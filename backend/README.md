@@ -1,33 +1,91 @@
 # Backend — Circl
 
-Go 1.22+ con chi/echo, WebSockets y PostgreSQL.
+Go 1.25+ con chi router, WebSockets y PostgreSQL.
 
-## Setup
+## Requisitos
+- Go 1.25+
+- PostgreSQL 15+
+- Redis 7+ (para presencia y Pub/Sub)
+
+## Setup rápido
 
 ```bash
 go mod download
+go mod tidy
+cp .env.example .env
 go run ./cmd/api
 ```
 
-API en [http://localhost:8080](http://localhost:8080).
+API estará disponible en `http://localhost:8080`.
+
+Prueba el health check:
+```bash
+curl http://localhost:8080/health
+```
 
 ## Scripts
-- `go run ./cmd/api`: inicia servidor
-- `go test ./...`: ejecuta tests
-- `go vet ./...`: análisis estático
-- `golangci-lint run`: linting completo
+
+- `go run ./cmd/api`: Inicia servidor de desarrollo
+- `go build ./cmd/api -o bin/api`: Build para producción
+- `go test ./...`: Ejecuta todos los tests
+- `go vet ./...`: Análisis estático
+- `golangci-lint run`: Linting completo (requiere instalación)
 
 ## Estructura
+
 ```
-/cmd/api          # main y setup HTTP
-/internal
-  /auth           # middlewares y servicios
-  /profiles       # perfiles
-  /chat           # chat y presencia
-  /db             # repositorios
-/pkg              # utilidades compartidas
-/migrations       # SQL
+cmd/
+  api/
+    main.go              # Servidor HTTP, router, middlewares
+
+internal/
+  auth/                  # Autenticación y JWT
+  profiles/              # Perfiles de usuarios
+  chat/                  # Mensajes y salas
+  db/                    # Repositorios y queries
+
+pkg/                     # Utilidades compartidas
+
+migrations/              # SQL migrations
+
+.env                     # Variables de entorno (no versionado)
+.env.example             # Plantilla de variables
+go.mod / go.sum          # Dependencias
 ```
 
-## Variables de entorno
-Ver `.env.example`.
+## Env Variables
+
+Copia `.env.example` a `.env` y edita según necesites. Las más importantes:
+
+- `PORT`: Puerto del servidor (default: 8080)
+- `ENV`: Entorno (development/staging/production)
+- `DB_*`: Credenciales PostgreSQL
+- `REDIS_URL`: URL de Redis
+- `JWT_SECRET`: Secreto para firmar JWTs
+- `CORS_ALLOWED_ORIGINS`: Orígenes permitidos (comma-separated)
+
+## Dependencias principales
+
+- **chi/v5**: HTTP router ligero y eficiente
+- **cors**: Middleware CORS
+- **godotenv**: Carga variables de entorno desde `.env`
+- **uuid**: Generación de UUIDs
+
+## Next Steps
+
+- [ ] Integrar PostgreSQL (SQLC o Ent ORM)
+- [ ] Autenticación y JWT validation
+- [ ] WebSockets para chat
+- [ ] Redis para presencia y Pub/Sub
+- [ ] Validación de requests
+- [ ] Logging estructurado
+- [ ] Tests unitarios e integración
+- [ ] Documentación de API (OpenAPI/Swagger)
+
+## Troubleshooting
+
+| Problema | Solución |
+|----------|----------|
+| Puerto 8080 en uso | Cambiar en `.env`: `PORT=9000 go run ./cmd/api` |
+| Go version < 1.25 | Verificar: `go version` |
+| Dependencias desactualizadas | Actualizar: `go get -u ./...` y `go mod tidy` |
