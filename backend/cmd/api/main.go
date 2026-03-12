@@ -1,60 +1,51 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"net/http"
-	"os"
-	"strings"
+	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+
+	"github.com/mayloo89/circl/backend/internal/config"
+	"github.com/mayloo89/circl/backend/internal/db"
+	"github.com/mayloo89/circl/backend/internal/server"
 )
 
 func main() {
-	// Cargar variables de entorno
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment")
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	port := config.EnvOrDefault("PORT", "8080")
+	env := config.EnvOrDefault("ENV", "development")
+	corsOrigins := server.NormalizeCORSOrigins(config.EnvOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
+
+	databaseURL, err := config.RequireEnv("DATABASE_URL")
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
-	env := os.Getenv("ENV")
-	if env == "" {
-		env = "development"
+	if err := db.Migrate("migrations", databaseURL); err != nil {
+		log.Fatalf("Migrations failed: %v", err)
 	}
+	log.Println("Migrations applied successfully")
 
-	corsOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
-	if corsOrigins == "" {
-		corsOrigins = "http://localhost:3000"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := db.Open(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("Database connection failed: %v", err)
 	}
-	origins := strings.Split(corsOrigins, ",")
+	defer pool.Close()
+	log.Println("Database connection established")
 
-	// Crear router
-	r := chi.NewRouter()
-
-	// Middlewares globales
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   origins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
-
-	// Rutas públicas
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","env":"%s"}`, env)
-	})
+	h := server.New(pool, env, corsOrigins)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
+	if err := http.ListenAndServe(":"+port, h); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
