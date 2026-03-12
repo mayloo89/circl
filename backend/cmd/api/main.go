@@ -8,6 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/db"
 	"github.com/mayloo89/circl/backend/internal/server"
@@ -42,7 +43,11 @@ func main() {
 	defer pool.Close()
 	log.Println("Database connection established")
 
-	h := server.New(pool, env, corsOrigins)
+	authStore := auth.NewStore(pool)
+	authSvc := auth.NewService(authStore)
+	authHandler := auth.NewHandler(authSvc)
+
+	h := server.New(pool, env, corsOrigins, authHandler)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {

@@ -1,136 +1,156 @@
-# Circl — Web de contactos con chat seguro
+# Circl — Private contact platform with secure chat
 
-Plataforma privada de perfiles y chat en tiempo real. Solo usuarios autenticados pueden ver/buscar otros perfiles y comunicarse.
+Private profiles and real-time chat. Only authenticated users can view, search, and message other users.
 
 ## Stack
 - **Frontend**: Next.js 15+ (App Router) + React 19 + TypeScript + Tailwind CSS 4
 - **Backend**: Go 1.25+ (chi router) + WebSockets
-- **Auth**: NextAuth.js (Auth.js) v5 con JWT + httpOnly cookies
-- **DB**: PostgreSQL 15+ + SQLC/Ent (por implementar)
-- **Cache/tiempo real**: Redis 7+ (presencia, Pub/Sub, rate limits)
-- **Colas**: asynq (procesamiento de imágenes, tareas)
+- **Auth**: NextAuth.js (Auth.js) v5 — JWT + httpOnly cookies
+- **DB**: PostgreSQL 17+, migrations via golang-migrate
+- **Cache / real-time**: Redis 7+ (presence, Pub/Sub, rate limits)
+- **Queues**: asynq (image processing, maintenance tasks)
 - **Storage**: S3/R2 + CDN
 - **CI/CD**: GitHub Actions
 
-## Documentación
-- [Plan de implementación](docs/implementation-plan.md)
+## Documentation
+- [Implementation plan](docs/implementation-plan.md)
 
-## Estado del proyecto
-- ✅ **Fundación**: Estructura, linters, CI/CD
+## Project status
+- ✅ **Foundation**: repo structure, linters, CI/CD
 - ✅ **Auth base**: NextAuth.js (frontend) + chi router (backend)
-- ⏳ **Perfiles privados**: En progreso
-- ⏳ **Búsqueda**: Pendiente
-- ⏳ **Chat y salas**: Pendiente
-- ⏳ **Presencia**: Pendiente
-- ⏳ **Media y workers**: Pendiente
+- ✅ **Database foundation**: PostgreSQL + golang-migrate, real bcrypt auth
+- ⏳ **Private profiles**: in progress
+- ⏳ **Search**: pending
+- ⏳ **Chat and rooms**: pending
+- ⏳ **Presence**: pending
+- ⏳ **Media and workers**: pending
 
-## Setup rápido
+## Local setup
 
-### Requisitos
+### Requirements
 - Node.js 20+
 - Go 1.25+
-- Docker (opcional, para Postgres/Redis locales)
-- PostgreSQL 15+
-- Redis 7+
+- PostgreSQL 17+ (e.g. [Postgres.app](https://postgresapp.com) on macOS)
 
-### Frontend
+### 1. Database
+
+Create the user and database (run once):
+
+```bash
+psql postgres -c "CREATE USER circl_user WITH PASSWORD 'circl_password';"
+psql postgres -c "CREATE DATABASE circl_db OWNER circl_user;"
+```
+
+Migrations run automatically when the backend starts — no manual step needed.
+
+### 2. Backend
+
+```bash
+cd backend
+cp .env.example .env
+# DATABASE_URL is already set for local development in .env.example
+go run ./cmd/api
+```
+
+API available at [http://localhost:8080](http://localhost:8080).
+
+```bash
+curl http://localhost:8080/health
+# → {"status":"ok","env":"development","db":"ok"}
+```
+
+### 3. Seed a test user
+
+```bash
+# Insert a user with password "password"
+psql postgres://circl_user:circl_password@localhost:5432/circl_db -c "
+  INSERT INTO users (email, password_hash, provider, status)
+  VALUES (
+    'test@example.com',
+    '\$2a\$10\$SOWOqkV.1kjNlizSgHM4ZuV6MvEFpGByzUqYA8plJtbEL8/Q4jlF.',
+    'local',
+    'active'
+  ) ON CONFLICT (email) DO NOTHING;"
+```
+
+Or generate your own bcrypt hash:
+
+```bash
+# macOS / Linux
+htpasswd -bnBC 10 "" yourpassword | tr -d ':\n' | cut -c2-
+```
+
+### 4. Frontend
 
 ```bash
 cd frontend
 npm install
 cp .env.example .env.local
-# Edita .env.local si es necesario
+# NEXTAUTH_SECRET: generate with → openssl rand -base64 32
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000).
 
-**Credenciales de prueba**: `test@example.com` / `password`
+**Test credentials**: `test@example.com` / `password`
 
-### Backend
+## Environment variables
 
-```bash
-cd backend
-cp .env.example .env
-# Edita .env si es necesario (DB, Redis, etc.)
-go run ./cmd/api
-```
+Each folder has a `.env.example` — copy it and fill in the values. These files are gitignored and never committed.
 
-API disponible en [http://localhost:8080](http://localhost:8080).
-
-Prueba:
-```bash
-curl http://localhost:8080/health
-```
-
-## Env Variables
-
-Cada carpeta tiene `.env.example`:
-- **Frontend**: Copia a `.env.local`
-- **Backend**: Copia a `.env`
+| File | Copy to |
+|------|---------|
+| `backend/.env.example` | `backend/.env` |
+| `frontend/.env.example` | `frontend/.env.local` |
 
 ## Scripts
 
 ### Frontend
 ```bash
 cd frontend
-npm run dev      # Desarrollo
-npm run build    # Build prod
+npm run dev      # Development server
+npm run build    # Production build
 npm run lint     # ESLint
-npm run format   # Prettier (próximamente)
-npm test         # Tests (próximamente)
 ```
 
 ### Backend
 ```bash
 cd backend
-go run ./cmd/api           # Desarrollo
-go build ./cmd/api         # Build
-go test ./...              # Tests
-go vet ./...               # Análisis estático
-golangci-lint run          # Linting completo
+go run ./cmd/api           # Development server
+go build ./cmd/api         # Build binary
+go test ./...              # Run tests
+go test ./... -cover       # Run tests with coverage
+go vet ./...               # Static analysis
 ```
 
-## CI/CD
-GitHub Actions ejecuta automáticamente:
-- Linting (ESLint para frontend, go vet/golangci-lint para backend)
-- Tests (cuando estén listos)
-- Chequeos de seguridad (Dependabot)
-
-## Estructura del repositorio
+## Repository structure
 
 ```
 circl/
 ├── frontend/               # Next.js app
 │   ├── app/               # App Router pages
-│   ├── components/        # React components
-│   ├── lib/               # Auth, API client, utilities
-│   ├── public/            # Static assets
+│   ├── lib/               # Auth config, utilities
 │   └── package.json
 ├── backend/               # Go API
-│   ├── cmd/api/           # Server entry point
+│   ├── cmd/api/           # Server entry point (main.go)
 │   ├── internal/          # Business logic
-│   │   ├── auth/
-│   │   ├── profiles/
-│   │   ├── chat/
-│   │   └── db/
-│   ├── pkg/               # Shared utilities
-│   ├── migrations/        # SQL migrations
-│   ├── go.mod
-│   └── .env
-├── docs/                  # Documentation
+│   │   ├── auth/          # Login handler, service, store
+│   │   ├── config/        # Env helpers
+│   │   ├── db/            # Connection pool, migrations
+│   │   └── server/        # Router, health handler
+│   ├── migrations/        # SQL migrations (up + down)
+│   └── go.mod
+├── docs/
 │   └── implementation-plan.md
 ├── .github/workflows/     # CI/CD
-├── .gitignore
-├── .editorconfig
 └── README.md
 ```
 
-## Contribuir
-1. Crea una rama: `git checkout -b feature/nombre-feature`
-2. Realiza cambios y tests
-3. Commit con mensajes descriptivos
-4. Push y abre un PR
+## Contributing
+1. Branch off `develop`: `git checkout -b feature/your-feature`
+2. Make changes and write tests (target: 98%+ coverage)
+3. Commit with descriptive messages in English
+4. Push and open a PR targeting `develop`
 
-## Licencia
+## License
 MIT
