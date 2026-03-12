@@ -17,7 +17,7 @@ type mockPinger struct{ err error }
 func (m *mockPinger) Ping(_ context.Context) error { return m.err }
 
 func TestHealthHandler_DBOk(t *testing.T) {
-	h := server.New(&mockPinger{}, "test", []string{"http://localhost:3000"})
+	h := server.New(&mockPinger{}, "test", []string{"http://localhost:3000"}, http.NotFoundHandler())
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -44,7 +44,7 @@ func TestHealthHandler_DBOk(t *testing.T) {
 }
 
 func TestHealthHandler_DBError(t *testing.T) {
-	h := server.New(&mockPinger{err: errors.New("connection refused")}, "test", []string{"*"})
+	h := server.New(&mockPinger{err: errors.New("connection refused")}, "test", []string{"*"}, http.NotFoundHandler())
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestHealthHandler_DBError(t *testing.T) {
 }
 
 func TestHealthHandler_ContentType(t *testing.T) {
-	h := server.New(&mockPinger{}, "production", []string{"*"})
+	h := server.New(&mockPinger{}, "production", []string{"*"}, http.NotFoundHandler())
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

@@ -19,7 +19,8 @@ type DBPinger interface {
 }
 
 // New returns a configured chi router with all application routes registered.
-func New(db DBPinger, env string, corsOrigins []string) http.Handler {
+// authHandler receives the fully configured auth sub-router (auth.NewHandler).
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -32,6 +33,7 @@ func New(db DBPinger, env string, corsOrigins []string) http.Handler {
 	}))
 
 	r.Get("/health", healthHandler(db, env))
+	r.Mount("/", authHandler)
 
 	return r
 }
