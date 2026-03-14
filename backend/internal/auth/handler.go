@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
 
@@ -38,10 +39,10 @@ var generateTokenFn = token.Generate
 // NewHandler returns an http.Handler with all auth routes registered.
 // jwtSecret and tokenExpiry are used to issue a signed JWT on login/register.
 func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /login", loginHandler(auth, jwtSecret, tokenExpiry))
-	mux.HandleFunc("POST /register", registerHandler(auth, jwtSecret, tokenExpiry))
-	return mux
+	r := chi.NewRouter()
+	r.Post("/login", loginHandler(auth, jwtSecret, tokenExpiry))
+	r.Post("/register", registerHandler(auth, jwtSecret, tokenExpiry))
+	return r
 }
 
 func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration) http.HandlerFunc {

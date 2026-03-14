@@ -10,25 +10,25 @@ export default async function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-4 rounded-lg bg-white p-8 shadow-lg">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950">
+      <div className="w-full max-w-md space-y-4 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
-          <h1 className="text-center text-3xl font-bold">Welcome to Circl</h1>
-          <p className="mt-2 text-center text-gray-600">
+          <h1 className="text-center text-3xl font-bold text-white">Welcome to Circl</h1>
+          <p className="mt-2 text-center text-gray-400">
             Hello, {session.user.name || session.user.email}
           </p>
         </div>
 
         <Link
           href="/profile"
-          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
         >
           My Profile
         </Link>
 
         <Link
           href="/contacts"
-          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
         >
           Contacts
         </Link>
@@ -41,7 +41,7 @@ export default async function Home() {
         >
           <button
             type="submit"
-            className="w-full rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            className="w-full rounded-md bg-red-700 px-4 py-2 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             Sign Out
           </button>

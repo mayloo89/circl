@@ -39,6 +39,24 @@ type UserSummary struct {
 	DisplayName string `json:"display_name"`
 }
 
+// PendingRequest represents an incoming pending contact request with the
+// contact row ID (needed to accept/decline) and the requester's details.
+type PendingRequest struct {
+	ContactID   string `json:"contact_id"`
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+}
+
+// SentRequest represents an outgoing pending contact request with the
+// contact row ID (needed to cancel) and the addressee's details.
+type SentRequest struct {
+	ContactID   string `json:"contact_id"`
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+}
+
 // Store is the persistence interface required by the service.
 type Store interface {
 	// SendRequest creates a pending contact request from requesterID to addresseeID.
@@ -52,7 +70,9 @@ type Store interface {
 	// ListAccepted returns all accepted contacts for the given user.
 	ListAccepted(ctx context.Context, userID string) ([]UserSummary, error)
 	// ListPending returns incoming pending requests for the given user.
-	ListPending(ctx context.Context, addresseeID string) ([]UserSummary, error)
+	ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error)
+	// ListSent returns outgoing pending requests sent by the given user.
+	ListSent(ctx context.Context, requesterID string) ([]SentRequest, error)
 	// SearchUsers returns users whose email or display_name matches the query,
 	// excluding the requesting user.
 	SearchUsers(ctx context.Context, query, excludeUserID string) ([]UserSummary, error)
@@ -92,8 +112,13 @@ func (s *Service) ListAccepted(ctx context.Context, userID string) ([]UserSummar
 }
 
 // ListPending returns incoming pending requests for the given user.
-func (s *Service) ListPending(ctx context.Context, userID string) ([]UserSummary, error) {
+func (s *Service) ListPending(ctx context.Context, userID string) ([]PendingRequest, error) {
 	return s.store.ListPending(ctx, userID)
+}
+
+// ListSent returns outgoing pending requests sent by the given user.
+func (s *Service) ListSent(ctx context.Context, userID string) ([]SentRequest, error) {
+	return s.store.ListSent(ctx, userID)
 }
 
 // SearchUsers searches for users by email or display name.

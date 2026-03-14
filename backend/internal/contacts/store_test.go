@@ -217,6 +217,70 @@ func TestListAccepted_QueryError(t *testing.T) {
 	}
 }
 
+func TestListSent_QueryError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return nil, errors.New("db error")
+		},
+	}}
+	_, err := s.ListSent(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestListSent_Success(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{}, nil
+		},
+	}}
+	results, err := s.ListSent(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(results))
+	}
+}
+
+func TestListSent_WithRows(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{
+				data: [][]any{
+					{"c-1", "u-2", "bob@example.com", "Bob"},
+				},
+			}, nil
+		},
+	}}
+	results, err := s.ListSent(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].ContactID != "c-1" || results[0].Email != "bob@example.com" {
+		t.Errorf("unexpected result: %+v", results[0])
+	}
+}
+
+func TestListSent_ScanError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{
+				data:    [][]any{{"c-1", "u-2", "bob@example.com", "Bob"}},
+				scanErr: errors.New("scan error"),
+			}, nil
+		},
+	}}
+	_, err := s.ListSent(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected scan error, got nil")
+	}
+}
+
 func TestListPending_QueryError(t *testing.T) {
 	s := &pgStore{db: &mockQuerier{
 		rowsFn: func() (pgx.Rows, error) {
@@ -226,6 +290,43 @@ func TestListPending_QueryError(t *testing.T) {
 	_, err := s.ListPending(t.Context(), "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestListPending_WithRows(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{
+				data: [][]any{
+					{"c-1", "u-2", "alice@example.com", "Alice"},
+				},
+			}, nil
+		},
+	}}
+	results, err := s.ListPending(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].ContactID != "c-1" || results[0].Email != "alice@example.com" {
+		t.Errorf("unexpected result: %+v", results[0])
+	}
+}
+
+func TestListPending_ScanError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{
+				data:    [][]any{{"c-1", "u-2", "alice@example.com", "Alice"}},
+				scanErr: errors.New("scan error"),
+			}, nil
+		},
+	}}
+	_, err := s.ListPending(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected scan error, got nil")
 	}
 }
 
