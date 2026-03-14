@@ -1,0 +1,67 @@
+package notifications
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/mayloo89/circl/backend/internal/token"
+)
+
+// NewHandler returns an SSE handler for GET /notifications/stream.
+//
+// Clients authenticate via a ?token=<jwt> query parameter because the
+// browser EventSource API does not support custom request headers.
+func NewHandler(hub *Hub, jwtSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Validate token from query param.
+		tok := r.URL.Query().Get("token")
+		if tok == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		claims, err := token.Validate(tok, jwtSecret)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims.Subject
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusNotImplemented)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+
+		ch, unsub := hub.Subscribe(userID)
+		defer unsub()
+
+		// Initial event so the client knows the stream is live.
+		writeEvent(w, flusher, Event{Type: "connected"})
+
+		for {
+			select {
+			case e := <-ch:
+				writeEvent(w, flusher, e)
+			case <-time.After(25 * time.Second):
+				// SSE comment heartbeat — keeps TCP alive through proxies.
+				fmt.Fprintf(w, ": heartbeat\n\n")
+				flusher.Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}
+}
+
+func writeEvent(w http.ResponseWriter, f http.Flusher, e Event) {
+	data, _ := json.Marshal(e)
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	f.Flush()
+}

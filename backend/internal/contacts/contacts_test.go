@@ -30,7 +30,9 @@ func (m *mockStore) SendRequest(_ context.Context, _, _ string) (*contacts.Conta
 func (m *mockStore) Accept(_ context.Context, _, _ string) (*contacts.Contact, error) {
 	return m.contact, m.acceptErr
 }
-func (m *mockStore) Delete(_ context.Context, _, _ string) error { return m.deleteErr }
+func (m *mockStore) Delete(_ context.Context, _, _ string) (*contacts.Contact, error) {
+	return m.contact, m.deleteErr
+}
 func (m *mockStore) ListAccepted(_ context.Context, _ string) ([]contacts.AcceptedContact, error) {
 	return m.accepted, m.listErr
 }
@@ -117,17 +119,22 @@ func TestService_Accept_NotFound(t *testing.T) {
 // --- Delete ---
 
 func TestService_Delete_Success(t *testing.T) {
-	svc := newService(&mockStore{})
+	c := &contacts.Contact{ID: "c-1", RequesterID: "u-1", AddresseeID: "u-2", Status: contacts.StatusAccepted}
+	svc := newService(&mockStore{contact: c})
 
-	if err := svc.Delete(t.Context(), "c-1", "u-1"); err != nil {
+	got, err := svc.Delete(t.Context(), "c-1", "u-1")
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != "c-1" {
+		t.Errorf("ID = %q, want c-1", got.ID)
 	}
 }
 
 func TestService_Delete_NotFound(t *testing.T) {
 	svc := newService(&mockStore{deleteErr: contacts.ErrNotFound})
 
-	err := svc.Delete(t.Context(), "c-1", "u-1")
+	_, err := svc.Delete(t.Context(), "c-1", "u-1")
 	if !errors.Is(err, contacts.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}

@@ -10,6 +10,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.7.0] - 2026-03-14 — Real-time contact removal
+
+### Added
+- `contact_removed` SSE event: `deleteHandler` now notifies the other party when a contact is removed or a pending request is declined/cancelled
+- Two new handler tests: `TestDelete_NotifiesOtherParty` and `TestDelete_NotifiesRequester_WhenAddresseeDeletes`
+- `contact_removed` event type added to `ContactEvent` union in `useNotifications.ts`
+- Contacts page now reacts to `contact_removed` in real time (removes the entry from accepted contacts, pending, and sent lists)
+
+### Changed
+- `Store.Delete`, `Service.Delete`, and `Manager.Delete` now return `(*Contact, error)` instead of `error`, using a `DELETE … RETURNING` query so the handler knows both participants
+- `deleteHandler` now accepts the `handlerConfig` parameter (same pattern as `sendRequestHandler` and `acceptHandler`)
+- `useNotifications` hook uses a `useRef` to keep the `onEvent` callback always up-to-date without re-creating the SSE connection — fixes stale-closure bug where `contact_accepted` events were missed after state changed
+- Store-layer unit tests for `Delete` now use `rowFn` (mock the `QueryRow` path) instead of `execFn`
+
+---
+
+## [0.6.0] - 2026-03-14 — Real-time notifications via SSE
+
+### Added
+- `internal/notifications` package: thread-safe `Hub` and SSE HTTP handler at `GET /notifications/stream`
+- `Notifier` interface in the notifications package so other packages can push events without importing the Hub directly
+- `contacts.WithNotifier` functional option: injects a `Notifier` into the contacts handler
+- `sendRequestHandler` now notifies the addressee with a `contact_request` event
+- `acceptHandler` now notifies the requester with a `contact_accepted` event
+- `useNotifications` hook in the frontend (`hooks/useNotifications.ts`): opens an SSE connection with exponential backoff reconnect
+- Contacts page now reacts to `contact_request` (re-fetches pending list) and `contact_accepted` (moves sent entry to accepted) in real time
+- Pending Requests section now shows a count badge
+
+### Changed
+- `server.New` accepts a new `notificationsHandler http.Handler` parameter
+- SSE endpoint is registered outside the `RequireAuth` middleware group; auth is done via `?token=` query param (browser `EventSource` does not support custom headers)
+
+---
+
+## [0.5.0] - 2026-03-14 — Modern Go 1.22–1.24 refactor
+
+### Changed
+- `config.EnvOrDefault` now uses `cmp.Or` (Go 1.22)
+- `server.NormalizeCORSOrigins` now uses `strings.SplitSeq` (Go 1.24)
+- All test functions use `t.Context()` instead of `context.Background()` (Go 1.24); `context.Background()` is kept only in `t.Cleanup` closures and `pgxpool.New` calls
+
+### Fixed
+- `profiles.UpdateMyProfile` now wraps `ErrInvalidInput` with `fmt.Errorf("%w", ...)` so `errors.Is` works correctly in the HTTP handler (previously returned 500 instead of 400 for empty display name)
+
+---
+
 ## [0.4.1] - 2026-03-14 — Fix remove contact
 
 ### Fixed

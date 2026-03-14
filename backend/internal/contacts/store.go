@@ -81,19 +81,21 @@ func (s *pgStore) Accept(ctx context.Context, contactID, addresseeID string) (*C
 }
 
 // Delete removes the contact row if the caller is either participant.
-func (s *pgStore) Delete(ctx context.Context, contactID, userID string) error {
-	tag, err := s.db.Exec(ctx, `
+func (s *pgStore) Delete(ctx context.Context, contactID, userID string) (*Contact, error) {
+	var c Contact
+	err := s.db.QueryRow(ctx, `
 		DELETE FROM contacts
-		WHERE id = $1 AND (requester_id = $2 OR addressee_id = $2)`,
+		WHERE id = $1 AND (requester_id = $2 OR addressee_id = $2)
+		RETURNING id, requester_id, addressee_id, status, created_at, updated_at`,
 		contactID, userID,
-	)
+	).Scan(&c.ID, &c.RequesterID, &c.AddresseeID, &c.Status, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("delete contact: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("delete contact: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return &c, nil
 }
 
 // ListAccepted returns all accepted contacts for the given user.
