@@ -1,4 +1,5 @@
 import { auth, signOut } from "@/lib/auth"
+import Link from "next/link"
 import { redirect } from "next/navigation"
 
 export default async function Home() {
@@ -10,13 +11,21 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-lg">
+      <div className="w-full max-w-md space-y-4 rounded-lg bg-white p-8 shadow-lg">
         <div>
-          <h1 className="text-center text-3xl font-bold">Bienvenido a Circl</h1>
+          <h1 className="text-center text-3xl font-bold">Welcome to Circl</h1>
           <p className="mt-2 text-center text-gray-600">
-            Hola, {session.user.name || session.user.email}
+            Hello, {session.user.name || session.user.email}
           </p>
         </div>
+
+        <Link
+          href="/profile"
+          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        >
+          My Profile
+        </Link>
+
         <form
           action={async () => {
             "use server"
@@ -27,7 +36,7 @@ export default async function Home() {
             type="submit"
             className="w-full rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
           >
-            Cerrar sesión
+            Sign Out
           </button>
         </form>
       </div>

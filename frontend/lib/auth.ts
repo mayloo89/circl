@@ -27,7 +27,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!res.ok) return null
 
           const user = await res.json()
-          return { id: user.id, email: user.email, name: user.email }
+          return { id: user.id, email: user.email, name: user.email, accessToken: user.token }
         } catch {
           // Backend unavailable — fail closed (do not grant access)
           return null
@@ -42,6 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        token.accessToken = user.accessToken
       }
       return token
     },
@@ -49,6 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string
       }
+      session.accessToken = token.accessToken
       return session
     },
   },

@@ -19,8 +19,10 @@ type DBPinger interface {
 }
 
 // New returns a configured chi router with all application routes registered.
-// authHandler receives the fully configured auth sub-router (auth.NewHandler).
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler) http.Handler {
+// authHandler is the auth sub-router (auth.NewHandler).
+// profileHandler is the profiles sub-router (profiles.NewHandler).
+// requireAuth is the JWT middleware that protects authenticated routes.
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, profileHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -34,6 +36,12 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 
 	r.Get("/health", healthHandler(db, env))
 	r.Mount("/", authHandler)
+
+	// Protected routes — requireAuth validates the Bearer JWT before forwarding.
+	r.Group(func(g chi.Router) {
+		g.Use(requireAuth)
+		g.Handle("/profiles/me", profileHandler)
+	})
 
 	return r
 }

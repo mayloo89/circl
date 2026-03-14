@@ -11,8 +11,12 @@ import (
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/db"
+	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/profiles"
 	"github.com/mayloo89/circl/backend/internal/server"
 )
+
+const tokenExpiry = 24 * time.Hour
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -24,6 +28,11 @@ func main() {
 	corsOrigins := server.NormalizeCORSOrigins(config.EnvOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
 
 	databaseURL, err := config.RequireEnv("DATABASE_URL")
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	jwtSecret, err := config.RequireEnv("JWT_SECRET")
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -45,9 +54,15 @@ func main() {
 
 	authStore := auth.NewStore(pool)
 	authSvc := auth.NewService(authStore)
-	authHandler := auth.NewHandler(authSvc)
+	authHandler := auth.NewHandler(authSvc, jwtSecret, tokenExpiry)
 
-	h := server.New(pool, env, corsOrigins, authHandler)
+	profileStore := profiles.NewStore(pool)
+	profileSvc := profiles.NewService(profileStore)
+	profileHandler := profiles.NewHandler(profileSvc)
+
+	requireAuth := middleware.RequireAuth(jwtSecret)
+
+	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {
