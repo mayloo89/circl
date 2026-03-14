@@ -3,6 +3,7 @@ package profiles
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 var (
@@ -51,7 +52,7 @@ func (s *Service) GetMyProfile(ctx context.Context, userID string) (*Profile, er
 // display_name is required.
 func (s *Service) UpdateMyProfile(ctx context.Context, userID, displayName, bio string) (*Profile, error) {
 	if displayName == "" {
-		return nil, errors.New("display name is required: " + ErrInvalidInput.Error())
+		return nil, fmt.Errorf("%w: display name is required", ErrInvalidInput)
 	}
 	return s.store.Upsert(ctx, userID, displayName, bio)
 }

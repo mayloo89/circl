@@ -29,7 +29,7 @@ func TestPgStore_GetByUserID_Success(t *testing.T) {
 		return nil
 	}}}}
 
-	p, err := store.GetByUserID(context.Background(), "user-1")
+	p, err := store.GetByUserID(t.Context(), "user-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestPgStore_GetByUserID_NotFound(t *testing.T) {
 		return pgx.ErrNoRows
 	}}}}
 
-	_, err := store.GetByUserID(context.Background(), "user-1")
+	_, err := store.GetByUserID(t.Context(), "user-1")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("got %v, want ErrNotFound", err)
 	}
@@ -54,7 +54,7 @@ func TestPgStore_GetByUserID_QueryError(t *testing.T) {
 		return errors.New("db error")
 	}}}}
 
-	_, err := store.GetByUserID(context.Background(), "user-1")
+	_, err := store.GetByUserID(t.Context(), "user-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -71,7 +71,7 @@ func TestPgStore_Upsert_Success(t *testing.T) {
 		return nil
 	}}}}
 
-	p, err := store.Upsert(context.Background(), "user-1", "Alice", "Bio")
+	p, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestPgStore_Upsert_QueryError(t *testing.T) {
 		return errors.New("db error")
 	}}}}
 
-	_, err := store.Upsert(context.Background(), "user-1", "Alice", "Bio")
+	_, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -114,7 +114,7 @@ func TestProfiles_Integration(t *testing.T) {
 
 	// Create a temp user for the test
 	var userID string
-	err = pool.QueryRow(context.Background(),
+	err = pool.QueryRow(t.Context(),
 		`INSERT INTO users (email, password_hash, provider, status)
 		 VALUES ('profile_test@example.com', 'hash', 'local', 'active')
 		 ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
@@ -130,7 +130,7 @@ func TestProfiles_Integration(t *testing.T) {
 	svc := NewService(NewStore(pool))
 
 	t.Run("get creates empty profile when not found", func(t *testing.T) {
-		p, err := svc.GetMyProfile(context.Background(), userID)
+		p, err := svc.GetMyProfile(t.Context(), userID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -140,11 +140,11 @@ func TestProfiles_Integration(t *testing.T) {
 	})
 
 	t.Run("update and retrieve profile", func(t *testing.T) {
-		_, err := svc.UpdateMyProfile(context.Background(), userID, "Alice", "Hello!")
+		_, err := svc.UpdateMyProfile(t.Context(), userID, "Alice", "Hello!")
 		if err != nil {
 			t.Fatalf("update error: %v", err)
 		}
-		p, err := svc.GetMyProfile(context.Background(), userID)
+		p, err := svc.GetMyProfile(t.Context(), userID)
 		if err != nil {
 			t.Fatalf("get error: %v", err)
 		}

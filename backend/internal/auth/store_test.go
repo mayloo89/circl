@@ -38,7 +38,7 @@ func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 		}},
 	}}
 
-	record, err := store.GetUserByEmail(context.Background(), "user@example.com")
+	record, err := store.GetUserByEmail(t.Context(), "user@example.com")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestPgStore_GetUserByEmail_NotFound(t *testing.T) {
 		row: &mockRow{scanFn: func(_ ...any) error { return pgx.ErrNoRows }},
 	}}
 
-	_, err := store.GetUserByEmail(context.Background(), "nobody@example.com")
+	_, err := store.GetUserByEmail(t.Context(), "nobody@example.com")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -63,7 +63,7 @@ func TestPgStore_GetUserByEmail_QueryError(t *testing.T) {
 		row: &mockRow{scanFn: func(_ ...any) error { return errors.New("connection reset") }},
 	}}
 
-	_, err := store.GetUserByEmail(context.Background(), "user@example.com")
+	_, err := store.GetUserByEmail(t.Context(), "user@example.com")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -82,7 +82,7 @@ func TestPgStore_CreateUser_Success(t *testing.T) {
 		}},
 	}}
 
-	record, err := store.CreateUser(context.Background(), "new@example.com", "$2a$10$hash")
+	record, err := store.CreateUser(t.Context(), "new@example.com", "$2a$10$hash")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestPgStore_CreateUser_EmailTaken(t *testing.T) {
 		}},
 	}}
 
-	_, err := store.CreateUser(context.Background(), "taken@example.com", "hash")
+	_, err := store.CreateUser(t.Context(), "taken@example.com", "hash")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("got %v, want ErrEmailTaken", err)
 	}
@@ -109,7 +109,7 @@ func TestPgStore_CreateUser_QueryError(t *testing.T) {
 		row: &mockRow{scanFn: func(_ ...any) error { return errors.New("db error") }},
 	}}
 
-	_, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	_, err := store.CreateUser(t.Context(), "user@example.com", "hash")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -147,7 +147,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register new user", func(t *testing.T) {
-		user, err := svc.Register(context.Background(), email, "securepass")
+		user, err := svc.Register(t.Context(), email, "securepass")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -157,7 +157,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("login with registered user", func(t *testing.T) {
-		user, err := svc.Login(context.Background(), email, "securepass")
+		user, err := svc.Login(t.Context(), email, "securepass")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -167,7 +167,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register duplicate email returns ErrEmailTaken", func(t *testing.T) {
-		_, err := svc.Register(context.Background(), email, "otherpass")
+		_, err := svc.Register(t.Context(), email, "otherpass")
 		if !errors.Is(err, ErrEmailTaken) {
 			t.Errorf("got %v, want ErrEmailTaken", err)
 		}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 )
@@ -8,10 +9,7 @@ import (
 // EnvOrDefault returns the value of the environment variable key,
 // or def if the variable is not set or empty.
 func EnvOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
+	return cmp.Or(os.Getenv(key), def)
 }
 
 // RequireEnv returns the value of the environment variable key,
