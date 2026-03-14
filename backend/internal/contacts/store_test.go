@@ -404,7 +404,7 @@ func TestScanUserSummaries_WithRows(t *testing.T) {
 		rowsFn: func() (pgx.Rows, error) {
 			return &mockRows{
 				data: [][]any{
-					{"u-1", "alice@example.com", "Alice"},
+					{"c-1", "u-2", "alice@example.com", "Alice"},
 				},
 			}, nil
 		},

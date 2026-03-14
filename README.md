@@ -17,10 +17,10 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 
 ## Project status
 - ✅ **Foundation**: repo structure, linters, CI/CD
-- ✅ **Auth base**: NextAuth.js (frontend) + chi router (backend)
-- ✅ **Database foundation**: PostgreSQL + golang-migrate, real bcrypt auth
-- ⏳ **Private profiles**: in progress
-- ⏳ **Search**: pending
+- ✅ **Auth**: registration, login, JWT tokens, NextAuth.js session
+- ✅ **Private profiles**: display name, bio — `GET /profiles/me`, `PUT /profiles/me`
+- ✅ **Contacts**: search, send/accept/decline/remove requests — full contacts lifecycle
+- ⏳ **Real-time notifications**: pending (WebSocket / SSE)
 - ⏳ **Chat and rooms**: pending
 - ⏳ **Presence**: pending
 - ⏳ **Media and workers**: pending
@@ -123,26 +123,55 @@ go test ./... -cover       # Run tests with coverage
 go vet ./...               # Static analysis
 ```
 
+## API reference
+
+All protected routes require `Authorization: Bearer <token>`.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/health` | — | Server and DB status |
+| `POST` | `/auth/register` | — | Create account |
+| `POST` | `/auth/login` | — | Login, returns JWT |
+| `GET` | `/profiles/me` | ✅ | Get own profile (auto-created) |
+| `PUT` | `/profiles/me` | ✅ | Update display name and bio |
+| `GET` | `/users/search?q=` | ✅ | Search users by email/name |
+| `POST` | `/contacts` | ✅ | Send a contact request |
+| `GET` | `/contacts` | ✅ | List accepted contacts |
+| `GET` | `/contacts/pending` | ✅ | List incoming pending requests |
+| `GET` | `/contacts/sent` | ✅ | List outgoing pending requests |
+| `PUT` | `/contacts/{id}/accept` | ✅ | Accept a pending request |
+| `DELETE` | `/contacts/{id}` | ✅ | Remove or decline a contact |
+
 ## Repository structure
 
 ```
 circl/
 ├── frontend/               # Next.js app
-│   ├── app/               # App Router pages
-│   ├── lib/               # Auth config, utilities
+│   ├── app/               # App Router pages and layouts
+│   │   ├── contacts/      # Contacts page
+│   │   ├── login/         # Login page
+│   │   ├── profile/       # Profile page
+│   │   └── register/      # Register page
+│   ├── lib/               # Auth config (NextAuth.js)
+│   ├── types/             # next-auth type augmentation
 │   └── package.json
 ├── backend/               # Go API
 │   ├── cmd/api/           # Server entry point (main.go)
-│   ├── internal/          # Business logic
-│   │   ├── auth/          # Login handler, service, store
+│   ├── internal/          # Business logic (clean architecture)
+│   │   ├── auth/          # Register/login handler, service, store
+│   │   ├── contacts/      # Contacts handler, service, store
 │   │   ├── config/        # Env helpers
-│   │   ├── db/            # Connection pool, migrations
-│   │   └── server/        # Router, health handler
+│   │   ├── db/            # Connection pool, migrations runner
+│   │   ├── middleware/    # JWT RequireAuth middleware
+│   │   ├── profiles/      # Profile handler, service, store
+│   │   ├── server/        # Chi router, CORS, health handler
+│   │   └── token/         # JWT generate/validate
 │   ├── migrations/        # SQL migrations (up + down)
 │   └── go.mod
 ├── docs/
 │   └── implementation-plan.md
 ├── .github/workflows/     # CI/CD
+├── CHANGELOG.md
 └── README.md
 ```
 

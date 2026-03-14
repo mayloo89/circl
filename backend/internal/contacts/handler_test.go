@@ -24,6 +24,7 @@ const (
 // mockManager is a test double for contacts.Manager.
 type mockManager struct {
 	contact    *contacts.Contact
+	accepted   []contacts.AcceptedContact
 	users      []contacts.UserSummary
 	pending    []contacts.PendingRequest
 	sent       []contacts.SentRequest
@@ -43,8 +44,8 @@ func (m *mockManager) Accept(_ context.Context, _, _ string) (*contacts.Contact,
 	return m.contact, m.acceptErr
 }
 func (m *mockManager) Delete(_ context.Context, _, _ string) error { return m.deleteErr }
-func (m *mockManager) ListAccepted(_ context.Context, _ string) ([]contacts.UserSummary, error) {
-	return m.users, m.listErr
+func (m *mockManager) ListAccepted(_ context.Context, _ string) ([]contacts.AcceptedContact, error) {
+	return m.accepted, m.listErr
 }
 func (m *mockManager) ListPending(_ context.Context, _ string) ([]contacts.PendingRequest, error) {
 	return m.pending, m.pendingErr
@@ -197,8 +198,8 @@ func TestSendRequest_InternalError(t *testing.T) {
 // --- List accepted ---
 
 func TestListAccepted_Success(t *testing.T) {
-	users := []contacts.UserSummary{{ID: "u-2", Email: "b@example.com"}}
-	h := contacts.NewHandler(&mockManager{users: users})
+	accepted := []contacts.AcceptedContact{{ContactID: "c-1", UserID: "u-2", Email: "b@example.com"}}
+	h := contacts.NewHandler(&mockManager{accepted: accepted})
 	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts", nil))
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)
@@ -233,8 +234,8 @@ func TestListAccepted_ServiceError(t *testing.T) {
 // --- List pending ---
 
 func TestListPending_Success(t *testing.T) {
-	users := []contacts.UserSummary{{ID: "u-3", Email: "c@example.com"}}
-	h := contacts.NewHandler(&mockManager{users: users})
+	pending := []contacts.PendingRequest{{ContactID: "c-1", UserID: "u-3", Email: "c@example.com"}}
+	h := contacts.NewHandler(&mockManager{pending: pending})
 	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts/pending", nil))
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)

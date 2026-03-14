@@ -26,11 +26,18 @@ interface SentRequest {
   display_name: string
 }
 
+interface AcceptedContact {
+  contact_id: string
+  user_id: string
+  email: string
+  display_name: string
+}
+
 export default function ContactsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  const [contacts, setContacts] = useState<UserSummary[]>([])
+  const [contacts, setContacts] = useState<AcceptedContact[]>([])
   const [pending, setPending] = useState<PendingRequest[]>([])
   const [sent, setSent] = useState<SentRequest[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -113,7 +120,7 @@ export default function ContactsPage() {
     }
     const accepted = pending.find((r) => r.contact_id === contactID)
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
-    if (accepted) setContacts((prev) => [...prev, { id: accepted.user_id, email: accepted.email, display_name: accepted.display_name }])
+    if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, email: accepted.email, display_name: accepted.display_name }])
   }
 
   async function cancelSent(contactID: string) {
@@ -139,12 +146,8 @@ export default function ContactsPage() {
       setError("Failed to remove contact.")
       return
     }
-    setContacts((prev) => prev.filter((u) => u.id !== contactID))
+    setContacts((prev) => prev.filter((c) => c.contact_id !== contactID))
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
-  }
-
-  function displayName(u: UserSummary) {
-    return u.display_name || u.email
   }
 
   if (status === "loading" || loading) {
@@ -183,7 +186,7 @@ export default function ContactsPage() {
             <ul className="mt-3 divide-y divide-gray-700">
               {searchResults.map((u) => (
                 <li key={u.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-200">{displayName(u)}</span>
+                  <span className="text-sm text-gray-200">{u.display_name || u.email}</span>
                   <button
                     onClick={() => sendRequest(u.id)}
                     className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
@@ -251,11 +254,11 @@ export default function ContactsPage() {
             <p className="text-sm text-gray-500">No contacts yet. Use the search above to add someone.</p>
           ) : (
             <ul className="divide-y divide-gray-700">
-              {contacts.map((u) => (
-                <li key={u.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-200">{displayName(u)}</span>
+              {contacts.map((c) => (
+                <li key={c.contact_id} className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
                   <button
-                    onClick={() => remove(u.id)}
+                    onClick={() => remove(c.contact_id)}
                     className="rounded bg-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-800"
                   >
                     Remove

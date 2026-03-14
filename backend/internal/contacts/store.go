@@ -96,10 +96,10 @@ func (s *pgStore) Delete(ctx context.Context, contactID, userID string) error {
 	return nil
 }
 
-// ListAccepted returns a summary of all accepted contacts for the given user.
-func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]UserSummary, error) {
+// ListAccepted returns all accepted contacts for the given user.
+func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT u.id, u.email, COALESCE(p.display_name, '') AS display_name
+		SELECT c.id, u.id, u.email, COALESCE(p.display_name, '') AS display_name
 		FROM contacts c
 		JOIN users u ON u.id = CASE
 			WHEN c.requester_id = $1 THEN c.addressee_id
@@ -115,7 +115,7 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]UserSummar
 		return nil, fmt.Errorf("list accepted: %w", err)
 	}
 	defer rows.Close()
-	return scanUserSummaries(rows)
+	return scanAcceptedContacts(rows)
 }
 
 // ListPending returns incoming pending contact requests for the given user.
@@ -177,6 +177,24 @@ func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) 
 	}
 	defer rows.Close()
 	return scanUserSummaries(rows)
+}
+
+func scanAcceptedContacts(rows pgx.Rows) ([]AcceptedContact, error) {
+	var results []AcceptedContact
+	for rows.Next() {
+		var c AcceptedContact
+		if err := rows.Scan(&c.ContactID, &c.UserID, &c.Email, &c.DisplayName); err != nil {
+			return nil, fmt.Errorf("scan accepted contact: %w", err)
+		}
+		results = append(results, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	if results == nil {
+		results = []AcceptedContact{}
+	}
+	return results, nil
 }
 
 func scanPendingRequests(rows pgx.Rows) ([]PendingRequest, error) {
