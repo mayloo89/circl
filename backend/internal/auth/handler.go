@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
+
+	"github.com/mayloo89/circl/backend/internal/token"
 )
 
 // Authenticator is the interface the handler depends on.
@@ -22,21 +25,26 @@ type loginRequest struct {
 type userResponse struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
+	Token string `json:"token"`
 }
 
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
+// generateTokenFn is a variable so tests can inject a failing implementation.
+var generateTokenFn = token.Generate
+
 // NewHandler returns an http.Handler with all auth routes registered.
-func NewHandler(auth Authenticator) http.Handler {
+// jwtSecret and tokenExpiry are used to issue a signed JWT on login/register.
+func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/login", loginHandler(auth))
-	mux.HandleFunc("POST /auth/register", registerHandler(auth))
+	mux.HandleFunc("POST /auth/login", loginHandler(auth, jwtSecret, tokenExpiry))
+	mux.HandleFunc("POST /auth/register", registerHandler(auth, jwtSecret, tokenExpiry))
 	return mux
 }
 
-func loginHandler(auth Authenticator) http.HandlerFunc {
+func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -64,11 +72,17 @@ func loginHandler(auth Authenticator) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email})
+		tok, err := generateTokenFn(user.ID, jwtSecret, tokenExpiry)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok})
 	}
 }
 
-func registerHandler(auth Authenticator) http.HandlerFunc {
+func registerHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -94,7 +108,13 @@ func registerHandler(auth Authenticator) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email})
+		tok, err := generateTokenFn(user.ID, jwtSecret, tokenExpiry)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, Token: tok})
 	}
 }
 

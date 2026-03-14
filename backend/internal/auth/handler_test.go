@@ -9,8 +9,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mayloo89/circl/backend/internal/auth"
+)
+
+const (
+	testSecret  = "supersecretfortesting-mustbe32chars!!"
+	testExpiry  = time.Hour
 )
 
 // mockAuth is a test double for Authenticator.
@@ -28,10 +34,14 @@ func (m *mockAuth) Register(_ context.Context, _, _ string) (*auth.User, error) 
 	return m.user, m.registerErr
 }
 
+func newHandler(mock *mockAuth) http.Handler {
+	return auth.NewHandler(mock, testSecret, testExpiry)
+}
+
 // --- Login handler ---
 
 func TestLoginHandler_Success(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{user: &auth.User{ID: "abc-123", Email: "user@example.com"}})
+	h := newHandler(&mockAuth{user: &auth.User{ID: "abc-123", Email: "user@example.com"}})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	rec := httptest.NewRecorder()
@@ -40,12 +50,14 @@ func TestLoginHandler_Success(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	assertJSONField(t, rec.Body.Bytes(), "id", "abc-123")
-	assertJSONField(t, rec.Body.Bytes(), "email", "user@example.com")
+	body := rec.Body.Bytes()
+	assertJSONField(t, body, "id", "abc-123")
+	assertJSONField(t, body, "email", "user@example.com")
+	assertJSONFieldNonEmpty(t, body, "token")
 }
 
 func TestLoginHandler_InvalidCredentials(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{loginErr: auth.ErrInvalidCredentials})
+	h := newHandler(&mockAuth{loginErr: auth.ErrInvalidCredentials})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"user@example.com","password":"wrong"}`))
 	rec := httptest.NewRecorder()
@@ -57,7 +69,7 @@ func TestLoginHandler_InvalidCredentials(t *testing.T) {
 }
 
 func TestLoginHandler_InternalError(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{loginErr: errors.New("unexpected db error")})
+	h := newHandler(&mockAuth{loginErr: errors.New("unexpected db error")})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	rec := httptest.NewRecorder()
@@ -69,7 +81,7 @@ func TestLoginHandler_InternalError(t *testing.T) {
 }
 
 func TestLoginHandler_MalformedJSON(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{})
+	h := newHandler(&mockAuth{})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader("{not json"))
 	rec := httptest.NewRecorder()
@@ -81,7 +93,7 @@ func TestLoginHandler_MalformedJSON(t *testing.T) {
 }
 
 func TestLoginHandler_MissingFields(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{})
+	h := newHandler(&mockAuth{})
 
 	for _, body := range []string{
 		`{"email":"","password":"secret"}`,
@@ -98,7 +110,7 @@ func TestLoginHandler_MissingFields(t *testing.T) {
 }
 
 func TestLoginHandler_PasswordTooLong(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{})
+	h := newHandler(&mockAuth{})
 
 	body, _ := json.Marshal(map[string]string{
 		"email":    "user@example.com",
@@ -114,7 +126,7 @@ func TestLoginHandler_PasswordTooLong(t *testing.T) {
 }
 
 func TestLoginHandler_ContentType(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}})
+	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"u@u.com","password":"pass1234"}`))
 	rec := httptest.NewRecorder()
@@ -128,7 +140,7 @@ func TestLoginHandler_ContentType(t *testing.T) {
 // --- Register handler ---
 
 func TestRegisterHandler_Success(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
+	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"new@example.com","password":"securepass"}`))
 	rec := httptest.NewRecorder()
@@ -137,11 +149,13 @@ func TestRegisterHandler_Success(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
-	assertJSONField(t, rec.Body.Bytes(), "email", "new@example.com")
+	body := rec.Body.Bytes()
+	assertJSONField(t, body, "email", "new@example.com")
+	assertJSONFieldNonEmpty(t, body, "token")
 }
 
 func TestRegisterHandler_EmailTaken(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{registerErr: auth.ErrEmailTaken})
+	h := newHandler(&mockAuth{registerErr: auth.ErrEmailTaken})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"taken@example.com","password":"securepass"}`))
 	rec := httptest.NewRecorder()
@@ -153,7 +167,7 @@ func TestRegisterHandler_EmailTaken(t *testing.T) {
 }
 
 func TestRegisterHandler_InvalidInput(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{registerErr: auth.ErrInvalidInput})
+	h := newHandler(&mockAuth{registerErr: auth.ErrInvalidInput})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"bad","password":"short"}`))
 	rec := httptest.NewRecorder()
@@ -165,7 +179,7 @@ func TestRegisterHandler_InvalidInput(t *testing.T) {
 }
 
 func TestRegisterHandler_InternalError(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{registerErr: errors.New("unexpected error")})
+	h := newHandler(&mockAuth{registerErr: errors.New("unexpected error")})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"user@example.com","password":"securepass"}`))
 	rec := httptest.NewRecorder()
@@ -177,7 +191,7 @@ func TestRegisterHandler_InternalError(t *testing.T) {
 }
 
 func TestRegisterHandler_MalformedJSON(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{})
+	h := newHandler(&mockAuth{})
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader("{not json"))
 	rec := httptest.NewRecorder()
@@ -189,7 +203,7 @@ func TestRegisterHandler_MalformedJSON(t *testing.T) {
 }
 
 func TestRegisterHandler_MissingFields(t *testing.T) {
-	h := auth.NewHandler(&mockAuth{})
+	h := newHandler(&mockAuth{})
 
 	for _, body := range []string{
 		`{"email":"","password":"securepass"}`,
@@ -215,5 +229,16 @@ func assertJSONField(t *testing.T, body []byte, key, want string) {
 	}
 	if m[key] != want {
 		t.Errorf("%s = %q, want %q", key, m[key], want)
+	}
+}
+
+func assertJSONFieldNonEmpty(t *testing.T, body []byte, key string) {
+	t.Helper()
+	var m map[string]string
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if m[key] == "" {
+		t.Errorf("%s is empty, want non-empty", key)
 	}
 }
