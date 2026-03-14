@@ -455,7 +455,7 @@ func openTestDB(t *testing.T) *pgxpool.Pool {
 func TestIntegration_ContactsFlow(t *testing.T) {
 	pool := openTestDB(t)
 	store := NewStore(pool)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create two test users directly via SQL.
 	var u1, u2 string
@@ -470,7 +470,7 @@ func TestIntegration_ContactsFlow(t *testing.T) {
 		t.Fatalf("create u2: %v", err)
 	}
 	t.Cleanup(func() {
-		pool.Exec(ctx, `DELETE FROM users WHERE id IN ($1,$2)`, u1, u2)
+		pool.Exec(context.Background(), `DELETE FROM users WHERE id IN ($1,$2)`, u1, u2)
 	})
 
 	// Send request.

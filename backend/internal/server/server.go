@@ -68,9 +68,8 @@ func healthHandler(db DBPinger, env string) http.HandlerFunc {
 // NormalizeCORSOrigins splits a comma-separated origins string into a slice,
 // trimming whitespace from each entry.
 func NormalizeCORSOrigins(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
+	var out []string
+	for p := range strings.SplitSeq(raw, ",") {
 		if trimmed := strings.TrimSpace(p); trimmed != "" {
 			out = append(out, trimmed)
 		}

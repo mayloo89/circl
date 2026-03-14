@@ -47,7 +47,7 @@ func TestService_Login_Success(t *testing.T) {
 		},
 	})
 
-	user, err := svc.Login(context.Background(), "user@example.com", "secret")
+	user, err := svc.Login(t.Context(), "user@example.com", "secret")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestService_Login_Success(t *testing.T) {
 func TestService_Login_UserNotFound(t *testing.T) {
 	svc := NewService(&mockStore{getErr: errors.New("user not found")})
 
-	_, err := svc.Login(context.Background(), "nobody@example.com", "password")
+	_, err := svc.Login(t.Context(), "nobody@example.com", "password")
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("got %v, want ErrInvalidCredentials", err)
 	}
@@ -75,7 +75,7 @@ func TestService_Login_WrongPassword(t *testing.T) {
 		},
 	})
 
-	_, err := svc.Login(context.Background(), "user@example.com", "wrong")
+	_, err := svc.Login(t.Context(), "user@example.com", "wrong")
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("got %v, want ErrInvalidCredentials", err)
 	}
@@ -91,7 +91,7 @@ func TestService_Login_SuspendedAccount(t *testing.T) {
 		},
 	})
 
-	_, err := svc.Login(context.Background(), "user@example.com", "secret")
+	_, err := svc.Login(t.Context(), "user@example.com", "secret")
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("got %v, want ErrInvalidCredentials", err)
 	}
@@ -102,7 +102,7 @@ func TestService_Login_SuspendedAccount(t *testing.T) {
 func TestService_Register_Success(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	user, err := svc.Register(context.Background(), "new@example.com", "securepass")
+	user, err := svc.Register(t.Context(), "new@example.com", "securepass")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestService_Register_Success(t *testing.T) {
 func TestService_Register_InvalidEmail(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	_, err := svc.Register(context.Background(), "not-an-email", "securepass")
+	_, err := svc.Register(t.Context(), "not-an-email", "securepass")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -123,7 +123,7 @@ func TestService_Register_InvalidEmail(t *testing.T) {
 func TestService_Register_PasswordTooShort(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	_, err := svc.Register(context.Background(), "user@example.com", "short")
+	_, err := svc.Register(t.Context(), "user@example.com", "short")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -137,7 +137,7 @@ func TestService_Register_PasswordTooLong(t *testing.T) {
 		longPass[i] = 'a'
 	}
 
-	_, err := svc.Register(context.Background(), "user@example.com", string(longPass))
+	_, err := svc.Register(t.Context(), "user@example.com", string(longPass))
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -146,7 +146,7 @@ func TestService_Register_PasswordTooLong(t *testing.T) {
 func TestService_Register_EmailTaken(t *testing.T) {
 	svc := NewService(&mockStore{createErr: ErrEmailTaken})
 
-	_, err := svc.Register(context.Background(), "taken@example.com", "securepass")
+	_, err := svc.Register(t.Context(), "taken@example.com", "securepass")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("got %v, want ErrEmailTaken", err)
 	}
