@@ -7,14 +7,11 @@ import (
 	"net/http"
 )
 
-const (
-	maxPasswordLen = 128 // prevent bcrypt DoS via oversized input
-)
-
 // Authenticator is the interface the handler depends on.
 // *Service satisfies this interface.
 type Authenticator interface {
 	Login(ctx context.Context, email, password string) (*User, error)
+	Register(ctx context.Context, email, password string) (*User, error)
 }
 
 type loginRequest struct {
@@ -22,7 +19,7 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-type loginResponse struct {
+type userResponse struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 }
@@ -35,6 +32,7 @@ type errorResponse struct {
 func NewHandler(auth Authenticator) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /auth/login", loginHandler(auth))
+	mux.HandleFunc("POST /auth/register", registerHandler(auth))
 	return mux
 }
 
@@ -66,7 +64,37 @@ func loginHandler(auth Authenticator) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, loginResponse{ID: user.ID, Email: user.Email})
+		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email})
+	}
+}
+
+func registerHandler(auth Authenticator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req loginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			return
+		}
+
+		if req.Email == "" || req.Password == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"email and password are required"})
+			return
+		}
+
+		user, err := auth.Register(r.Context(), req.Email, req.Password)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrInvalidInput):
+				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+			case errors.Is(err, ErrEmailTaken):
+				writeJSON(w, http.StatusConflict, errorResponse{"email already taken"})
+			default:
+				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email})
 	}
 }
 

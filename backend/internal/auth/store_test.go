@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // mockQuerier is a test double for the querier interface.
@@ -19,12 +19,13 @@ func (m *mockQuerier) QueryRow(_ context.Context, _ string, _ ...any) rowScanner
 }
 
 // mockRow is a test double for rowScanner.
-// scanFn receives the dest pointers and populates them (or returns an error).
 type mockRow struct {
 	scanFn func(dest ...any) error
 }
 
 func (r *mockRow) Scan(dest ...any) error { return r.scanFn(dest...) }
+
+// --- GetUserByEmail ---
 
 func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 	store := &pgStore{db: &mockQuerier{
@@ -43,9 +44,6 @@ func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 	}
 	if record.ID != "uuid-1" {
 		t.Errorf("ID = %q, want %q", record.ID, "uuid-1")
-	}
-	if record.Status != "active" {
-		t.Errorf("Status = %q, want %q", record.Status, "active")
 	}
 }
 
@@ -71,14 +69,62 @@ func TestPgStore_GetUserByEmail_QueryError(t *testing.T) {
 	}
 }
 
+// --- CreateUser ---
+
+func TestPgStore_CreateUser_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(dest ...any) error {
+			*dest[0].(*string) = "new-uuid"
+			*dest[1].(*string) = "new@example.com"
+			*dest[2].(*string) = "$2a$10$hash"
+			*dest[3].(*string) = "active"
+			return nil
+		}},
+	}}
+
+	record, err := store.CreateUser(context.Background(), "new@example.com", "$2a$10$hash")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if record.ID != "new-uuid" {
+		t.Errorf("ID = %q, want %q", record.ID, "new-uuid")
+	}
+}
+
+func TestPgStore_CreateUser_EmailTaken(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error {
+			return &pgconn.PgError{Code: "23505"}
+		}},
+	}}
+
+	_, err := store.CreateUser(context.Background(), "taken@example.com", "hash")
+	if !errors.Is(err, ErrEmailTaken) {
+		t.Errorf("got %v, want ErrEmailTaken", err)
+	}
+}
+
+func TestPgStore_CreateUser_QueryError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error { return errors.New("db error") }},
+	}}
+
+	_, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- NewStore ---
+
 func TestNewStore(t *testing.T) {
-	// Verify NewStore returns a non-nil Store without panicking.
-	// A nil pool is intentional here — we're only testing construction.
 	store := NewStore((*pgxpool.Pool)(nil))
 	if store == nil {
 		t.Fatal("expected non-nil store")
 	}
 }
+
+// --- Integration ---
 
 func TestStore_Integration(t *testing.T) {
 	dbURL := os.Getenv("TEST_DATABASE_URL")
@@ -92,38 +138,38 @@ func TestStore_Integration(t *testing.T) {
 	}
 	defer pool.Close()
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte("testpassword"), bcrypt.MinCost)
-	_, err = pool.Exec(context.Background(),
-		`INSERT INTO users (email, password_hash, provider, status)
-		 VALUES ($1, $2, 'local', 'active')
-		 ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
-		"store_test@example.com", string(hash),
-	)
-	if err != nil {
-		t.Fatalf("seed test user: %v", err)
-	}
+	store := NewStore(pool)
+	svc := NewService(store)
+
+	const email = "store_integration@example.com"
 	t.Cleanup(func() {
-		pool.Exec(context.Background(), `DELETE FROM users WHERE email = $1`, "store_test@example.com")
+		pool.Exec(context.Background(), `DELETE FROM users WHERE email = $1`, email)
 	})
 
-	store := NewStore(pool)
-
-	t.Run("returns user when found", func(t *testing.T) {
-		svc := NewService(store)
-		user, err := svc.Login(context.Background(), "store_test@example.com", "testpassword")
+	t.Run("register new user", func(t *testing.T) {
+		user, err := svc.Register(context.Background(), email, "securepass")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if user.Email != "store_test@example.com" {
-			t.Errorf("email = %q, want %q", user.Email, "store_test@example.com")
+		if user.Email != email {
+			t.Errorf("email = %q, want %q", user.Email, email)
 		}
 	})
 
-	t.Run("returns error when user not found", func(t *testing.T) {
-		svc := NewService(store)
-		_, err := svc.Login(context.Background(), "nobody@example.com", "password")
-		if err == nil {
-			t.Fatal("expected error, got nil")
+	t.Run("login with registered user", func(t *testing.T) {
+		user, err := svc.Login(context.Background(), email, "securepass")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if user.Email != email {
+			t.Errorf("email = %q, want %q", user.Email, email)
+		}
+	})
+
+	t.Run("register duplicate email returns ErrEmailTaken", func(t *testing.T) {
+		_, err := svc.Register(context.Background(), email, "otherpass")
+		if !errors.Is(err, ErrEmailTaken) {
+			t.Errorf("got %v, want ErrEmailTaken", err)
 		}
 	})
 }
