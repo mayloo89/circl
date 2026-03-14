@@ -43,7 +43,7 @@ func newHandler(mock *mockAuth) http.Handler {
 func TestLoginHandler_Success(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "abc-123", Email: "user@example.com"}})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -59,7 +59,7 @@ func TestLoginHandler_Success(t *testing.T) {
 func TestLoginHandler_InvalidCredentials(t *testing.T) {
 	h := newHandler(&mockAuth{loginErr: auth.ErrInvalidCredentials})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"user@example.com","password":"wrong"}`))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"wrong"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -71,7 +71,7 @@ func TestLoginHandler_InvalidCredentials(t *testing.T) {
 func TestLoginHandler_InternalError(t *testing.T) {
 	h := newHandler(&mockAuth{loginErr: errors.New("unexpected db error")})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -83,7 +83,7 @@ func TestLoginHandler_InternalError(t *testing.T) {
 func TestLoginHandler_MalformedJSON(t *testing.T) {
 	h := newHandler(&mockAuth{})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader("{not json"))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("{not json"))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -99,7 +99,7 @@ func TestLoginHandler_MissingFields(t *testing.T) {
 		`{"email":"","password":"secret"}`,
 		`{"email":"user@example.com","password":""}`,
 	} {
-		req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(body))
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 
@@ -116,7 +116,7 @@ func TestLoginHandler_PasswordTooLong(t *testing.T) {
 		"email":    "user@example.com",
 		"password": strings.Repeat("a", 129),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -128,7 +128,7 @@ func TestLoginHandler_PasswordTooLong(t *testing.T) {
 func TestLoginHandler_ContentType(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"u@u.com","password":"pass1234"}`))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"pass1234"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -142,7 +142,7 @@ func TestLoginHandler_ContentType(t *testing.T) {
 func TestRegisterHandler_Success(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"new@example.com","password":"securepass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"new@example.com","password":"securepass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -157,7 +157,7 @@ func TestRegisterHandler_Success(t *testing.T) {
 func TestRegisterHandler_EmailTaken(t *testing.T) {
 	h := newHandler(&mockAuth{registerErr: auth.ErrEmailTaken})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"taken@example.com","password":"securepass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"taken@example.com","password":"securepass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -169,7 +169,7 @@ func TestRegisterHandler_EmailTaken(t *testing.T) {
 func TestRegisterHandler_InvalidInput(t *testing.T) {
 	h := newHandler(&mockAuth{registerErr: auth.ErrInvalidInput})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"bad","password":"short"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"bad","password":"short"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -181,7 +181,7 @@ func TestRegisterHandler_InvalidInput(t *testing.T) {
 func TestRegisterHandler_InternalError(t *testing.T) {
 	h := newHandler(&mockAuth{registerErr: errors.New("unexpected error")})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"user@example.com","password":"securepass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"user@example.com","password":"securepass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -193,7 +193,7 @@ func TestRegisterHandler_InternalError(t *testing.T) {
 func TestRegisterHandler_MalformedJSON(t *testing.T) {
 	h := newHandler(&mockAuth{})
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader("{not json"))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader("{not json"))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -209,7 +209,7 @@ func TestRegisterHandler_MissingFields(t *testing.T) {
 		`{"email":"","password":"securepass"}`,
 		`{"email":"user@example.com","password":""}`,
 	} {
-		req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 
