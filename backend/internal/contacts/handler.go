@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/notifications"
 )
 
 // Manager is the interface the handlers depend on.
@@ -22,17 +23,36 @@ type Manager interface {
 	SearchUsers(ctx context.Context, query, userID string) ([]UserSummary, error)
 }
 
+// handlerConfig holds optional dependencies for the contacts handler.
+type handlerConfig struct {
+	notifier notifications.Notifier
+}
+
+// HandlerOption configures the contacts handler.
+type HandlerOption func(*handlerConfig)
+
+// WithNotifier sets a Notifier that receives events when contact requests are
+// sent or accepted.
+func WithNotifier(n notifications.Notifier) HandlerOption {
+	return func(cfg *handlerConfig) { cfg.notifier = n }
+}
+
 // NewHandler returns a chi router with all contacts and user-search routes.
 // All routes require a valid JWT (enforced by the caller via middleware.RequireAuth).
-func NewHandler(svc Manager) http.Handler {
+func NewHandler(svc Manager, opts ...HandlerOption) http.Handler {
+	cfg := &handlerConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
+
 	r := chi.NewRouter()
 
 	r.Get("/users/search", searchUsersHandler(svc))
-	r.Post("/contacts", sendRequestHandler(svc))
+	r.Post("/contacts", sendRequestHandler(svc, cfg))
 	r.Get("/contacts", listAcceptedHandler(svc))
 	r.Get("/contacts/pending", listPendingHandler(svc))
 	r.Get("/contacts/sent", listSentHandler(svc))
-	r.Put("/contacts/{id}/accept", acceptHandler(svc))
+	r.Put("/contacts/{id}/accept", acceptHandler(svc, cfg))
 	r.Delete("/contacts/{id}", deleteHandler(svc))
 
 	return r
@@ -55,7 +75,7 @@ func searchUsersHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
-func sendRequestHandler(svc Manager) http.HandlerFunc {
+func sendRequestHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -87,6 +107,17 @@ func sendRequestHandler(svc Manager) http.HandlerFunc {
 			}
 			return
 		}
+
+		if cfg.notifier != nil {
+			cfg.notifier.Notify(contact.AddresseeID, notifications.Event{
+				Type: "contact_request",
+				Payload: map[string]string{
+					"contact_id":   contact.ID,
+					"requester_id": contact.RequesterID,
+				},
+			})
+		}
+
 		writeJSON(w, http.StatusCreated, contact)
 	}
 }
@@ -139,7 +170,7 @@ func listSentHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
-func acceptHandler(svc Manager) http.HandlerFunc {
+func acceptHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -156,6 +187,17 @@ func acceptHandler(svc Manager) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
 			return
 		}
+
+		if cfg.notifier != nil {
+			cfg.notifier.Notify(contact.RequesterID, notifications.Event{
+				Type: "contact_accepted",
+				Payload: map[string]string{
+					"contact_id":   contact.ID,
+					"addressee_id": contact.AddresseeID,
+				},
+			})
+		}
+
 		writeJSON(w, http.StatusOK, contact)
 	}
 }

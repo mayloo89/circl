@@ -2,7 +2,9 @@
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+
+import { useNotifications } from "@/hooks/useNotifications"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -51,6 +53,18 @@ export default function ContactsPage() {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
 
+  const fetchPending = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/contacts/pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) setPending(await res.json())
+    } catch {
+      // silent — non-critical refresh
+    }
+  }, [token])
+
   useEffect(() => {
     if (status !== "authenticated" || !token) return
 
@@ -67,6 +81,30 @@ export default function ContactsPage() {
       .catch(() => setError("Failed to load contacts."))
       .finally(() => setLoading(false))
   }, [status, token])
+
+  useNotifications(token, (e) => {
+    if (e.type === "contact_request") {
+      // Re-fetch pending to get the full display_name/email of the requester.
+      fetchPending()
+    }
+    if (e.type === "contact_accepted") {
+      // Move the matching sent entry into accepted contacts.
+      setSent((prev) => {
+        const matched = prev.find((s) => s.contact_id === e.payload.contact_id)
+        if (!matched) return prev
+        setContacts((c) => [
+          ...c,
+          {
+            contact_id: matched.contact_id,
+            user_id: matched.user_id,
+            email: matched.email,
+            display_name: matched.display_name,
+          },
+        ])
+        return prev.filter((s) => s.contact_id !== e.payload.contact_id)
+      })
+    }
+  })
 
   async function search(q: string) {
     setSearchQuery(q)
@@ -202,7 +240,12 @@ export default function ContactsPage() {
         {/* Pending requests */}
         {pending.length > 0 && (
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 text-lg font-semibold text-white">Pending Requests</h2>
+            <h2 className="mb-3 text-lg font-semibold text-white">
+              Pending Requests
+              <span className="ml-2 rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">
+                {pending.length}
+              </span>
+            </h2>
             <ul className="divide-y divide-gray-700">
               {pending.map((r) => (
                 <li key={r.contact_id} className="flex items-center justify-between py-2">

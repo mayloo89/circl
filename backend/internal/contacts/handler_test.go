@@ -13,6 +13,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
 
@@ -494,5 +495,80 @@ func TestListSent_NoUserIDInContext(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- Notifier ---
+
+type mockNotifier struct {
+	calledWith []struct {
+		userID string
+		event  notifications.Event
+	}
+}
+
+func (m *mockNotifier) Notify(userID string, e notifications.Event) {
+	m.calledWith = append(m.calledWith, struct {
+		userID string
+		event  notifications.Event
+	}{userID, e})
+}
+
+func TestSendRequest_NotifiesAddressee(t *testing.T) {
+	c := &contacts.Contact{ID: "c-1", RequesterID: testUserID, AddresseeID: "u-2", Status: contacts.StatusPending}
+	notifier := &mockNotifier{}
+	h := contacts.NewHandler(&mockManager{contact: c}, contacts.WithNotifier(notifier))
+
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/contacts", strings.NewReader(`{"addressee_id":"u-2"}`)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if len(notifier.calledWith) != 1 {
+		t.Fatalf("Notify called %d times, want 1", len(notifier.calledWith))
+	}
+	if notifier.calledWith[0].userID != "u-2" {
+		t.Errorf("Notify userID = %q, want u-2", notifier.calledWith[0].userID)
+	}
+	if notifier.calledWith[0].event.Type != "contact_request" {
+		t.Errorf("Notify event type = %q, want contact_request", notifier.calledWith[0].event.Type)
+	}
+}
+
+func TestAccept_NotifiesRequester(t *testing.T) {
+	c := &contacts.Contact{ID: "c-1", RequesterID: "u-3", AddresseeID: testUserID, Status: contacts.StatusAccepted}
+	notifier := &mockNotifier{}
+	h := contacts.NewHandler(&mockManager{contact: c}, contacts.WithNotifier(notifier))
+
+	req := authedRequest(httptest.NewRequest(http.MethodPut, "/contacts/c-1/accept", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if len(notifier.calledWith) != 1 {
+		t.Fatalf("Notify called %d times, want 1", len(notifier.calledWith))
+	}
+	if notifier.calledWith[0].userID != "u-3" {
+		t.Errorf("Notify userID = %q, want u-3", notifier.calledWith[0].userID)
+	}
+	if notifier.calledWith[0].event.Type != "contact_accepted" {
+		t.Errorf("Notify event type = %q, want contact_accepted", notifier.calledWith[0].event.Type)
+	}
+}
+
+func TestSendRequest_NoNotifier_NoPanic(t *testing.T) {
+	c := &contacts.Contact{ID: "c-1", RequesterID: testUserID, AddresseeID: "u-2", Status: contacts.StatusPending}
+	h := contacts.NewHandler(&mockManager{contact: c}) // no WithNotifier
+
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/contacts", strings.NewReader(`{"addressee_id":"u-2"}`)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
 }
