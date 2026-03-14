@@ -39,8 +39,8 @@ var generateTokenFn = token.Generate
 // jwtSecret and tokenExpiry are used to issue a signed JWT on login/register.
 func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/login", loginHandler(auth, jwtSecret, tokenExpiry))
-	mux.HandleFunc("POST /auth/register", registerHandler(auth, jwtSecret, tokenExpiry))
+	mux.HandleFunc("POST /login", loginHandler(auth, jwtSecret, tokenExpiry))
+	mux.HandleFunc("POST /register", registerHandler(auth, jwtSecret, tokenExpiry))
 	return mux
 }
 

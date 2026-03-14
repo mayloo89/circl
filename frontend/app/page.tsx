@@ -26,6 +26,13 @@ export default async function Home() {
           My Profile
         </Link>
 
+        <Link
+          href="/contacts"
+          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        >
+          Contacts
+        </Link>
+
         <form
           action={async () => {
             "use server"

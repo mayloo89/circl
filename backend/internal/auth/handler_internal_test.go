@@ -35,7 +35,7 @@ func TestLoginHandler_TokenGenerateError(t *testing.T) {
 	}
 
 	h := NewHandler(&mockAuthInternal{user: &User{ID: "1", Email: "u@u.com"}}, "secret", time.Hour)
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -53,7 +53,7 @@ func TestRegisterHandler_TokenGenerateError(t *testing.T) {
 	}
 
 	h := NewHandler(&mockAuthInternal{user: &User{ID: "1", Email: "u@u.com"}}, "secret", time.Hour)
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

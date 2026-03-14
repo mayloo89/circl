@@ -10,6 +10,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/config"
+	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/db"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/profiles"
@@ -60,9 +61,13 @@ func main() {
 	profileSvc := profiles.NewService(profileStore)
 	profileHandler := profiles.NewHandler(profileSvc)
 
+	contactStore := contacts.NewStore(pool)
+	contactSvc := contacts.NewService(contactStore)
+	contactsHandler := contacts.NewHandler(contactSvc)
+
 	requireAuth := middleware.RequireAuth(jwtSecret)
 
-	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {
