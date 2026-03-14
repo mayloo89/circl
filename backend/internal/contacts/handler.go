@@ -17,7 +17,8 @@ type Manager interface {
 	Accept(ctx context.Context, contactID, userID string) (*Contact, error)
 	Delete(ctx context.Context, contactID, userID string) error
 	ListAccepted(ctx context.Context, userID string) ([]UserSummary, error)
-	ListPending(ctx context.Context, userID string) ([]UserSummary, error)
+	ListPending(ctx context.Context, userID string) ([]PendingRequest, error)
+	ListSent(ctx context.Context, userID string) ([]SentRequest, error)
 	SearchUsers(ctx context.Context, query, userID string) ([]UserSummary, error)
 }
 
@@ -30,6 +31,7 @@ func NewHandler(svc Manager) http.Handler {
 	r.Post("/contacts", sendRequestHandler(svc))
 	r.Get("/contacts", listAcceptedHandler(svc))
 	r.Get("/contacts/pending", listPendingHandler(svc))
+	r.Get("/contacts/sent", listSentHandler(svc))
 	r.Put("/contacts/{id}/accept", acceptHandler(svc))
 	r.Delete("/contacts/{id}", deleteHandler(svc))
 
@@ -118,6 +120,22 @@ func listPendingHandler(svc Manager) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, contacts)
+	}
+}
+
+func listSentHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			return
+		}
+		sent, err := svc.ListSent(r.Context(), userID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			return
+		}
+		writeJSON(w, http.StatusOK, sent)
 	}
 }
 

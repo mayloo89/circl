@@ -119,9 +119,9 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]UserSummar
 }
 
 // ListPending returns incoming pending contact requests for the given user.
-func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]UserSummary, error) {
+func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT u.id, u.email, COALESCE(p.display_name, '') AS display_name
+		SELECT c.id, u.id, u.email, COALESCE(p.display_name, '') AS display_name
 		FROM contacts c
 		JOIN users u ON u.id = c.requester_id
 		LEFT JOIN profiles p ON p.user_id = u.id
@@ -133,10 +133,29 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]UserSu
 		return nil, fmt.Errorf("list pending: %w", err)
 	}
 	defer rows.Close()
-	return scanUserSummaries(rows)
+	return scanPendingRequests(rows)
 }
 
-// SearchUsers finds users by email or display_name prefix, excluding the caller.
+// ListSent returns outgoing pending contact requests sent by the given user.
+func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentRequest, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT c.id, u.id, u.email, COALESCE(p.display_name, '') AS display_name
+		FROM contacts c
+		JOIN users u ON u.id = c.addressee_id
+		LEFT JOIN profiles p ON p.user_id = u.id
+		WHERE c.requester_id = $1 AND c.status = 'pending'
+		ORDER BY c.created_at DESC`,
+		requesterID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list sent: %w", err)
+	}
+	defer rows.Close()
+	return scanSentRequests(rows)
+}
+
+// SearchUsers finds users by email or display_name prefix, excluding the caller
+// and any user who already has a contact relationship (any status) with the caller.
 func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) ([]UserSummary, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT u.id, u.email, COALESCE(p.display_name, '') AS display_name
@@ -144,6 +163,11 @@ func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) 
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id <> $1
 		  AND (u.email ILIKE $2 OR p.display_name ILIKE $2)
+		  AND NOT EXISTS (
+		    SELECT 1 FROM contacts c
+		    WHERE (c.requester_id = $1 AND c.addressee_id = u.id)
+		       OR (c.requester_id = u.id AND c.addressee_id = $1)
+		  )
 		ORDER BY display_name, u.email
 		LIMIT 20`,
 		excludeUserID, "%"+query+"%",
@@ -153,6 +177,42 @@ func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) 
 	}
 	defer rows.Close()
 	return scanUserSummaries(rows)
+}
+
+func scanPendingRequests(rows pgx.Rows) ([]PendingRequest, error) {
+	var results []PendingRequest
+	for rows.Next() {
+		var r PendingRequest
+		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName); err != nil {
+			return nil, fmt.Errorf("scan pending request: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	if results == nil {
+		results = []PendingRequest{}
+	}
+	return results, nil
+}
+
+func scanSentRequests(rows pgx.Rows) ([]SentRequest, error) {
+	var results []SentRequest
+	for rows.Next() {
+		var r SentRequest
+		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName); err != nil {
+			return nil, fmt.Errorf("scan sent request: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	if results == nil {
+		results = []SentRequest{}
+	}
+	return results, nil
 }
 
 func scanUserSummaries(rows pgx.Rows) ([]UserSummary, error) {

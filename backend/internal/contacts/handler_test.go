@@ -23,13 +23,17 @@ const (
 
 // mockManager is a test double for contacts.Manager.
 type mockManager struct {
-	contact   *contacts.Contact
-	users     []contacts.UserSummary
-	sendErr   error
-	acceptErr error
-	deleteErr error
-	listErr   error
-	searchErr error
+	contact    *contacts.Contact
+	users      []contacts.UserSummary
+	pending    []contacts.PendingRequest
+	sent       []contacts.SentRequest
+	sendErr    error
+	acceptErr  error
+	deleteErr  error
+	listErr    error
+	pendingErr error
+	sentErr    error
+	searchErr  error
 }
 
 func (m *mockManager) SendRequest(_ context.Context, _, _ string) (*contacts.Contact, error) {
@@ -42,8 +46,11 @@ func (m *mockManager) Delete(_ context.Context, _, _ string) error { return m.de
 func (m *mockManager) ListAccepted(_ context.Context, _ string) ([]contacts.UserSummary, error) {
 	return m.users, m.listErr
 }
-func (m *mockManager) ListPending(_ context.Context, _ string) ([]contacts.UserSummary, error) {
-	return m.users, m.listErr
+func (m *mockManager) ListPending(_ context.Context, _ string) ([]contacts.PendingRequest, error) {
+	return m.pending, m.pendingErr
+}
+func (m *mockManager) ListSent(_ context.Context, _ string) ([]contacts.SentRequest, error) {
+	return m.sent, m.sentErr
 }
 func (m *mockManager) SearchUsers(_ context.Context, _, _ string) ([]contacts.UserSummary, error) {
 	return m.users, m.searchErr
@@ -249,7 +256,7 @@ func TestListPending_Unauthorized(t *testing.T) {
 }
 
 func TestListPending_ServiceError(t *testing.T) {
-	h := contacts.NewHandler(&mockManager{listErr: errors.New("db error")})
+	h := contacts.NewHandler(&mockManager{pendingErr: errors.New("db error")})
 	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts/pending", nil))
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)
@@ -427,6 +434,60 @@ func TestAccept_NoUserIDInContext(t *testing.T) {
 func TestDelete_NoUserIDInContext(t *testing.T) {
 	h := contacts.NewHandler(&mockManager{})
 	req := httptest.NewRequest(http.MethodDelete, "/contacts/c-1", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- ListSent ---
+
+func TestListSent_Success(t *testing.T) {
+	sent := []contacts.SentRequest{{ContactID: "c-1", UserID: "u-2", Email: "b@example.com"}}
+	h := contacts.NewHandler(&mockManager{sent: sent})
+	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts/sent", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var got []contacts.SentRequest
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 || got[0].ContactID != "c-1" {
+		t.Errorf("got = %v", got)
+	}
+}
+
+func TestListSent_Unauthorized(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/contacts/sent", nil)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestListSent_InternalError(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{sentErr: errors.New("db error")})
+	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts/sent", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestListSent_NoUserIDInContext(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/contacts/sent", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

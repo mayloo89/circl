@@ -12,12 +12,27 @@ interface UserSummary {
   display_name: string
 }
 
+interface PendingRequest {
+  contact_id: string
+  user_id: string
+  email: string
+  display_name: string
+}
+
+interface SentRequest {
+  contact_id: string
+  user_id: string
+  email: string
+  display_name: string
+}
+
 export default function ContactsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
   const [contacts, setContacts] = useState<UserSummary[]>([])
-  const [pending, setPending] = useState<UserSummary[]>([])
+  const [pending, setPending] = useState<PendingRequest[]>([])
+  const [sent, setSent] = useState<SentRequest[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
   const [error, setError] = useState("")
@@ -35,10 +50,12 @@ export default function ContactsPage() {
     Promise.all([
       fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
     ])
-      .then(([c, p]) => {
+      .then(([c, p, s]) => {
         setContacts(c)
         setPending(p)
+        setSent(s)
       })
       .catch(() => setError("Failed to load contacts."))
       .finally(() => setLoading(false))
@@ -76,6 +93,11 @@ export default function ContactsPage() {
       setError("Failed to send contact request.")
       return
     }
+    const contact = await res.json()
+    const user = searchResults.find((u) => u.id === addresseeID)
+    if (user) {
+      setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, email: user.email, display_name: user.display_name }])
+    }
     setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
   }
 
@@ -89,9 +111,22 @@ export default function ContactsPage() {
       setError("Failed to accept contact.")
       return
     }
-    const accepted = pending.find((u) => u.id === contactID)
-    setPending((prev) => prev.filter((u) => u.id !== contactID))
-    if (accepted) setContacts((prev) => [...prev, accepted])
+    const accepted = pending.find((r) => r.contact_id === contactID)
+    setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
+    if (accepted) setContacts((prev) => [...prev, { id: accepted.user_id, email: accepted.email, display_name: accepted.display_name }])
+  }
+
+  async function cancelSent(contactID: string) {
+    setError("")
+    const res = await fetch(`${API_URL}/contacts/${contactID}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      setError("Failed to cancel request.")
+      return
+    }
+    setSent((prev) => prev.filter((r) => r.contact_id !== contactID))
   }
 
   async function remove(contactID: string) {
@@ -105,7 +140,7 @@ export default function ContactsPage() {
       return
     }
     setContacts((prev) => prev.filter((u) => u.id !== contactID))
-    setPending((prev) => prev.filter((u) => u.id !== contactID))
+    setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
   }
 
   function displayName(u: UserSummary) {
@@ -114,42 +149,44 @@ export default function ContactsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+        <p className="text-gray-400">Loading...</p>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-gray-50 py-10">
+    <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-lg space-y-8 px-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Contacts</h1>
-          <button onClick={() => router.push("/")} className="text-sm text-gray-500 hover:text-gray-700">
+          <h1 className="text-3xl font-bold text-white">Contacts</h1>
+          <button onClick={() => router.push("/")} className="text-sm text-gray-400 hover:text-gray-200">
             ← Home
           </button>
         </div>
 
-        {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        {error && (
+          <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
+        )}
 
         {/* Search */}
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="mb-3 text-lg font-semibold">Add Contact</h2>
+        <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
+          <h2 className="mb-3 text-lg font-semibold text-white">Add Contact</h2>
           <input
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => search(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           {searchResults.length > 0 && (
-            <ul className="mt-3 divide-y divide-gray-100">
+            <ul className="mt-3 divide-y divide-gray-700">
               {searchResults.map((u) => (
                 <li key={u.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm">{displayName(u)}</span>
+                  <span className="text-sm text-gray-200">{displayName(u)}</span>
                   <button
                     onClick={() => sendRequest(u.id)}
-                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700"
+                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
                   >
                     Add
                   </button>
@@ -161,22 +198,22 @@ export default function ContactsPage() {
 
         {/* Pending requests */}
         {pending.length > 0 && (
-          <div className="rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-3 text-lg font-semibold">Pending Requests</h2>
-            <ul className="divide-y divide-gray-100">
-              {pending.map((u) => (
-                <li key={u.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm">{displayName(u)}</span>
+          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
+            <h2 className="mb-3 text-lg font-semibold text-white">Pending Requests</h2>
+            <ul className="divide-y divide-gray-700">
+              {pending.map((r) => (
+                <li key={r.contact_id} className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => accept(u.id)}
-                      className="rounded bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
+                      onClick={() => accept(r.contact_id)}
+                      className="rounded bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-600"
                     >
                       Accept
                     </button>
                     <button
-                      onClick={() => remove(u.id)}
-                      className="rounded bg-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-300"
+                      onClick={() => remove(r.contact_id)}
+                      className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-200 hover:bg-gray-600"
                     >
                       Decline
                     </button>
@@ -187,19 +224,39 @@ export default function ContactsPage() {
           </div>
         )}
 
+        {/* Sent requests */}
+        {sent.length > 0 && (
+          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
+            <h2 className="mb-3 text-lg font-semibold text-white">Sent Requests</h2>
+            <ul className="divide-y divide-gray-700">
+              {sent.map((r) => (
+                <li key={r.contact_id} className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
+                  <button
+                    onClick={() => cancelSent(r.contact_id)}
+                    className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-200 hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Contact list */}
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="mb-3 text-lg font-semibold">My Contacts ({contacts.length})</h2>
+        <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
+          <h2 className="mb-3 text-lg font-semibold text-white">My Contacts ({contacts.length})</h2>
           {contacts.length === 0 ? (
             <p className="text-sm text-gray-500">No contacts yet. Use the search above to add someone.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-gray-700">
               {contacts.map((u) => (
                 <li key={u.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm">{displayName(u)}</span>
+                  <span className="text-sm text-gray-200">{displayName(u)}</span>
                   <button
                     onClick={() => remove(u.id)}
-                    className="rounded bg-red-100 px-3 py-1 text-xs text-red-700 hover:bg-red-200"
+                    className="rounded bg-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-800"
                   >
                     Remove
                   </button>

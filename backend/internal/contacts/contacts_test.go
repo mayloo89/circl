@@ -12,10 +12,14 @@ import (
 type mockStore struct {
 	contact     *contacts.Contact
 	users       []contacts.UserSummary
+	pending     []contacts.PendingRequest
+	sent        []contacts.SentRequest
 	sendErr     error
 	acceptErr   error
 	deleteErr   error
 	listErr     error
+	pendingErr  error
+	sentErr     error
 	searchErr   error
 }
 
@@ -29,8 +33,11 @@ func (m *mockStore) Delete(_ context.Context, _, _ string) error { return m.dele
 func (m *mockStore) ListAccepted(_ context.Context, _ string) ([]contacts.UserSummary, error) {
 	return m.users, m.listErr
 }
-func (m *mockStore) ListPending(_ context.Context, _ string) ([]contacts.UserSummary, error) {
-	return m.users, m.listErr
+func (m *mockStore) ListPending(_ context.Context, _ string) ([]contacts.PendingRequest, error) {
+	return m.pending, m.pendingErr
+}
+func (m *mockStore) ListSent(_ context.Context, _ string) ([]contacts.SentRequest, error) {
+	return m.sent, m.sentErr
 }
 func (m *mockStore) SearchUsers(_ context.Context, _, _ string) ([]contacts.UserSummary, error) {
 	return m.users, m.searchErr
@@ -152,8 +159,8 @@ func TestService_ListAccepted_StoreError(t *testing.T) {
 // --- ListPending ---
 
 func TestService_ListPending_Success(t *testing.T) {
-	users := []contacts.UserSummary{{ID: "u-3", Email: "c@example.com"}}
-	svc := newService(&mockStore{users: users})
+	pending := []contacts.PendingRequest{{ContactID: "c-1", UserID: "u-3", Email: "c@example.com"}}
+	svc := newService(&mockStore{pending: pending})
 
 	got, err := svc.ListPending(t.Context(), "u-1")
 	if err != nil {
@@ -161,6 +168,30 @@ func TestService_ListPending_Success(t *testing.T) {
 	}
 	if len(got) != 1 {
 		t.Errorf("len = %d, want 1", len(got))
+	}
+}
+
+// --- ListSent ---
+
+func TestService_ListSent_Success(t *testing.T) {
+	sent := []contacts.SentRequest{{ContactID: "c-1", UserID: "u-2", Email: "b@example.com"}}
+	svc := newService(&mockStore{sent: sent})
+
+	got, err := svc.ListSent(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("len = %d, want 1", len(got))
+	}
+}
+
+func TestService_ListSent_StoreError(t *testing.T) {
+	svc := newService(&mockStore{sentErr: errors.New("db error")})
+
+	_, err := svc.ListSent(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }
 
