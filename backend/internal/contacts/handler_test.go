@@ -44,7 +44,9 @@ func (m *mockManager) SendRequest(_ context.Context, _, _ string) (*contacts.Con
 func (m *mockManager) Accept(_ context.Context, _, _ string) (*contacts.Contact, error) {
 	return m.contact, m.acceptErr
 }
-func (m *mockManager) Delete(_ context.Context, _, _ string) error { return m.deleteErr }
+func (m *mockManager) Delete(_ context.Context, _, _ string) (*contacts.Contact, error) {
+	return m.contact, m.deleteErr
+}
 func (m *mockManager) ListAccepted(_ context.Context, _ string) ([]contacts.AcceptedContact, error) {
 	return m.accepted, m.listErr
 }
@@ -570,5 +572,50 @@ func TestSendRequest_NoNotifier_NoPanic(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+func TestDelete_NotifiesOtherParty(t *testing.T) {
+	// testUserID is the requester; the addressee (u-2) should be notified.
+	c := &contacts.Contact{ID: "c-1", RequesterID: testUserID, AddresseeID: "u-2", Status: contacts.StatusAccepted}
+	notifier := &mockNotifier{}
+	h := contacts.NewHandler(&mockManager{contact: c}, contacts.WithNotifier(notifier))
+
+	req := authedRequest(httptest.NewRequest(http.MethodDelete, "/contacts/c-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if len(notifier.calledWith) != 1 {
+		t.Fatalf("Notify called %d times, want 1", len(notifier.calledWith))
+	}
+	if notifier.calledWith[0].userID != "u-2" {
+		t.Errorf("Notify userID = %q, want u-2", notifier.calledWith[0].userID)
+	}
+	if notifier.calledWith[0].event.Type != "contact_removed" {
+		t.Errorf("Notify event type = %q, want contact_removed", notifier.calledWith[0].event.Type)
+	}
+}
+
+func TestDelete_NotifiesRequester_WhenAddresseeDeletes(t *testing.T) {
+	// testUserID is the addressee; the requester (u-3) should be notified.
+	c := &contacts.Contact{ID: "c-1", RequesterID: "u-3", AddresseeID: testUserID, Status: contacts.StatusAccepted}
+	notifier := &mockNotifier{}
+	h := contacts.NewHandler(&mockManager{contact: c}, contacts.WithNotifier(notifier))
+
+	req := authedRequest(httptest.NewRequest(http.MethodDelete, "/contacts/c-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if len(notifier.calledWith) != 1 {
+		t.Fatalf("Notify called %d times, want 1", len(notifier.calledWith))
+	}
+	if notifier.calledWith[0].userID != "u-3" {
+		t.Errorf("Notify userID = %q, want u-3", notifier.calledWith[0].userID)
 	}
 }

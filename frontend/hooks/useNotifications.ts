@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -8,6 +8,7 @@ export type ContactEvent =
   | { type: "connected" }
   | { type: "contact_request"; payload: { contact_id: string; requester_id: string } }
   | { type: "contact_accepted"; payload: { contact_id: string; addressee_id: string } }
+  | { type: "contact_removed"; payload: { contact_id: string } }
 
 /**
  * Opens an SSE connection to /notifications/stream and calls onEvent for each
@@ -20,6 +21,13 @@ export function useNotifications(
   token: string | undefined,
   onEvent: (e: ContactEvent) => void,
 ): void {
+  // Keep a ref so the SSE handler always calls the latest callback without
+  // re-creating the EventSource connection every time the parent re-renders.
+  const onEventRef = useRef(onEvent)
+  useEffect(() => {
+    onEventRef.current = onEvent
+  })
+
   useEffect(() => {
     if (!token) return
 
@@ -35,7 +43,7 @@ export function useNotifications(
       es.onmessage = (msg) => {
         try {
           const event = JSON.parse(msg.data) as ContactEvent
-          onEvent(event)
+          onEventRef.current(event)
         } catch {
           // ignore malformed events
         }
@@ -62,5 +70,5 @@ export function useNotifications(
       if (retryTimeout !== null) clearTimeout(retryTimeout)
       es?.close()
     }
-  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token])
 }

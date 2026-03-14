@@ -74,8 +74,8 @@ type Store interface {
 	// Only the addressee may accept; returns ErrForbidden otherwise.
 	Accept(ctx context.Context, contactID, addresseeID string) (*Contact, error)
 	// Delete removes a contact row regardless of status.
-	// Either participant may delete; returns ErrForbidden otherwise.
-	Delete(ctx context.Context, contactID, userID string) error
+	// Either participant may delete; returns ErrNotFound if not found.
+	Delete(ctx context.Context, contactID, userID string) (*Contact, error)
 	// ListAccepted returns all accepted contacts for the given user.
 	ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error)
 	// ListPending returns incoming pending requests for the given user.
@@ -111,7 +111,7 @@ func (s *Service) Accept(ctx context.Context, contactID, userID string) (*Contac
 }
 
 // Delete removes a contact. Either participant can delete.
-func (s *Service) Delete(ctx context.Context, contactID, userID string) error {
+func (s *Service) Delete(ctx context.Context, contactID, userID string) (*Contact, error) {
 	return s.store.Delete(ctx, contactID, userID)
 }
 

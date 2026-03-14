@@ -89,20 +89,27 @@ export default function ContactsPage() {
     }
     if (e.type === "contact_accepted") {
       // Move the matching sent entry into accepted contacts.
-      setSent((prev) => {
-        const matched = prev.find((s) => s.contact_id === e.payload.contact_id)
-        if (!matched) return prev
-        setContacts((c) => [
-          ...c,
-          {
+      // Read sent outside the updater to avoid calling setContacts inside
+      // setSent (nested setState triggers double-invocation in StrictMode).
+      const matched = sent.find((s) => s.contact_id === e.payload.contact_id)
+      if (matched) {
+        setSent((prev) => prev.filter((s) => s.contact_id !== e.payload.contact_id))
+        setContacts((prev) => {
+          if (prev.some((c) => c.contact_id === matched.contact_id)) return prev
+          return [...prev, {
             contact_id: matched.contact_id,
             user_id: matched.user_id,
             email: matched.email,
             display_name: matched.display_name,
-          },
-        ])
-        return prev.filter((s) => s.contact_id !== e.payload.contact_id)
-      })
+          }]
+        })
+      }
+    }
+    if (e.type === "contact_removed") {
+      const { contact_id } = e.payload
+      setContacts((prev) => prev.filter((c) => c.contact_id !== contact_id))
+      setPending((prev) => prev.filter((r) => r.contact_id !== contact_id))
+      setSent((prev) => prev.filter((r) => r.contact_id !== contact_id))
     }
   })
 

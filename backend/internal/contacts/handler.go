@@ -16,7 +16,7 @@ import (
 type Manager interface {
 	SendRequest(ctx context.Context, requesterID, addresseeID string) (*Contact, error)
 	Accept(ctx context.Context, contactID, userID string) (*Contact, error)
-	Delete(ctx context.Context, contactID, userID string) error
+	Delete(ctx context.Context, contactID, userID string) (*Contact, error)
 	ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error)
 	ListPending(ctx context.Context, userID string) ([]PendingRequest, error)
 	ListSent(ctx context.Context, userID string) ([]SentRequest, error)
@@ -53,7 +53,7 @@ func NewHandler(svc Manager, opts ...HandlerOption) http.Handler {
 	r.Get("/contacts/pending", listPendingHandler(svc))
 	r.Get("/contacts/sent", listSentHandler(svc))
 	r.Put("/contacts/{id}/accept", acceptHandler(svc, cfg))
-	r.Delete("/contacts/{id}", deleteHandler(svc))
+	r.Delete("/contacts/{id}", deleteHandler(svc, cfg))
 
 	return r
 }
@@ -202,7 +202,7 @@ func acceptHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	}
 }
 
-func deleteHandler(svc Manager) http.HandlerFunc {
+func deleteHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -210,7 +210,8 @@ func deleteHandler(svc Manager) http.HandlerFunc {
 			return
 		}
 		contactID := chi.URLParam(r, "id")
-		if err := svc.Delete(r.Context(), contactID, userID); err != nil {
+		contact, err := svc.Delete(r.Context(), contactID, userID)
+		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errResp("contact not found"))
 				return
@@ -218,6 +219,18 @@ func deleteHandler(svc Manager) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
 			return
 		}
+
+		if cfg.notifier != nil {
+			otherUserID := contact.RequesterID
+			if contact.RequesterID == userID {
+				otherUserID = contact.AddresseeID
+			}
+			cfg.notifier.Notify(otherUserID, notifications.Event{
+				Type:    "contact_removed",
+				Payload: map[string]string{"contact_id": contact.ID},
+			})
+		}
+
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

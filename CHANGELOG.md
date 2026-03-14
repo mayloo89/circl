@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.7.0] - 2026-03-14 — Real-time contact removal
+
+### Added
+- `contact_removed` SSE event: `deleteHandler` now notifies the other party when a contact is removed or a pending request is declined/cancelled
+- Two new handler tests: `TestDelete_NotifiesOtherParty` and `TestDelete_NotifiesRequester_WhenAddresseeDeletes`
+- `contact_removed` event type added to `ContactEvent` union in `useNotifications.ts`
+- Contacts page now reacts to `contact_removed` in real time (removes the entry from accepted contacts, pending, and sent lists)
+
+### Changed
+- `Store.Delete`, `Service.Delete`, and `Manager.Delete` now return `(*Contact, error)` instead of `error`, using a `DELETE … RETURNING` query so the handler knows both participants
+- `deleteHandler` now accepts the `handlerConfig` parameter (same pattern as `sendRequestHandler` and `acceptHandler`)
+- `useNotifications` hook uses a `useRef` to keep the `onEvent` callback always up-to-date without re-creating the SSE connection — fixes stale-closure bug where `contact_accepted` events were missed after state changed
+- Store-layer unit tests for `Delete` now use `rowFn` (mock the `QueryRow` path) instead of `execFn`
+
+---
+
 ## [0.6.0] - 2026-03-14 — Real-time notifications via SSE
 
 ### Added

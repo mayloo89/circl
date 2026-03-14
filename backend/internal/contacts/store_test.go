@@ -115,13 +115,18 @@ func TestAccept_DBSuccess(t *testing.T) {
 }
 
 func TestDelete_DBSuccess(t *testing.T) {
+	want := &Contact{ID: "c-1", RequesterID: "u-1", AddresseeID: "u-2", Status: StatusAccepted}
 	s := &pgStore{db: &mockQuerier{
-		execFn: func() (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("DELETE 1"), nil
+		rowFn: func() pgx.Row {
+			return &mockRow{scanFn: scanContact(want)}
 		},
 	}}
-	if err := s.Delete(t.Context(), "c-1", "u-1"); err != nil {
+	got, err := s.Delete(t.Context(), "c-1", "u-1")
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != "c-1" {
+		t.Errorf("ID = %q, want c-1", got.ID)
 	}
 }
 
@@ -183,11 +188,13 @@ func TestAccept_NotFound(t *testing.T) {
 
 func TestDelete_DBError(t *testing.T) {
 	s := &pgStore{db: &mockQuerier{
-		execFn: func() (pgconn.CommandTag, error) {
-			return pgconn.CommandTag{}, errors.New("db error")
+		rowFn: func() pgx.Row {
+			return &mockRow{scanFn: func(_ ...any) error {
+				return errors.New("db error")
+			}}
 		},
 	}}
-	err := s.Delete(t.Context(), "c-1", "u-1")
+	_, err := s.Delete(t.Context(), "c-1", "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -195,11 +202,13 @@ func TestDelete_DBError(t *testing.T) {
 
 func TestDelete_NotFound(t *testing.T) {
 	s := &pgStore{db: &mockQuerier{
-		execFn: func() (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("DELETE 0"), nil
+		rowFn: func() pgx.Row {
+			return &mockRow{scanFn: func(_ ...any) error {
+				return pgx.ErrNoRows
+			}}
 		},
 	}}
-	err := s.Delete(t.Context(), "c-1", "u-1")
+	_, err := s.Delete(t.Context(), "c-1", "u-1")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
@@ -525,12 +534,12 @@ func TestIntegration_ContactsFlow(t *testing.T) {
 	}
 
 	// Delete contact.
-	if err := store.Delete(ctx, c.ID, u1); err != nil {
+	if _, err := store.Delete(ctx, c.ID, u1); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
 	// Second delete must return ErrNotFound.
-	if err := store.Delete(ctx, c.ID, u1); !errors.Is(err, ErrNotFound) {
+	if _, err := store.Delete(ctx, c.ID, u1); !errors.Is(err, ErrNotFound) {
 		t.Errorf("second delete: err = %v, want ErrNotFound", err)
 	}
 }
