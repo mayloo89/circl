@@ -16,7 +16,7 @@ type Manager interface {
 	SendRequest(ctx context.Context, requesterID, addresseeID string) (*Contact, error)
 	Accept(ctx context.Context, contactID, userID string) (*Contact, error)
 	Delete(ctx context.Context, contactID, userID string) error
-	ListAccepted(ctx context.Context, userID string) ([]UserSummary, error)
+	ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error)
 	ListPending(ctx context.Context, userID string) ([]PendingRequest, error)
 	ListSent(ctx context.Context, userID string) ([]SentRequest, error)
 	SearchUsers(ctx context.Context, query, userID string) ([]UserSummary, error)

@@ -39,6 +39,15 @@ type UserSummary struct {
 	DisplayName string `json:"display_name"`
 }
 
+// AcceptedContact represents an accepted contact with the contact row ID
+// (needed to remove) and the peer user's details.
+type AcceptedContact struct {
+	ContactID   string `json:"contact_id"`
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+}
+
 // PendingRequest represents an incoming pending contact request with the
 // contact row ID (needed to accept/decline) and the requester's details.
 type PendingRequest struct {
@@ -68,7 +77,7 @@ type Store interface {
 	// Either participant may delete; returns ErrForbidden otherwise.
 	Delete(ctx context.Context, contactID, userID string) error
 	// ListAccepted returns all accepted contacts for the given user.
-	ListAccepted(ctx context.Context, userID string) ([]UserSummary, error)
+	ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error)
 	// ListPending returns incoming pending requests for the given user.
 	ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error)
 	// ListSent returns outgoing pending requests sent by the given user.
@@ -107,7 +116,7 @@ func (s *Service) Delete(ctx context.Context, contactID, userID string) error {
 }
 
 // ListAccepted returns the accepted contacts for the given user.
-func (s *Service) ListAccepted(ctx context.Context, userID string) ([]UserSummary, error) {
+func (s *Service) ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error) {
 	return s.store.ListAccepted(ctx, userID)
 }
 

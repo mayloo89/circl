@@ -10,17 +10,18 @@ import (
 
 // mockStore is a test double for contacts.Store.
 type mockStore struct {
-	contact     *contacts.Contact
-	users       []contacts.UserSummary
-	pending     []contacts.PendingRequest
-	sent        []contacts.SentRequest
-	sendErr     error
-	acceptErr   error
-	deleteErr   error
-	listErr     error
-	pendingErr  error
-	sentErr     error
-	searchErr   error
+	contact    *contacts.Contact
+	accepted   []contacts.AcceptedContact
+	users      []contacts.UserSummary
+	pending    []contacts.PendingRequest
+	sent       []contacts.SentRequest
+	sendErr    error
+	acceptErr  error
+	deleteErr  error
+	listErr    error
+	pendingErr error
+	sentErr    error
+	searchErr  error
 }
 
 func (m *mockStore) SendRequest(_ context.Context, _, _ string) (*contacts.Contact, error) {
@@ -30,8 +31,8 @@ func (m *mockStore) Accept(_ context.Context, _, _ string) (*contacts.Contact, e
 	return m.contact, m.acceptErr
 }
 func (m *mockStore) Delete(_ context.Context, _, _ string) error { return m.deleteErr }
-func (m *mockStore) ListAccepted(_ context.Context, _ string) ([]contacts.UserSummary, error) {
-	return m.users, m.listErr
+func (m *mockStore) ListAccepted(_ context.Context, _ string) ([]contacts.AcceptedContact, error) {
+	return m.accepted, m.listErr
 }
 func (m *mockStore) ListPending(_ context.Context, _ string) ([]contacts.PendingRequest, error) {
 	return m.pending, m.pendingErr
@@ -135,8 +136,8 @@ func TestService_Delete_NotFound(t *testing.T) {
 // --- ListAccepted ---
 
 func TestService_ListAccepted_Success(t *testing.T) {
-	users := []contacts.UserSummary{{ID: "u-2", Email: "b@example.com"}}
-	svc := newService(&mockStore{users: users})
+	accepted := []contacts.AcceptedContact{{ContactID: "c-1", UserID: "u-2", Email: "b@example.com"}}
+	svc := newService(&mockStore{accepted: accepted})
 
 	got, err := svc.ListAccepted(t.Context(), "u-1")
 	if err != nil {
