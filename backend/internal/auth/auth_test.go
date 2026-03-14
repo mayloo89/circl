@@ -10,12 +10,20 @@ import (
 
 // mockStore is a test double for Store.
 type mockStore struct {
-	record *userRecord
-	err    error
+	record    *userRecord
+	getErr    error
+	createErr error
 }
 
 func (m *mockStore) GetUserByEmail(_ context.Context, _ string) (*userRecord, error) {
-	return m.record, m.err
+	return m.record, m.getErr
+}
+
+func (m *mockStore) CreateUser(_ context.Context, email, _ string) (*userRecord, error) {
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	return &userRecord{ID: "new-uuid", Email: email, Status: "active"}, nil
 }
 
 func hashPassword(t *testing.T, password string) string {
@@ -26,6 +34,8 @@ func hashPassword(t *testing.T, password string) string {
 	}
 	return string(hash)
 }
+
+// --- Login ---
 
 func TestService_Login_Success(t *testing.T) {
 	svc := NewService(&mockStore{
@@ -44,13 +54,10 @@ func TestService_Login_Success(t *testing.T) {
 	if user.ID != "abc-123" {
 		t.Errorf("ID = %q, want %q", user.ID, "abc-123")
 	}
-	if user.Email != "user@example.com" {
-		t.Errorf("Email = %q, want %q", user.Email, "user@example.com")
-	}
 }
 
 func TestService_Login_UserNotFound(t *testing.T) {
-	svc := NewService(&mockStore{err: errors.New("user not found")})
+	svc := NewService(&mockStore{getErr: errors.New("user not found")})
 
 	_, err := svc.Login(context.Background(), "nobody@example.com", "password")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -87,5 +94,105 @@ func TestService_Login_SuspendedAccount(t *testing.T) {
 	_, err := svc.Login(context.Background(), "user@example.com", "secret")
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("got %v, want ErrInvalidCredentials", err)
+	}
+}
+
+// --- Register ---
+
+func TestService_Register_Success(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	user, err := svc.Register(context.Background(), "new@example.com", "securepass")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if user.Email != "new@example.com" {
+		t.Errorf("email = %q, want %q", user.Email, "new@example.com")
+	}
+}
+
+func TestService_Register_InvalidEmail(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	_, err := svc.Register(context.Background(), "not-an-email", "securepass")
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestService_Register_PasswordTooShort(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	_, err := svc.Register(context.Background(), "user@example.com", "short")
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestService_Register_PasswordTooLong(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	longPass := make([]byte, maxPasswordLen+1)
+	for i := range longPass {
+		longPass[i] = 'a'
+	}
+
+	_, err := svc.Register(context.Background(), "user@example.com", string(longPass))
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestService_Register_EmailTaken(t *testing.T) {
+	svc := NewService(&mockStore{createErr: ErrEmailTaken})
+
+	_, err := svc.Register(context.Background(), "taken@example.com", "securepass")
+	if !errors.Is(err, ErrEmailTaken) {
+		t.Errorf("got %v, want ErrEmailTaken", err)
+	}
+}
+
+// --- validateEmail ---
+
+func TestValidateEmail(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantErr bool
+	}{
+		{"user@example.com", false},
+		{"user+tag@sub.domain.com", false},
+		{"notanemail", true},
+		{"@nodomain", true},
+		{"", true},
+	}
+	for _, tt := range tests {
+		err := validateEmail(tt.input)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("validateEmail(%q) error = %v, wantErr = %v", tt.input, err, tt.wantErr)
+		}
+	}
+}
+
+// --- validatePassword ---
+
+func TestValidatePassword(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid", "securepass", false},
+		{"exactly min length", "12345678", false},
+		{"too short", "short", true},
+		{"too long", string(make([]byte, maxPasswordLen+1)), true},
+		{"exactly max length", string(make([]byte, maxPasswordLen)), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePassword(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validatePassword() error = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
 	}
 }

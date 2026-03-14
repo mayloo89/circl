@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,6 +55,28 @@ func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("query user: %w", err)
+	}
+
+	return &u, nil
+}
+
+// CreateUser inserts a new local user and returns the created record.
+// Returns ErrEmailTaken if the email is already registered.
+func (s *pgStore) CreateUser(ctx context.Context, email, passwordHash string) (*userRecord, error) {
+	row := s.db.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, provider, status)
+		 VALUES ($1, $2, 'local', 'active')
+		 RETURNING id, email, password_hash, status`,
+		email, passwordHash,
+	)
+
+	var u userRecord
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrEmailTaken
+		}
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	return &u, nil

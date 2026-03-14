@@ -1,8 +1,9 @@
 "use client"
 
 import { signIn } from "next-auth/react"
-import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -21,7 +22,7 @@ export default function LoginPage() {
     })
 
     if (result?.error) {
-      setError("Credenciales inválidas")
+      setError("Invalid credentials")
     } else {
       router.push("/")
     }
@@ -32,15 +33,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-lg">
         <div>
           <h2 className="text-center text-3xl font-bold">Circl</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Inicia sesión en tu cuenta
-          </p>
+          <p className="mt-2 text-center text-sm text-gray-600">Sign in to your account</p>
         </div>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded-md bg-red-50 p-4 text-sm text-red-800">
-              {error}
-            </div>
+            <div className="rounded-md bg-red-50 p-4 text-sm text-red-800">{error}</div>
           )}
           <div className="space-y-4">
             <div>
@@ -74,11 +72,15 @@ export default function LoginPage() {
             type="submit"
             className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Iniciar sesión
+            Sign in
           </button>
         </form>
-        <p className="text-center text-xs text-gray-500">
-          Usuario de prueba: test@example.com / password
+
+        <p className="text-center text-sm text-gray-600">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
+            Create one
+          </Link>
         </p>
       </div>
     </div>
