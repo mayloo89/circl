@@ -23,7 +23,11 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Real-time notifications**: SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
 - ✅ **Chat and rooms**: WebSocket DMs and group rooms, Redis Pub/Sub fan-out, message history, unread counts
 - ✅ **Presence**: online/offline dot on contacts list, "Online" / "Last seen X ago" in DM chat header, instant updates via SSE
-- ⏳ **Media and workers**: pending
+- ✅ **Storage infrastructure**: Storage interface abstraction, LocalStorage (dev), uploads API (request → confirm lifecycle)
+- ✅ **Profile avatars**: upload from profile page, displayed in navbar, contacts list, chat list, chat room header, and message bubbles
+- ⏳ **Chat attachments**: pending
+- ⏳ **S3 storage**: pending
+- ⏳ **Image processing**: pending
 
 ## Local setup
 
@@ -134,7 +138,7 @@ All protected routes require `Authorization: Bearer <token>`.
 | `POST` | `/auth/register` | — | Create account |
 | `POST` | `/auth/login` | — | Login, returns JWT |
 | `GET` | `/profiles/me` | ✅ | Get own profile (auto-created) |
-| `PUT` | `/profiles/me` | ✅ | Update display name and bio |
+| `PUT` | `/profiles/me` | ✅ | Update display name, bio, and avatar URL |
 | `GET` | `/users/search?q=` | ✅ | Search users by email/name |
 | `POST` | `/contacts` | ✅ | Send a contact request |
 | `GET` | `/contacts` | ✅ | List accepted contacts |

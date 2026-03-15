@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -21,6 +22,7 @@ interface RoomSummary {
   name: string
   peer_id: string
   peer_name: string
+  peer_avatar_url: string
   last_message: MessageSummary | null
   unread_count: number
   created_at: string
@@ -90,8 +92,21 @@ export default function ChatPage() {
                 <li key={room.id}>
                   <Link
                     href={`/chat/${room.id}`}
-                    className="flex items-center justify-between px-6 py-4 hover:bg-gray-800/60 transition-colors"
+                    className="flex items-center gap-3 px-6 py-4 hover:bg-gray-800/60 transition-colors"
                   >
+                    {room.type === "dm" ? (
+                      room.peer_avatar_url ? (
+                        <Image src={room.peer_avatar_url} alt="" width={40} height={40} className="h-10 w-10 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                      ) : (
+                        <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gray-700 text-sm font-medium text-gray-300 ring-1 ring-gray-600">
+                          {(room.peer_name || "?")[0].toUpperCase()}
+                        </span>
+                      )
+                    ) : (
+                      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-indigo-700 text-sm font-medium text-white ring-1 ring-indigo-600">
+                        {(room.name || "G")[0].toUpperCase()}
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-white">
                         {room.type === "dm" ? room.peer_name || "Unknown" : room.name}

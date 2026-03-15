@@ -26,6 +26,7 @@ func TestPgStore_GetByUserID_Success(t *testing.T) {
 		*dest[1].(*string) = "user-1"
 		*dest[2].(*string) = "Alice"
 		*dest[3].(*string) = "Bio"
+		*dest[4].(*string) = ""
 		return nil
 	}}}}
 
@@ -68,10 +69,11 @@ func TestPgStore_Upsert_Success(t *testing.T) {
 		*dest[1].(*string) = "user-1"
 		*dest[2].(*string) = "Alice"
 		*dest[3].(*string) = "Bio"
+		*dest[4].(*string) = ""
 		return nil
 	}}}}
 
-	p, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio")
+	p, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -85,7 +87,7 @@ func TestPgStore_Upsert_QueryError(t *testing.T) {
 		return errors.New("db error")
 	}}}}
 
-	_, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio")
+	_, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -140,7 +142,7 @@ func TestProfiles_Integration(t *testing.T) {
 	})
 
 	t.Run("update and retrieve profile", func(t *testing.T) {
-		_, err := svc.UpdateMyProfile(t.Context(), userID, "Alice", "Hello!")
+		_, err := svc.UpdateMyProfile(t.Context(), userID, "Alice", "Hello!", "")
 		if err != nil {
 			t.Fatalf("update error: %v", err)
 		}

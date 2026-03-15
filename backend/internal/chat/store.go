@@ -162,6 +162,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			r.created_at,
 			COALESCE(peer.id::text, '')                                    AS peer_id,
 			COALESCE(NULLIF(pp.display_name, ''), peer.email, '') AS peer_name,
+			COALESCE(pp.avatar_url, '')                      AS peer_avatar_url,
 			COALESCE(lm.content, '')                         AS last_content,
 			COALESCE(lm.sender_id::text, '')                 AS last_sender_id,
 			lm.created_at                                    AS last_at,
@@ -204,7 +205,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 
 		if err := rows.Scan(
 			&s.ID, &s.Type, &s.Name, &s.CreatedAt,
-			&s.PeerID, &s.PeerName,
+			&s.PeerID, &s.PeerName, &s.PeerAvatarURL,
 			&lastContent, &lastSenderID, &lastAt,
 			&s.UnreadCount,
 		); err != nil {
@@ -242,13 +243,14 @@ func (s *pgStore) SaveMessage(ctx context.Context, roomID, senderID, msgType, co
 		SELECT
 			i.id, i.room_id, i.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
+			COALESCE(p.avatar_url, '') AS sender_avatar_url,
 			i.type, i.content, i.expires_at, i.view_once, i.created_at
 		FROM inserted i
 		JOIN users u ON u.id = i.sender_id
 		LEFT JOIN profiles p ON p.user_id = i.sender_id`,
 		roomID, senderID, msgType, content,
 	).Scan(
-		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName,
+		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
 		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.CreatedAt,
 	)
 	if err != nil {
@@ -268,6 +270,7 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 		SELECT
 			m.id, m.room_id, m.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
+			COALESCE(p.avatar_url, '') AS sender_avatar_url,
 			m.type, m.content, m.expires_at, m.view_once, m.created_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
@@ -287,7 +290,7 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 	for rows.Next() {
 		var m Message
 		if err := rows.Scan(
-			&m.ID, &m.RoomID, &m.SenderID, &m.SenderName,
+			&m.ID, &m.RoomID, &m.SenderID, &m.SenderName, &m.SenderAvatarURL,
 			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("list messages: scan: %w", err)

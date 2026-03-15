@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-15 — Profile avatars and avatar display across the app
+
+### Added
+- Profile avatar upload: click-to-upload circle on the profile page using the `useUpload` hook (jpeg/png/webp, ≤ 5 MB)
+- `avatar_url` field on `Profile` struct, stored with `NULLIF`/`COALESCE` pattern in Postgres
+- Avatar display in the navbar: user's own avatar next to the "Profile" link (fetched from `GET /profiles/me`)
+- Avatar display in contacts: all three sections (accepted, pending, sent) and search results show contact avatars with initial-letter fallback
+- Presence dot repositioned as a badge on the avatar circle (bottom-right corner) in accepted contacts
+- Avatar display in chat list: peer avatar for DM rooms, initial circle for groups
+- Avatar display in chat room header: peer avatar next to name and online status
+- Avatar display in chat messages: sender avatar beside each received message bubble
+- `avatar_url` added to `AcceptedContact`, `PendingRequest`, `SentRequest`, `UserSummary` (contacts package)
+- `peer_avatar_url` added to `RoomSummary`, `sender_avatar_url` added to `Message` and WebSocket `serverMessage` (chat package)
+- All SQL queries updated to select `COALESCE(p.avatar_url, '')` from the profiles join
+
+### Changed
+- `PUT /profiles/me` request/response now includes `avatar_url`
+- `updateRequest` and `profileResponse` structs include `avatar_url`
+- `Store.Upsert` and `Service.UpdateMyProfile` accept `avatarURL` parameter
+- Contacts SQL queries (ListAccepted, ListPending, ListSent, SearchUsers) return avatar_url
+- Chat SQL queries (ListRooms, SaveMessage, ListMessages) return avatar_url
+- Frontend interfaces updated across all chat and contacts pages
+
 ---
 
 ## [1.1.0] - 2026-03-15 — Storage interface, LocalStorage, and uploads API

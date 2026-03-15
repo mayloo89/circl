@@ -33,14 +33,14 @@ func NewStore(pool *pgxpool.Pool) Store {
 // GetByUserID returns the profile for the given user ID.
 func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, user_id, display_name, bio
+		`SELECT id, user_id, display_name, bio, COALESCE(avatar_url, '')
 		   FROM profiles
 		  WHERE user_id = $1`,
 		userID,
 	)
 
 	var p Profile
-	if err := row.Scan(&p.ID, &p.UserID, &p.DisplayName, &p.Bio); err != nil {
+	if err := row.Scan(&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -51,20 +51,21 @@ func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, err
 }
 
 // Upsert inserts or updates the profile for the given user ID.
-func (s *pgStore) Upsert(ctx context.Context, userID, displayName, bio string) (*Profile, error) {
+func (s *pgStore) Upsert(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error) {
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO profiles (user_id, display_name, bio)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO profiles (user_id, display_name, bio, avatar_url)
+		 VALUES ($1, $2, $3, NULLIF($4, ''))
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET display_name = EXCLUDED.display_name,
 		        bio          = EXCLUDED.bio,
+		        avatar_url   = EXCLUDED.avatar_url,
 		        updated_at   = now()
-		 RETURNING id, user_id, display_name, bio`,
-		userID, displayName, bio,
+		 RETURNING id, user_id, display_name, bio, COALESCE(avatar_url, '')`,
+		userID, displayName, bio, avatarURL,
 	)
 
 	var p Profile
-	if err := row.Scan(&p.ID, &p.UserID, &p.DisplayName, &p.Bio); err != nil {
+	if err := row.Scan(&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL); err != nil {
 		return nil, fmt.Errorf("upsert profile: %w", err)
 	}
 

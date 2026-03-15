@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -13,6 +14,7 @@ interface UserSummary {
   id: string
   email: string
   display_name: string
+  avatar_url: string
 }
 
 interface PendingRequest {
@@ -20,6 +22,7 @@ interface PendingRequest {
   user_id: string
   email: string
   display_name: string
+  avatar_url: string
 }
 
 interface SentRequest {
@@ -27,6 +30,7 @@ interface SentRequest {
   user_id: string
   email: string
   display_name: string
+  avatar_url: string
 }
 
 interface AcceptedContact {
@@ -34,6 +38,7 @@ interface AcceptedContact {
   user_id: string
   email: string
   display_name: string
+  avatar_url: string
 }
 
 export default function ContactsPage() {
@@ -110,6 +115,7 @@ export default function ContactsPage() {
               user_id: matched.user_id,
               email: matched.email,
               display_name: matched.display_name,
+              avatar_url: matched.avatar_url,
             }]
           })
         }
@@ -163,7 +169,7 @@ export default function ContactsPage() {
     const contact = await res.json()
     const user = searchResults.find((u) => u.id === addresseeID)
     if (user) {
-      setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, email: user.email, display_name: user.display_name }])
+      setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
     }
     setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
   }
@@ -180,7 +186,7 @@ export default function ContactsPage() {
     }
     const accepted = pending.find((r) => r.contact_id === contactID)
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
-    if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, email: accepted.email, display_name: accepted.display_name }])
+    if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
     refreshPendingCount()
   }
 
@@ -263,7 +269,16 @@ export default function ContactsPage() {
             <ul className="mt-3 divide-y divide-gray-700">
               {searchResults.map((u) => (
                 <li key={u.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-200">{u.display_name || u.email}</span>
+                  <div className="flex items-center gap-3">
+                    {u.avatar_url ? (
+                      <Image src={u.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                    ) : (
+                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
+                        {(u.display_name || u.email)[0].toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-200">{u.display_name || u.email}</span>
+                  </div>
                   <button
                     onClick={() => sendRequest(u.id)}
                     className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
@@ -288,7 +303,16 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {pending.map((r) => (
                 <li key={r.contact_id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
+                  <div className="flex items-center gap-3">
+                    {r.avatar_url ? (
+                      <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                    ) : (
+                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
+                        {(r.display_name || r.email)[0].toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => accept(r.contact_id)}
@@ -316,7 +340,16 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {sent.map((r) => (
                 <li key={r.contact_id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
+                  <div className="flex items-center gap-3">
+                    {r.avatar_url ? (
+                      <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                    ) : (
+                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
+                        {(r.display_name || r.email)[0].toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
+                  </div>
                   <button
                     onClick={() => cancelSent(r.contact_id)}
                     className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-200 hover:bg-gray-600"
@@ -338,12 +371,21 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {contacts.map((c) => (
                 <li key={c.contact_id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2 w-2 flex-none rounded-full ${
-                        presence[c.user_id]?.online ? "bg-green-400" : "bg-gray-600"
-                      }`}
-                    />
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-none">
+                      {c.avatar_url ? (
+                        <Image src={c.avatar_url} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-700" />
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
+                          {(c.display_name || c.email)[0].toUpperCase()}
+                        </span>
+                      )}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-gray-900 ${
+                          presence[c.user_id]?.online ? "bg-green-400" : "bg-gray-600"
+                        }`}
+                      />
+                    </div>
                     <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
                   </div>
                   <div className="flex gap-2">

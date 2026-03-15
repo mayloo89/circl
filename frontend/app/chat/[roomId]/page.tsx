@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
@@ -15,6 +16,7 @@ interface HistoryMessage {
   room_id: string
   sender_id: string
   sender_name: string
+  sender_avatar_url: string
   type: string
   content: string
   created_at: string
@@ -26,6 +28,7 @@ interface RoomSummary {
   name: string
   peer_id: string
   peer_name: string
+  peer_avatar_url: string
 }
 
 export default function ChatRoomPage() {
@@ -134,10 +137,20 @@ export default function ChatRoomPage() {
           ←
         </button>
         {room ? (
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-white">
-              {room.type === "dm" ? room.peer_name : room.name}
-            </span>
+          <>
+            {room.type === "dm" ? (
+              room.peer_avatar_url ? (
+                <Image src={room.peer_avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+              ) : (
+                <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
+                  {(room.peer_name || "?")[0].toUpperCase()}
+                </span>
+              )
+            ) : null}
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-white">
+                {room.type === "dm" ? room.peer_name : room.name}
+              </span>
             {room.type === "dm" && room.peer_id ? (
               <div className="flex items-center gap-1.5">
                 <span
@@ -154,7 +167,8 @@ export default function ChatRoomPage() {
                 </span>
               </div>
             ) : null}
-          </div>
+            </div>
+          </>
         ) : (
           <div className="flex items-center gap-2">
             <span
@@ -171,29 +185,43 @@ export default function ChatRoomPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {allMessages.map((msg) => {
           const isOwn = msg.sender_id === userID
+          const avatarUrl = "sender_avatar_url" in msg ? msg.sender_avatar_url : ""
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}
+              className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
             >
               {!isOwn && (
-                <span className="mb-1 text-xs text-gray-500">{msg.sender_name}</span>
+                <div className="mr-2 mt-5 flex-none">
+                  {avatarUrl ? (
+                    <Image src={avatarUrl} alt="" width={28} height={28} className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-700" />
+                  ) : (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-700 text-xs text-gray-300 ring-1 ring-gray-600">
+                      {(msg.sender_name || "?")[0].toUpperCase()}
+                    </span>
+                  )}
+                </div>
               )}
-              <div
-                className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
-                  isOwn
-                    ? "rounded-br-sm bg-indigo-600 text-white"
-                    : "rounded-bl-sm bg-gray-800 text-gray-100"
-                }`}
-              >
-                {msg.content}
+              <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+                {!isOwn && (
+                  <span className="mb-1 text-xs text-gray-500">{msg.sender_name}</span>
+                )}
+                <div
+                  className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
+                    isOwn
+                      ? "rounded-br-sm bg-indigo-600 text-white"
+                      : "rounded-bl-sm bg-gray-800 text-gray-100"
+                  }`}
+                >
+                  {msg.content}
+                </div>
+                <span className="mt-1 text-[10px] text-gray-600">
+                  {new Date(msg.created_at).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
               </div>
-              <span className="mt-1 text-[10px] text-gray-600">
-                {new Date(msg.created_at).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
             </div>
           )
         })}

@@ -16,11 +16,11 @@ func (m *mockStore) GetByUserID(_ context.Context, _ string) (*Profile, error) {
 	return m.profile, m.getErr
 }
 
-func (m *mockStore) Upsert(_ context.Context, userID, displayName, bio string) (*Profile, error) {
+func (m *mockStore) Upsert(_ context.Context, userID, displayName, bio, avatarURL string) (*Profile, error) {
 	if m.upsertErr != nil {
 		return nil, m.upsertErr
 	}
-	return &Profile{ID: "prof-1", UserID: userID, DisplayName: displayName, Bio: bio}, nil
+	return &Profile{ID: "prof-1", UserID: userID, DisplayName: displayName, Bio: bio, AvatarURL: avatarURL}, nil
 }
 
 // --- GetMyProfile ---
@@ -74,7 +74,7 @@ func TestGetMyProfile_UpsertError(t *testing.T) {
 func TestUpdateMyProfile_Success(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	p, err := svc.UpdateMyProfile(t.Context(), "user-1", "Alice", "Bio here")
+	p, err := svc.UpdateMyProfile(t.Context(), "user-1", "Alice", "Bio here", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestUpdateMyProfile_Success(t *testing.T) {
 func TestUpdateMyProfile_EmptyDisplayName(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", "", "Bio")
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", "", "Bio", "")
 	if err == nil {
 		t.Fatal("expected error for empty display name")
 	}
@@ -95,7 +95,7 @@ func TestUpdateMyProfile_EmptyDisplayName(t *testing.T) {
 func TestUpdateMyProfile_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{upsertErr: errors.New("db error")})
 
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", "Alice", "Bio")
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", "Alice", "Bio", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
