@@ -14,6 +14,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 
 ## Documentation
 - [Implementation plan](docs/implementation-plan.md)
+- [Production readiness checklist](docs/production-readiness.md)
 
 ## Project status
 - ✅ **Foundation**: repo structure, linters, CI/CD
