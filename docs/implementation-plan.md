@@ -1,86 +1,89 @@
-# Guía de implementación — Web de contactos con chat seguro (Go + Next.js)
+# Implementation Plan — Private contact platform with secure chat (Go + Next.js)
 
-## 1. Alcance funcional
-- Perfiles privados: solo usuarios autenticados pueden ver/buscar otros perfiles.
-- Datos: nombre, bio, fotos, preferencias de búsqueda (evitar exponer PII sensible).
-- Búsqueda interna: filtros básicos, paginación; sin enumeración pública.
-- Chat 1:1 y salas generales; historial persistente.
-- Presencia online/offline con "última vez visto".
-- Subida y entrega de fotos con CDN.
+## 1. Functional scope
+- Private profiles: only authenticated users can view and search other profiles.
+- Data: display name, bio, photos, search preferences (avoid exposing sensitive PII).
+- Internal search: basic filters, pagination; no public enumeration.
+- 1:1 chat and group rooms; persistent message history.
+- Online/offline presence with "last seen".
+- Photo and file uploads with CDN delivery.
 
-## 2. Stack recomendado
-- Frontend: Next.js (App Router) + React + TypeScript + Tailwind. Playwright para e2e.
-- Backend: Go (chi/echo) + middlewares; WebSockets (nhooyr/gorilla).
-- Auth: OIDC/Auth.js o proveedor (Auth0/Clerk/Cognito). Cookies httpOnly + refresh rotado.
-- DB: PostgreSQL + SQLC/Ent; migraciones con golang-migrate.
-- Cache/tiempo real: Redis (presencia, Pub/Sub chat, rate limits, blacklist de tokens).
-- Colas/worker: asynq para imágenes y tareas de mantenimiento.
-- Storage: S3/R2 + URLs firmadas; procesamiento de imágenes (bimg/imagor) en worker.
-- Infra: Frontend en Vercel; backend en Fly.io/Render/AWS; Postgres (Neon/RDS), Redis (Upstash/ElastiCache).
-- Calidad: ESLint/Prettier, golangci-lint, Jest/Vitest (frontend), tests Go + Testcontainers, CI GitHub Actions.
-- Observabilidad: Logs estructurados (zerolog/zap), métricas/tracing (OpenTelemetry/Prometheus), errores (Sentry).
+## 2. Stack
+- Frontend: Next.js (App Router) + React + TypeScript + Tailwind. Playwright for e2e.
+- Backend: Go (chi) + middlewares; WebSockets (gorilla/websocket).
+- Auth: NextAuth.js (Auth.js) v5 with credentials provider; httpOnly cookies; JWT HS256.
+- DB: PostgreSQL + golang-migrate for schema migrations; pgx/v5 connection pool.
+- Cache / real-time: Redis (presence, Pub/Sub for chat fan-out, rate limits, token blacklist).
+- Queues / worker: asynq for image processing and maintenance tasks.
+- Storage: S3/R2 + pre-signed URLs; image processing (bimg/imagor) in worker.
+- Infra: Frontend on Vercel; backend on Fly.io/Render/AWS; Postgres (Neon/RDS), Redis (Upstash/ElastiCache).
+- Quality: ESLint/Prettier, golangci-lint, Go tests, CI via GitHub Actions.
+- Observability: structured logs (zerolog/zap), metrics/tracing (OpenTelemetry/Prometheus), error tracking (Sentry).
 
-## 3. Arquitectura lógica
-- Front: rutas protegidas por middleware; CSR para chat; SSR solo con sesión válida.
-- BFF/API:
-  - Auth: login/logout, refresh rotado, revocación (Redis blacklist).
-  - Profiles: CRUD privado, paginación, sin exponer contactos directos sin consentimiento.
-  - Search: requiere sesión; índices en Postgres; respuestas genéricas para evitar enumeración.
-  - Chat: WebSockets autenticados; mensajes 1:1 y salas; persistencia en Postgres; fanout vía Redis Pub/Sub.
-  - Presencia: heartbeats a Redis con TTL; cálculo de online/offline/last seen.
-  - Media: firma de uploads a S3; hooks de post-proceso; limpieza de huérfanos.
-- Worker: procesamiento de imágenes, expiración de sesiones revocadas, limpieza de presencia.
+## 3. Logical architecture
+- Frontend: middleware-protected routes; CSR for chat; SSR only with a valid session.
+- API:
+  - Auth: login/logout, token rotation, revocation (Redis blacklist).
+  - Profiles: private CRUD, pagination, no direct contact exposure without consent.
+  - Search: requires session; Postgres indexes; generic responses to prevent enumeration.
+  - Chat: authenticated WebSockets; 1:1 and group rooms; Postgres persistence; fan-out via Redis Pub/Sub.
+  - Presence: Redis heartbeats with TTL; online/offline/last seen computation.
+  - Media: pre-signed S3 uploads; post-process hooks; orphan cleanup.
+- Worker: image processing, revoked session expiry, presence cleanup.
 
-## 4. Seguridad
-- TLS extremo a extremo; HSTS; CSP estricta (sin unsafe-inline), deshabilitar eval.
-- Cookies httpOnly, Secure, SameSite=Lax/Strict; rotación de refresh tokens.
-- CSRF (si usas cookies); CORS restringido; rate limiting por IP y user en login/búsqueda/chat.
-- Validación y saneamiento en servidor; límites de payload y tamaño de archivo.
-- Protección contra enumeración: respuestas genéricas en login/reset; búsqueda solo autenticada.
-- Logs sin PII; IP hasheada si se requiere; cifrado de backups; secretos en vault/KMS.
-- Roles mínimos: usuario/admin; chequear ownership en recursos (perfiles, chats).
+## 4. Security
+- TLS end-to-end; HSTS; strict CSP (no unsafe-inline, no eval).
+- httpOnly, Secure, SameSite=Lax/Strict cookies; refresh token rotation.
+- CSRF protection (if cookies); restricted CORS; rate limiting per IP and user on login/search/chat.
+- Server-side validation and sanitisation; payload and file size limits.
+- Enumeration protection: generic responses on login/reset; search requires authentication.
+- Logs without PII; hashed IPs if required; encrypted backups; secrets in vault/KMS.
+- Least privilege: user/admin roles; ownership checks on all resources (profiles, chats).
 
-## 5. Modelo de datos (base)
-- users: id, email (único), hash de pass si aplica, estado, created_at, last_login_at/ip_hash.
-- profiles: user_id (FK), display_name, bio, campos buscables, foto_principal_url, settings de privacidad.
-- messages: id, chat_id, sender_id, body, media_url?, created_at, delivered_at, read_at.
-- chats: id, tipo (direct|room), participantes (tabla pivot para directos), metadata.
-- rooms: id, nombre, descripción, visibilidad (pública interna), creador.
-- Índices: búsqueda en profiles, messages(chat_id, created_at) para paginación; constraints FK.
+## 5. Data model (base)
+- users: id, email (unique), password hash, status, created_at, last_login_at/ip_hash.
+- profiles: user_id (FK), display_name, bio, searchable fields, avatar_url, privacy settings.
+- contacts: id, requester_id, addressee_id, status (pending/accepted/blocked), created_at.
+- rooms: id, type (dm|group), name, dm_key (unique for DMs), created_at, updated_at.
+- room_members: room_id, user_id, last_read_at.
+- messages: id, room_id, sender_id, type, content, media_url?, expires_at, view_once, created_at.
+- message_views: message_id, user_id, viewed_at (for view-once ephemeral messages).
+- Indexes: profile search, messages(room_id, created_at) for pagination; FK constraints.
 
-## 6. Flujo de tiempo real
-- Handshake WS con token de sesión (o cookie + sesión validada).
-- Suscripción a: chats del usuario, rooms públicas, canal de presencia.
-- Presencia: heartbeat cada N segundos → set en Redis con TTL; caída del TTL marca offline.
-- Fanout: API publica mensaje → guarda en Postgres → emite a Redis Pub/Sub → reenvía por WS a suscriptores.
+## 6. Real-time flow
+- WS handshake with session token via `?token=` query param (browser WS API has no custom header support).
+- Per-room Redis Pub/Sub channel: `chat:room:{roomID}`; hub subscribes on first client, unsubscribes on last.
+- Presence: heartbeat every N seconds → Redis key with TTL; TTL expiry marks offline.
+- Fan-out: client sends message → saved to Postgres → published to Redis Pub/Sub → forwarded via WS to all subscribers.
+- SSE bus: single `EventSource` connection per session for out-of-band notifications (contact events, new message badges).
 
-## 7. Manejo de media
-- Front solicita URL firmada → sube a S3 directamente.
-- Worker procesa (resize, strip metadata) → guarda variantes → actualiza URL en DB.
-- Entrega vía CDN; políticas anti-hotlink.
+## 7. Media handling
+- Frontend requests a pre-signed URL → uploads directly to S3.
+- Worker processes (resize, strip metadata) → saves variants → updates URL in DB.
+- Delivery via CDN; anti-hotlink policies.
 
-## 8. Plan por fases
+## 8. Roadmap
 
-- [x] **Fundación**: repo, CI/CD (GitHub Actions), linters, entornos dev/prod, secretos.
-- [x] **Auth base**: registro y login con bcrypt; JWT HS256; `RequireAuth` middleware; NextAuth.js con credentials provider; cookies httpOnly.
-- [x] **Perfiles privados**: `GET/PUT /profiles/me`; lazy creation; página de perfil en frontend.
-- [x] **Contactos**: búsqueda de usuarios; envío/aceptación/rechazo/cancelación de solicitudes; `DELETE /contacts/{id}`; estado machine `pending → accepted`.
-- [x] **Notificaciones en tiempo real (SSE)**: `notifications.Hub`; `GET /notifications/stream?token=`; eventos `contact_request`, `contact_accepted`, `contact_removed`; badge en NavBar; `NotificationsContext` (bus de eventos, una sola conexión SSE por sesión).
-- [x] **Chat y salas**: WebSocket (`GET /chat/rooms/{id}/ws?token=`); Redis Pub/Sub fan-out; DMs y grupos; persistencia en Postgres; historial paginado; conteo de no leídos; badge en NavBar vía evento SSE `new_message`; mensajes efímeros en schema (`expires_at`, `view_once`).
-- [ ] **Presencia**: heartbeat a Redis con TTL; online/offline/last seen en UI.
-- [ ] **Media**: URLs firmadas para upload directo a S3/R2; worker asynq (resize, strip metadata); entrega vía CDN; mensajes con foto/archivo en chat.
-- [ ] **Mensajes efímeros**: TTL worker (`expires_at`); view-once (`view_once` + `message_views`); limpieza automática.
-- [ ] **Indicadores de escritura y receipts**: eventos `typing` y `read` sobre WebSocket.
-- [ ] **QA/hardening**: tests e2e (Playwright); SAST/Dependabot; revisión CSP/HSTS/CORS; rate limiting.
-- [ ] **Observabilidad y despliegue**: logs estructurados, métricas, tracing (OpenTelemetry); despliegue en Vercel + Fly.io/Render; DB y Redis gestionados.
+- [x] **Foundation**: repo, CI/CD (GitHub Actions), linters, dev/prod environments, secrets.
+- [x] **Auth**: registration and login with bcrypt; JWT HS256; `RequireAuth` middleware; NextAuth.js credentials provider; httpOnly cookies.
+- [x] **Private profiles**: `GET/PUT /profiles/me`; lazy profile creation; profile page in frontend.
+- [x] **Contacts**: user search; send/accept/decline/cancel requests; `DELETE /contacts/{id}`; `pending → accepted` state machine.
+- [x] **Real-time notifications (SSE)**: `notifications.Hub`; `GET /notifications/stream?token=`; `contact_request`, `contact_accepted`, `contact_removed` events; NavBar badge; `NotificationsContext` (single SSE connection per session, event bus for all subscribers).
+- [x] **Chat and rooms**: WebSocket (`GET /chat/rooms/{id}/ws?token=`); Redis Pub/Sub fan-out; DMs and group rooms; Postgres persistence; paginated history; unread counts; NavBar badge via `new_message` SSE event; ephemeral message schema (`expires_at`, `view_once`).
+- [ ] **Presence**: Redis heartbeat with TTL; online/offline/last seen in UI.
+- [ ] **Media**: pre-signed uploads to S3/R2; asynq worker (resize, strip metadata); CDN delivery; photo/file messages in chat.
+- [ ] **Ephemeral messages**: TTL cleanup worker (`expires_at`); view-once logic (`view_once` + `message_views`); automatic deletion.
+- [ ] **Typing indicators and read receipts**: `typing` and `read` events over WebSocket.
+- [ ] **QA / hardening**: e2e tests (Playwright); SAST/Dependabot; CSP/HSTS/CORS review; rate limiting.
+- [ ] **Observability and deployment**: structured logs, metrics, tracing (OpenTelemetry); deploy to Vercel + Fly.io/Render; managed DB and Redis.
 
-## 9. Testing
-- Unit: handlers y servicios (auth, chat, profiles).
-- Integración: DB y Redis (Testcontainers).
-- E2E: Playwright (flujos de login, perfiles, búsqueda, chat y presencia).
-- Seguridad: rate limit, CSRF (si cookies), headers (CSP/HSTS), tamaño de payload.
+## 9. Testing strategy
+- Unit: handlers and services (auth, chat, profiles, contacts).
+- Integration: real Postgres and Redis (skipped when env vars not set).
+- E2E: Playwright (login, profiles, search, chat, presence flows).
+- Security: rate limiting, headers (CSP/HSTS), payload size limits.
 
-## 10. Operación
-- SLIs: latencia HTTP/WS, tasa de entrega de mensajes, errores 5xx, expiración de heartbeats.
-- Alertas: caída de WS, colas atrasadas, errores de worker, espacio en disco, conexiones DB.
-- Backups cifrados y probados; rotación de claves periódica.
+## 10. Operations
+- SLIs: HTTP/WS latency, message delivery rate, 5xx error rate, heartbeat expiry.
+- Alerts: WS drops, queue backlogs, worker errors, disk space, DB connections.
+- Encrypted and tested backups; periodic key rotation.
