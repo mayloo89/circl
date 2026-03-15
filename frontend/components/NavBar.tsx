@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
@@ -54,7 +55,7 @@ export default function NavBar() {
         </Link>
         <Link href="/profile" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
           {avatarURL ? (
-            <img src={avatarURL} alt="" className="h-6 w-6 rounded-full object-cover ring-1 ring-gray-700" />
+            <Image src={avatarURL} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover ring-1 ring-gray-700" />
           ) : (
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-700 text-xs text-gray-300 ring-1 ring-gray-600">
               {displayName ? displayName[0].toUpperCase() : "?"}

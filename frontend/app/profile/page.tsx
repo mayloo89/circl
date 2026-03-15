@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
@@ -110,7 +111,7 @@ export default function ProfilePage() {
             className="group relative h-24 w-24 rounded-full bg-gray-800 ring-2 ring-gray-700 hover:ring-indigo-500 focus:outline-none focus:ring-indigo-500 overflow-hidden"
           >
             {avatarURL ? (
-              <img src={avatarURL} alt="Avatar" className="h-full w-full object-cover" />
+              <Image src={avatarURL} alt="Avatar" width={96} height={96} className="h-full w-full object-cover" />
             ) : (
               <span className="text-3xl text-gray-500 group-hover:text-gray-300">
                 {displayName ? displayName[0].toUpperCase() : "?"}

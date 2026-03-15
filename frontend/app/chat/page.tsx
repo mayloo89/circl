@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -95,7 +96,7 @@ export default function ChatPage() {
                   >
                     {room.type === "dm" ? (
                       room.peer_avatar_url ? (
-                        <img src={room.peer_avatar_url} alt="" className="h-10 w-10 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                        <Image src={room.peer_avatar_url} alt="" width={40} height={40} className="h-10 w-10 flex-none rounded-full object-cover ring-1 ring-gray-700" />
                       ) : (
                         <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gray-700 text-sm font-medium text-gray-300 ring-1 ring-gray-600">
                           {(room.peer_name || "?")[0].toUpperCase()}

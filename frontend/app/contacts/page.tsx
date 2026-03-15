@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -270,7 +271,7 @@ export default function ContactsPage() {
                 <li key={u.id} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-3">
                     {u.avatar_url ? (
-                      <img src={u.avatar_url} alt="" className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                      <Image src={u.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
                     ) : (
                       <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
                         {(u.display_name || u.email)[0].toUpperCase()}
@@ -304,7 +305,7 @@ export default function ContactsPage() {
                 <li key={r.contact_id} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-3">
                     {r.avatar_url ? (
-                      <img src={r.avatar_url} alt="" className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                      <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
                     ) : (
                       <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
                         {(r.display_name || r.email)[0].toUpperCase()}
@@ -341,7 +342,7 @@ export default function ContactsPage() {
                 <li key={r.contact_id} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-3">
                     {r.avatar_url ? (
-                      <img src={r.avatar_url} alt="" className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                      <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
                     ) : (
                       <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
                         {(r.display_name || r.email)[0].toUpperCase()}
@@ -373,7 +374,7 @@ export default function ContactsPage() {
                   <div className="flex items-center gap-3">
                     <div className="relative flex-none">
                       {c.avatar_url ? (
-                        <img src={c.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-700" />
+                        <Image src={c.avatar_url} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-700" />
                       ) : (
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
                           {(c.display_name || c.email)[0].toUpperCase()}

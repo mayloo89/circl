@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
@@ -139,7 +140,7 @@ export default function ChatRoomPage() {
           <>
             {room.type === "dm" ? (
               room.peer_avatar_url ? (
-                <img src={room.peer_avatar_url} alt="" className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                <Image src={room.peer_avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
               ) : (
                 <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
                   {(room.peer_name || "?")[0].toUpperCase()}
@@ -193,7 +194,7 @@ export default function ChatRoomPage() {
               {!isOwn && (
                 <div className="mr-2 mt-5 flex-none">
                   {avatarUrl ? (
-                    <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-700" />
+                    <Image src={avatarUrl} alt="" width={28} height={28} className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-700" />
                   ) : (
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-700 text-xs text-gray-300 ring-1 ring-gray-600">
                       {(msg.sender_name || "?")[0].toUpperCase()}
