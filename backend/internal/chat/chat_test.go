@@ -15,12 +15,14 @@ type mockStore struct {
 	rooms        []chat.RoomSummary
 	msg          *chat.Message
 	msgs         []chat.Message
+	members      []string
 	isMember     bool
 	roomErr      error
 	roomsErr     error
 	msgErr       error
 	msgsErr      error
 	memberErr    error
+	membersErr   error
 	markReadErr  error
 }
 
@@ -32,6 +34,9 @@ func (m *mockStore) CreateGroup(_ context.Context, _, _ string, _ []string) (*ch
 }
 func (m *mockStore) IsMember(_ context.Context, _, _ string) (bool, error) {
 	return m.isMember, m.memberErr
+}
+func (m *mockStore) ListMembers(_ context.Context, _ string) ([]string, error) {
+	return m.members, m.membersErr
 }
 func (m *mockStore) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary, error) {
 	return m.rooms, m.roomsErr
@@ -179,6 +184,27 @@ func TestService_ListMessages_Success(t *testing.T) {
 func TestService_ListMessages_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{msgsErr: errors.New("db error")})
 	_, err := svc.ListMessages(t.Context(), "r-1", nil, 50)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ListMembers_Success(t *testing.T) {
+	want := []string{"u-1", "u-2"}
+	svc := chat.NewService(&mockStore{members: want})
+
+	got, err := svc.ListMembers(t.Context(), "r-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+}
+
+func TestService_ListMembers_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{membersErr: errors.New("db error")})
+	_, err := svc.ListMembers(t.Context(), "r-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

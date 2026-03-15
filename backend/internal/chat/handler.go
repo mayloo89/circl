@@ -74,8 +74,11 @@ func NewHandler(svc Manager) http.Handler {
 // It must be registered outside the requireAuth middleware group because the
 // browser WebSocket API does not support custom request headers; the JWT is
 // passed as a ?token= query parameter instead and validated here.
-func NewWSHandler(svc Manager, hub *Hub, jwtSecret string) http.HandlerFunc {
-	return wsHandler(svc, hub, jwtSecret)
+//
+// notifyNewMessage, if non-nil, is called for each non-sender room member
+// after a message is saved, allowing callers to push real-time SSE badges.
+func NewWSHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string)) http.HandlerFunc {
+	return wsHandler(svc, hub, jwtSecret, notifyNewMessage)
 }
 
 // getDMHandler returns (or creates) the direct-message room between the
@@ -239,7 +242,7 @@ func markReadHandler(svc Manager) http.HandlerFunc {
 // WebSocket API does not support custom headers.
 //
 // GET /chat/rooms/{id}/ws?token=<jwt>
-func wsHandler(svc Manager, hub *Hub, jwtSecret string) http.HandlerFunc {
+func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tok := r.URL.Query().Get("token")
 		if tok == "" {
@@ -277,13 +280,13 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string) http.HandlerFunc {
 		hub.register <- client
 
 		go client.writePump()
-		go client.readPump(svc)
+		go client.readPump(svc, notifyNewMessage)
 	}
 }
 
 // readPump pumps messages from the WebSocket connection to the hub.
 // It runs in a dedicated goroutine per connection.
-func (c *Client) readPump(svc Manager) {
+func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID string)) {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -308,7 +311,8 @@ func (c *Client) readPump(svc Manager) {
 		}
 
 		if in.Type == "message" && in.Content != "" {
-			msg, err := svc.SaveMessage(context.Background(), c.roomID, c.userID, MessageTypeText, in.Content)
+			ctx := context.Background()
+			msg, err := svc.SaveMessage(ctx, c.roomID, c.userID, MessageTypeText, in.Content)
 			if err != nil {
 				continue
 			}
@@ -326,7 +330,18 @@ func (c *Client) readPump(svc Manager) {
 				continue
 			}
 
-			_ = c.hub.Publish(context.Background(), c.roomID, data)
+			_ = c.hub.Publish(ctx, c.roomID, data)
+
+			// Notify non-sender members so they can show an unread badge.
+			if notifyNewMessage != nil {
+				if members, err := svc.ListMembers(ctx, c.roomID); err == nil {
+					for _, uid := range members {
+						if uid != c.userID {
+							notifyNewMessage(uid, c.roomID)
+						}
+					}
+				}
+			}
 		}
 	}
 }

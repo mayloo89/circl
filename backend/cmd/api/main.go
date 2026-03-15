@@ -95,7 +95,12 @@ func main() {
 	chatStore := chat.NewStore(pool)
 	chatSvc := chat.NewService(chatStore)
 	chatHandler := chat.NewHandler(chatSvc)
-	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret)
+	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
+		hub.Notify(recipientID, notifications.Event{
+			Type:    "new_message",
+			Payload: map[string]string{"room_id": roomID},
+		})
+	})
 
 	requireAuth := middleware.RequireAuth(jwtSecret)
 

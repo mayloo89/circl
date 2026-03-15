@@ -117,6 +117,26 @@ func (s *pgStore) CreateGroup(ctx context.Context, creatorID, name string, membe
 	return &room, nil
 }
 
+// ListMembers returns the user IDs of all members in a room.
+func (s *pgStore) ListMembers(ctx context.Context, roomID string) ([]string, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT user_id::text FROM room_members WHERE room_id = $1`, roomID)
+	if err != nil {
+		return nil, fmt.Errorf("list members: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("list members: scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // IsMember reports whether userID is a member of roomID.
 func (s *pgStore) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
 	var exists bool

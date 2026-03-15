@@ -9,8 +9,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <NotificationsProvider>
-        <NavBar />
-        {children}
+        <div className="flex h-screen flex-col overflow-hidden">
+          <NavBar />
+          <div className="flex-1 overflow-auto min-h-0">
+            {children}
+          </div>
+        </div>
       </NotificationsProvider>
     </SessionProvider>
   )

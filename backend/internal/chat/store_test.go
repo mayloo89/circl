@@ -144,6 +144,25 @@ func TestIntegration_ChatFlow(t *testing.T) {
 		t.Errorf("room %q not found in ListRooms for u1", room.ID)
 	}
 
+	// --- ListMembers ---
+
+	memberIDs, err := store.ListMembers(ctx, room.ID)
+	if err != nil {
+		t.Fatalf("ListMembers: %v", err)
+	}
+	found1, found2 := false, false
+	for _, id := range memberIDs {
+		if id == u1 {
+			found1 = true
+		}
+		if id == u2 {
+			found2 = true
+		}
+	}
+	if !found1 || !found2 {
+		t.Errorf("ListMembers = %v, want both %q and %q", memberIDs, u1, u2)
+	}
+
 	// --- MarkRead ---
 
 	if err := store.MarkRead(ctx, room.ID, u1); err != nil {

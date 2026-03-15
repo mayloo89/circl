@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
+import { useNotificationsContext } from "@/contexts/NotificationsContext"
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 interface MessageSummary {
@@ -32,10 +34,14 @@ export default function ChatPage() {
   const [error, setError] = useState("")
 
   const token = session?.accessToken
+  const { clearChatBadge } = useNotificationsContext()
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
+
+  // Clear the nav badge when the user is on the chat list page.
+  useEffect(() => { clearChatBadge() }, [clearChatBadge])
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return

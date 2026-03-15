@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 
+import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type ChatMessage } from "@/hooks/useChat"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -32,6 +33,10 @@ export default function ChatRoomPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { messages: liveMessages, connected, send } = useChat(roomId, token)
+  const { clearChatBadge } = useNotificationsContext()
+
+  // Clear the nav badge when entering a room.
+  useEffect(() => { clearChatBadge() }, [clearChatBadge])
 
   // Redirect unauthenticated users.
   useEffect(() => {
@@ -74,20 +79,25 @@ export default function ChatRoomPage() {
   }
 
   // Combine history with live WebSocket messages, deduplicating by id.
-  const historyIds = new Set(history.map((m) => m.id))
-  const dedupedLive = liveMessages.filter((m) => !historyIds.has(m.id))
-  const allMessages: Array<HistoryMessage | ChatMessage> = [...history, ...dedupedLive]
+  const seen = new Set<string>()
+  const allMessages: Array<HistoryMessage | ChatMessage> = []
+  for (const msg of [...history, ...liveMessages]) {
+    if (!seen.has(msg.id)) {
+      seen.add(msg.id)
+      allMessages.push(msg)
+    }
+  }
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+      <div className="flex h-full items-center justify-center bg-gray-950">
         <p className="text-gray-400">Loading...</p>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen flex-col bg-gray-950">
+    <div className="flex h-full flex-col bg-gray-950">
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
         <button

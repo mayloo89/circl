@@ -59,6 +59,9 @@ func (m *mockManager) SaveMessage(_ context.Context, _, _, _, _ string) (*chat.M
 func (m *mockManager) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
 	return m.msgs, m.msgsErr
 }
+func (m *mockManager) ListMembers(_ context.Context, _ string) ([]string, error) {
+	return nil, nil
+}
 func (m *mockManager) MarkRead(_ context.Context, _, _ string) error {
 	return m.markErr
 }
@@ -341,7 +344,7 @@ func TestMarkRead_ServiceError(t *testing.T) {
 // --- WebSocket handler ---
 
 func TestWSHandler_NoToken(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{}, nil, testSecret)
+	h := chat.NewWSHandler(&mockManager{}, nil, testSecret, nil)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -351,7 +354,7 @@ func TestWSHandler_NoToken(t *testing.T) {
 }
 
 func TestWSHandler_InvalidToken(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{}, nil, testSecret)
+	h := chat.NewWSHandler(&mockManager{}, nil, testSecret, nil)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token=badtoken", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -361,7 +364,7 @@ func TestWSHandler_InvalidToken(t *testing.T) {
 }
 
 func TestWSHandler_NotMember(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{isMember: false}, nil, testSecret)
+	h := chat.NewWSHandler(&mockManager{isMember: false}, nil, testSecret, nil)
 	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
@@ -372,7 +375,7 @@ func TestWSHandler_NotMember(t *testing.T) {
 }
 
 func TestWSHandler_MemberCheckError(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{memberErr: errors.New("db fail")}, nil, testSecret)
+	h := chat.NewWSHandler(&mockManager{memberErr: errors.New("db fail")}, nil, testSecret, nil)
 	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
@@ -417,7 +420,7 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -466,7 +469,7 @@ func TestWSHandler_IgnoresEmptyContent(t *testing.T) {
 	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -505,7 +508,7 @@ func TestWSHandler_HubShutdownSendsCloseFrame(t *testing.T) {
 	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -542,7 +545,7 @@ func TestWSHandler_SaveMessageError(t *testing.T) {
 	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)

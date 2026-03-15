@@ -22,46 +22,46 @@ var (
 )
 
 type Room struct {
-	ID        string
-	Type      string
-	Name      string
-	DMKey     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string    `json:"id"`
+	Type      string    `json:"type"`
+	Name      string    `json:"name"`
+	DMKey     string    `json:"dm_key,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // MessageSummary is a lightweight view of the most recent message in a room,
 // used when listing rooms without fetching full message history.
 type MessageSummary struct {
-	SenderID  string
-	Content   string
-	CreatedAt time.Time
+	SenderID  string    `json:"sender_id"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // RoomSummary is returned by ListRooms and contains everything the UI needs
 // to render a conversation list entry without extra round-trips.
 type RoomSummary struct {
-	ID          string
-	Type        string
-	Name        string
-	PeerID      string // non-empty for DMs
-	PeerName    string // non-empty for DMs
-	LastMessage *MessageSummary
-	UnreadCount int
-	CreatedAt   time.Time
+	ID          string          `json:"id"`
+	Type        string          `json:"type"`
+	Name        string          `json:"name"`
+	PeerID      string          `json:"peer_id,omitempty"`
+	PeerName    string          `json:"peer_name,omitempty"`
+	LastMessage *MessageSummary `json:"last_message"`
+	UnreadCount int             `json:"unread_count"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
 // Message is the full representation of a chat message including sender info.
 type Message struct {
-	ID         string
-	RoomID     string
-	SenderID   string
-	SenderName string
-	Type       string
-	Content    string
-	ExpiresAt  *time.Time
-	ViewOnce   bool
-	CreatedAt  time.Time
+	ID         string     `json:"id"`
+	RoomID     string     `json:"room_id"`
+	SenderID   string     `json:"sender_id"`
+	SenderName string     `json:"sender_name"`
+	Type       string     `json:"type"`
+	Content    string     `json:"content"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	ViewOnce   bool       `json:"view_once"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 // Store is the persistence contract for the chat package.
@@ -69,6 +69,7 @@ type Store interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
+	ListMembers(ctx context.Context, roomID string) ([]string, error)
 	ListRooms(ctx context.Context, userID string) ([]RoomSummary, error)
 	SaveMessage(ctx context.Context, roomID, senderID, msgType, content string) (*Message, error)
 	ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error)
@@ -80,6 +81,7 @@ type Manager interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
+	ListMembers(ctx context.Context, roomID string) ([]string, error)
 	ListRooms(ctx context.Context, userID string) ([]RoomSummary, error)
 	SaveMessage(ctx context.Context, roomID, senderID, msgType, content string) (*Message, error)
 	ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error)
@@ -107,6 +109,10 @@ func (s *Service) CreateGroup(ctx context.Context, creatorID, name string, membe
 
 func (s *Service) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
 	return s.store.IsMember(ctx, roomID, userID)
+}
+
+func (s *Service) ListMembers(ctx context.Context, roomID string) ([]string, error) {
+	return s.store.ListMembers(ctx, roomID)
 }
 
 func (s *Service) ListRooms(ctx context.Context, userID string) ([]RoomSummary, error) {
