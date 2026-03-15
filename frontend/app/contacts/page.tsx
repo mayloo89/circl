@@ -194,6 +194,21 @@ export default function ContactsPage() {
     setSent((prev) => prev.filter((r) => r.contact_id !== contactID))
   }
 
+  async function startDM(peerID: string) {
+    setError("")
+    const res = await fetch(`${API_URL}/chat/rooms/dm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ peer_id: peerID }),
+    })
+    if (!res.ok) {
+      setError("Failed to open conversation.")
+      return
+    }
+    const room = await res.json()
+    router.push(`/chat/${room.id}`)
+  }
+
   async function remove(contactID: string) {
     setError("")
     const res = await fetch(`${API_URL}/contacts/${contactID}`, {
@@ -321,12 +336,20 @@ export default function ContactsPage() {
               {contacts.map((c) => (
                 <li key={c.contact_id} className="flex items-center justify-between py-2">
                   <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
-                  <button
-                    onClick={() => remove(c.contact_id)}
-                    className="rounded bg-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-800"
-                  >
-                    Remove
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => startDM(c.user_id)}
+                      className="rounded bg-indigo-700 px-3 py-1 text-xs text-white hover:bg-indigo-600"
+                    >
+                      Message
+                    </button>
+                    <button
+                      onClick={() => remove(c.contact_id)}
+                      className="rounded bg-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

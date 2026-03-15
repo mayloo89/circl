@@ -21,7 +21,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Private profiles**: display name, bio — `GET /profiles/me`, `PUT /profiles/me`
 - ✅ **Contacts**: search, send/accept/decline/remove requests — full contacts lifecycle
 - ✅ **Real-time notifications**: SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
-- ⏳ **Chat and rooms**: pending
+- ✅ **Chat and rooms**: WebSocket DMs and group rooms, Redis Pub/Sub fan-out, message history, unread counts
 - ⏳ **Presence**: pending
 - ⏳ **Media and workers**: pending
 
@@ -31,6 +31,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - Node.js 20+
 - Go 1.25+
 - PostgreSQL 17+ (e.g. [Postgres.app](https://postgresapp.com) on macOS)
+- Redis 7+ (e.g. `brew install redis && brew services start redis` on macOS)
 
 ### 1. Database
 
@@ -142,6 +143,12 @@ All protected routes require `Authorization: Bearer <token>`.
 | `PUT` | `/contacts/{id}/accept` | ✅ | Accept a pending request |
 | `DELETE` | `/contacts/{id}` | ✅ | Remove or decline a contact |
 | `GET` | `/notifications/stream?token=` | — | SSE stream for real-time events |
+| `POST` | `/chat/rooms/dm` | ✅ | Get or create a DM room |
+| `POST` | `/chat/rooms` | ✅ | Create a named group room |
+| `GET` | `/chat/rooms` | ✅ | List rooms with last message and unread count |
+| `GET` | `/chat/rooms/{id}/messages` | ✅ | Paginated message history |
+| `PUT` | `/chat/rooms/{id}/read` | ✅ | Mark room as read |
+| `GET` | `/chat/rooms/{id}/ws?token=` | — | WebSocket connection for real-time chat |
 
 ## Repository structure
 
@@ -149,13 +156,14 @@ All protected routes require `Authorization: Bearer <token>`.
 circl/
 ├── frontend/               # Next.js app
 │   ├── app/               # App Router pages and layouts
+│   │   ├── chat/          # Chat list and room pages
 │   │   ├── contacts/      # Contacts page
 │   │   ├── login/         # Login page
 │   │   ├── profile/       # Profile page
 │   │   └── register/      # Register page
 │   ├── components/        # Shared UI components (NavBar)
 │   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)
-│   ├── hooks/             # Custom hooks (useNotifications)
+│   ├── hooks/             # Custom hooks (useNotifications, useChat)
 │   ├── lib/               # Auth config (NextAuth.js)
 │   ├── types/             # next-auth type augmentation
 │   └── package.json
@@ -167,6 +175,7 @@ circl/
 │   │   ├── config/        # Env helpers
 │   │   ├── db/            # Connection pool, migrations runner
 │   │   ├── middleware/    # JWT RequireAuth middleware
+│   │   ├── chat/          # Chat rooms, Hub (WebSocket fan-out), store, handler
 │   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
 │   │   ├── profiles/      # Profile handler, service, store
 │   │   ├── server/        # Chi router, CORS, health handler
