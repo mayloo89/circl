@@ -258,7 +258,7 @@ func TestListSent_WithRows(t *testing.T) {
 		rowsFn: func() (pgx.Rows, error) {
 			return &mockRows{
 				data: [][]any{
-					{"c-1", "u-2", "bob@example.com", "Bob"},
+					{"c-1", "u-2", "bob@example.com", "Bob", ""},
 				},
 			}, nil
 		},
@@ -307,7 +307,7 @@ func TestListPending_WithRows(t *testing.T) {
 		rowsFn: func() (pgx.Rows, error) {
 			return &mockRows{
 				data: [][]any{
-					{"c-1", "u-2", "alice@example.com", "Alice"},
+					{"c-1", "u-2", "alice@example.com", "Alice", ""},
 				},
 			}, nil
 		},
@@ -355,7 +355,7 @@ func TestScanUserSummaries_ScanError(t *testing.T) {
 	s := &pgStore{db: &mockQuerier{
 		rowsFn: func() (pgx.Rows, error) {
 			return &mockRows{
-				data:    [][]any{{"id", "email", "name"}},
+				data:    [][]any{{"id", "email", "name", "", "avatar"}},
 				scanErr: errors.New("scan error"),
 			}, nil
 		},
@@ -413,7 +413,7 @@ func TestScanUserSummaries_WithRows(t *testing.T) {
 		rowsFn: func() (pgx.Rows, error) {
 			return &mockRows{
 				data: [][]any{
-					{"c-1", "u-2", "alice@example.com", "Alice"},
+					{"c-1", "u-2", "alice@example.com", "Alice", ""},
 				},
 			}, nil
 		},

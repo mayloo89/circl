@@ -101,7 +101,9 @@ func (s *pgStore) Delete(ctx context.Context, contactID, userID string) (*Contac
 // ListAccepted returns all accepted contacts for the given user.
 func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, u.id, u.email, COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name
+		SELECT c.id, u.id, u.email,
+		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM contacts c
 		JOIN users u ON u.id = CASE
 			WHEN c.requester_id = $1 THEN c.addressee_id
@@ -123,7 +125,9 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedCo
 // ListPending returns incoming pending contact requests for the given user.
 func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, u.id, u.email, COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name
+		SELECT c.id, u.id, u.email,
+		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM contacts c
 		JOIN users u ON u.id = c.requester_id
 		LEFT JOIN profiles p ON p.user_id = u.id
@@ -141,7 +145,9 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]Pendin
 // ListSent returns outgoing pending contact requests sent by the given user.
 func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentRequest, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, u.id, u.email, COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name
+		SELECT c.id, u.id, u.email,
+		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM contacts c
 		JOIN users u ON u.id = c.addressee_id
 		LEFT JOIN profiles p ON p.user_id = u.id
@@ -160,7 +166,9 @@ func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentReque
 // and any user who already has a contact relationship (any status) with the caller.
 func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) ([]UserSummary, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT u.id, u.email, COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name
+		SELECT u.id, u.email,
+		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM users u
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id <> $1
@@ -185,7 +193,7 @@ func scanAcceptedContacts(rows pgx.Rows) ([]AcceptedContact, error) {
 	var results []AcceptedContact
 	for rows.Next() {
 		var c AcceptedContact
-		if err := rows.Scan(&c.ContactID, &c.UserID, &c.Email, &c.DisplayName); err != nil {
+		if err := rows.Scan(&c.ContactID, &c.UserID, &c.Email, &c.DisplayName, &c.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan accepted contact: %w", err)
 		}
 		results = append(results, c)
@@ -203,7 +211,7 @@ func scanPendingRequests(rows pgx.Rows) ([]PendingRequest, error) {
 	var results []PendingRequest
 	for rows.Next() {
 		var r PendingRequest
-		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName); err != nil {
+		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName, &r.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan pending request: %w", err)
 		}
 		results = append(results, r)
@@ -221,7 +229,7 @@ func scanSentRequests(rows pgx.Rows) ([]SentRequest, error) {
 	var results []SentRequest
 	for rows.Next() {
 		var r SentRequest
-		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName); err != nil {
+		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName, &r.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan sent request: %w", err)
 		}
 		results = append(results, r)
@@ -239,7 +247,7 @@ func scanUserSummaries(rows pgx.Rows) ([]UserSummary, error) {
 	var results []UserSummary
 	for rows.Next() {
 		var u UserSummary
-		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan user summary: %w", err)
 		}
 		results = append(results, u)

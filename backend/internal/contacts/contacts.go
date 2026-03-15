@@ -37,6 +37,7 @@ type UserSummary struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 // AcceptedContact represents an accepted contact with the contact row ID
@@ -46,6 +47,7 @@ type AcceptedContact struct {
 	UserID      string `json:"user_id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 // PendingRequest represents an incoming pending contact request with the
@@ -55,6 +57,7 @@ type PendingRequest struct {
 	UserID      string `json:"user_id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 // SentRequest represents an outgoing pending contact request with the
@@ -64,6 +67,7 @@ type SentRequest struct {
 	UserID      string `json:"user_id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 // Store is the persistence interface required by the service.

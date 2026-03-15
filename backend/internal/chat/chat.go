@@ -41,27 +41,29 @@ type MessageSummary struct {
 // RoomSummary is returned by ListRooms and contains everything the UI needs
 // to render a conversation list entry without extra round-trips.
 type RoomSummary struct {
-	ID          string          `json:"id"`
-	Type        string          `json:"type"`
-	Name        string          `json:"name"`
-	PeerID      string          `json:"peer_id,omitempty"`
-	PeerName    string          `json:"peer_name,omitempty"`
-	LastMessage *MessageSummary `json:"last_message"`
-	UnreadCount int             `json:"unread_count"`
-	CreatedAt   time.Time       `json:"created_at"`
+	ID            string          `json:"id"`
+	Type          string          `json:"type"`
+	Name          string          `json:"name"`
+	PeerID        string          `json:"peer_id,omitempty"`
+	PeerName      string          `json:"peer_name,omitempty"`
+	PeerAvatarURL string          `json:"peer_avatar_url,omitempty"`
+	LastMessage   *MessageSummary `json:"last_message"`
+	UnreadCount   int             `json:"unread_count"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 // Message is the full representation of a chat message including sender info.
 type Message struct {
-	ID         string     `json:"id"`
-	RoomID     string     `json:"room_id"`
-	SenderID   string     `json:"sender_id"`
-	SenderName string     `json:"sender_name"`
-	Type       string     `json:"type"`
-	Content    string     `json:"content"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	ViewOnce   bool       `json:"view_once"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID              string     `json:"id"`
+	RoomID          string     `json:"room_id"`
+	SenderID        string     `json:"sender_id"`
+	SenderName      string     `json:"sender_name"`
+	SenderAvatarURL string     `json:"sender_avatar_url"`
+	Type            string     `json:"type"`
+	Content         string     `json:"content"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	ViewOnce        bool       `json:"view_once"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 // Store is the persistence contract for the chat package.

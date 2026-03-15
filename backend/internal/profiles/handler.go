@@ -12,7 +12,7 @@ import (
 // ProfileManager is the interface the handler depends on.
 type ProfileManager interface {
 	GetMyProfile(ctx context.Context, userID string) (*Profile, error)
-	UpdateMyProfile(ctx context.Context, userID, displayName, bio string) (*Profile, error)
+	UpdateMyProfile(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error)
 }
 
 type profileResponse struct {
@@ -20,11 +20,13 @@ type profileResponse struct {
 	UserID      string `json:"user_id"`
 	DisplayName string `json:"display_name"`
 	Bio         string `json:"bio"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 type updateRequest struct {
 	DisplayName string `json:"display_name"`
 	Bio         string `json:"bio"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 type errorResponse struct {
@@ -71,7 +73,7 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 			return
 		}
 
-		profile, err := svc.UpdateMyProfile(r.Context(), userID, req.DisplayName, req.Bio)
+		profile, err := svc.UpdateMyProfile(r.Context(), userID, req.DisplayName, req.Bio, req.AvatarURL)
 		if err != nil {
 			if errors.Is(err, ErrInvalidInput) {
 				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
@@ -91,6 +93,7 @@ func toResponse(p *Profile) profileResponse {
 		UserID:      p.UserID,
 		DisplayName: p.DisplayName,
 		Bio:         p.Bio,
+		AvatarURL:   p.AvatarURL,
 	}
 }
 

@@ -12,6 +12,7 @@ export interface ChatMessage {
   room_id: string
   sender_id: string
   sender_name: string
+  sender_avatar_url: string
   content: string
   created_at: string
 }

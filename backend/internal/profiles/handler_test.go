@@ -27,7 +27,7 @@ func (m *mockProfileManager) GetMyProfile(_ context.Context, userID string) (*pr
 	return m.profile, m.getErr
 }
 
-func (m *mockProfileManager) UpdateMyProfile(_ context.Context, _, _, _ string) (*profiles.Profile, error) {
+func (m *mockProfileManager) UpdateMyProfile(_ context.Context, _, _, _, _ string) (*profiles.Profile, error) {
 	return m.profile, m.updateErr
 }
 

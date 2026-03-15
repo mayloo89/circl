@@ -40,13 +40,14 @@ type Client struct {
 
 // serverMessage is the JSON envelope sent from the server to connected clients.
 type serverMessage struct {
-	Type       string    `json:"type"`
-	ID         string    `json:"id"`
-	RoomID     string    `json:"room_id"`
-	SenderID   string    `json:"sender_id"`
-	SenderName string    `json:"sender_name"`
-	Content    string    `json:"content"`
-	CreatedAt  time.Time `json:"created_at"`
+	Type            string    `json:"type"`
+	ID              string    `json:"id"`
+	RoomID          string    `json:"room_id"`
+	SenderID        string    `json:"sender_id"`
+	SenderName      string    `json:"sender_name"`
+	SenderAvatarURL string    `json:"sender_avatar_url"`
+	Content         string    `json:"content"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // clientMessage is the JSON envelope received from a connected client.
@@ -318,13 +319,14 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			}
 
 			data, err := json.Marshal(serverMessage{
-				Type:       "message",
-				ID:         msg.ID,
-				RoomID:     msg.RoomID,
-				SenderID:   msg.SenderID,
-				SenderName: msg.SenderName,
-				Content:    msg.Content,
-				CreatedAt:  msg.CreatedAt,
+				Type:            "message",
+				ID:              msg.ID,
+				RoomID:          msg.RoomID,
+				SenderID:        msg.SenderID,
+				SenderName:      msg.SenderName,
+				SenderAvatarURL: msg.SenderAvatarURL,
+				Content:         msg.Content,
+				CreatedAt:       msg.CreatedAt,
 			})
 			if err != nil {
 				continue

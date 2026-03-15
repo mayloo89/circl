@@ -17,12 +17,13 @@ type Profile struct {
 	UserID      string
 	DisplayName string
 	Bio         string
+	AvatarURL   string
 }
 
 // Store is the data-access interface required by the profiles service.
 type Store interface {
 	GetByUserID(ctx context.Context, userID string) (*Profile, error)
-	Upsert(ctx context.Context, userID, displayName, bio string) (*Profile, error)
+	Upsert(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error)
 }
 
 // Service handles profile business logic.
@@ -41,18 +42,18 @@ func (s *Service) GetMyProfile(ctx context.Context, userID string) (*Profile, er
 	profile, err := s.store.GetByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return s.store.Upsert(ctx, userID, "", "")
+			return s.store.Upsert(ctx, userID, "", "", "")
 		}
 		return nil, err
 	}
 	return profile, nil
 }
 
-// UpdateMyProfile updates the display name and bio for the given user.
+// UpdateMyProfile updates the display name, bio, and avatar for the given user.
 // display_name is required.
-func (s *Service) UpdateMyProfile(ctx context.Context, userID, displayName, bio string) (*Profile, error) {
+func (s *Service) UpdateMyProfile(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error) {
 	if displayName == "" {
 		return nil, fmt.Errorf("%w: display name is required", ErrInvalidInput)
 	}
-	return s.store.Upsert(ctx, userID, displayName, bio)
+	return s.store.Upsert(ctx, userID, displayName, bio, avatarURL)
 }
