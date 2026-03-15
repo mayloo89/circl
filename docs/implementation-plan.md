@@ -71,7 +71,11 @@
 - [x] **Real-time notifications (SSE)**: `notifications.Hub`; `GET /notifications/stream?token=`; `contact_request`, `contact_accepted`, `contact_removed` events; NavBar badge; `NotificationsContext` (single SSE connection per session, event bus for all subscribers).
 - [x] **Chat and rooms**: WebSocket (`GET /chat/rooms/{id}/ws?token=`); Redis Pub/Sub fan-out; DMs and group rooms; Postgres persistence; paginated history; unread counts; NavBar badge via `new_message` SSE event; ephemeral message schema (`expires_at`, `view_once`).
 - [x] **Presence**: Redis heartbeat with TTL; `POST /presence/heartbeat` (20s interval, tab-visibility-aware); `DELETE /presence/heartbeat` (immediate offline on logout); `GET /presence?ids=` batch query; `presence_online` / `presence_offline` SSE fan-out to contacts; green dot on contacts list; peer name + online status in DM chat header; `last_seen_at` persisted in Postgres; `formatLastSeen` utility.
-- [ ] **Media**: pre-signed uploads to S3/R2; asynq worker (resize, strip metadata); CDN delivery; photo/file messages in chat.
+- [x] **Media — storage infra**: `Storage` interface (LocalStorage for dev, S3Storage for prod); `uploads` table; `POST /uploads/request` + `POST /uploads/{id}/confirm` lifecycle; file validation (type, size); `useUpload` frontend hook.
+- [ ] **Media — avatar upload**: profile avatar UI; `PUT /profiles/me` with `avatar_url`; avatar display in contacts and chat.
+- [ ] **Media — chat attachments**: attachment button in chat; image/file/video messages; render in message list.
+- [ ] **Media — S3 provider**: `S3Storage` implementation (aws-sdk-go-v2); pre-signed URLs; CDN delivery.
+- [ ] **Media — image processing**: asynq worker; resize/thumbnails; strip EXIF metadata.
 - [ ] **Ephemeral messages**: TTL cleanup worker (`expires_at`); view-once logic (`view_once` + `message_views`); automatic deletion.
 - [ ] **Typing indicators and read receipts**: `typing` and `read` events over WebSocket.
 - [ ] **QA / hardening**: e2e tests (Playwright); SAST/Dependabot; CSP/HSTS/CORS review; rate limiting.

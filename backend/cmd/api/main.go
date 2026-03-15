@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -19,6 +20,8 @@ import (
 	"github.com/mayloo89/circl/backend/internal/presence"
 	"github.com/mayloo89/circl/backend/internal/profiles"
 	"github.com/mayloo89/circl/backend/internal/server"
+	"github.com/mayloo89/circl/backend/internal/storage"
+	"github.com/mayloo89/circl/backend/internal/uploads"
 )
 
 const tokenExpiry = 24 * time.Hour
@@ -106,9 +109,28 @@ func main() {
 	presenceStore := presence.NewStore(rdb, pool)
 	presenceHandler := presence.NewHandler(presenceStore, hub)
 
+	// Storage provider: LocalStorage for dev, S3Storage for production.
+	storageProvider := config.EnvOrDefault("STORAGE_PROVIDER", "local")
+	var fileStorage storage.Storage
+	var localStorageHandler http.Handler
+
+	switch storageProvider {
+	case "local":
+		ls := storage.NewLocalStorage("./data/uploads", fmt.Sprintf("http://localhost:%s/uploads/files", port))
+		fileStorage = ls
+		localStorageHandler = storage.NewLocalHandler(ls)
+		log.Println("Storage provider: local (./data/uploads)")
+	default:
+		log.Fatalf("Unknown storage provider: %s", storageProvider)
+	}
+
+	uploadStore := uploads.NewStore(pool)
+	uploadSvc := uploads.NewService(uploadStore, fileStorage)
+	uploadHandler := uploads.NewHandler(uploadSvc)
+
 	requireAuth := middleware.RequireAuth(jwtSecret)
 
-	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, localStorageHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {
