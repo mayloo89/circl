@@ -22,7 +22,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Contacts**: search, send/accept/decline/remove requests — full contacts lifecycle
 - ✅ **Real-time notifications**: SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
 - ✅ **Chat and rooms**: WebSocket DMs and group rooms, Redis Pub/Sub fan-out, message history, unread counts
-- ⏳ **Presence**: pending
+- ✅ **Presence**: online/offline dot on contacts list, "Online" / "Last seen X ago" in DM chat header, instant updates via SSE
 - ⏳ **Media and workers**: pending
 
 ## Local setup
@@ -149,6 +149,9 @@ All protected routes require `Authorization: Bearer <token>`.
 | `GET` | `/chat/rooms/{id}/messages` | ✅ | Paginated message history |
 | `PUT` | `/chat/rooms/{id}/read` | ✅ | Mark room as read |
 | `GET` | `/chat/rooms/{id}/ws?token=` | — | WebSocket connection for real-time chat |
+| `POST` | `/presence/heartbeat` | ✅ | Mark self as online (send every ~20s) |
+| `DELETE` | `/presence/heartbeat` | ✅ | Mark self as offline immediately (on logout) |
+| `GET` | `/presence?ids=` | ✅ | Batch presence query (online + last seen) |
 
 ## Repository structure
 
@@ -161,9 +164,9 @@ circl/
 │   │   ├── login/         # Login page
 │   │   ├── profile/       # Profile page
 │   │   └── register/      # Register page
-│   ├── components/        # Shared UI components (NavBar)
+│   ├── components/        # Shared UI components (NavBar, SignOutButton)
 │   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)
-│   ├── hooks/             # Custom hooks (useNotifications, useChat)
+│   ├── hooks/             # Custom hooks (useNotifications, useChat, useHeartbeat, usePresence)
 │   ├── lib/               # Auth config (NextAuth.js)
 │   ├── types/             # next-auth type augmentation
 │   └── package.json
@@ -177,6 +180,7 @@ circl/
 │   │   ├── middleware/    # JWT RequireAuth middleware
 │   │   ├── chat/          # Chat rooms, Hub (WebSocket fan-out), store, handler
 │   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
+│   │   ├── presence/      # Redis heartbeat, offline, batch presence query
 │   │   ├── profiles/      # Profile handler, service, store
 │   │   ├── server/        # Chi router, CORS, health handler
 │   │   └── token/         # JWT generate/validate

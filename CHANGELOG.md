@@ -10,6 +10,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.0] - 2026-03-15 — Presence: online/offline and last seen
+
+### Added
+- `internal/presence` package: `Store` (Redis + Postgres), `Heartbeat` (SET NX + Expire + update `last_seen_at`), `Offline` (DEL key), `GetPresence` (Redis pipeline EXISTS + Postgres `last_seen_at`), `ContactIDs` (for SSE fan-out)
+- `POST /presence/heartbeat` — marks the authenticated user as online; emits `presence_online` SSE to all contacts on first heartbeat (NX)
+- `DELETE /presence/heartbeat` — immediately marks the user as offline; emits `presence_offline` SSE to all contacts
+- `GET /presence?ids=id1,id2,...` — returns `[{user_id, online, last_seen_at}]` for up to 100 users; online status from Redis, last seen from Postgres
+- Migration `000005_add_presence`: `last_seen_at TIMESTAMPTZ` column on `users`
+- `presence_online` and `presence_offline` SSE event types added to the `ContactEvent` union
+- `useHeartbeat` hook: calls `POST /presence/heartbeat` every 20 seconds; fires immediately on mount and on `visibilitychange` to visible; stops when tab is hidden
+- `usePresence` hook: polls `GET /presence?ids=...` every 30 seconds; reacts instantly to `presence_online` / `presence_offline` SSE events via optional `subscribe` param; `formatLastSeen` utility ("just now", "X minutes ago", etc.)
+- `SignOutButton` client component: calls `DELETE /presence/heartbeat` before `signOut()` so the user goes offline immediately
+- Green presence dot on each contact in the contacts list
+- DM chat room header now shows peer display name (fallback to email), presence dot, and "Online" / "Last seen X ago" status
+
+### Changed
+- `server.New()` now accepts `presenceHandler http.Handler`
+- `NotificationsContext` mounts `useHeartbeat` app-wide — single heartbeat for the entire session
+- `contacts/store.go` and `chat/store.go`: `COALESCE(NULLIF(display_name, ''), email)` ensures users with an empty `display_name` always show their email instead of a blank label
+- Sign-out button on the home page converted from a server-action form to `<SignOutButton />` (client component)
+
+---
+
 ## [0.9.0] - 2026-03-15 — Real-time chat with WebSocket and Redis Pub/Sub
 
 ### Added

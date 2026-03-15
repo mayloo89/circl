@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type ChatMessage } from "@/hooks/useChat"
+import { usePresence, formatLastSeen } from "@/hooks/usePresence"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -19,6 +20,14 @@ interface HistoryMessage {
   created_at: string
 }
 
+interface RoomSummary {
+  id: string
+  type: "dm" | "group"
+  name: string
+  peer_id: string
+  peer_name: string
+}
+
 export default function ChatRoomPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -30,10 +39,14 @@ export default function ChatRoomPage() {
 
   const [history, setHistory] = useState<HistoryMessage[]>([])
   const [input, setInput] = useState("")
+  const [room, setRoom] = useState<RoomSummary | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { messages: liveMessages, connected, send } = useChat(roomId, token)
-  const { clearChatBadge } = useNotificationsContext()
+  const { clearChatBadge, subscribe } = useNotificationsContext()
+
+  const peerIDs = room?.peer_id ? [room.peer_id] : []
+  const presence = usePresence(peerIDs, token, subscribe)
 
   // Clear the nav badge when entering a room.
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
@@ -42,6 +55,20 @@ export default function ChatRoomPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
+
+  // Load room metadata (peer info for DMs).
+  useEffect(() => {
+    if (status !== "authenticated" || !token || !roomId) return
+    fetch(`${API_URL}/chat/rooms`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((rooms: RoomSummary[]) => {
+        const found = rooms.find((r) => r.id === roomId)
+        if (found) setRoom(found)
+      })
+      .catch(() => {})
+  }, [status, token, roomId])
 
   // Load message history once authenticated.
   useEffect(() => {
@@ -106,14 +133,38 @@ export default function ChatRoomPage() {
         >
           ←
         </button>
-        <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 rounded-full ${connected ? "bg-green-400" : "bg-gray-600"}`}
-          />
-          <span className="text-sm text-gray-300">
-            {connected ? "Connected" : "Connecting…"}
-          </span>
-        </div>
+        {room ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-white">
+              {room.type === "dm" ? room.peer_name : room.name}
+            </span>
+            {room.type === "dm" && room.peer_id ? (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    presence[room.peer_id]?.online ? "bg-green-400" : "bg-gray-600"
+                  }`}
+                />
+                <span className="text-xs text-gray-400">
+                  {presence[room.peer_id]?.online
+                    ? "Online"
+                    : presence[room.peer_id]?.last_seen_at
+                    ? formatLastSeen(presence[room.peer_id].last_seen_at)
+                    : "Offline"}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span
+              className={`h-2 w-2 rounded-full ${connected ? "bg-green-400" : "bg-gray-600"}`}
+            />
+            <span className="text-sm text-gray-300">
+              {connected ? "Connected" : "Connecting…"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Message list */}

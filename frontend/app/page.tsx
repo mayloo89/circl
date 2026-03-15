@@ -1,6 +1,8 @@
-import { auth, signOut } from "@/lib/auth"
+import { auth } from "@/lib/auth"
 import Link from "next/link"
 import { redirect } from "next/navigation"
+
+import SignOutButton from "@/components/SignOutButton"
 
 export default async function Home() {
   const session = await auth()
@@ -33,19 +35,7 @@ export default async function Home() {
           Contacts
         </Link>
 
-        <form
-          action={async () => {
-            "use server"
-            await signOut()
-          }}
-        >
-          <button
-            type="submit"
-            className="w-full rounded-md bg-red-700 px-4 py-2 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-          >
-            Sign Out
-          </button>
-        </form>
+        <SignOutButton />
       </div>
     </div>
   )

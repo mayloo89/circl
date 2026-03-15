@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
+import { usePresence } from "@/hooks/usePresence"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -49,6 +50,8 @@ export default function ContactsPage() {
 
   const token = session?.accessToken
   const { subscribe, refreshPendingCount } = useNotificationsContext()
+  const contactUserIDs = contacts.map((c) => c.user_id)
+  const presence = usePresence(contactUserIDs, token, subscribe)
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
@@ -335,7 +338,14 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {contacts.map((c) => (
                 <li key={c.contact_id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 flex-none rounded-full ${
+                        presence[c.user_id]?.online ? "bg-green-400" : "bg-gray-600"
+                      }`}
+                    />
+                    <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => startDM(c.user_id)}

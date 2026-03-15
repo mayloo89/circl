@@ -25,8 +25,9 @@ type DBPinger interface {
 // notificationsHandler is the SSE handler (notifications.NewHandler).
 // chatHandler is the REST chat sub-router (chat.NewHandler); must run behind requireAuth.
 // chatWSHandler is the WebSocket endpoint (chat.NewWSHandler); handles its own auth via ?token=.
+// presenceHandler is the presence sub-router (presence.NewHandler); must run behind requireAuth.
 // requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -55,6 +56,7 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 		g.Handle("/profiles/me", profileHandler)
 		g.Mount("/", contactsHandler)
 		g.Mount("/chat", chatHandler)
+		g.Mount("/presence", presenceHandler)
 	})
 
 	return r

@@ -160,8 +160,8 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			r.type,
 			COALESCE(r.name, '')                             AS name,
 			r.created_at,
-			COALESCE(peer.id::text, '')                      AS peer_id,
-			COALESCE(pp.display_name, peer.email, '')        AS peer_name,
+			COALESCE(peer.id::text, '')                                    AS peer_id,
+			COALESCE(NULLIF(pp.display_name, ''), peer.email, '') AS peer_name,
 			COALESCE(lm.content, '')                         AS last_content,
 			COALESCE(lm.sender_id::text, '')                 AS last_sender_id,
 			lm.created_at                                    AS last_at,
@@ -241,7 +241,7 @@ func (s *pgStore) SaveMessage(ctx context.Context, roomID, senderID, msgType, co
 		)
 		SELECT
 			i.id, i.room_id, i.sender_id,
-			COALESCE(p.display_name, u.email) AS sender_name,
+			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			i.type, i.content, i.expires_at, i.view_once, i.created_at
 		FROM inserted i
 		JOIN users u ON u.id = i.sender_id
@@ -267,7 +267,7 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 	rows, err := s.db.Query(ctx, `
 		SELECT
 			m.id, m.room_id, m.sender_id,
-			COALESCE(p.display_name, u.email) AS sender_name,
+			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			m.type, m.content, m.expires_at, m.view_once, m.created_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 
+import { useHeartbeat } from "@/hooks/useHeartbeat"
 import { useNotifications, type ContactEvent } from "@/hooks/useNotifications"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -93,6 +94,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
     return () => { cancelled = true }
   }, [status, token])
+
+  // Heartbeat — keeps the user marked as online in Redis while the app is open.
+  useHeartbeat(token)
 
   // Single SSE connection for the entire app.
   // useNotifications keeps onEvent in a ref internally, so this callback is

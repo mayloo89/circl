@@ -10,6 +10,8 @@ export type ContactEvent =
   | { type: "contact_accepted"; payload: { contact_id: string; addressee_id: string } }
   | { type: "contact_removed"; payload: { contact_id: string } }
   | { type: "new_message"; payload: { room_id: string } }
+  | { type: "presence_online"; payload: { user_id: string } }
+  | { type: "presence_offline"; payload: { user_id: string } }
 
 /**
  * Opens an SSE connection to /notifications/stream and calls onEvent for each
