@@ -1,0 +1,199 @@
+package chat_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/mayloo89/circl/backend/internal/chat"
+)
+
+// mockStore implements chat.Store for service-layer tests.
+type mockStore struct {
+	room         *chat.Room
+	rooms        []chat.RoomSummary
+	msg          *chat.Message
+	msgs         []chat.Message
+	isMember     bool
+	roomErr      error
+	roomsErr     error
+	msgErr       error
+	msgsErr      error
+	memberErr    error
+	markReadErr  error
+}
+
+func (m *mockStore) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
+func (m *mockStore) CreateGroup(_ context.Context, _, _ string, _ []string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
+func (m *mockStore) IsMember(_ context.Context, _, _ string) (bool, error) {
+	return m.isMember, m.memberErr
+}
+func (m *mockStore) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary, error) {
+	return m.rooms, m.roomsErr
+}
+func (m *mockStore) SaveMessage(_ context.Context, _, _, _, _ string) (*chat.Message, error) {
+	return m.msg, m.msgErr
+}
+func (m *mockStore) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
+	return m.msgs, m.msgsErr
+}
+func (m *mockStore) MarkRead(_ context.Context, _, _ string) error {
+	return m.markReadErr
+}
+
+func TestService_GetOrCreateDM_Success(t *testing.T) {
+	want := &chat.Room{ID: "r-1", Type: chat.RoomTypeDM}
+	svc := chat.NewService(&mockStore{room: want})
+
+	got, err := svc.GetOrCreateDM(t.Context(), "u-1", "u-2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != "r-1" {
+		t.Errorf("ID = %q, want r-1", got.ID)
+	}
+}
+
+func TestService_GetOrCreateDM_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{roomErr: errors.New("db error")})
+
+	_, err := svc.GetOrCreateDM(t.Context(), "u-1", "u-2")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_CreateGroup_Success(t *testing.T) {
+	want := &chat.Room{ID: "r-2", Type: chat.RoomTypeGroup, Name: "team"}
+	svc := chat.NewService(&mockStore{room: want})
+
+	got, err := svc.CreateGroup(t.Context(), "u-1", "team", []string{"u-2", "u-3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Name != "team" {
+		t.Errorf("Name = %q, want team", got.Name)
+	}
+}
+
+func TestService_CreateGroup_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{roomErr: errors.New("db error")})
+	_, err := svc.CreateGroup(t.Context(), "u-1", "team", nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_IsMember_True(t *testing.T) {
+	svc := chat.NewService(&mockStore{isMember: true})
+
+	ok, err := svc.IsMember(t.Context(), "r-1", "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Error("expected true, got false")
+	}
+}
+
+func TestService_IsMember_False(t *testing.T) {
+	svc := chat.NewService(&mockStore{isMember: false})
+	ok, err := svc.IsMember(t.Context(), "r-1", "u-99")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("expected false, got true")
+	}
+}
+
+func TestService_IsMember_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{memberErr: errors.New("db error")})
+	_, err := svc.IsMember(t.Context(), "r-1", "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ListRooms_Success(t *testing.T) {
+	want := []chat.RoomSummary{{ID: "r-1"}, {ID: "r-2"}}
+	svc := chat.NewService(&mockStore{rooms: want})
+
+	got, err := svc.ListRooms(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+}
+
+func TestService_ListRooms_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{roomsErr: errors.New("db error")})
+	_, err := svc.ListRooms(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_SaveMessage_Success(t *testing.T) {
+	now := time.Now()
+	want := &chat.Message{ID: "m-1", RoomID: "r-1", SenderID: "u-1", Content: "hello", CreatedAt: now}
+	svc := chat.NewService(&mockStore{msg: want})
+
+	got, err := svc.SaveMessage(t.Context(), "r-1", "u-1", chat.MessageTypeText, "hello")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != "m-1" {
+		t.Errorf("ID = %q, want m-1", got.ID)
+	}
+}
+
+func TestService_SaveMessage_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{msgErr: errors.New("db error")})
+	_, err := svc.SaveMessage(t.Context(), "r-1", "u-1", chat.MessageTypeText, "hello")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ListMessages_Success(t *testing.T) {
+	want := []chat.Message{{ID: "m-1"}, {ID: "m-2"}}
+	svc := chat.NewService(&mockStore{msgs: want})
+
+	got, err := svc.ListMessages(t.Context(), "r-1", nil, 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+}
+
+func TestService_ListMessages_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{msgsErr: errors.New("db error")})
+	_, err := svc.ListMessages(t.Context(), "r-1", nil, 50)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_MarkRead_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{})
+	if err := svc.MarkRead(t.Context(), "r-1", "u-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_MarkRead_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{markReadErr: errors.New("db error")})
+	if err := svc.MarkRead(t.Context(), "r-1", "u-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

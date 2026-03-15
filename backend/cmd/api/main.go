@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/mayloo89/circl/backend/internal/auth"
+	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/db"
@@ -39,15 +41,20 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
+	redisURL, err := config.RequireEnv("REDIS_URL")
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
 	if err := db.Migrate("migrations", databaseURL); err != nil {
 		log.Fatalf("Migrations failed: %v", err)
 	}
 	log.Println("Migrations applied successfully")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	initCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := db.Open(ctx, databaseURL)
+	pool, err := db.Open(initCtx, databaseURL)
 	if err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
@@ -69,9 +76,30 @@ func main() {
 	contactSvc := contacts.NewService(contactStore)
 	contactsHandler := contacts.NewHandler(contactSvc, contacts.WithNotifier(hub))
 
+	redisOpt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("Invalid Redis URL: %v", err)
+	}
+	rdb := redis.NewClient(redisOpt)
+	defer rdb.Close()
+
+	appCtx := context.Background()
+	if err := rdb.Ping(appCtx).Err(); err != nil {
+		log.Fatalf("Redis connection failed: %v", err)
+	}
+	log.Println("Redis connection established")
+
+	chatHub := chat.NewHub(rdb)
+	go chatHub.Run(appCtx)
+
+	chatStore := chat.NewStore(pool)
+	chatSvc := chat.NewService(chatStore)
+	chatHandler := chat.NewHandler(chatSvc)
+	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret)
+
 	requireAuth := middleware.RequireAuth(jwtSecret)
 
-	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {

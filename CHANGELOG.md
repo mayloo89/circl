@@ -10,6 +10,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.9.0] - 2026-03-15 — Real-time chat with WebSocket and Redis Pub/Sub
+
+### Added
+- `internal/chat` package: domain models (`Room`, `RoomSummary`, `Message`), `Store` interface, `Service` (delegation layer), `Hub` (channel-based WebSocket fan-out), and HTTP handlers
+- `Hub`: goroutine-safe broadcast hub; channels (`register`, `unregister`, `broadcast`) are the only mutation path — no mutex on hot path; slow clients are evicted (full send buffer closes connection)
+- Redis Pub/Sub integration: `Hub.Publish` writes to `chat:room:{roomID}`; `listenRedis` goroutine per room forwards messages to local clients — enables horizontal scaling across multiple server instances
+- `POST /chat/rooms/dm` — get or create a DM room (idempotent via `dm_key` canonical index)
+- `POST /chat/rooms` — create a named group room
+- `GET /chat/rooms` — list rooms for the authenticated user with last message and unread count
+- `GET /chat/rooms/{id}/messages?before=&limit=` — paginated message history (cursor-based, newest-first)
+- `PUT /chat/rooms/{id}/read` — mark all messages as read
+- `GET /chat/rooms/{id}/ws?token=` — WebSocket endpoint (JWT via query param, same pattern as SSE)
+- Migration `000004_create_chat`: `rooms`, `room_members`, `messages`, `message_views` tables; `dm_key` partial unique index; `expires_at` and `view_once` columns on `messages` (groundwork for ephemeral messages)
+- Frontend chat list page (`/chat`) with unread badge per room
+- Frontend chat room page (`/chat/[roomId]`) with history, live WebSocket messages (dedup by ID), mark-read on enter, connected indicator, and send on Enter
+- `useChat` hook: derives WebSocket URL from `API_URL`, auto-reconnect with exponential backoff
+- "Message" button on the contacts page — calls `POST /chat/rooms/dm` and redirects to the room
+- `REDIS_URL` env var wired in `main.go`; Redis client is pinged at startup
+
+### Changed
+- `server.New()` now accepts `chatHandler http.Handler` and `chatWSHandler http.Handler`; WS endpoint is registered outside `requireAuth` (handles its own JWT validation)
+- NavBar: "Messages" link added before Contacts
+
+---
+
 ## [0.8.0] - 2026-03-15 — Global nav bar with real-time notification badge
 
 ### Added
