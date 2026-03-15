@@ -2,9 +2,9 @@
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
-import { useNotifications } from "@/hooks/useNotifications"
+import { useNotificationsContext } from "@/contexts/NotificationsContext"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -48,6 +48,7 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true)
 
   const token = session?.accessToken
+  const { subscribe, refreshPendingCount } = useNotificationsContext()
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
@@ -82,36 +83,47 @@ export default function ContactsPage() {
       .finally(() => setLoading(false))
   }, [status, token])
 
-  useNotifications(token, (e) => {
-    if (e.type === "contact_request") {
-      // Re-fetch pending to get the full display_name/email of the requester.
-      fetchPending()
-    }
-    if (e.type === "contact_accepted") {
-      // Move the matching sent entry into accepted contacts.
-      // Read sent outside the updater to avoid calling setContacts inside
-      // setSent (nested setState triggers double-invocation in StrictMode).
-      const matched = sent.find((s) => s.contact_id === e.payload.contact_id)
-      if (matched) {
-        setSent((prev) => prev.filter((s) => s.contact_id !== e.payload.contact_id))
-        setContacts((prev) => {
-          if (prev.some((c) => c.contact_id === matched.contact_id)) return prev
-          return [...prev, {
-            contact_id: matched.contact_id,
-            user_id: matched.user_id,
-            email: matched.email,
-            display_name: matched.display_name,
-          }]
-        })
+  // Keep a ref to the event handler so the subscription (registered once on
+  // mount) always calls the latest version — avoids stale closures over
+  // `sent`, `pending`, etc. without re-subscribing on every state change.
+  const handleEventRef = useRef<Parameters<typeof subscribe>[0]>(() => {})
+  useEffect(() => {
+    handleEventRef.current = (e) => {
+      if (e.type === "contact_request") {
+        // Re-fetch to get the requester's display_name / email.
+        fetchPending()
+      }
+      if (e.type === "contact_accepted") {
+        // Move the matching sent entry into accepted contacts.
+        // Read `sent` outside the updater to avoid nested setState calls
+        // (double-invocation in StrictMode).
+        const matched = sent.find((s) => s.contact_id === e.payload.contact_id)
+        if (matched) {
+          setSent((prev) => prev.filter((s) => s.contact_id !== e.payload.contact_id))
+          setContacts((prev) => {
+            if (prev.some((c) => c.contact_id === matched.contact_id)) return prev
+            return [...prev, {
+              contact_id: matched.contact_id,
+              user_id: matched.user_id,
+              email: matched.email,
+              display_name: matched.display_name,
+            }]
+          })
+        }
+      }
+      if (e.type === "contact_removed") {
+        const { contact_id } = e.payload
+        setContacts((prev) => prev.filter((c) => c.contact_id !== contact_id))
+        setPending((prev) => prev.filter((r) => r.contact_id !== contact_id))
+        setSent((prev) => prev.filter((r) => r.contact_id !== contact_id))
       }
     }
-    if (e.type === "contact_removed") {
-      const { contact_id } = e.payload
-      setContacts((prev) => prev.filter((c) => c.contact_id !== contact_id))
-      setPending((prev) => prev.filter((r) => r.contact_id !== contact_id))
-      setSent((prev) => prev.filter((r) => r.contact_id !== contact_id))
-    }
   })
+
+  // Stable subscription: registers once on mount, calls through the ref.
+  useEffect(() => {
+    return subscribe((e) => handleEventRef.current(e))
+  }, [subscribe])
 
   async function search(q: string) {
     setSearchQuery(q)
@@ -166,6 +178,7 @@ export default function ContactsPage() {
     const accepted = pending.find((r) => r.contact_id === contactID)
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
     if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, email: accepted.email, display_name: accepted.display_name }])
+    refreshPendingCount()
   }
 
   async function cancelSent(contactID: string) {
@@ -193,6 +206,7 @@ export default function ContactsPage() {
     }
     setContacts((prev) => prev.filter((c) => c.contact_id !== contactID))
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
+    refreshPendingCount()
   }
 
   if (status === "loading" || loading) {
