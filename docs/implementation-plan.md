@@ -60,16 +60,19 @@
 - Entrega vía CDN; políticas anti-hotlink.
 
 ## 8. Plan por fases
-- [x] Fundación: repos, CI/CD, linters, entornos (dev/stage/prod), secretos.
-- [ ] Auth base: OIDC/Auth.js; cookies httpOnly; refresh rotado; rate limit login; middleware de rutas.
-- [ ] Perfiles privados: CRUD y visualización autenticada; uploads firmados; auditoría.
-- [ ] Búsqueda: filtros con índices; paginación; anti-enumeración; límites de rate.
-- [ ] Chat y salas: WS autenticado; persistencia de mensajes; salas generales; paginación de historial.
-- [ ] Presencia: heartbeat Redis; mostrar online/offline/last seen en UI.
-- [ ] Background/media: worker asynq; procesamiento de imágenes; limpieza y tareas de mantenimiento.
-- [ ] Frontend: vistas protegidas (login, onboarding, perfiles, búsqueda, chat); estado de sesión; manejo de WS y presencia.
-- [ ] QA/hardening: tests unit/integración/e2e; SAST/Dependabot; revisión de CSP/HSTS/CORS; permisos de buckets.
-- [ ] Observabilidad y despliegue: logs, métricas, tracing, alertas; despliegue en Vercel + Fly/Render/AWS; DB/Redis gestionados.
+
+- [x] **Fundación**: repo, CI/CD (GitHub Actions), linters, entornos dev/prod, secretos.
+- [x] **Auth base**: registro y login con bcrypt; JWT HS256; `RequireAuth` middleware; NextAuth.js con credentials provider; cookies httpOnly.
+- [x] **Perfiles privados**: `GET/PUT /profiles/me`; lazy creation; página de perfil en frontend.
+- [x] **Contactos**: búsqueda de usuarios; envío/aceptación/rechazo/cancelación de solicitudes; `DELETE /contacts/{id}`; estado machine `pending → accepted`.
+- [x] **Notificaciones en tiempo real (SSE)**: `notifications.Hub`; `GET /notifications/stream?token=`; eventos `contact_request`, `contact_accepted`, `contact_removed`; badge en NavBar; `NotificationsContext` (bus de eventos, una sola conexión SSE por sesión).
+- [x] **Chat y salas**: WebSocket (`GET /chat/rooms/{id}/ws?token=`); Redis Pub/Sub fan-out; DMs y grupos; persistencia en Postgres; historial paginado; conteo de no leídos; badge en NavBar vía evento SSE `new_message`; mensajes efímeros en schema (`expires_at`, `view_once`).
+- [ ] **Presencia**: heartbeat a Redis con TTL; online/offline/last seen en UI.
+- [ ] **Media**: URLs firmadas para upload directo a S3/R2; worker asynq (resize, strip metadata); entrega vía CDN; mensajes con foto/archivo en chat.
+- [ ] **Mensajes efímeros**: TTL worker (`expires_at`); view-once (`view_once` + `message_views`); limpieza automática.
+- [ ] **Indicadores de escritura y receipts**: eventos `typing` y `read` sobre WebSocket.
+- [ ] **QA/hardening**: tests e2e (Playwright); SAST/Dependabot; revisión CSP/HSTS/CORS; rate limiting.
+- [ ] **Observabilidad y despliegue**: logs estructurados, métricas, tracing (OpenTelemetry); despliegue en Vercel + Fly.io/Render; DB y Redis gestionados.
 
 ## 9. Testing
 - Unit: handlers y servicios (auth, chat, profiles).
