@@ -10,6 +10,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.1.0] - 2026-03-15 — Storage interface, LocalStorage, and uploads API
+
+### Added
+- `internal/storage` package: `Storage` interface (`GenerateUploadURL`, `PublicURL`, `Delete`); `LocalStorage` implementation (filesystem + in-memory upload tokens with TTL); `NewLocalHandler` for dev file upload/serve (`PUT /put/{token}`, `GET /*`)
+- `storage/validation.go`: `ValidateUpload` (category × content-type × size), `SanitizeFilename`, `ParseCategory`; allowed types and size limits per category (`avatar`: jpeg/png/webp ≤ 5 MB; `chat-attachment`: jpeg/png/webp/gif/mp4/mov/pdf ≤ 50 MB)
+- `internal/uploads` package: `Upload` domain type, `Store` interface (Postgres CRUD), `Service` (request → confirm lifecycle), HTTP handler
+- `POST /uploads/request` — validates category/type/size, creates a `pending` row, returns an upload URL
+- `POST /uploads/{id}/confirm` — marks upload as `committed`, returns public URL
+- Migration `000006_create_uploads`: `uploads` table with `storage_key` unique index, `status` (pending/committed/failed), cleanup index on pending rows
+- `useUpload` frontend hook: 3-step upload flow (request → PUT → confirm)
+- `middleware.ContextWithUserID` helper for tests
+- Full test coverage: validation (11 cases), sanitization, LocalStorage (generate/consume/delete), local handler (upload/serve/path-traversal), uploads handler (request/confirm/auth/forbidden/not-found)
+
+### Changed
+- `server.New()` accepts `uploadHandler` and optional `localStorageHandler`
+- `main.go` wires `STORAGE_PROVIDER` env var (default `local`) to select storage backend
+- `.gitignore` excludes `backend/data/` (local upload directory)
+
+---
+
 ## [1.0.0] - 2026-03-15 — Presence: online/offline and last seen
 
 ### Added

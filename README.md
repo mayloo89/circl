@@ -152,6 +152,8 @@ All protected routes require `Authorization: Bearer <token>`.
 | `POST` | `/presence/heartbeat` | ✅ | Mark self as online (send every ~20s) |
 | `DELETE` | `/presence/heartbeat` | ✅ | Mark self as offline immediately (on logout) |
 | `GET` | `/presence?ids=` | ✅ | Batch presence query (online + last seen) |
+| `POST` | `/uploads/request` | ✅ | Request an upload URL (validates type/size) |
+| `POST` | `/uploads/{id}/confirm` | ✅ | Confirm upload completed |
 
 ## Repository structure
 
@@ -166,7 +168,7 @@ circl/
 │   │   └── register/      # Register page
 │   ├── components/        # Shared UI components (NavBar, SignOutButton)
 │   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)
-│   ├── hooks/             # Custom hooks (useNotifications, useChat, useHeartbeat, usePresence)
+│   ├── hooks/             # Custom hooks (useNotifications, useChat, useHeartbeat, usePresence, useUpload)
 │   ├── lib/               # Auth config (NextAuth.js)
 │   ├── types/             # next-auth type augmentation
 │   └── package.json
@@ -181,6 +183,8 @@ circl/
 │   │   ├── chat/          # Chat rooms, Hub (WebSocket fan-out), store, handler
 │   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
 │   │   ├── presence/      # Redis heartbeat, offline, batch presence query
+│   │   ├── storage/       # Storage interface, LocalStorage, file validation
+│   │   ├── uploads/       # Upload lifecycle (request → confirm), Postgres tracking
 │   │   ├── profiles/      # Profile handler, service, store
 │   │   ├── server/        # Chi router, CORS, health handler
 │   │   └── token/         # JWT generate/validate

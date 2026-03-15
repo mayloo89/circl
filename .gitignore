@@ -24,6 +24,7 @@ vendor/
 *.coverprofile
 *.pprof
 backend/api
+backend/data/
 
 # OS / IDE
 .DS_Store
