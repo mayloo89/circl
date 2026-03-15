@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.0] - 2026-03-15 — Global nav bar with real-time notification badge
+
+### Added
+- `NotificationsContext` (`contexts/NotificationsContext.tsx`): manages the single SSE connection for the entire app and acts as an event bus via `subscribe(listener) → unsubscribe` — any component reacts to real-time events without opening its own connection
+- `NavBar` component (`components/NavBar.tsx`): persistent navigation bar on all authenticated pages; app name links to `/`; Contacts link shows a live badge with the pending request count (updates in real time, capped at `9+`)
+- `refreshPendingCount()` exposed from context so pages can sync the badge after local accept/decline actions
+
+### Changed
+- `providers.tsx` now wraps the app with `NotificationsProvider` and renders `<NavBar />`
+- Contacts page subscribes to the context event bus instead of calling `useNotifications` directly — eliminates the duplicate SSE connection that existed when on `/contacts`
+- Event handler in the contacts page uses `useRef` explicitly (pattern now documented in code) instead of relying on the hook's internal ref
+
+---
+
 ## [0.7.0] - 2026-03-14 — Real-time contact removal
 
 ### Added
