@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
         port: "8080",
       },
     ],
+    dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
   },
 };
 
