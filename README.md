@@ -20,7 +20,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Auth**: registration, login, JWT tokens, NextAuth.js session
 - ✅ **Private profiles**: display name, bio — `GET /profiles/me`, `PUT /profiles/me`
 - ✅ **Contacts**: search, send/accept/decline/remove requests — full contacts lifecycle
-- ⏳ **Real-time notifications**: pending (WebSocket / SSE)
+- ✅ **Real-time notifications**: SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
 - ⏳ **Chat and rooms**: pending
 - ⏳ **Presence**: pending
 - ⏳ **Media and workers**: pending
@@ -141,6 +141,7 @@ All protected routes require `Authorization: Bearer <token>`.
 | `GET` | `/contacts/sent` | ✅ | List outgoing pending requests |
 | `PUT` | `/contacts/{id}/accept` | ✅ | Accept a pending request |
 | `DELETE` | `/contacts/{id}` | ✅ | Remove or decline a contact |
+| `GET` | `/notifications/stream?token=` | — | SSE stream for real-time events |
 
 ## Repository structure
 
@@ -152,6 +153,9 @@ circl/
 │   │   ├── login/         # Login page
 │   │   ├── profile/       # Profile page
 │   │   └── register/      # Register page
+│   ├── components/        # Shared UI components (NavBar)
+│   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)
+│   ├── hooks/             # Custom hooks (useNotifications)
 │   ├── lib/               # Auth config (NextAuth.js)
 │   ├── types/             # next-auth type augmentation
 │   └── package.json
@@ -163,6 +167,7 @@ circl/
 │   │   ├── config/        # Env helpers
 │   │   ├── db/            # Connection pool, migrations runner
 │   │   ├── middleware/    # JWT RequireAuth middleware
+│   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
 │   │   ├── profiles/      # Profile handler, service, store
 │   │   ├── server/        # Chi router, CORS, health handler
 │   │   └── token/         # JWT generate/validate

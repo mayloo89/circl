@@ -59,10 +59,19 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, [token])
 
-  // Fetch initial count once authenticated.
+  // Fetch initial count once authenticated. Inline fetch with cancellation
+  // flag is the correct React pattern for data fetching inside effects.
   useEffect(() => {
-    if (status === "authenticated") refreshPendingCount()
-  }, [status, refreshPendingCount])
+    if (status !== "authenticated" || !token) return
+    let cancelled = false
+    fetch(`${API_URL}/contacts/pending`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: unknown[]) => { if (!cancelled) setPendingCount(data.length) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [status, token])
 
   // Single SSE connection for the entire app.
   // useNotifications keeps onEvent in a ref internally, so this callback is
