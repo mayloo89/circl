@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -51,9 +52,33 @@ type serverMessage struct {
 }
 
 // clientMessage is the JSON envelope received from a connected client.
+// Type must be "message" (plain text) or "attachment" (uploaded file URL).
+// MimeType is required when Type is "attachment" and is used to determine
+// whether the content is an image, video, or generic file.
 type clientMessage struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
+	Type     string `json:"type"`
+	Content  string `json:"content"`
+	MimeType string `json:"mime_type,omitempty"`
+}
+
+// resolveMessageType maps a client-supplied frame type and MIME type to the
+// internal MessageType* constant. It returns false for unknown frame types.
+func resolveMessageType(clientType, mimeType string) (string, bool) {
+	switch clientType {
+	case "message":
+		return MessageTypeText, true
+	case "attachment":
+		switch {
+		case strings.HasPrefix(mimeType, "image/"):
+			return MessageTypeImage, true
+		case strings.HasPrefix(mimeType, "video/"):
+			return MessageTypeVideo, true
+		default:
+			return MessageTypeFile, true
+		}
+	default:
+		return "", false
+	}
 }
 
 // NewHandler returns a chi router with the REST chat routes.
@@ -311,36 +336,39 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			continue
 		}
 
-		if in.Type == "message" && in.Content != "" {
-			ctx := context.Background()
-			msg, err := svc.SaveMessage(ctx, c.roomID, c.userID, MessageTypeText, in.Content)
-			if err != nil {
-				continue
-			}
+		msgType, ok := resolveMessageType(in.Type, in.MimeType)
+		if !ok || in.Content == "" {
+			continue
+		}
 
-			data, err := json.Marshal(serverMessage{
-				Type:            "message",
-				ID:              msg.ID,
-				RoomID:          msg.RoomID,
-				SenderID:        msg.SenderID,
-				SenderName:      msg.SenderName,
-				SenderAvatarURL: msg.SenderAvatarURL,
-				Content:         msg.Content,
-				CreatedAt:       msg.CreatedAt,
-			})
-			if err != nil {
-				continue
-			}
+		ctx := context.Background()
+		msg, err := svc.SaveMessage(ctx, c.roomID, c.userID, msgType, in.Content)
+		if err != nil {
+			continue
+		}
 
-			_ = c.hub.Publish(ctx, c.roomID, data)
+		data, err := json.Marshal(serverMessage{
+			Type:            msg.Type,
+			ID:              msg.ID,
+			RoomID:          msg.RoomID,
+			SenderID:        msg.SenderID,
+			SenderName:      msg.SenderName,
+			SenderAvatarURL: msg.SenderAvatarURL,
+			Content:         msg.Content,
+			CreatedAt:       msg.CreatedAt,
+		})
+		if err != nil {
+			continue
+		}
 
-			// Notify non-sender members so they can show an unread badge.
-			if notifyNewMessage != nil {
-				if members, err := svc.ListMembers(ctx, c.roomID); err == nil {
-					for _, uid := range members {
-						if uid != c.userID {
-							notifyNewMessage(uid, c.roomID)
-						}
+		_ = c.hub.Publish(ctx, c.roomID, data)
+
+		// Notify non-sender members so they can show an unread badge.
+		if notifyNewMessage != nil {
+			if members, err := svc.ListMembers(ctx, c.roomID); err == nil {
+				for _, uid := range members {
+					if uid != c.userID {
+						notifyNewMessage(uid, c.roomID)
 					}
 				}
 			}

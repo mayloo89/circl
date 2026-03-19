@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type ChatMessage } from "@/hooks/useChat"
 import { usePresence, formatLastSeen } from "@/hooks/usePresence"
+import { useUpload } from "@/hooks/useUpload"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -44,8 +45,10 @@ export default function ChatRoomPage() {
   const [input, setInput] = useState("")
   const [room, setRoom] = useState<RoomSummary | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { messages: liveMessages, connected, send } = useChat(roomId, token)
+  const { messages: liveMessages, connected, send, sendAttachment } = useChat(roomId, token)
+  const { upload, uploading } = useUpload(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
   const peerIDs = room?.peer_id ? [room.peer_id] : []
@@ -106,6 +109,17 @@ export default function ChatRoomPage() {
     if (!content) return
     send(content)
     setInput("")
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+
+    const result = await upload(file, "chat-attachment")
+    if (result) {
+      sendAttachment(result.url, file.type)
+    }
   }
 
   // Combine history with live WebSocket messages, deduplicating by id.
@@ -207,13 +221,37 @@ export default function ChatRoomPage() {
                   <span className="mb-1 text-xs text-gray-500">{msg.sender_name}</span>
                 )}
                 <div
-                  className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
-                    isOwn
-                      ? "rounded-br-sm bg-indigo-600 text-white"
-                      : "rounded-bl-sm bg-gray-800 text-gray-100"
+                  className={`max-w-xs rounded-2xl text-sm ${
+                    msg.type === "image"
+                      ? "overflow-hidden p-0"
+                      : `px-4 py-2 ${isOwn ? "rounded-br-sm bg-indigo-600 text-white" : "rounded-bl-sm bg-gray-800 text-gray-100"}`
                   }`}
                 >
-                  {msg.content}
+                  {msg.type === "image" ? (
+                    <a href={msg.content} target="_blank" rel="noopener noreferrer">
+                      <Image
+                        src={msg.content}
+                        alt="image"
+                        width={240}
+                        height={180}
+                        className="max-h-60 w-auto rounded-2xl object-cover"
+                      />
+                    </a>
+                  ) : msg.type === "file" || msg.type === "video" ? (
+                    <a
+                      href={msg.content}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-2 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
+                    >
+                      <span>📎</span>
+                      <span className="truncate underline">
+                        {msg.content.split("/").pop() ?? "attachment"}
+                      </span>
+                    </a>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
                 <span className="mt-1 text-[10px] text-gray-600">
                   {new Date(msg.created_at).toLocaleTimeString([], {
@@ -231,6 +269,30 @@ export default function ChatRoomPage() {
       {/* Input */}
       <div className="border-t border-gray-800 bg-gray-900 px-4 py-3">
         <div className="flex items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!connected || uploading}
+            title="Attach file"
+            className="flex-none rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
+          >
+            {uploading ? (
+              <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            )}
+          </button>
           <input
             type="text"
             placeholder="Message…"

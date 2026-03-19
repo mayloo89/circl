@@ -454,8 +454,8 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if got["type"] != "message" {
-		t.Errorf("type = %v, want message", got["type"])
+	if got["type"] != "text" {
+		t.Errorf("type = %v, want text", got["type"])
 	}
 	if got["content"] != "hello from test" {
 		t.Errorf("content = %v, want %q", got["content"], "hello from test")
@@ -536,6 +536,219 @@ func TestWSHandler_HubShutdownSendsCloseFrame(t *testing.T) {
 		t.Log("received message during hub shutdown (acceptable)")
 	}
 	// The test succeeds as long as we don't deadlock; the close path was exercised.
+}
+
+func TestWSHandler_SendAttachmentMessage(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	now := time.Now()
+	savedMsg := &chat.Message{
+		ID:         "m-2",
+		RoomID:     "r-1",
+		SenderID:   testUserID,
+		SenderName: "Tester",
+		Type:       chat.MessageTypeImage,
+		Content:    "http://localhost:8080/uploads/img.jpg",
+		CreatedAt:  now,
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	payload := map[string]string{
+		"type":      "attachment",
+		"content":   "http://localhost:8080/uploads/img.jpg",
+		"mime_type": "image/jpeg",
+	}
+	if err := conn.WriteJSON(payload); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["type"] != chat.MessageTypeImage {
+		t.Errorf("type = %v, want %q", got["type"], chat.MessageTypeImage)
+	}
+	if got["content"] != "http://localhost:8080/uploads/img.jpg" {
+		t.Errorf("content = %v", got["content"])
+	}
+}
+
+func TestWSHandler_SendVideoAttachment(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	savedMsg := &chat.Message{
+		ID:        "m-3",
+		RoomID:    "r-1",
+		SenderID:  testUserID,
+		Type:      chat.MessageTypeVideo,
+		Content:   "http://localhost:8080/uploads/video.mp4",
+		CreatedAt: time.Now(),
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "http://localhost:8080/uploads/video.mp4", "mime_type": "video/mp4"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["type"] != chat.MessageTypeVideo {
+		t.Errorf("type = %v, want %q", got["type"], chat.MessageTypeVideo)
+	}
+}
+
+func TestWSHandler_SendFileAttachment(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	savedMsg := &chat.Message{
+		ID:        "m-4",
+		RoomID:    "r-1",
+		SenderID:  testUserID,
+		Type:      chat.MessageTypeFile,
+		Content:   "http://localhost:8080/uploads/doc.pdf",
+		CreatedAt: time.Now(),
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "http://localhost:8080/uploads/doc.pdf", "mime_type": "application/pdf"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["type"] != chat.MessageTypeFile {
+		t.Errorf("type = %v, want %q", got["type"], chat.MessageTypeFile)
+	}
+}
+
+func TestWSHandler_IgnoresUnknownType(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Unknown type should be silently ignored.
+	if err := conn.WriteJSON(map[string]string{"type": "typing", "content": "..."}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected no message for unknown type, but received one")
+	}
+}
+
+func TestWSHandler_IgnoresAttachmentWithEmptyContent(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "", "mime_type": "image/jpeg"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected no message for empty attachment, but received one")
+	}
 }
 
 func TestWSHandler_SaveMessageError(t *testing.T) {
