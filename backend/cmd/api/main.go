@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -120,6 +121,28 @@ func main() {
 		fileStorage = ls
 		localStorageHandler = storage.NewLocalHandler(ls)
 		log.Println("Storage provider: local (./data/uploads)")
+	case "s3":
+		endpoint := config.EnvOrDefault("S3_ENDPOINT", "localhost:9000")
+		useSSL := !strings.HasPrefix(endpoint, "http://")
+		endpoint = strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://")
+		bucket := config.EnvOrDefault("S3_BUCKET", "circl-media")
+		accessKey := config.EnvOrDefault("S3_ACCESS_KEY", "")
+		secretKey := config.EnvOrDefault("S3_SECRET_KEY", "")
+		publicURL := config.EnvOrDefault("S3_PUBLIC_URL", fmt.Sprintf("http://%s/%s", endpoint, bucket))
+
+		s3store, err := storage.NewS3Storage(storage.S3Config{
+			Endpoint:  endpoint,
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+			Bucket:    bucket,
+			PublicURL: publicURL,
+			UseSSL:    useSSL,
+		})
+		if err != nil {
+			log.Fatalf("S3 storage init failed: %v", err)
+		}
+		fileStorage = s3store
+		log.Printf("Storage provider: S3-compatible (%s, bucket: %s)", endpoint, bucket)
 	default:
 		log.Fatalf("Unknown storage provider: %s", storageProvider)
 	}
