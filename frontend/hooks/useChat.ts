@@ -7,7 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const WS_URL = API_URL.replace(/^http/, "ws")
 
 export interface ChatMessage {
-  type: "message"
+  type: string
   id: string
   room_id: string
   sender_id: string
@@ -16,6 +16,8 @@ export interface ChatMessage {
   content: string
   created_at: string
 }
+
+const chatMessageTypes = new Set(["text", "image", "video", "file"])
 
 /**
  * Manages the WebSocket connection for a single chat room.
@@ -34,6 +36,12 @@ export function useChat(roomId: string | null, token: string | undefined) {
   const send = useCallback((content: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "message", content }))
+    }
+  }, [])
+
+  const sendAttachment = useCallback((url: string, mimeType: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "attachment", content: url, mime_type: mimeType }))
     }
   }, [])
 
@@ -69,7 +77,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data) as ChatMessage
-          if (msg.type === "message") {
+          if (chatMessageTypes.has(msg.type)) {
             setMessages((prev) => [...prev, msg])
           }
         } catch {
@@ -88,5 +96,5 @@ export function useChat(roomId: string | null, token: string | undefined) {
     }
   }, [roomId, token])
 
-  return { messages, connected, send }
+  return { messages, connected, send, sendAttachment }
 }
