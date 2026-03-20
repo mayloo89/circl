@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -105,6 +107,73 @@ func TestLocalStorage_ConsumePendingUpload_UnknownToken(t *testing.T) {
 	_, err := ls.ConsumePendingUpload("nonexistent-token")
 	if err == nil {
 		t.Error("expected error for unknown token")
+	}
+}
+
+func TestLocalStorage_GetObject_Success(t *testing.T) {
+	dir := t.TempDir()
+	ls := NewLocalStorage(dir, "http://localhost:8080/uploads/files")
+
+	key := "chat-attachment/user1/file.jpg"
+	path := filepath.Join(dir, key)
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	os.WriteFile(path, []byte("image bytes"), 0o644)
+
+	rc, err := ls.GetObject(t.Context(), key)
+	if err != nil {
+		t.Fatalf("GetObject() error: %v", err)
+	}
+	defer rc.Close()
+	data, _ := io.ReadAll(rc)
+	if string(data) != "image bytes" {
+		t.Errorf("data = %q, want image bytes", data)
+	}
+}
+
+func TestLocalStorage_GetObject_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	ls := NewLocalStorage(dir, "http://localhost:8080/uploads/files")
+
+	_, err := ls.GetObject(t.Context(), "nonexistent/file.jpg")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestLocalStorage_PutObject(t *testing.T) {
+	dir := t.TempDir()
+	ls := NewLocalStorage(dir, "http://localhost:8080/uploads/files")
+
+	key := "thumbnails/chat-attachment/user1/file.jpg"
+	body := strings.NewReader("thumbnail data")
+	if err := ls.PutObject(t.Context(), key, "image/jpeg", body, int64(body.Len())); err != nil {
+		t.Fatalf("PutObject() error: %v", err)
+	}
+
+	path := filepath.Join(dir, key)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error: %v", err)
+	}
+	if string(data) != "thumbnail data" {
+		t.Errorf("data = %q, want thumbnail data", data)
+	}
+}
+
+func TestLocalStorage_PutObject_Overwrites(t *testing.T) {
+	dir := t.TempDir()
+	ls := NewLocalStorage(dir, "http://localhost:8080/uploads/files")
+
+	key := "chat-attachment/user1/file.jpg"
+	path := filepath.Join(dir, key)
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	os.WriteFile(path, []byte("old content"), 0o644)
+
+	ls.PutObject(t.Context(), key, "image/jpeg", strings.NewReader("new content"), 11) //nolint:errcheck
+
+	data, _ := os.ReadFile(path)
+	if string(data) != "new content" {
+		t.Errorf("data = %q, want new content", data)
 	}
 }
 

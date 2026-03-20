@@ -11,6 +11,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/hibiken/asynq"
+
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
@@ -23,6 +25,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/server"
 	"github.com/mayloo89/circl/backend/internal/storage"
 	"github.com/mayloo89/circl/backend/internal/uploads"
+	"github.com/mayloo89/circl/backend/internal/worker"
 )
 
 const tokenExpiry = 24 * time.Hour
@@ -149,6 +152,29 @@ func main() {
 
 	uploadStore := uploads.NewStore(pool)
 	uploadSvc := uploads.NewService(uploadStore, fileStorage)
+
+	redisConnOpt := asynq.RedisClientOpt{
+		Addr:     redisOpt.Addr,
+		Password: redisOpt.Password,
+		DB:       redisOpt.DB,
+	}
+	workerClient := worker.NewClient(redisConnOpt)
+	defer workerClient.Close() //nolint:errcheck
+	uploadSvc.SetEnqueuer(func(ctx context.Context, uploadID, storageKey, contentType string) error {
+		return worker.EnqueueProcessImage(ctx, workerClient, worker.ImageProcessPayload{
+			UploadID:    uploadID,
+			StorageKey:  storageKey,
+			ContentType: contentType,
+		})
+	})
+
+	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore)
+	workerServer := worker.NewServer(redisConnOpt, 4)
+	if err := workerServer.Start(imageProcessor); err != nil {
+		log.Fatalf("Worker server failed to start: %v", err)
+	}
+	defer workerServer.Shutdown()
+
 	uploadHandler := uploads.NewHandler(uploadSvc)
 
 	requireAuth := middleware.RequireAuth(jwtSecret)

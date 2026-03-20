@@ -5,6 +5,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 )
 
@@ -37,4 +38,11 @@ type Storage interface {
 
 	// Delete removes a file from storage.
 	Delete(ctx context.Context, key string) error
+
+	// GetObject downloads the content of a stored file. The caller must close
+	// the returned ReadCloser.
+	GetObject(ctx context.Context, key string) (io.ReadCloser, error)
+
+	// PutObject uploads data to storage, replacing any existing object at key.
+	PutObject(ctx context.Context, key, contentType string, r io.Reader, size int64) error
 }

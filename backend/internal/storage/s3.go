@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url" //nolint:depguard // used for *url.URL return type in minioClient interface
 	"strings"
 	"time"
@@ -15,9 +16,37 @@ const presignedURLTTL = 15 * time.Minute
 
 // minioClient is the subset of the MinIO client API used by S3Storage.
 // It exists so that tests can inject a fake without a real MinIO server.
+// GetObject and PutObject use simplified signatures (no minio-specific option
+// types) so fakes stay clean.
 type minioClient interface {
 	PresignedPutObject(ctx context.Context, bucket, key string, expires time.Duration) (*url.URL, error)
 	RemoveObject(ctx context.Context, bucket, key string, opts minio.RemoveObjectOptions) error
+	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error)
+	PutObject(ctx context.Context, bucket, key string, r io.Reader, size int64, contentType string) error
+}
+
+// realMinioClient wraps *minio.Client to satisfy the minioClient interface.
+// The wrapper is needed because minio.Client.GetObject returns *minio.Object
+// (not io.ReadCloser) and minio.Client.PutObject returns (minio.UploadInfo, error).
+type realMinioClient struct {
+	c *minio.Client
+}
+
+func (r *realMinioClient) PresignedPutObject(ctx context.Context, bucket, key string, expires time.Duration) (*url.URL, error) {
+	return r.c.PresignedPutObject(ctx, bucket, key, expires)
+}
+
+func (r *realMinioClient) RemoveObject(ctx context.Context, bucket, key string, opts minio.RemoveObjectOptions) error {
+	return r.c.RemoveObject(ctx, bucket, key, opts)
+}
+
+func (r *realMinioClient) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	return r.c.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+}
+
+func (r *realMinioClient) PutObject(ctx context.Context, bucket, key string, rd io.Reader, size int64, contentType string) error {
+	_, err := r.c.PutObject(ctx, bucket, key, rd, size, minio.PutObjectOptions{ContentType: contentType})
+	return err
 }
 
 // S3Config holds the configuration for an S3-compatible storage provider.
@@ -53,14 +82,14 @@ type S3Storage struct {
 // NewS3Storage creates an S3Storage backed by the provided configuration.
 // It returns an error if the MinIO client cannot be initialised.
 func NewS3Storage(cfg S3Config) (*S3Storage, error) {
-	client, err := minio.New(cfg.Endpoint, &minio.Options{
+	mc, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("s3 storage: create client: %w", err)
 	}
-	return newS3StorageWithClient(client, cfg.Bucket, cfg.PublicURL), nil
+	return newS3StorageWithClient(&realMinioClient{mc}, cfg.Bucket, cfg.PublicURL), nil
 }
 
 // newS3StorageWithClient is the internal constructor used by tests to inject a
@@ -97,6 +126,23 @@ func (s *S3Storage) PublicURL(key string) string {
 func (s *S3Storage) Delete(ctx context.Context, key string) error {
 	if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("s3 storage: delete %q: %w", key, err)
+	}
+	return nil
+}
+
+// GetObject downloads the content of a stored file.
+func (s *S3Storage) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	rc, err := s.client.GetObject(ctx, s.bucket, key)
+	if err != nil {
+		return nil, fmt.Errorf("s3 storage: get %q: %w", key, err)
+	}
+	return rc, nil
+}
+
+// PutObject uploads data to storage, replacing any existing object at key.
+func (s *S3Storage) PutObject(ctx context.Context, key, contentType string, r io.Reader, size int64) error {
+	if err := s.client.PutObject(ctx, s.bucket, key, r, size, contentType); err != nil {
+		return fmt.Errorf("s3 storage: put %q: %w", key, err)
 	}
 	return nil
 }

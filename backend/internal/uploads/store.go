@@ -37,10 +37,10 @@ func (s *pgStore) Create(ctx context.Context, u *Upload) error {
 func (s *pgStore) GetByID(ctx context.Context, id string) (*Upload, error) {
 	var u Upload
 	err := s.db.QueryRow(ctx, `
-		SELECT id, user_id, storage_key, filename, content_type, size_bytes, category, status, created_at, committed_at
+		SELECT id, user_id, storage_key, filename, content_type, size_bytes, category, status, thumbnail_key, created_at, committed_at
 		FROM uploads
 		WHERE id = $1`, id,
-	).Scan(&u.ID, &u.UserID, &u.StorageKey, &u.Filename, &u.ContentType, &u.SizeBytes, &u.Category, &u.Status, &u.CreatedAt, &u.CommittedAt)
+	).Scan(&u.ID, &u.UserID, &u.StorageKey, &u.Filename, &u.ContentType, &u.SizeBytes, &u.Category, &u.Status, &u.ThumbnailKey, &u.CreatedAt, &u.CommittedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrNotFound
@@ -48,6 +48,19 @@ func (s *pgStore) GetByID(ctx context.Context, id string) (*Upload, error) {
 		return nil, fmt.Errorf("uploads: get by id: %w", err)
 	}
 	return &u, nil
+}
+
+// SetThumbnailKey stores the thumbnail storage key after background processing.
+func (s *pgStore) SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error {
+	tag, err := s.db.Exec(ctx, `
+		UPDATE uploads SET thumbnail_key = $2 WHERE id = $1`, id, thumbnailKey)
+	if err != nil {
+		return fmt.Errorf("uploads: set thumbnail key: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // Commit transitions an upload from pending to committed.
