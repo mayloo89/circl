@@ -5,6 +5,8 @@ package uploads
 import (
 	"context"
 	"errors"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/mayloo89/circl/backend/internal/storage"
@@ -18,16 +20,17 @@ var (
 
 // Upload represents a tracked file upload.
 type Upload struct {
-	ID          string     `json:"id"`
-	UserID      string     `json:"user_id"`
-	StorageKey  string     `json:"storage_key"`
-	Filename    string     `json:"filename"`
-	ContentType string     `json:"content_type"`
-	SizeBytes   int64      `json:"size_bytes"`
-	Category    string     `json:"category"`
-	Status      string     `json:"status"` // "pending" or "committed"
-	CreatedAt   time.Time  `json:"created_at"`
-	CommittedAt *time.Time `json:"committed_at,omitempty"`
+	ID           string     `json:"id"`
+	UserID       string     `json:"user_id"`
+	StorageKey   string     `json:"storage_key"`
+	Filename     string     `json:"filename"`
+	ContentType  string     `json:"content_type"`
+	SizeBytes    int64      `json:"size_bytes"`
+	Category     string     `json:"category"`
+	Status       string     `json:"status"` // "pending" or "committed"
+	ThumbnailKey *string    `json:"thumbnail_key,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	CommittedAt  *time.Time `json:"committed_at,omitempty"`
 }
 
 // Store is the persistence contract for uploads.
@@ -35,6 +38,7 @@ type Store interface {
 	Create(ctx context.Context, u *Upload) error
 	GetByID(ctx context.Context, id string) (*Upload, error)
 	Commit(ctx context.Context, id string) error
+	SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error
 }
 
 // Service is the application-layer that coordinates the storage provider
@@ -42,11 +46,19 @@ type Store interface {
 type Service struct {
 	store   Store
 	storage storage.Storage
+	enqueue func(ctx context.Context, uploadID, storageKey, contentType string) error
 }
 
 // NewService returns a ready-to-use upload service.
 func NewService(store Store, st storage.Storage) *Service {
 	return &Service{store: store, storage: st}
+}
+
+// SetEnqueuer registers a function that enqueues a background processing task
+// after an image upload is confirmed. The function is called asynchronously
+// and errors are logged but do not fail the confirm request.
+func (s *Service) SetEnqueuer(fn func(ctx context.Context, uploadID, storageKey, contentType string) error) {
+	s.enqueue = fn
 }
 
 // RequestUploadInput is the input for RequestUpload.
@@ -122,7 +134,8 @@ type ConfirmUploadOutput struct {
 }
 
 // ConfirmUpload marks a pending upload as committed. The caller must own
-// the upload.
+// the upload. For image uploads, a background processing task is enqueued
+// to generate a thumbnail and strip EXIF metadata.
 func (s *Service) ConfirmUpload(ctx context.Context, uploadID, userID string) (*ConfirmUploadOutput, error) {
 	u, err := s.store.GetByID(ctx, uploadID)
 	if err != nil {
@@ -137,6 +150,12 @@ func (s *Service) ConfirmUpload(ctx context.Context, uploadID, userID string) (*
 
 	if err := s.store.Commit(ctx, uploadID); err != nil {
 		return nil, err
+	}
+
+	if s.enqueue != nil && strings.HasPrefix(u.ContentType, "image/") {
+		if err := s.enqueue(ctx, u.ID, u.StorageKey, u.ContentType); err != nil {
+			log.Printf("uploads: enqueue image processing for %s: %v", u.ID, err)
+		}
 	}
 
 	return &ConfirmUploadOutput{

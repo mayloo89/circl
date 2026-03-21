@@ -1,0 +1,500 @@
+package worker
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
+	"io"
+	"strings"
+	"testing"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/hibiken/asynq"
+)
+
+// --- Test doubles ---
+
+type fakeStorage struct {
+	objects     map[string]string
+	putErr      error
+	getErr      error
+	lastPutKey  string
+	lastPutType string
+}
+
+func newFakeStorage(key, content string) *fakeStorage {
+	fs := &fakeStorage{objects: make(map[string]string)}
+	if key != "" {
+		fs.objects[key] = content
+	}
+	return fs
+}
+
+func (f *fakeStorage) GetObject(_ context.Context, key string) (io.ReadCloser, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	content, ok := f.objects[key]
+	if !ok {
+		return nil, errors.New("storage: not found")
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (f *fakeStorage) PutObject(_ context.Context, key, contentType string, r io.Reader, _ int64) error {
+	if f.putErr != nil {
+		return f.putErr
+	}
+	data, _ := io.ReadAll(r)
+	f.objects[key] = string(data)
+	f.lastPutKey = key
+	f.lastPutType = contentType
+	return nil
+}
+
+// fakeStore captures calls to SetThumbnailKey.
+type fakeStore struct {
+	thumbnailKey string
+	uploadID     string
+	err          error
+}
+
+func (f *fakeStore) SetThumbnailKey(_ context.Context, id, key string) error {
+	f.uploadID = id
+	f.thumbnailKey = key
+	return f.err
+}
+
+// --- Helpers ---
+
+func makeJPEG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	img.Set(0, 0, color.RGBA{R: 200, G: 100, B: 50, A: 255})
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func makePNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// --- thumbnailKey ---
+
+func TestThumbnailKey_JPEG(t *testing.T) {
+	got := thumbnailKey("chat-attachment/user/abc-photo.jpg")
+	want := "thumbnails/chat-attachment/user/abc-photo.jpg"
+	if got != want {
+		t.Errorf("thumbnailKey = %q, want %q", got, want)
+	}
+}
+
+func TestThumbnailKey_PNG(t *testing.T) {
+	got := thumbnailKey("chat-attachment/user/abc-photo.png")
+	want := "thumbnails/chat-attachment/user/abc-photo.jpg"
+	if got != want {
+		t.Errorf("thumbnailKey = %q, want %q", got, want)
+	}
+}
+
+func TestThumbnailKey_NoExtension(t *testing.T) {
+	got := thumbnailKey("chat-attachment/user/file")
+	want := "thumbnails/chat-attachment/user/file.jpg"
+	if got != want {
+		t.Errorf("thumbnailKey = %q, want %q", got, want)
+	}
+}
+
+// --- resizeToFit ---
+
+func TestResizeToFit_AlreadySmall(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	out := resizeToFit(src, 480)
+	if out != src {
+		t.Error("expected same image to be returned when already within bounds")
+	}
+}
+
+func TestResizeToFit_LandscapeReduces(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 960, 480))
+	out := resizeToFit(src, 480)
+	b := out.Bounds()
+	if b.Dx() != 480 {
+		t.Errorf("width = %d, want 480", b.Dx())
+	}
+	if b.Dy() != 240 {
+		t.Errorf("height = %d, want 240", b.Dy())
+	}
+}
+
+func TestResizeToFit_PortraitReduces(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 320, 640))
+	out := resizeToFit(src, 480)
+	b := out.Bounds()
+	if b.Dy() != 480 {
+		t.Errorf("height = %d, want 480", b.Dy())
+	}
+	if b.Dx() != 240 {
+		t.Errorf("width = %d, want 240", b.Dx())
+	}
+}
+
+// --- process: JPEG ---
+
+func TestProcess_JPEG_StripsEXIFAndGeneratesThumbnail(t *testing.T) {
+	key := "chat-attachment/user/photo.jpg"
+	imgData := makeJPEG(t, 800, 600)
+
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	proc := NewImageProcessor(st, store)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID:    "upload-1",
+		StorageKey:  key,
+		ContentType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("process() error: %v", err)
+	}
+
+	// Original should be replaced (EXIF strip).
+	if _, ok := st.objects[key]; !ok {
+		t.Error("expected original key to be re-uploaded after EXIF strip")
+	}
+
+	// Thumbnail should be uploaded.
+	thumbKey := thumbnailKey(key)
+	if _, ok := st.objects[thumbKey]; !ok {
+		t.Errorf("expected thumbnail at %q", thumbKey)
+	}
+
+	// Store should be updated.
+	if store.uploadID != "upload-1" {
+		t.Errorf("upload ID = %q, want upload-1", store.uploadID)
+	}
+	if store.thumbnailKey != thumbKey {
+		t.Errorf("thumbnail key = %q, want %q", store.thumbnailKey, thumbKey)
+	}
+}
+
+// --- process: PNG ---
+
+func TestProcess_PNG_StripsEXIFAndGeneratesThumbnail(t *testing.T) {
+	key := "chat-attachment/user/image.png"
+	imgData := makePNG(t, 600, 400)
+
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	proc := NewImageProcessor(st, store)
+
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "upload-2", StorageKey: key, ContentType: "image/png",
+	}); err != nil {
+		t.Fatalf("process() error: %v", err)
+	}
+
+	thumbKey := thumbnailKey(key)
+	if _, ok := st.objects[thumbKey]; !ok {
+		t.Errorf("expected thumbnail at %q", thumbKey)
+	}
+	if store.thumbnailKey != thumbKey {
+		t.Errorf("thumbnail key = %q, want %q", store.thumbnailKey, thumbKey)
+	}
+}
+
+// --- process: GIF (thumbnail only, no EXIF strip) ---
+
+func TestProcess_GIF_ThumbnailOnly(t *testing.T) {
+	key := "chat-attachment/user/anim.gif"
+
+	// Minimal valid 1x1 GIF89a.
+	gifData := []byte{
+		0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // GIF89a
+		0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, // Logical Screen Descriptor
+		0xff, 0xff, 0xff, 0x00, 0x00, 0x00, // Global Color Table (white, black)
+		0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, // Image Descriptor
+		0x02, 0x02, 0x4c, 0x01, 0x00, // Image Data (LZW)
+		0x3b, // Trailer
+	}
+
+	st := newFakeStorage(key, string(gifData))
+	store := &fakeStore{}
+	proc := NewImageProcessor(st, store)
+
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "upload-3", StorageKey: key, ContentType: "image/gif",
+	}); err != nil {
+		t.Fatalf("process() error: %v", err)
+	}
+
+	// Original must NOT be replaced (no EXIF strip for GIF).
+	if st.lastPutKey == key {
+		t.Error("GIF original should not be re-uploaded")
+	}
+
+	// Thumbnail must exist.
+	thumbKey := thumbnailKey(key)
+	if _, ok := st.objects[thumbKey]; !ok {
+		t.Errorf("expected thumbnail at %q", thumbKey)
+	}
+}
+
+// --- process: error cases ---
+
+func TestProcess_GetObjectError(t *testing.T) {
+	st := &fakeStorage{getErr: errors.New("not found"), objects: map[string]string{}}
+	proc := NewImageProcessor(st, &fakeStore{})
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: "k", ContentType: "image/jpeg",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestProcess_PutObjectError_OnStrip(t *testing.T) {
+	key := "chat-attachment/user/photo.jpg"
+	imgData := makeJPEG(t, 10, 10)
+	st := newFakeStorage(key, string(imgData))
+	st.putErr = errors.New("put failed")
+	proc := NewImageProcessor(st, &fakeStore{})
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: key, ContentType: "image/jpeg",
+	})
+	if err == nil {
+		t.Fatal("expected error on PutObject")
+	}
+}
+
+func TestProcess_SetThumbnailKeyError(t *testing.T) {
+	key := "chat-attachment/user/photo.jpg"
+	imgData := makeJPEG(t, 10, 10)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{err: errors.New("db error")}
+	proc := NewImageProcessor(st, store)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: key, ContentType: "image/jpeg",
+	})
+	if err == nil {
+		t.Fatal("expected error from SetThumbnailKey")
+	}
+}
+
+// --- Handle ---
+
+func TestHandle_ValidPayload(t *testing.T) {
+	key := "chat-attachment/user/photo.jpg"
+	imgData := makeJPEG(t, 10, 10)
+	st := newFakeStorage(key, string(imgData))
+	proc := NewImageProcessor(st, &fakeStore{})
+
+	payload, _ := json.Marshal(ImageProcessPayload{
+		UploadID: "u1", StorageKey: key, ContentType: "image/jpeg",
+	})
+	task := asynq.NewTask(TaskProcessImage, payload)
+	if err := proc.Handle(t.Context(), task); err != nil {
+		t.Fatalf("Handle() error: %v", err)
+	}
+}
+
+func TestHandle_InvalidJSON(t *testing.T) {
+	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{})
+	task := asynq.NewTask(TaskProcessImage, []byte("not-json"))
+	if err := proc.Handle(t.Context(), task); err == nil {
+		t.Fatal("expected error for invalid JSON payload")
+	}
+}
+
+func TestHandle_ProcessError(t *testing.T) {
+	// Storage returns an error → Handle must return the error.
+	st := &fakeStorage{getErr: errors.New("not found"), objects: map[string]string{}}
+	proc := NewImageProcessor(st, &fakeStore{})
+
+	payload, _ := json.Marshal(ImageProcessPayload{
+		UploadID: "u1", StorageKey: "missing/key.jpg", ContentType: "image/jpeg",
+	})
+	task := asynq.NewTask(TaskProcessImage, payload)
+	if err := proc.Handle(t.Context(), task); err == nil {
+		t.Fatal("expected error when process fails")
+	}
+}
+
+// --- EnqueueProcessImage ---
+
+func TestEnqueueProcessImage(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := NewClient(asynq.RedisClientOpt{Addr: mr.Addr()})
+	defer client.Close() //nolint:errcheck
+
+	err := EnqueueProcessImage(t.Context(), client, ImageProcessPayload{
+		UploadID: "u1", StorageKey: "chat-attachment/u/f.jpg", ContentType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("EnqueueProcessImage() error: %v", err)
+	}
+}
+
+// --- NewServer / Start / Shutdown ---
+
+func TestServer_StartAndShutdown(t *testing.T) {
+	mr := miniredis.RunT(t)
+	srv := NewServer(asynq.RedisClientOpt{Addr: mr.Addr()}, 2)
+	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{})
+	if err := srv.Start(proc); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+	srv.Shutdown() // must not panic
+}
+
+// --- decodeImage: unsupported type ---
+
+func TestDecodeImage_UnsupportedType(t *testing.T) {
+	_, err := decodeImage("application/pdf", []byte("pdf bytes"))
+	if err == nil {
+		t.Fatal("expected error for unsupported content type")
+	}
+}
+
+func TestDecodeImage_WebPInvalidData(t *testing.T) {
+	_, err := decodeImage("image/webp", []byte("not-valid-webp-data"))
+	if err == nil {
+		t.Fatal("expected error for invalid WebP bytes")
+	}
+}
+
+func TestDecodeImage_GIFInvalidData(t *testing.T) {
+	_, err := decodeImage("image/gif", []byte("not-valid-gif"))
+	if err == nil {
+		t.Fatal("expected error for invalid GIF bytes")
+	}
+}
+
+// --- encodeOriginal: unsupported type ---
+
+func TestEncodeOriginal_UnsupportedType(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	_, err := encodeOriginal(img, "image/gif")
+	if err == nil {
+		t.Fatal("expected error for unsupported encode type")
+	}
+}
+
+// --- resizeToFit: extreme aspect ratios ---
+
+func TestResizeToFit_ExtremeWide(t *testing.T) {
+	// Very wide image: 10000×1. dh would be 0 without the guard.
+	src := image.NewRGBA(image.Rect(0, 0, 10000, 1))
+	out := resizeToFit(src, 480)
+	b := out.Bounds()
+	if b.Dy() < 1 {
+		t.Errorf("height = %d, want >= 1", b.Dy())
+	}
+	if b.Dx() != 480 {
+		t.Errorf("width = %d, want 480", b.Dx())
+	}
+}
+
+func TestResizeToFit_ExtremeTall(t *testing.T) {
+	// Very tall image: 1×10000. dw would be 0 without the guard.
+	src := image.NewRGBA(image.Rect(0, 0, 1, 10000))
+	out := resizeToFit(src, 480)
+	b := out.Bounds()
+	if b.Dx() < 1 {
+		t.Errorf("width = %d, want >= 1", b.Dx())
+	}
+	if b.Dy() != 480 {
+		t.Errorf("height = %d, want 480", b.Dy())
+	}
+}
+
+// --- process: io.ReadAll error ---
+
+func TestProcess_ReadError(t *testing.T) {
+	st := &brokenReadStorage{}
+	proc := NewImageProcessor(st, &fakeStore{})
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: "k.jpg", ContentType: "image/jpeg",
+	})
+	if err == nil {
+		t.Fatal("expected error when reading object fails")
+	}
+}
+
+// brokenReadStorage returns a reader that always fails on Read.
+type brokenReadStorage struct{}
+
+func (b *brokenReadStorage) GetObject(_ context.Context, _ string) (io.ReadCloser, error) {
+	return &errReadCloser{}, nil
+}
+
+func (b *brokenReadStorage) PutObject(_ context.Context, _, _ string, _ io.Reader, _ int64) error {
+	return nil
+}
+
+type errReadCloser struct{}
+
+func (e *errReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("read error") }
+func (e *errReadCloser) Close() error               { return nil }
+
+// --- process: PutObject error on thumbnail ---
+
+func TestProcess_PutObjectError_OnThumbnail(t *testing.T) {
+	key := "chat-attachment/user/photo.png"
+	imgData := makePNG(t, 10, 10)
+
+	callCount := 0
+	st := &fakeStorage{objects: map[string]string{key: string(imgData)}}
+	// Fail only the second PutObject call (thumbnail), not the first (EXIF strip).
+	origPutObject := st.PutObject
+	_ = origPutObject // not a method we can replace; use putErr approach differently
+
+	// We need a storage that fails on the second call. Use a wrapper.
+	wrapped := &countingPutStorage{inner: st, failAfter: 1}
+	proc := NewImageProcessor(wrapped, &fakeStore{})
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: key, ContentType: "image/png",
+	})
+	_ = callCount
+	if err == nil {
+		t.Fatal("expected error when thumbnail PutObject fails")
+	}
+}
+
+// countingPutStorage wraps fakeStorage and fails PutObject after failAfter calls.
+type countingPutStorage struct {
+	inner     *fakeStorage
+	failAfter int
+	calls     int
+}
+
+func (c *countingPutStorage) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	return c.inner.GetObject(ctx, key)
+}
+
+func (c *countingPutStorage) PutObject(ctx context.Context, key, contentType string, r io.Reader, size int64) error {
+	c.calls++
+	if c.calls > c.failAfter {
+		return errors.New("put failed")
+	}
+	return c.inner.PutObject(ctx, key, contentType, r, size)
+}

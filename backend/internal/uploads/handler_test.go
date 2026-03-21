@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +58,15 @@ func (m *mockStore) Commit(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *mockStore) SetThumbnailKey(_ context.Context, id, key string) error {
+	u, ok := m.uploads[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.ThumbnailKey = &key
+	return nil
+}
+
 type mockStorage struct{}
 
 func (m *mockStorage) GenerateUploadURL(_ context.Context, params storage.UploadParams) (*storage.UploadResult, error) {
@@ -66,6 +78,30 @@ func (m *mockStorage) PublicURL(key string) string {
 }
 
 func (m *mockStorage) Delete(_ context.Context, _ string) error { return nil }
+
+func (m *mockStorage) GetObject(_ context.Context, _ string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
+func (m *mockStorage) PutObject(_ context.Context, _, _ string, _ io.Reader, _ int64) error {
+	return nil
+}
+
+// failingMockStorage returns an error from GenerateUploadURL.
+type failingMockStorage struct{ mockStorage }
+
+func (f *failingMockStorage) GenerateUploadURL(_ context.Context, _ storage.UploadParams) (*storage.UploadResult, error) {
+	return nil, errors.New("storage unavailable")
+}
+
+// failingCommitStore is a mockStore where Commit always returns a DB error.
+type failingCommitStore struct {
+	mockStore
+}
+
+func (f *failingCommitStore) Commit(_ context.Context, _ string) error {
+	return errors.New("db error")
+}
 
 // --- Helpers ---
 
@@ -257,6 +293,203 @@ func TestConfirmUpload_Forbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestConfirmUpload_AlreadyCommitted(t *testing.T) {
+	store := newMockStore()
+	svc := NewService(store, &mockStorage{})
+
+	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
+		UserID: "user-1", Category: "avatar", Filename: "photo.jpg",
+		ContentType: "image/jpeg", SizeBytes: 1024,
+	})
+	svc.ConfirmUpload(t.Context(), out.UploadID, "user-1") //nolint:errcheck
+
+	r := chi.NewRouter()
+	r.Post("/{id}/confirm", confirmHandler(svc))
+
+	req := httptest.NewRequest(http.MethodPost, "/"+out.UploadID+"/confirm", nil)
+	req = withAuth(req, "user-1")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+}
+
+func TestConfirmUpload_NoAuth(t *testing.T) {
+	svc := NewService(newMockStore(), &mockStorage{})
+	r := chi.NewRouter()
+	r.Post("/{id}/confirm", confirmHandler(svc))
+
+	req := httptest.NewRequest(http.MethodPost, "/some-id/confirm", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequestUpload_InvalidJSON(t *testing.T) {
+	svc := NewService(newMockStore(), &mockStorage{})
+	handler := NewHandler(svc)
+
+	req := httptest.NewRequest(http.MethodPost, "/request", bytes.NewBufferString("not json"))
+	req = withAuth(req, "user-1")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestConfirmUpload_EnqueuerCalled(t *testing.T) {
+	store := newMockStore()
+	svc := NewService(store, &mockStorage{})
+
+	var enqueuedUploadID string
+	svc.SetEnqueuer(func(_ context.Context, uploadID, _, _ string) error {
+		enqueuedUploadID = uploadID
+		return nil
+	})
+
+	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
+		UserID:      "user-1",
+		Category:    "chat-attachment",
+		Filename:    "photo.jpg",
+		ContentType: "image/jpeg",
+		SizeBytes:   1024,
+	})
+
+	_, err := svc.ConfirmUpload(t.Context(), out.UploadID, "user-1")
+	if err != nil {
+		t.Fatalf("ConfirmUpload() error: %v", err)
+	}
+	if enqueuedUploadID != out.UploadID {
+		t.Errorf("enqueued upload ID = %q, want %q", enqueuedUploadID, out.UploadID)
+	}
+}
+
+func TestConfirmUpload_EnqueuerError_DoesNotFail(t *testing.T) {
+	store := newMockStore()
+	svc := NewService(store, &mockStorage{})
+	svc.SetEnqueuer(func(_ context.Context, _, _, _ string) error {
+		return errors.New("redis down")
+	})
+
+	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
+		UserID:      "user-1",
+		Category:    "chat-attachment",
+		Filename:    "photo.jpg",
+		ContentType: "image/jpeg",
+		SizeBytes:   1024,
+	})
+
+	_, err := svc.ConfirmUpload(t.Context(), out.UploadID, "user-1")
+	if err != nil {
+		t.Errorf("ConfirmUpload() should succeed even if enqueuer fails: %v", err)
+	}
+}
+
+func TestRequestUpload_StorageError(t *testing.T) {
+	svc := NewService(newMockStore(), &failingMockStorage{})
+	handler := NewHandler(svc)
+
+	body := `{"category":"avatar","filename":"photo.jpg","content_type":"image/jpeg","size_bytes":1024}`
+	req := httptest.NewRequest(http.MethodPost, "/request", bytes.NewBufferString(body))
+	req = withAuth(req, "user-1")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestConfirmUpload_CommitError(t *testing.T) {
+	store := &failingCommitStore{mockStore: *newMockStore()}
+	svc := NewService(&store.mockStore, &mockStorage{})
+
+	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
+		UserID:      "user-1",
+		Category:    "avatar",
+		Filename:    "photo.jpg",
+		ContentType: "image/jpeg",
+		SizeBytes:   1024,
+	})
+
+	// Use failingCommitStore directly as the store.
+	svcFail := NewService(store, &mockStorage{})
+
+	r := chi.NewRouter()
+	r.Post("/{id}/confirm", confirmHandler(svcFail))
+
+	req := httptest.NewRequest(http.MethodPost, "/"+out.UploadID+"/confirm", nil)
+	req = withAuth(req, "user-1")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestConfirmUpload_MissingID(t *testing.T) {
+	// Call confirmHandler directly without chi URL params so id is empty.
+	svc := NewService(newMockStore(), &mockStorage{})
+	req := httptest.NewRequest(http.MethodPost, "/confirm", nil)
+	req = withAuth(req, "user-1")
+	rec := httptest.NewRecorder()
+	confirmHandler(svc)(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestRequestUpload_InvalidFilename(t *testing.T) {
+	svc := NewService(newMockStore(), &mockStorage{})
+	handler := NewHandler(svc)
+
+	body := `{"category":"avatar","filename":"","content_type":"image/jpeg","size_bytes":1024}`
+	req := httptest.NewRequest(http.MethodPost, "/request", bytes.NewBufferString(body))
+	req = withAuth(req, "user-1")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestConfirmUpload_NonImageDoesNotEnqueue(t *testing.T) {
+	store := newMockStore()
+	svc := NewService(store, &mockStorage{})
+
+	enqueued := false
+	svc.SetEnqueuer(func(_ context.Context, _, _, _ string) error {
+		enqueued = true
+		return nil
+	})
+
+	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
+		UserID:      "user-1",
+		Category:    "chat-attachment",
+		Filename:    "doc.pdf",
+		ContentType: "application/pdf",
+		SizeBytes:   1024,
+	})
+
+	svc.ConfirmUpload(t.Context(), out.UploadID, "user-1") //nolint:errcheck
+	if enqueued {
+		t.Error("expected enqueuer NOT to be called for non-image uploads")
 	}
 }
 

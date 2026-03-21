@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -70,6 +71,37 @@ func (ls *LocalStorage) Delete(_ context.Context, key string) error {
 	path := filepath.Join(ls.basePath, filepath.Clean(key))
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("local storage: delete: %w", err)
+	}
+	return nil
+}
+
+// GetObject opens a stored file for reading. The caller must close the returned
+// ReadCloser.
+func (ls *LocalStorage) GetObject(_ context.Context, key string) (io.ReadCloser, error) {
+	path := filepath.Join(ls.basePath, filepath.Clean(key))
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("local storage: get %q: %w", key, err)
+	}
+	return f, nil
+}
+
+// PutObject writes data to storage, replacing any existing file at key.
+func (ls *LocalStorage) PutObject(_ context.Context, key, _ string, r io.Reader, _ int64) error {
+	path := filepath.Join(ls.basePath, filepath.Clean(key))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("local storage: mkdirall: %w", err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("local storage: create %q: %w", key, err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, r); err != nil {
+		return fmt.Errorf("local storage: write %q: %w", key, err)
 	}
 	return nil
 }
