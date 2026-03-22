@@ -28,17 +28,25 @@ const (
 
 // mockManager is a test double for chat.Manager.
 type mockManager struct {
-	room      *chat.Room
-	rooms     []chat.RoomSummary
-	msg       *chat.Message
-	msgs      []chat.Message
-	isMember  bool
-	roomErr   error
-	roomsErr  error
-	msgErr    error
-	msgsErr   error
-	memberErr error
-	markErr   error
+	room            *chat.Room
+	rooms           []chat.RoomSummary
+	msg             *chat.Message
+	msgs            []chat.Message
+	isMember        bool
+	roomErr         error
+	roomsErr        error
+	msgErr          error
+	msgsErr         error
+	memberErr       error
+	markErr         error
+	viewOnceMsg     *chat.Message
+	viewOnceKeys    []string
+	viewOnceErr     error
+	deleteRoomID    string
+	deleteKeys      []string
+	deleteErr       error
+	expiredIDs      []string
+	expiredErr      error
 }
 
 func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
@@ -53,7 +61,7 @@ func (m *mockManager) IsMember(_ context.Context, _, _ string) (bool, error) {
 func (m *mockManager) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary, error) {
 	return m.rooms, m.roomsErr
 }
-func (m *mockManager) SaveMessage(_ context.Context, _, _, _, _ string) (*chat.Message, error) {
+func (m *mockManager) SaveMessage(_ context.Context, _ chat.SaveMessageParams) (*chat.Message, error) {
 	return m.msg, m.msgErr
 }
 func (m *mockManager) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
@@ -64,6 +72,15 @@ func (m *mockManager) ListMembers(_ context.Context, _ string) ([]string, error)
 }
 func (m *mockManager) MarkRead(_ context.Context, _, _ string) error {
 	return m.markErr
+}
+func (m *mockManager) ViewOnceMessage(_ context.Context, _, _, _ string) (*chat.Message, []string, error) {
+	return m.viewOnceMsg, m.viewOnceKeys, m.viewOnceErr
+}
+func (m *mockManager) DeleteMessage(_ context.Context, _ string) (string, []string, error) {
+	return m.deleteRoomID, m.deleteKeys, m.deleteErr
+}
+func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
+	return m.expiredIDs, m.expiredErr
 }
 
 func authedReq(r *http.Request) *http.Request {
@@ -309,6 +326,32 @@ func TestListMessages_MemberCheckError(t *testing.T) {
 	}
 }
 
+func TestListMessages_MasksViewOnceForNonSender(t *testing.T) {
+	// A view_once message from another user should have its content masked.
+	msgs := []chat.Message{
+		{ID: "m-1", SenderID: "other-user", Content: "secret", ViewOnce: true},
+		{ID: "m-2", SenderID: testUserID, Content: "my msg", ViewOnce: true},
+	}
+	h := chat.NewHandler(&mockManager{isMember: true, msgs: msgs})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1/messages", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got []chat.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got[0].Content != "" {
+		t.Errorf("view_once from other user should have empty content, got %q", got[0].Content)
+	}
+	if got[1].Content != "my msg" {
+		t.Errorf("sender's own view_once should retain content, got %q", got[1].Content)
+	}
+}
+
 // --- Mark read ---
 
 func TestMarkRead_NoUserInContext(t *testing.T) {
@@ -338,6 +381,128 @@ func TestMarkRead_ServiceError(t *testing.T) {
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- View once message ---
+
+func TestViewMessage_Success(t *testing.T) {
+	msg := &chat.Message{ID: "m-1", RoomID: "r-1", ViewOnce: true, Content: "secret"}
+	mgr := &mockManager{
+		isMember:    true,
+		viewOnceMsg: msg,
+		viewOnceKeys: []string{"uploads/key.jpg"},
+	}
+
+	var deletedKeys []string
+	var notifiedRoom, notifiedMsg string
+	cfg := chat.HandlerConfig{
+		DeleteFiles: func(_ context.Context, keys []string) { deletedKeys = keys },
+		NotifyMessageDeleted: func(roomID, msgID string) {
+			notifiedRoom, notifiedMsg = roomID, msgID
+		},
+	}
+	h := chat.NewHandler(mgr, cfg)
+
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got chat.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ID != "m-1" {
+		t.Errorf("ID = %q, want m-1", got.ID)
+	}
+	if got.Content != "secret" {
+		t.Errorf("Content = %q, want secret", got.Content)
+	}
+	if len(deletedKeys) != 1 || deletedKeys[0] != "uploads/key.jpg" {
+		t.Errorf("deletedKeys = %v, want [uploads/key.jpg]", deletedKeys)
+	}
+	if notifiedRoom != "r-1" || notifiedMsg != "m-1" {
+		t.Errorf("notification roomID=%q msgID=%q, want r-1/m-1", notifiedRoom, notifiedMsg)
+	}
+}
+
+func TestViewMessage_NoKeysNoCallbacks(t *testing.T) {
+	// When ViewOnceMessage returns no keys (not yet all viewers), callbacks are skipped.
+	msg := &chat.Message{ID: "m-1", ViewOnce: true, Content: "secret"}
+	mgr := &mockManager{isMember: true, viewOnceMsg: msg, viewOnceKeys: nil}
+
+	called := false
+	cfg := chat.HandlerConfig{
+		NotifyMessageDeleted: func(_, _ string) { called = true },
+	}
+	h := chat.NewHandler(mgr, cfg)
+
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if called {
+		t.Error("notify callback should not be called when no keys returned")
+	}
+}
+
+func TestViewMessage_NotFound(t *testing.T) {
+	mgr := &mockManager{isMember: true, viewOnceErr: chat.ErrNotFound}
+	h := chat.NewHandler(mgr)
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestViewMessage_Forbidden_NotMember(t *testing.T) {
+	mgr := &mockManager{isMember: false}
+	h := chat.NewHandler(mgr)
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestViewMessage_Forbidden_IsSender(t *testing.T) {
+	mgr := &mockManager{isMember: true, viewOnceErr: chat.ErrForbidden}
+	h := chat.NewHandler(mgr)
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestViewMessage_ServiceError(t *testing.T) {
+	mgr := &mockManager{isMember: true, viewOnceErr: errors.New("db fail")}
+	h := chat.NewHandler(mgr)
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestViewMessage_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodPost, "/rooms/r-1/messages/m-1/view", nil)
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
 	}
 }
 
@@ -780,5 +945,147 @@ func TestWSHandler_SaveMessageError(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Error("expected no message on save error, but received one")
+	}
+}
+
+func TestWSHandler_SendViewOnceMessage(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	now := time.Now()
+	savedMsg := &chat.Message{
+		ID:        "m-vo",
+		RoomID:    "r-1",
+		SenderID:  testUserID,
+		Type:      "text",
+		Content:   "tap to view",
+		ViewOnce:  true,
+		CreatedAt: now,
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]any{
+		"type": "message", "content": "tap to view", "view_once": true,
+	}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// Content must be masked in the broadcast: omitted from JSON (omitempty on empty string).
+	if c, ok := got["content"]; ok && c != "" {
+		t.Errorf("content = %q, want absent/empty for view_once broadcast", c)
+	}
+	if got["view_once"] != true {
+		t.Errorf("view_once = %v, want true", got["view_once"])
+	}
+	if got["event"] != "new_message" {
+		t.Errorf("event = %v, want new_message", got["event"])
+	}
+}
+
+func TestWSHandler_SendTTLMessage(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	now := time.Now()
+	expires := now.Add(time.Hour)
+	savedMsg := &chat.Message{
+		ID:        "m-ttl",
+		RoomID:    "r-1",
+		SenderID:  testUserID,
+		Type:      "text",
+		Content:   "expires soon",
+		ExpiresAt: &expires,
+		CreatedAt: now,
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]any{
+		"type": "message", "content": "expires soon", "ttl": "1h",
+	}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["content"] != "expires soon" {
+		t.Errorf("content = %q, want 'expires soon'", got["content"])
+	}
+	if got["expires_at"] == nil {
+		t.Error("expires_at should be set for TTL messages")
+	}
+}
+
+func TestWSHandler_InvalidTTLIgnored(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Unknown TTL label should cause the message to be silently dropped.
+	if err := conn.WriteJSON(map[string]any{
+		"type": "message", "content": "hi", "ttl": "30m",
+	}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected no message for invalid TTL, but received one")
 	}
 }

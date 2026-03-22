@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,25 +41,42 @@ type Client struct {
 }
 
 // serverMessage is the JSON envelope sent from the server to connected clients.
+// event is "new_message" for incoming messages or "message_deleted" for deletions.
 type serverMessage struct {
-	Type            string    `json:"type"`
-	ID              string    `json:"id"`
-	RoomID          string    `json:"room_id"`
-	SenderID        string    `json:"sender_id"`
-	SenderName      string    `json:"sender_name"`
-	SenderAvatarURL string    `json:"sender_avatar_url"`
-	Content         string    `json:"content"`
-	CreatedAt       time.Time `json:"created_at"`
+	Event           string     `json:"event"`
+	Type            string     `json:"type,omitempty"`
+	ID              string     `json:"id"`
+	RoomID          string     `json:"room_id"`
+	SenderID        string     `json:"sender_id,omitempty"`
+	SenderName      string     `json:"sender_name,omitempty"`
+	SenderAvatarURL string     `json:"sender_avatar_url,omitempty"`
+	Content         string     `json:"content,omitempty"`
+	ViewOnce        bool       `json:"view_once,omitempty"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at,omitempty"`
 }
 
 // clientMessage is the JSON envelope received from a connected client.
 // Type must be "message" (plain text) or "attachment" (uploaded file URL).
-// MimeType is required when Type is "attachment" and is used to determine
-// whether the content is an image, video, or generic file.
+// MimeType is required when Type is "attachment".
+// ViewOnce and TTL are mutually exclusive ephemeral modes.
 type clientMessage struct {
 	Type     string `json:"type"`
 	Content  string `json:"content"`
 	MimeType string `json:"mime_type,omitempty"`
+	UploadID string `json:"upload_id,omitempty"`
+	ViewOnce bool   `json:"view_once,omitempty"`
+	TTL      string `json:"ttl,omitempty"` // "1h" | "24h" | "7d"
+}
+
+// HandlerConfig holds optional callbacks for the REST chat handler.
+type HandlerConfig struct {
+	// NotifyMessageDeleted is called after a message is physically deleted
+	// so the hub can broadcast a message_deleted event to all room members.
+	NotifyMessageDeleted func(roomID, messageID string)
+	// DeleteFiles is called with storage keys to remove from object storage
+	// after a message's attached files have been unlinked from the database.
+	DeleteFiles func(ctx context.Context, keys []string)
 }
 
 // resolveMessageType maps a client-supplied frame type and MIME type to the
@@ -84,14 +102,21 @@ func resolveMessageType(clientType, mimeType string) (string, bool) {
 // NewHandler returns a chi router with the REST chat routes.
 // It must be mounted behind the requireAuth middleware so that
 // middleware.UserIDFromContext is available in every handler.
-func NewHandler(svc Manager) http.Handler {
-	r := chi.NewRouter()
+// An optional HandlerConfig may be provided to wire deletion notifications
+// and object storage cleanup.
+func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
+	var c HandlerConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
 
+	r := chi.NewRouter()
 	r.Post("/rooms/dm", getDMHandler(svc))
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
 	r.Get("/rooms/{id}/messages", listMessagesHandler(svc))
 	r.Put("/rooms/{id}/read", markReadHandler(svc))
+	r.Post("/rooms/{id}/messages/{msgID}/view", viewMessageHandler(svc, c))
 
 	return r
 }
@@ -195,6 +220,7 @@ func listRoomsHandler(svc Manager) http.HandlerFunc {
 }
 
 // listMessagesHandler returns paginated messages for a room.
+// View-once messages not sent by the requester have their content masked.
 //
 // GET /chat/rooms/{id}/messages?before=<RFC3339>&limit=<int>
 func listMessagesHandler(svc Manager) http.HandlerFunc {
@@ -236,6 +262,14 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 			return
 		}
 
+		// Mask view_once content for non-senders: the recipient must call
+		// POST /rooms/{id}/messages/{msgID}/view to fetch the real content.
+		for i := range msgs {
+			if msgs[i].ViewOnce && msgs[i].SenderID != userID {
+				msgs[i].Content = ""
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(msgs) //nolint:errcheck
 	}
@@ -260,6 +294,56 @@ func markReadHandler(svc Manager) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// viewMessageHandler delivers the content of a view-once message to the
+// requester and, once all non-sender members have viewed it, physically
+// deletes the message and its attached files.
+//
+// POST /chat/rooms/{id}/messages/{msgID}/view
+func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+
+		roomID := chi.URLParam(r, "id")
+		msgID := chi.URLParam(r, "msgID")
+
+		member, err := svc.IsMember(r.Context(), roomID, userID)
+		if err != nil || !member {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+
+		msg, keys, err := svc.ViewOnceMessage(r.Context(), msgID, roomID, userID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrForbidden) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if len(keys) > 0 {
+			if cfg.DeleteFiles != nil {
+				cfg.DeleteFiles(r.Context(), keys)
+			}
+			if cfg.NotifyMessageDeleted != nil {
+				cfg.NotifyMessageDeleted(roomID, msgID)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(msg) //nolint:errcheck
 	}
 }
 
@@ -341,20 +425,47 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			continue
 		}
 
+		params := SaveMessageParams{
+			RoomID:   c.roomID,
+			SenderID: c.userID,
+			Type:     msgType,
+			Content:  in.Content,
+			UploadID: in.UploadID,
+			ViewOnce: in.ViewOnce,
+		}
+		if in.TTL != "" {
+			d, err := ParseTTL(in.TTL)
+			if err != nil {
+				continue // reject unknown TTL values
+			}
+			t := time.Now().Add(d)
+			params.ExpiresAt = &t
+		}
+
 		ctx := context.Background()
-		msg, err := svc.SaveMessage(ctx, c.roomID, c.userID, msgType, in.Content)
+		msg, err := svc.SaveMessage(ctx, params)
 		if err != nil {
 			continue
 		}
 
+		// View-once messages are broadcast with masked content; the recipient
+		// must call POST /rooms/{id}/messages/{msgID}/view to read them.
+		content := msg.Content
+		if msg.ViewOnce {
+			content = ""
+		}
+
 		data, err := json.Marshal(serverMessage{
+			Event:           "new_message",
 			Type:            msg.Type,
 			ID:              msg.ID,
 			RoomID:          msg.RoomID,
 			SenderID:        msg.SenderID,
 			SenderName:      msg.SenderName,
 			SenderAvatarURL: msg.SenderAvatarURL,
-			Content:         msg.Content,
+			Content:         content,
+			ViewOnce:        msg.ViewOnce,
+			ExpiresAt:       msg.ExpiresAt,
 			CreatedAt:       msg.CreatedAt,
 		})
 		if err != nil {
