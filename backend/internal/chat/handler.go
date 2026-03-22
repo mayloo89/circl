@@ -424,6 +424,11 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		if !ok || in.Content == "" {
 			continue
 		}
+		// Attachment messages must carry an upload_id so the file can be
+		// linked to the message record and cleaned up on deletion.
+		if in.Type == "attachment" && in.UploadID == "" {
+			continue
+		}
 
 		params := SaveMessageParams{
 			RoomID:   c.roomID,

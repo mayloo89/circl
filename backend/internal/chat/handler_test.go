@@ -740,6 +740,7 @@ func TestWSHandler_SendAttachmentMessage(t *testing.T) {
 		"type":      "attachment",
 		"content":   "http://localhost:8080/uploads/img.jpg",
 		"mime_type": "image/jpeg",
+		"upload_id": "upload-123",
 	}
 	if err := conn.WriteJSON(payload); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
@@ -790,7 +791,7 @@ func TestWSHandler_SendVideoAttachment(t *testing.T) {
 	defer conn.Close()
 	time.Sleep(100 * time.Millisecond)
 
-	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "http://localhost:8080/uploads/video.mp4", "mime_type": "video/mp4"}); err != nil {
+	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "http://localhost:8080/uploads/video.mp4", "mime_type": "video/mp4", "upload_id": "upload-123"}); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}
 
@@ -835,7 +836,7 @@ func TestWSHandler_SendFileAttachment(t *testing.T) {
 	defer conn.Close()
 	time.Sleep(100 * time.Millisecond)
 
-	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "http://localhost:8080/uploads/doc.pdf", "mime_type": "application/pdf"}); err != nil {
+	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "http://localhost:8080/uploads/doc.pdf", "mime_type": "application/pdf", "upload_id": "upload-123"}); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}
 
@@ -913,6 +914,38 @@ func TestWSHandler_IgnoresAttachmentWithEmptyContent(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Error("expected no message for empty attachment, but received one")
+	}
+}
+
+func TestWSHandler_IgnoresAttachmentWithoutUploadID(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Attachment without upload_id must be silently dropped.
+	if err := conn.WriteJSON(map[string]string{
+		"type": "attachment", "content": "https://storage/img.jpg", "mime_type": "image/jpeg",
+	}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected no message for attachment without upload_id, but received one")
 	}
 }
 
