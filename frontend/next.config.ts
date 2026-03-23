@@ -5,6 +5,7 @@ import type { RemotePattern } from "next/dist/shared/lib/image-config";
 // configured via NEXT_PUBLIC_IMAGE_HOSTNAME (set as a Docker build arg).
 const remotePatterns: RemotePattern[] = [
   { protocol: "http", hostname: "localhost", port: "8080" },
+  { protocol: "http", hostname: "localhost", port: "9000" },
 ];
 
 if (process.env.NEXT_PUBLIC_IMAGE_HOSTNAME) {

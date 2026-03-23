@@ -231,36 +231,58 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 }
 
 // SaveMessage persists a new message and returns the full record including
-// the sender's display name for immediate broadcast.
-func (s *pgStore) SaveMessage(ctx context.Context, roomID, senderID, msgType, content string) (*Message, error) {
+// sender display name for immediate broadcast.  If p.UploadID is set, the
+// corresponding upload record is linked to this message in the same transaction.
+func (s *pgStore) SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("save message: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var msg Message
-	err := s.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		WITH inserted AS (
-			INSERT INTO messages (room_id, sender_id, type, content)
-			VALUES ($1, $2, $3, $4)
-			RETURNING id, room_id, sender_id, type, content, expires_at, view_once, created_at
+			INSERT INTO messages (room_id, sender_id, type, content, expires_at, view_once)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id, room_id, sender_id, type, content, expires_at, view_once, tombstone, created_at
 		)
 		SELECT
 			i.id, i.room_id, i.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			i.type, i.content, i.expires_at, i.view_once, i.created_at
+			i.type, i.content, i.expires_at, i.view_once, i.tombstone, i.created_at
 		FROM inserted i
 		JOIN users u ON u.id = i.sender_id
 		LEFT JOIN profiles p ON p.user_id = i.sender_id`,
-		roomID, senderID, msgType, content,
+		p.RoomID, p.SenderID, p.Type, p.Content, p.ExpiresAt, p.ViewOnce,
 	).Scan(
 		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
-		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.CreatedAt,
+		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("save message: %w", err)
+	}
+
+	if p.UploadID != "" {
+		if _, err = tx.Exec(ctx, `
+			UPDATE uploads SET message_id = $1
+			WHERE id = $2 AND user_id = $3 AND status = 'committed'`,
+			msg.ID, p.UploadID, p.SenderID,
+		); err != nil {
+			return nil, fmt.Errorf("save message: link upload: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("save message: commit: %w", err)
 	}
 	return &msg, nil
 }
 
 // ListMessages returns up to limit messages in roomID older than before
 // (or all messages when before is nil), newest first.
+// Expired TTL messages are excluded.
 func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
@@ -271,12 +293,13 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 			m.id, m.room_id, m.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			m.type, m.content, m.expires_at, m.view_once, m.created_at
+			m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.created_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		LEFT JOIN profiles p ON p.user_id = m.sender_id
 		WHERE m.room_id = $1
 		  AND ($2::timestamptz IS NULL OR m.created_at < $2)
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW() OR m.tombstone)
 		ORDER BY m.created_at DESC
 		LIMIT $3`,
 		roomID, before, limit,
@@ -291,7 +314,7 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 		var m Message
 		if err := rows.Scan(
 			&m.ID, &m.RoomID, &m.SenderID, &m.SenderName, &m.SenderAvatarURL,
-			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.CreatedAt,
+			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.Tombstone, &m.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("list messages: scan: %w", err)
 		}
@@ -316,4 +339,209 @@ func (s *pgStore) MarkRead(ctx context.Context, roomID, userID string) error {
 		return fmt.Errorf("mark read: %w", err)
 	}
 	return nil
+}
+
+// ViewOnceMessage atomically records that viewerID has viewed the message.
+// For DMs (the only supported scope), once all non-sender members have viewed
+// the message, it is deleted and the storage keys for any linked uploads are
+// returned so the caller can remove them from object storage.
+func (s *pgStore) ViewOnceMessage(ctx context.Context, messageID, roomID, viewerID string) (*Message, []string, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("view once: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var msg Message
+	err = tx.QueryRow(ctx, `
+		SELECT m.id, m.room_id, m.sender_id,
+			COALESCE(NULLIF(p.display_name, ''), u.email),
+			COALESCE(p.avatar_url, ''),
+			m.type, m.content, m.expires_at, m.view_once, m.created_at
+		FROM messages m
+		JOIN users u ON u.id = m.sender_id
+		LEFT JOIN profiles p ON p.user_id = m.sender_id
+		WHERE m.id = $1 AND m.room_id = $2`,
+		messageID, roomID,
+	).Scan(
+		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
+		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("view once: get message: %w", err)
+	}
+	if !msg.ViewOnce {
+		return nil, nil, ErrForbidden
+	}
+	if msg.SenderID == viewerID {
+		return nil, nil, ErrForbidden
+	}
+
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO message_views (message_id, user_id) VALUES ($1, $2)
+		ON CONFLICT DO NOTHING`, messageID, viewerID,
+	); err != nil {
+		return nil, nil, fmt.Errorf("view once: record view: %w", err)
+	}
+
+	// Check whether all non-sender members have now viewed the message.
+	var shouldDelete bool
+	if err = tx.QueryRow(ctx, `
+		SELECT NOT EXISTS (
+			SELECT 1 FROM room_members rm
+			WHERE rm.room_id = $1
+			  AND rm.user_id != $2
+			  AND NOT EXISTS (
+				SELECT 1 FROM message_views mv
+				WHERE mv.message_id = $3 AND mv.user_id = rm.user_id
+			  )
+		)`, msg.RoomID, msg.SenderID, messageID,
+	).Scan(&shouldDelete); err != nil {
+		return nil, nil, fmt.Errorf("view once: check views: %w", err)
+	}
+
+	var keys []string
+	if shouldDelete {
+		keys, err = collectUploadKeys(ctx, tx, messageID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if _, err = tx.Exec(ctx,
+			`UPDATE messages SET content = '', tombstone = true WHERE id = $1`,
+			messageID,
+		); err != nil {
+			return nil, nil, fmt.Errorf("view once: tombstone: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, fmt.Errorf("view once: commit: %w", err)
+	}
+	return &msg, keys, nil
+}
+
+// DeleteMessage deletes a message and its linked uploads from the database.
+// Returns the room ID and any storage keys to remove from object storage.
+func (s *pgStore) DeleteMessage(ctx context.Context, messageID string) (string, []string, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("delete message: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var roomID string
+	if err = tx.QueryRow(ctx,
+		`SELECT room_id FROM messages WHERE id = $1`, messageID,
+	).Scan(&roomID); errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, ErrNotFound
+	} else if err != nil {
+		return "", nil, fmt.Errorf("delete message: get room: %w", err)
+	}
+
+	keys, err := collectUploadKeys(ctx, tx, messageID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if _, err = tx.Exec(ctx, `DELETE FROM messages WHERE id = $1`, messageID); err != nil {
+		return "", nil, fmt.Errorf("delete message: delete: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", nil, fmt.Errorf("delete message: commit: %w", err)
+	}
+	return roomID, keys, nil
+}
+
+// TombstoneMessage converts an expired TTL message into a persistent tombstone:
+// it erases the content, sets tombstone=true and expires_at=NULL so the record
+// is retained in history but no longer appears as active.
+// Returns the room ID and any storage keys to remove from object storage.
+func (s *pgStore) TombstoneMessage(ctx context.Context, messageID string) (string, []string, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("tombstone message: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var roomID string
+	if err = tx.QueryRow(ctx,
+		`SELECT room_id FROM messages WHERE id = $1`, messageID,
+	).Scan(&roomID); errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, ErrNotFound
+	} else if err != nil {
+		return "", nil, fmt.Errorf("tombstone message: get room: %w", err)
+	}
+
+	keys, err := collectUploadKeys(ctx, tx, messageID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if _, err = tx.Exec(ctx,
+		`UPDATE messages SET content = '', expires_at = NULL, tombstone = true WHERE id = $1`,
+		messageID,
+	); err != nil {
+		return "", nil, fmt.Errorf("tombstone message: update: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", nil, fmt.Errorf("tombstone message: commit: %w", err)
+	}
+	return roomID, keys, nil
+}
+
+// ListExpiredMessages returns the IDs of messages whose TTL has elapsed.
+func (s *pgStore) ListExpiredMessages(ctx context.Context) ([]string, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT id FROM messages WHERE expires_at IS NOT NULL AND expires_at < NOW()`)
+	if err != nil {
+		return nil, fmt.Errorf("list expired messages: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("list expired messages: scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// txQuerier is the subset of pgx.Tx used by collectUploadKeys.
+type txQuerier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// collectUploadKeys queries uploads linked to messageID and returns all storage
+// keys (primary + thumbnail) that should be removed from object storage.
+func collectUploadKeys(ctx context.Context, tx txQuerier, messageID string) ([]string, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT storage_key, thumbnail_key
+		FROM uploads
+		WHERE message_id = $1 AND status = 'committed'`, messageID)
+	if err != nil {
+		return nil, fmt.Errorf("collect upload keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var sk string
+		var tk *string
+		if err := rows.Scan(&sk, &tk); err != nil {
+			return nil, fmt.Errorf("collect upload keys: scan: %w", err)
+		}
+		keys = append(keys, sk)
+		if tk != nil {
+			keys = append(keys, *tk)
+		}
+	}
+	return keys, rows.Err()
 }

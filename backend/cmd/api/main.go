@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -102,7 +103,6 @@ func main() {
 
 	chatStore := chat.NewStore(pool)
 	chatSvc := chat.NewService(chatStore)
-	chatHandler := chat.NewHandler(chatSvc)
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
 		hub.Notify(recipientID, notifications.Event{
 			Type:    "new_message",
@@ -150,6 +150,26 @@ func main() {
 		log.Fatalf("Unknown storage provider: %s", storageProvider)
 	}
 
+	notifyDeleted := func(roomID, messageID string) {
+		data, _ := json.Marshal(map[string]string{
+			"event":   "message_deleted",
+			"id":      messageID,
+			"room_id": roomID,
+		})
+		chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
+	}
+	chatHandler := chat.NewHandler(chatSvc, chat.HandlerConfig{
+		NotifyMessageDeleted: notifyDeleted,
+		DeleteFiles: func(ctx context.Context, keys []string) {
+			for _, key := range keys {
+				if err := fileStorage.Delete(ctx, key); err != nil {
+					log.Printf("chat: delete file %s: %v", key, err)
+				}
+			}
+		},
+		ReadFile: fileStorage.GetObject,
+	})
+
 	uploadStore := uploads.NewStore(pool)
 	uploadSvc := uploads.NewService(uploadStore, fileStorage)
 
@@ -174,6 +194,16 @@ func main() {
 		log.Fatalf("Worker server failed to start: %v", err)
 	}
 	defer workerServer.Shutdown()
+
+	ephemeralCleaner := worker.NewEphemeralCleaner(chatStore, fileStorage, func(roomID, messageID string) {
+		data, _ := json.Marshal(map[string]string{
+			"event":   "message_deleted",
+			"id":      messageID,
+			"room_id": roomID,
+		})
+		chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
+	})
+	ephemeralCleaner.Start(appCtx)
 
 	uploadHandler := uploads.NewHandler(uploadSvc)
 

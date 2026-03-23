@@ -88,7 +88,9 @@ func TestIntegration_ChatFlow(t *testing.T) {
 
 	// --- SaveMessage ---
 
-	msg, err := store.SaveMessage(ctx, room.ID, u1, MessageTypeText, "hello world")
+	msg, err := store.SaveMessage(ctx, SaveMessageParams{
+		RoomID: room.ID, SenderID: u1, Type: MessageTypeText, Content: "hello world",
+	})
 	if err != nil {
 		t.Fatalf("SaveMessage: %v", err)
 	}

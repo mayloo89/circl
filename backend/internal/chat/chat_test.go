@@ -11,19 +11,27 @@ import (
 
 // mockStore implements chat.Store for service-layer tests.
 type mockStore struct {
-	room         *chat.Room
-	rooms        []chat.RoomSummary
-	msg          *chat.Message
-	msgs         []chat.Message
-	members      []string
-	isMember     bool
-	roomErr      error
-	roomsErr     error
-	msgErr       error
-	msgsErr      error
-	memberErr    error
-	membersErr   error
-	markReadErr  error
+	room            *chat.Room
+	rooms           []chat.RoomSummary
+	msg             *chat.Message
+	msgs            []chat.Message
+	members         []string
+	isMember        bool
+	roomErr         error
+	roomsErr        error
+	msgErr          error
+	msgsErr         error
+	memberErr       error
+	membersErr      error
+	markReadErr     error
+	viewOnceMsg     *chat.Message
+	viewOnceKeys    []string
+	viewOnceErr     error
+	deleteRoomID    string
+	deleteKeys      []string
+	deleteErr       error
+	expiredIDs      []string
+	expiredErr      error
 }
 
 func (m *mockStore) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
@@ -41,7 +49,7 @@ func (m *mockStore) ListMembers(_ context.Context, _ string) ([]string, error) {
 func (m *mockStore) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary, error) {
 	return m.rooms, m.roomsErr
 }
-func (m *mockStore) SaveMessage(_ context.Context, _, _, _, _ string) (*chat.Message, error) {
+func (m *mockStore) SaveMessage(_ context.Context, _ chat.SaveMessageParams) (*chat.Message, error) {
 	return m.msg, m.msgErr
 }
 func (m *mockStore) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
@@ -49,6 +57,18 @@ func (m *mockStore) ListMessages(_ context.Context, _ string, _ *time.Time, _ in
 }
 func (m *mockStore) MarkRead(_ context.Context, _, _ string) error {
 	return m.markReadErr
+}
+func (m *mockStore) ViewOnceMessage(_ context.Context, _, _, _ string) (*chat.Message, []string, error) {
+	return m.viewOnceMsg, m.viewOnceKeys, m.viewOnceErr
+}
+func (m *mockStore) DeleteMessage(_ context.Context, _ string) (string, []string, error) {
+	return m.deleteRoomID, m.deleteKeys, m.deleteErr
+}
+func (m *mockStore) TombstoneMessage(_ context.Context, _ string) (string, []string, error) {
+	return m.deleteRoomID, m.deleteKeys, m.deleteErr
+}
+func (m *mockStore) ListExpiredMessages(_ context.Context) ([]string, error) {
+	return m.expiredIDs, m.expiredErr
 }
 
 func TestService_GetOrCreateDM_Success(t *testing.T) {
@@ -151,7 +171,9 @@ func TestService_SaveMessage_Success(t *testing.T) {
 	want := &chat.Message{ID: "m-1", RoomID: "r-1", SenderID: "u-1", Content: "hello", CreatedAt: now}
 	svc := chat.NewService(&mockStore{msg: want})
 
-	got, err := svc.SaveMessage(t.Context(), "r-1", "u-1", chat.MessageTypeText, "hello")
+	got, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID: "r-1", SenderID: "u-1", Type: chat.MessageTypeText, Content: "hello",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,7 +184,9 @@ func TestService_SaveMessage_Success(t *testing.T) {
 
 func TestService_SaveMessage_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{msgErr: errors.New("db error")})
-	_, err := svc.SaveMessage(t.Context(), "r-1", "u-1", chat.MessageTypeText, "hello")
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID: "r-1", SenderID: "u-1", Type: chat.MessageTypeText, Content: "hello",
+	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -221,5 +245,102 @@ func TestService_MarkRead_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{markReadErr: errors.New("db error")})
 	if err := svc.MarkRead(t.Context(), "r-1", "u-1"); err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ViewOnceMessage_Success(t *testing.T) {
+	msg := &chat.Message{ID: "m-1", ViewOnce: true, Content: "secret"}
+	svc := chat.NewService(&mockStore{viewOnceMsg: msg, viewOnceKeys: []string{"uploads/key.jpg"}})
+
+	got, keys, err := svc.ViewOnceMessage(t.Context(), "m-1", "r-1", "u-2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != "m-1" {
+		t.Errorf("ID = %q, want m-1", got.ID)
+	}
+	if len(keys) != 1 {
+		t.Errorf("keys len = %d, want 1", len(keys))
+	}
+}
+
+func TestService_ViewOnceMessage_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{viewOnceErr: errors.New("db error")})
+	_, _, err := svc.ViewOnceMessage(t.Context(), "m-1", "r-1", "u-2")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_DeleteMessage_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{deleteRoomID: "r-1", deleteKeys: []string{"uploads/key.jpg"}})
+
+	roomID, keys, err := svc.DeleteMessage(t.Context(), "m-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if roomID != "r-1" {
+		t.Errorf("roomID = %q, want r-1", roomID)
+	}
+	if len(keys) != 1 {
+		t.Errorf("keys len = %d, want 1", len(keys))
+	}
+}
+
+func TestService_DeleteMessage_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{deleteErr: errors.New("db error")})
+	_, _, err := svc.DeleteMessage(t.Context(), "m-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ListExpiredMessages_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{expiredIDs: []string{"m-1", "m-2"}})
+
+	ids, err := svc.ListExpiredMessages(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ids) != 2 {
+		t.Errorf("len = %d, want 2", len(ids))
+	}
+}
+
+func TestService_ListExpiredMessages_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{expiredErr: errors.New("db error")})
+	_, err := svc.ListExpiredMessages(t.Context())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestParseTTL_Valid(t *testing.T) {
+	cases := []struct {
+		label   string
+		minutes int
+	}{
+		{chat.TTL15Min, 15},
+		{chat.TTL30Min, 30},
+		{chat.TTL1Hour, 60},
+		{chat.TTL6Hours, 6 * 60},
+		{chat.TTL12Hours, 12 * 60},
+		{chat.TTL24Hour, 24 * 60},
+	}
+	for _, tc := range cases {
+		d, err := chat.ParseTTL(tc.label)
+		if err != nil {
+			t.Errorf("ParseTTL(%q): unexpected error: %v", tc.label, err)
+		}
+		if d.Minutes() != float64(tc.minutes) {
+			t.Errorf("ParseTTL(%q) = %v, want %dm", tc.label, d, tc.minutes)
+		}
+	}
+}
+
+func TestParseTTL_Invalid(t *testing.T) {
+	_, err := chat.ParseTTL("7d")
+	if err == nil {
+		t.Error("expected error for invalid TTL, got nil")
 	}
 }

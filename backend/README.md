@@ -73,14 +73,11 @@ Copia `.env.example` a `.env` y edita según necesites. Las más importantes:
 
 ## Next Steps
 
-- [ ] Integrar PostgreSQL (SQLC o Ent ORM)
-- [ ] Autenticación y JWT validation
-- [ ] WebSockets para chat
-- [ ] Redis para presencia y Pub/Sub
-- [ ] Validación de requests
-- [ ] Logging estructurado
-- [ ] Tests unitarios e integración
-- [ ] Documentación de API (OpenAPI/Swagger)
+- [ ] Typing indicators — broadcast typing events over WebSocket
+- [ ] Read receipts — per-user per-message delivery and read acknowledgment
+- [ ] Frontend thumbnails — display `thumbnail_url` in chat message list
+- [ ] OpenAPI / Swagger documentation
+- [ ] Structured logging (slog)
 
 ## Troubleshooting
 
