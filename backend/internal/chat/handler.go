@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,6 +80,10 @@ type HandlerConfig struct {
 	// DeleteFiles is called with storage keys to remove from object storage
 	// after a message's attached files have been unlinked from the database.
 	DeleteFiles func(ctx context.Context, keys []string)
+	// ReadFile opens a storage object by key for reading. Used by the view-once
+	// handler to stream the file content to the client before deleting it,
+	// eliminating the race between file serving and file deletion.
+	ReadFile func(ctx context.Context, key string) (io.ReadCloser, error)
 }
 
 // resolveMessageType maps a client-supplied frame type and MIME type to the
@@ -333,6 +340,37 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 			return
 		}
 
+		// For image/video view-once messages, stream the file binary directly
+		// to the client so the browser has the data in hand before we delete
+		// the file from storage. This eliminates the race between the client
+		// loading the media and the goroutine removing it from the bucket.
+		if len(keys) > 0 && cfg.ReadFile != nil && (msg.Type == MessageTypeImage || msg.Type == MessageTypeVideo) {
+			rc, readErr := cfg.ReadFile(r.Context(), keys[0])
+			if readErr == nil {
+				defer rc.Close() //nolint:errcheck
+				ct := mime.TypeByExtension(filepath.Ext(keys[0]))
+				if ct == "" {
+					ct = "application/octet-stream"
+				}
+				w.Header().Set("Content-Type", ct)
+				io.Copy(w, rc) //nolint:errcheck
+				go func() {
+					if cfg.DeleteFiles != nil {
+						cfg.DeleteFiles(context.Background(), keys)
+					}
+					if cfg.NotifyMessageDeleted != nil {
+						cfg.NotifyMessageDeleted(roomID, msgID)
+					}
+				}()
+				return
+			}
+		}
+
+		// For text messages (or if ReadFile is unavailable), return JSON.
+		// No streaming race exists here, so cleanup runs synchronously.
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(msg) //nolint:errcheck
+
 		if len(keys) > 0 {
 			if cfg.DeleteFiles != nil {
 				cfg.DeleteFiles(r.Context(), keys)
@@ -341,9 +379,6 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 				cfg.NotifyMessageDeleted(roomID, msgID)
 			}
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(msg) //nolint:errcheck
 	}
 }
 

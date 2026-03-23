@@ -167,6 +167,7 @@ func main() {
 				}
 			}
 		},
+		ReadFile: fileStorage.GetObject,
 	})
 
 	uploadStore := uploads.NewStore(pool)

@@ -14,7 +14,15 @@ export interface ChatMessage {
   sender_name: string
   sender_avatar_url: string
   content: string
+  view_once: boolean
+  tombstone?: boolean
+  expires_at?: string
   created_at: string
+}
+
+export interface SendOpts {
+  viewOnce?: boolean
+  ttl?: string // "1h" | "24h" | "7d"
 }
 
 const chatMessageTypes = new Set(["text", "image", "video", "file"])
@@ -24,24 +32,38 @@ const chatMessageTypes = new Set(["text", "image", "video", "file"])
  *
  * - Connects when both `roomId` and `token` are available.
  * - Reconnects automatically with exponential backoff on error.
- * - Returns the live message list, connection state, and a send function.
+ * - Returns the live message list, connection state, send functions, and
+ *   a set of IDs for messages deleted via message_deleted events.
  */
 export function useChat(roomId: string | null, token: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
 
-  const send = useCallback((content: string) => {
+  const send = useCallback((content: string, opts?: SendOpts) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "message", content }))
+      wsRef.current.send(JSON.stringify({
+        type: "message",
+        content,
+        ...(opts?.viewOnce && { view_once: true }),
+        ...(opts?.ttl && { ttl: opts.ttl }),
+      }))
     }
   }, [])
 
-  const sendAttachment = useCallback((url: string, mimeType: string) => {
+  const sendAttachment = useCallback((uploadId: string, url: string, mimeType: string, opts?: SendOpts) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "attachment", content: url, mime_type: mimeType }))
+      wsRef.current.send(JSON.stringify({
+        type: "attachment",
+        content: url,
+        mime_type: mimeType,
+        upload_id: uploadId,
+        ...(opts?.viewOnce && { view_once: true }),
+        ...(opts?.ttl && { ttl: opts.ttl }),
+      }))
     }
   }, [])
 
@@ -76,9 +98,13 @@ export function useChat(roomId: string | null, token: string | undefined) {
 
       ws.onmessage = (e) => {
         try {
-          const msg = JSON.parse(e.data) as ChatMessage
-          if (chatMessageTypes.has(msg.type)) {
-            setMessages((prev) => [...prev, msg])
+          const frame = JSON.parse(e.data)
+          if (frame.event === "message_deleted" && frame.id) {
+            // Keep the message in `messages` so the page can render a tombstone
+            // in its original position. Only track the ID as deleted.
+            setDeletedIds((prev) => new Set([...prev, frame.id as string]))
+          } else if (frame.type && chatMessageTypes.has(frame.type)) {
+            setMessages((prev) => [...prev, frame as ChatMessage])
           }
         } catch {
           // ignore malformed frames
@@ -93,8 +119,9 @@ export function useChat(roomId: string | null, token: string | undefined) {
       wsRef.current?.close()
       setConnected(false)
       setMessages([])
+      setDeletedIds(new Set())
     }
   }, [roomId, token])
 
-  return { messages, connected, send, sendAttachment }
+  return { messages, deletedIds, connected, send, sendAttachment }
 }

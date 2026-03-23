@@ -79,6 +79,9 @@ func (m *mockManager) ViewOnceMessage(_ context.Context, _, _, _ string) (*chat.
 func (m *mockManager) DeleteMessage(_ context.Context, _ string) (string, []string, error) {
 	return m.deleteRoomID, m.deleteKeys, m.deleteErr
 }
+func (m *mockManager) TombstoneMessage(_ context.Context, _ string) (string, []string, error) {
+	return m.deleteRoomID, m.deleteKeys, m.deleteErr
+}
 func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
 	return m.expiredIDs, m.expiredErr
 }
@@ -1111,7 +1114,7 @@ func TestWSHandler_InvalidTTLIgnored(t *testing.T) {
 
 	// Unknown TTL label should cause the message to be silently dropped.
 	if err := conn.WriteJSON(map[string]any{
-		"type": "message", "content": "hi", "ttl": "30m",
+		"type": "message", "content": "hi", "ttl": "7d",
 	}); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}

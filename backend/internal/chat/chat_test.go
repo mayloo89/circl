@@ -64,6 +64,9 @@ func (m *mockStore) ViewOnceMessage(_ context.Context, _, _, _ string) (*chat.Me
 func (m *mockStore) DeleteMessage(_ context.Context, _ string) (string, []string, error) {
 	return m.deleteRoomID, m.deleteKeys, m.deleteErr
 }
+func (m *mockStore) TombstoneMessage(_ context.Context, _ string) (string, []string, error) {
+	return m.deleteRoomID, m.deleteKeys, m.deleteErr
+}
 func (m *mockStore) ListExpiredMessages(_ context.Context) ([]string, error) {
 	return m.expiredIDs, m.expiredErr
 }
@@ -314,26 +317,29 @@ func TestService_ListExpiredMessages_Error(t *testing.T) {
 
 func TestParseTTL_Valid(t *testing.T) {
 	cases := []struct {
-		label string
-		hours int
+		label   string
+		minutes int
 	}{
-		{chat.TTL1Hour, 1},
-		{chat.TTL24Hour, 24},
-		{chat.TTL7Days, 7 * 24},
+		{chat.TTL15Min, 15},
+		{chat.TTL30Min, 30},
+		{chat.TTL1Hour, 60},
+		{chat.TTL6Hours, 6 * 60},
+		{chat.TTL12Hours, 12 * 60},
+		{chat.TTL24Hour, 24 * 60},
 	}
 	for _, tc := range cases {
 		d, err := chat.ParseTTL(tc.label)
 		if err != nil {
 			t.Errorf("ParseTTL(%q): unexpected error: %v", tc.label, err)
 		}
-		if d.Hours() != float64(tc.hours) {
-			t.Errorf("ParseTTL(%q) = %v, want %dh", tc.label, d, tc.hours)
+		if d.Minutes() != float64(tc.minutes) {
+			t.Errorf("ParseTTL(%q) = %v, want %dm", tc.label, d, tc.minutes)
 		}
 	}
 }
 
 func TestParseTTL_Invalid(t *testing.T) {
-	_, err := chat.ParseTTL("30m")
+	_, err := chat.ParseTTL("7d")
 	if err == nil {
 		t.Error("expected error for invalid TTL, got nil")
 	}

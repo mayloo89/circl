@@ -17,9 +17,12 @@ const (
 	MessageTypeFile  = "file"
 
 	// TTL label constants for ephemeral messages.
+	TTL15Min  = "15m"
+	TTL30Min  = "30m"
 	TTL1Hour  = "1h"
+	TTL6Hours = "6h"
+	TTL12Hours = "12h"
 	TTL24Hour = "24h"
-	TTL7Days  = "7d"
 )
 
 var (
@@ -28,17 +31,20 @@ var (
 )
 
 var ttlDurations = map[string]time.Duration{
-	TTL1Hour:  time.Hour,
-	TTL24Hour: 24 * time.Hour,
-	TTL7Days:  7 * 24 * time.Hour,
+	TTL15Min:   15 * time.Minute,
+	TTL30Min:   30 * time.Minute,
+	TTL1Hour:   time.Hour,
+	TTL6Hours:  6 * time.Hour,
+	TTL12Hours: 12 * time.Hour,
+	TTL24Hour:  24 * time.Hour,
 }
 
 // ParseTTL returns the Duration for a TTL label.
-// Valid labels are "1h", "24h", "7d".
+// Valid labels are "15m", "30m", "1h", "6h", "12h", "24h".
 func ParseTTL(ttl string) (time.Duration, error) {
 	d, ok := ttlDurations[ttl]
 	if !ok {
-		return 0, fmt.Errorf("chat: invalid ttl %q; valid values: 1h, 24h, 7d", ttl)
+		return 0, fmt.Errorf("chat: invalid ttl %q; valid values: 15m, 30m, 1h, 6h, 12h, 24h", ttl)
 	}
 	return d, nil
 }
@@ -85,7 +91,11 @@ type Message struct {
 	Content         string     `json:"content"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	ViewOnce        bool       `json:"view_once"`
-	CreatedAt       time.Time  `json:"created_at"`
+	// Tombstone is true when the message content has been permanently erased
+	// (view-once viewed or TTL expired). The record is kept so the chat
+	// history can show a placeholder where the message used to be.
+	Tombstone bool `json:"tombstone,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // SaveMessageParams are the inputs for persisting a new message.
@@ -120,6 +130,11 @@ type Store interface {
 	// DeleteMessage deletes a message and its linked uploads from the database
 	// and returns the room ID and any storage keys to remove from object storage.
 	DeleteMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
+	// TombstoneMessage converts an expired TTL message into a tombstone: it
+	// erases the content and marks the record as tombstone=true so the chat
+	// history can show a placeholder. Returns the room ID and any storage keys
+	// to remove from object storage.
+	TombstoneMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 	// ListExpiredMessages returns the IDs of messages whose expires_at has passed.
 	ListExpiredMessages(ctx context.Context) ([]string, error)
 }
@@ -136,6 +151,7 @@ type Manager interface {
 	MarkRead(ctx context.Context, roomID, userID string) error
 	ViewOnceMessage(ctx context.Context, messageID, roomID, viewerID string) (msg *Message, storageKeys []string, err error)
 	DeleteMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
+	TombstoneMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 	ListExpiredMessages(ctx context.Context) ([]string, error)
 }
 
@@ -188,6 +204,10 @@ func (s *Service) ViewOnceMessage(ctx context.Context, messageID, roomID, viewer
 
 func (s *Service) DeleteMessage(ctx context.Context, messageID string) (string, []string, error) {
 	return s.store.DeleteMessage(ctx, messageID)
+}
+
+func (s *Service) TombstoneMessage(ctx context.Context, messageID string) (string, []string, error) {
+	return s.store.TombstoneMessage(ctx, messageID)
 }
 
 func (s *Service) ListExpiredMessages(ctx context.Context) ([]string, error) {

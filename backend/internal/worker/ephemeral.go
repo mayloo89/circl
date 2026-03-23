@@ -11,9 +11,10 @@ import (
 type EphemeralStore interface {
 	// ListExpiredMessages returns the IDs of messages whose expires_at has elapsed.
 	ListExpiredMessages(ctx context.Context) ([]string, error)
-	// DeleteMessage deletes the message from the database and returns the room ID
-	// and any storage keys to remove from object storage.
-	DeleteMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
+	// TombstoneMessage converts an expired message into a tombstone so the chat
+	// history retains a placeholder, and returns the room ID and any storage
+	// keys to remove from object storage.
+	TombstoneMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 }
 
 // DeletionStorage is the subset of storage.Storage required to delete files.
@@ -63,9 +64,9 @@ func (e *EphemeralCleaner) Sweep(ctx context.Context) {
 	}
 
 	for _, id := range ids {
-		roomID, keys, err := e.store.DeleteMessage(ctx, id)
+		roomID, keys, err := e.store.TombstoneMessage(ctx, id)
 		if err != nil {
-			log.Printf("ephemeral cleaner: delete message %s: %v", id, err)
+			log.Printf("ephemeral cleaner: tombstone message %s: %v", id, err)
 			continue
 		}
 

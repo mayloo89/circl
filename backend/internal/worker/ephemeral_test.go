@@ -23,7 +23,7 @@ func (f *fakeEphemeralStore) ListExpiredMessages(_ context.Context) ([]string, e
 	return f.expiredIDs, f.expiredErr
 }
 
-func (f *fakeEphemeralStore) DeleteMessage(_ context.Context, id string) (string, []string, error) {
+func (f *fakeEphemeralStore) TombstoneMessage(_ context.Context, id string) (string, []string, error) {
 	if f.deleteErr != nil {
 		return "", nil, f.deleteErr
 	}

@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-23 — Chat attachments and ephemeral messages
+
+### Added
+- Chat attachment support: send images, videos, and files directly in chat rooms via `sendAttachment` WebSocket frame
+- Ephemeral messages: view-once (tap-to-view) and TTL-based (15m / 30m / 1h / 6h / 12h / 24h) modes for all message types (text and attachments)
+- Lightbox overlay for viewing images and videos inline; media view-once messages stream binary from the server before deletion to avoid 404 race
+- Tombstone messages: instead of hard-deleting view-once or TTL-expired messages, the DB record is converted to a tombstone (`tombstone=true`, content cleared) so chat history shows a persistent placeholder ("View-once message" / "Message expired")
+- Migration `000009_add_tombstone_to_messages`: `tombstone boolean NOT NULL DEFAULT FALSE` column on `messages`
+- `TombstoneMessage` store method used by both `ViewOnceMessage` (after all viewers have read) and the ephemeral cleaner (TTL expiry)
+- TTL countdown badge on received ephemeral messages (color shifts: gray → amber < 1h → red < 10min); client-side 1-minute interval re-renders without a server round-trip
+- Differentiated "tap to view" cards for received view-once messages: compact pill for text ("Tap to read"), tall card with type-specific icon for image / video / file
+- Sent view-once bubble shows content type label ("Photo · View once", "Video · View once", etc.)
+- Ephemeral mode picker label "Applies to messages & attachments" to clarify scope
+- `message_deleted` WebSocket event keeps messages in history as tombstones (no longer removes from array)
+- `MinIO` (`localhost:9000`) added to `next/image` `remotePatterns` for local development
+
+### Changed
+- TTL options updated from `1h / 24h / 7d` to `15m / 30m / 1h / 6h / 12h / 24h`; `TTL7Days` constant removed
+- `ListMessages` SQL now includes tombstone records (`OR m.tombstone`) and excludes non-tombstone expired rows
+- View-once text cleanup runs synchronously (no goroutine) since there is no streaming race for text content
+- `EphemeralStore` interface uses `TombstoneMessage` instead of `DeleteMessage`
+
 ## [1.2.0] - 2026-03-15 — Profile avatars and avatar display across the app
 
 ### Added

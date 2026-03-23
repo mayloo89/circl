@@ -245,20 +245,20 @@ func (s *pgStore) SaveMessage(ctx context.Context, p SaveMessageParams) (*Messag
 		WITH inserted AS (
 			INSERT INTO messages (room_id, sender_id, type, content, expires_at, view_once)
 			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id, room_id, sender_id, type, content, expires_at, view_once, created_at
+			RETURNING id, room_id, sender_id, type, content, expires_at, view_once, tombstone, created_at
 		)
 		SELECT
 			i.id, i.room_id, i.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			i.type, i.content, i.expires_at, i.view_once, i.created_at
+			i.type, i.content, i.expires_at, i.view_once, i.tombstone, i.created_at
 		FROM inserted i
 		JOIN users u ON u.id = i.sender_id
 		LEFT JOIN profiles p ON p.user_id = i.sender_id`,
 		p.RoomID, p.SenderID, p.Type, p.Content, p.ExpiresAt, p.ViewOnce,
 	).Scan(
 		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
-		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.CreatedAt,
+		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("save message: %w", err)
@@ -293,13 +293,13 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 			m.id, m.room_id, m.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			m.type, m.content, m.expires_at, m.view_once, m.created_at
+			m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.created_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		LEFT JOIN profiles p ON p.user_id = m.sender_id
 		WHERE m.room_id = $1
 		  AND ($2::timestamptz IS NULL OR m.created_at < $2)
-		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW() OR m.tombstone)
 		ORDER BY m.created_at DESC
 		LIMIT $3`,
 		roomID, before, limit,
@@ -314,7 +314,7 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 		var m Message
 		if err := rows.Scan(
 			&m.ID, &m.RoomID, &m.SenderID, &m.SenderName, &m.SenderAvatarURL,
-			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.CreatedAt,
+			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.Tombstone, &m.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("list messages: scan: %w", err)
 		}
@@ -409,8 +409,11 @@ func (s *pgStore) ViewOnceMessage(ctx context.Context, messageID, roomID, viewer
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err = tx.Exec(ctx, `DELETE FROM messages WHERE id = $1`, messageID); err != nil {
-			return nil, nil, fmt.Errorf("view once: delete: %w", err)
+		if _, err = tx.Exec(ctx,
+			`UPDATE messages SET content = '', tombstone = true WHERE id = $1`,
+			messageID,
+		); err != nil {
+			return nil, nil, fmt.Errorf("view once: tombstone: %w", err)
 		}
 	}
 
@@ -449,6 +452,44 @@ func (s *pgStore) DeleteMessage(ctx context.Context, messageID string) (string, 
 
 	if err := tx.Commit(ctx); err != nil {
 		return "", nil, fmt.Errorf("delete message: commit: %w", err)
+	}
+	return roomID, keys, nil
+}
+
+// TombstoneMessage converts an expired TTL message into a persistent tombstone:
+// it erases the content, sets tombstone=true and expires_at=NULL so the record
+// is retained in history but no longer appears as active.
+// Returns the room ID and any storage keys to remove from object storage.
+func (s *pgStore) TombstoneMessage(ctx context.Context, messageID string) (string, []string, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("tombstone message: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var roomID string
+	if err = tx.QueryRow(ctx,
+		`SELECT room_id FROM messages WHERE id = $1`, messageID,
+	).Scan(&roomID); errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, ErrNotFound
+	} else if err != nil {
+		return "", nil, fmt.Errorf("tombstone message: get room: %w", err)
+	}
+
+	keys, err := collectUploadKeys(ctx, tx, messageID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if _, err = tx.Exec(ctx,
+		`UPDATE messages SET content = '', expires_at = NULL, tombstone = true WHERE id = $1`,
+		messageID,
+	); err != nil {
+		return "", nil, fmt.Errorf("tombstone message: update: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", nil, fmt.Errorf("tombstone message: commit: %w", err)
 	}
 	return roomID, keys, nil
 }
