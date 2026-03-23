@@ -21,7 +21,7 @@ export default function ProfilePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [, setProfile] = useState<Profile | null>(null)
   const [displayName, setDisplayName] = useState("")
   const [bio, setBio] = useState("")
   const [avatarURL, setAvatarURL] = useState("")

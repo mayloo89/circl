@@ -162,10 +162,10 @@ export default function ChatRoomPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [history, liveMessages])
 
-  // Tick every minute so TTL countdowns re-render automatically.
-  const [, setTick] = useState(0)
+  // Updated every minute so TTL countdowns re-render automatically.
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 60_000)
+    const id = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(id)
   }, [])
 
@@ -235,8 +235,8 @@ export default function ChatRoomPage() {
     }
   }
 
-  function formatExpiry(expiresAt: string): string {
-    const diff = new Date(expiresAt).getTime() - Date.now()
+  function formatExpiry(expiresAt: string, nowMs: number): string {
+    const diff = new Date(expiresAt).getTime() - nowMs
     if (diff <= 0) return "expired"
     const h = Math.floor(diff / 3_600_000)
     const m = Math.floor((diff % 3_600_000) / 60_000)
@@ -246,17 +246,16 @@ export default function ChatRoomPage() {
     return "< 1m"
   }
 
-  function expiryColorClass(expiresAt: string): string {
-    const diff = new Date(expiresAt).getTime() - Date.now()
+  function expiryColorClass(expiresAt: string, nowMs: number): string {
+    const diff = new Date(expiresAt).getTime() - nowMs
     const mins = diff / 60_000
     if (mins < 10) return "text-red-400"
     if (mins < 60) return "text-amber-400"
     return "text-gray-500"
   }
 
-  // Recomputed every minute via tick. Messages whose expires_at has passed
-  // are shown as tombstones even if the WS message_deleted event hasn't arrived yet.
-  const now = Date.now()
+  // Messages whose expires_at has passed are shown as tombstones even if the
+  // WS message_deleted event hasn't arrived yet. `now` updates every minute.
   const expiredIds = new Set(
     allMessages
       .filter((m) => m.expires_at && new Date(m.expires_at).getTime() <= now)
@@ -498,12 +497,12 @@ export default function ChatRoomPage() {
                 </div>
                 <div className="mt-1 flex items-center gap-1.5">
                   {msg.expires_at && !isViewOnce && (
-                    <span className={`flex items-center gap-1 text-[10px] font-medium ${expiryColorClass(msg.expires_at)}`}>
+                    <span className={`flex items-center gap-1 text-[10px] font-medium ${expiryColorClass(msg.expires_at, now)}`}>
                       <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="9" />
                         <path strokeLinecap="round" d="M12 7v5l3 3" />
                       </svg>
-                      {formatExpiry(msg.expires_at)}
+                      {formatExpiry(msg.expires_at, now)}
                     </span>
                   )}
                   <span className="text-[10px] text-gray-600">
