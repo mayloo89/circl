@@ -32,3 +32,14 @@ body {
 .animate-message-in {
   animation: message-in 0.18s ease-out forwards;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-message-in {
+    animation: none;
+  }
+  .animate-pulse,
+  .animate-ping,
+  .animate-spin {
+    animation: none;
+  }
+}
