@@ -525,7 +525,7 @@ export default function ChatRoomPage() {
                               msg.type === "image" || msg.type === "video" || msg.type === "file" ? (
                                 <button
                                   onClick={() => handleViewOnce(msg.id)}
-                                  className="flex w-44 flex-col items-center gap-3 py-3"
+                                  className="flex w-44 flex-col items-center gap-3 py-3 transition-transform active:scale-95"
                                 >
                                   <div className="relative">
                                     <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/30" />
@@ -553,7 +553,7 @@ export default function ChatRoomPage() {
                               ) : (
                                 <button
                                   onClick={() => handleViewOnce(msg.id)}
-                                  className="flex items-center gap-2 px-1 py-0.5"
+                                  className="flex items-center gap-2 px-1 py-0.5 transition-transform active:scale-95"
                                 >
                                   <div className="relative flex-none">
                                     <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/30" />
@@ -579,7 +579,7 @@ export default function ChatRoomPage() {
                             ) : msg.type === "image" && msg.content ? (
                               <button
                                 onClick={() => setMediaModal({ url: msg.content, type: "image" })}
-                                className="block overflow-hidden rounded-2xl"
+                                className="block overflow-hidden rounded-2xl transition-transform active:scale-95"
                               >
                                 <Image
                                   src={("thumbnail_url" in msg && msg.thumbnail_url) ? msg.thumbnail_url : msg.content}
@@ -592,7 +592,7 @@ export default function ChatRoomPage() {
                             ) : msg.type === "video" && msg.content ? (
                               <button
                                 onClick={() => setMediaModal({ url: msg.content, type: "video" })}
-                                className={`flex items-center gap-2 px-4 py-2 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
+                                className={`flex items-center gap-2 px-4 py-2 transition-transform active:scale-95 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
                               >
                                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M8 5v14l11-7z" />
