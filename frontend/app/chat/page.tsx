@@ -104,8 +104,10 @@ export default function ChatPage() {
 
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
 
-  useEffect(() => {
-    if (status !== "authenticated" || !token) return
+  function loadRooms() {
+    if (!token) return
+    setError("")
+    setLoading(true)
     fetch(`${API_URL}/chat/rooms`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -113,6 +115,12 @@ export default function ChatPage() {
       .then((data) => setRooms(data))
       .catch(() => setError("Failed to load conversations."))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    if (status !== "authenticated" || !token) return
+    loadRooms()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, token])
 
   return (
@@ -130,7 +138,15 @@ export default function ChatPage() {
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
+          <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
+            <p className="text-sm text-red-400">{error}</p>
+            <button
+              onClick={loadRooms}
+              className="ml-3 shrink-0 rounded bg-red-800 px-3 py-1.5 text-xs text-red-200 hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
         )}
 
         <div className="rounded-lg bg-gray-900 shadow-xl ring-1 ring-gray-800">
