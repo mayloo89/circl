@@ -43,7 +43,7 @@ func createTestUser(t *testing.T, pool *pgxpool.Pool, email string) string {
 
 func TestIntegration_ChatFlow(t *testing.T) {
 	pool := openTestDB(t)
-	store := NewStore(pool)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
 	ctx := t.Context()
 
 	u1 := createTestUser(t, pool, "chat_test_u1@example.com")
@@ -189,7 +189,7 @@ func TestIntegration_ChatFlow(t *testing.T) {
 
 func TestIntegration_GetDisplayName(t *testing.T) {
 	pool := openTestDB(t)
-	store := NewStore(pool)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
 	ctx := t.Context()
 
 	uid := createTestUser(t, pool, "chat_dn_test@example.com")
@@ -226,7 +226,7 @@ func TestIntegration_GetDisplayName(t *testing.T) {
 
 func TestIntegration_CreateGroup(t *testing.T) {
 	pool := openTestDB(t)
-	store := NewStore(pool)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
 	ctx := t.Context()
 
 	u1 := createTestUser(t, pool, "chat_group_u1@example.com")
@@ -259,7 +259,7 @@ func TestIntegration_CreateGroup(t *testing.T) {
 // TestListMessages_DefaultLimit verifies the limit is capped when <= 0.
 func TestIntegration_ListMessages_DefaultLimit(t *testing.T) {
 	pool := openTestDB(t)
-	store := NewStore(pool)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
 	ctx := t.Context()
 
 	u1 := createTestUser(t, pool, "chat_limit_u1@example.com")
