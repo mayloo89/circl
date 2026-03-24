@@ -69,15 +69,18 @@ type MessageSummary struct {
 // RoomSummary is returned by ListRooms and contains everything the UI needs
 // to render a conversation list entry without extra round-trips.
 type RoomSummary struct {
-	ID            string          `json:"id"`
-	Type          string          `json:"type"`
-	Name          string          `json:"name"`
-	PeerID        string          `json:"peer_id,omitempty"`
-	PeerName      string          `json:"peer_name,omitempty"`
-	PeerAvatarURL string          `json:"peer_avatar_url,omitempty"`
-	LastMessage   *MessageSummary `json:"last_message"`
-	UnreadCount   int             `json:"unread_count"`
-	CreatedAt     time.Time       `json:"created_at"`
+	ID             string          `json:"id"`
+	Type           string          `json:"type"`
+	Name           string          `json:"name"`
+	PeerID         string          `json:"peer_id,omitempty"`
+	PeerName       string          `json:"peer_name,omitempty"`
+	PeerAvatarURL  string          `json:"peer_avatar_url,omitempty"`
+	// PeerLastReadAt is the peer's last_read_at timestamp for DM rooms.
+	// Used to seed the initial read-receipt state without a round-trip.
+	PeerLastReadAt *time.Time      `json:"peer_last_read_at,omitempty"`
+	LastMessage    *MessageSummary `json:"last_message"`
+	UnreadCount    int             `json:"unread_count"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 // Message is the full representation of a chat message including sender info.
@@ -122,7 +125,9 @@ type Store interface {
 	ListRooms(ctx context.Context, userID string) ([]RoomSummary, error)
 	SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error)
 	ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error)
-	MarkRead(ctx context.Context, roomID, userID string) error
+	// MarkRead updates the user's last_read_at for the room and returns the
+	// timestamp that was written so callers can broadcast read-receipt events.
+	MarkRead(ctx context.Context, roomID, userID string) (time.Time, error)
 	// ViewOnceMessage atomically records that viewerID has seen the message and,
 	// if all non-sender members have now viewed it, deletes the message from the
 	// database and returns the storage keys to clean up from object storage.
@@ -151,7 +156,9 @@ type Manager interface {
 	ListRooms(ctx context.Context, userID string) ([]RoomSummary, error)
 	SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error)
 	ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error)
-	MarkRead(ctx context.Context, roomID, userID string) error
+	// MarkRead updates the user's last_read_at for the room and returns the
+	// timestamp that was written so callers can broadcast read-receipt events.
+	MarkRead(ctx context.Context, roomID, userID string) (time.Time, error)
 	ViewOnceMessage(ctx context.Context, messageID, roomID, viewerID string) (msg *Message, storageKeys []string, err error)
 	DeleteMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 	TombstoneMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
@@ -200,7 +207,7 @@ func (s *Service) ListMessages(ctx context.Context, roomID string, before *time.
 	return s.store.ListMessages(ctx, roomID, before, limit)
 }
 
-func (s *Service) MarkRead(ctx context.Context, roomID, userID string) error {
+func (s *Service) MarkRead(ctx context.Context, roomID, userID string) (time.Time, error) {
 	return s.store.MarkRead(ctx, roomID, userID)
 }
 

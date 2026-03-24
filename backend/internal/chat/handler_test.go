@@ -39,6 +39,7 @@ type mockManager struct {
 	msgsErr         error
 	memberErr       error
 	markErr         error
+	markReadTime    time.Time
 	viewOnceMsg     *chat.Message
 	viewOnceKeys    []string
 	viewOnceErr     error
@@ -75,8 +76,8 @@ func (m *mockManager) ListMessages(_ context.Context, _ string, _ *time.Time, _ 
 func (m *mockManager) ListMembers(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
 }
-func (m *mockManager) MarkRead(_ context.Context, _, _ string) error {
-	return m.markErr
+func (m *mockManager) MarkRead(_ context.Context, _, _ string) (time.Time, error) {
+	return m.markReadTime, m.markErr
 }
 func (m *mockManager) ViewOnceMessage(_ context.Context, _, _, _ string) (*chat.Message, []string, error) {
 	return m.viewOnceMsg, m.viewOnceKeys, m.viewOnceErr
@@ -389,6 +390,37 @@ func TestMarkRead_ServiceError(t *testing.T) {
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestMarkRead_NotifiesRoomRead(t *testing.T) {
+	readAt := time.Now().UTC().Round(time.Second)
+	mgr := &mockManager{markReadTime: readAt}
+
+	var notifiedRoomID, notifiedUserID string
+	var notifiedReadAt time.Time
+	cfg := chat.HandlerConfig{
+		NotifyRoomRead: func(roomID, userID string, at time.Time) {
+			notifiedRoomID, notifiedUserID, notifiedReadAt = roomID, userID, at
+		},
+	}
+	h := chat.NewHandler(mgr, cfg)
+
+	req := authedReq(httptest.NewRequest(http.MethodPut, "/rooms/r-1/read", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+	if notifiedRoomID != "r-1" {
+		t.Errorf("room_id = %q, want r-1", notifiedRoomID)
+	}
+	if notifiedUserID != testUserID {
+		t.Errorf("user_id = %q, want %q", notifiedUserID, testUserID)
+	}
+	if !notifiedReadAt.Equal(readAt) {
+		t.Errorf("read_at = %v, want %v", notifiedReadAt, readAt)
 	}
 }
 

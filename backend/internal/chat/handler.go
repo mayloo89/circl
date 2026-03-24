@@ -86,6 +86,9 @@ type HandlerConfig struct {
 	// NotifyMessageDeleted is called after a message is physically deleted
 	// so the hub can broadcast a message_deleted event to all room members.
 	NotifyMessageDeleted func(roomID, messageID string)
+	// NotifyRoomRead is called after a user marks a room as read so the hub
+	// can broadcast a read_receipt event to all room members.
+	NotifyRoomRead func(roomID, userID string, readAt time.Time)
 	// DeleteFiles is called with storage keys to remove from object storage
 	// after a message's attached files have been unlinked from the database.
 	DeleteFiles func(ctx context.Context, keys []string)
@@ -131,7 +134,7 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
 	r.Get("/rooms/{id}/messages", listMessagesHandler(svc))
-	r.Put("/rooms/{id}/read", markReadHandler(svc))
+	r.Put("/rooms/{id}/read", markReadHandler(svc, c))
 	r.Post("/rooms/{id}/messages/{msgID}/view", viewMessageHandler(svc, c))
 
 	return r
@@ -291,10 +294,11 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
-// markReadHandler marks all messages in a room as read for the authenticated user.
+// markReadHandler marks all messages in a room as read for the authenticated
+// user and broadcasts a read_receipt WS event to all room members.
 //
 // PUT /chat/rooms/{id}/read
-func markReadHandler(svc Manager) http.HandlerFunc {
+func markReadHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -304,9 +308,14 @@ func markReadHandler(svc Manager) http.HandlerFunc {
 
 		roomID := chi.URLParam(r, "id")
 
-		if err := svc.MarkRead(r.Context(), roomID, userID); err != nil {
+		readAt, err := svc.MarkRead(r.Context(), roomID, userID)
+		if err != nil {
 			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
 			return
+		}
+
+		if cfg.NotifyRoomRead != nil {
+			cfg.NotifyRoomRead(roomID, userID, readAt)
 		}
 
 		w.WriteHeader(http.StatusNoContent)

@@ -30,6 +30,9 @@ export interface TypingUser {
   displayName: string
 }
 
+/** Maps userId → timestamp (ms) of their last read event. */
+export type ReadReceipts = Map<string, number>
+
 const chatMessageTypes = new Set(["text", "image", "video", "file"])
 
 /**
@@ -46,6 +49,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
   const [typingUsers, setTypingUsers] = useState<Map<string, { displayName: string; at: number }>>(new Map())
+  const [readReceipts, setReadReceipts] = useState<ReadReceipts>(new Map())
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
@@ -116,6 +120,15 @@ export function useChat(roomId: string | null, token: string | undefined) {
             // Keep the message in `messages` so the page can render a tombstone
             // in its original position. Only track the ID as deleted.
             setDeletedIds((prev) => new Set([...prev, frame.id as string]))
+          } else if (frame.event === "read_receipt" && frame.user_id && frame.read_at) {
+            const ts = new Date(frame.read_at as string).getTime()
+            if (!isNaN(ts)) {
+              setReadReceipts((prev) => {
+                const next = new Map(prev)
+                next.set(frame.user_id as string, ts)
+                return next
+              })
+            }
           } else if (frame.event === "typing" && frame.user_id) {
             setTypingUsers((prev) => {
               const next = new Map(prev)
@@ -143,6 +156,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
       setMessages([])
       setDeletedIds(new Set())
       setTypingUsers(new Map())
+      setReadReceipts(new Map())
     }
   }, [roomId, token])
 
@@ -162,5 +176,5 @@ export function useChat(roomId: string | null, token: string | undefined) {
     return () => clearInterval(id)
   }, [roomId, token])
 
-  return { messages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers }
+  return { messages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts }
 }
