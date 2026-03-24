@@ -756,7 +756,9 @@ export default function ChatRoomPage() {
             )}
           </div>
 
+          <label htmlFor="message-input" className="sr-only">Message</label>
           <input
+            id="message-input"
             type="text"
             placeholder="Message…"
             value={input}

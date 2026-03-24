@@ -258,7 +258,9 @@ export default function ContactsPage() {
         {/* Search */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
           <h2 className="mb-3 text-lg font-semibold text-white">Add Contact</h2>
+          <label htmlFor="contact-search" className="sr-only">Search contacts</label>
           <input
+            id="contact-search"
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
