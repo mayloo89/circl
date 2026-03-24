@@ -96,6 +96,7 @@ export default function ChatPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Messages</h1>
           <button
+            aria-label="Go to home"
             onClick={() => router.push("/")}
             className="text-sm text-gray-400 hover:text-gray-200"
           >

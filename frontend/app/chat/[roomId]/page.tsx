@@ -111,6 +111,7 @@ function Lightbox({ url, type, onClose }: { url: string; type: string; onClose: 
       onClick={onClose}
     >
       <button
+        aria-label="Close"
         className="absolute right-4 top-4 rounded-full p-2 text-white/70 hover:text-white"
         onClick={onClose}
       >
@@ -388,7 +389,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
+        <button aria-label="Back to messages" onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
           ←
         </button>
         {room ? (
@@ -694,6 +695,7 @@ export default function ChatRoomPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={!connected || uploading}
+            aria-label="Attach file"
             title="Attach file"
             className="flex-none rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
           >
@@ -714,6 +716,7 @@ export default function ChatRoomPage() {
             <button
               onClick={() => setShowEphemeralMenu((v) => !v)}
               disabled={!connected}
+              aria-label="Ephemeral message"
               title="Ephemeral message"
               className={`rounded-full p-2 transition-colors disabled:opacity-40 ${
                 ephemeral !== "off"
