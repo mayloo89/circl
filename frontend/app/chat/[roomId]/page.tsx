@@ -492,11 +492,9 @@ export default function ChatRoomPage() {
                             </svg>
                             {isViewOnce ? "View-once message" : "Message expired"}
                           </div>
-                          {lastInGroup && (
-                            <span className="mt-1 text-[10px] text-gray-700">
-                              {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          )}
+                          <span className="mt-1 text-[10px] text-gray-700">
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
                         </>
                       ) : (
                         <>
@@ -608,35 +606,33 @@ export default function ChatRoomPage() {
                             )}
                           </div>
 
-                          {lastInGroup && (
-                            <div className="mt-1 flex items-center gap-1.5">
-                              {msg.expires_at && !isViewOnce && (
-                                <span className={`flex items-center gap-1 text-[10px] font-medium ${expiryColorClass(msg.expires_at, now)}`}>
-                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="9" />
-                                    <path strokeLinecap="round" d="M12 7v5l3 3" />
-                                  </svg>
-                                  {formatExpiry(msg.expires_at, now)}
-                                </span>
-                              )}
-                              <span className="text-[10px] text-gray-600">
-                                {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          <div className="mt-1 flex items-center gap-1.5">
+                            {msg.expires_at && !isViewOnce && (
+                              <span className={`flex items-center gap-1 text-[10px] font-medium ${expiryColorClass(msg.expires_at, now)}`}>
+                                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <circle cx="12" cy="12" r="9" />
+                                  <path strokeLinecap="round" d="M12 7v5l3 3" />
+                                </svg>
+                                {formatExpiry(msg.expires_at, now)}
                               </span>
-                              {isOwn && (() => {
-                                const isRead = peerId && peerReadAtMs > 0 && new Date(msg.created_at).getTime() <= peerReadAtMs
-                                return isRead ? (
-                                  <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 12.5l5 5L18 6" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12.5l5 5L22.5 6" />
-                                  </svg>
-                                ) : (
-                                  <svg className="h-3.5 w-3.5 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6" />
-                                  </svg>
-                                )
-                              })()}
-                            </div>
-                          )}
+                            )}
+                            <span className="text-[10px] text-gray-600">
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            {isOwn && lastInGroup && (() => {
+                              const isRead = peerId && peerReadAtMs > 0 && new Date(msg.created_at).getTime() <= peerReadAtMs
+                              return isRead ? (
+                                <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 12.5l5 5L18 6" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12.5l5 5L22.5 6" />
+                                </svg>
+                              ) : (
+                                <svg className="h-3.5 w-3.5 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6" />
+                                </svg>
+                              )
+                            })()}
+                          </div>
                         </>
                       )}
                     </div>
