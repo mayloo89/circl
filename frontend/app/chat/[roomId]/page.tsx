@@ -160,17 +160,26 @@ export default function ChatRoomPage() {
     }).catch(() => {})
   }, [status, token, roomId])
 
-  // Mark room as read whenever a new live message arrives so the sender gets
-  // instant ✓✓ feedback while the user is actively in the chat.
+  // Mark room as read when a new message from another user arrives and the tab
+  // is visible. Also re-fires when the tab becomes visible again so messages
+  // received while the tab was hidden are marked promptly on focus.
   useEffect(() => {
     if (!token || !roomId || liveMessages.length === 0) return
-    const last = liveMessages[liveMessages.length - 1]
-    if (last?.sender_id !== userID) {
-      fetch(`${API_URL}/chat/rooms/${roomId}/read`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {})
+
+    function markRead() {
+      if (document.visibilityState !== "visible") return
+      const last = liveMessages[liveMessages.length - 1]
+      if (last?.sender_id !== userID) {
+        fetch(`${API_URL}/chat/rooms/${roomId}/read`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {})
+      }
     }
+
+    markRead()
+    document.addEventListener("visibilitychange", markRead)
+    return () => document.removeEventListener("visibilitychange", markRead)
   }, [liveMessages, roomId, token, userID])
 
   useEffect(() => {
