@@ -62,6 +62,7 @@ type Room struct {
 // used when listing rooms without fetching full message history.
 type MessageSummary struct {
 	SenderID  string    `json:"sender_id"`
+	Type      string    `json:"type"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 }
