@@ -172,7 +172,8 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 				WHERE msg.room_id = r.id
 				  AND msg.sender_id <> $1
 				  AND (me.last_read_at IS NULL OR msg.created_at > me.last_read_at)
-			) AS unread_count
+			) AS unread_count,
+			peer_rm.last_read_at                             AS peer_last_read_at
 		FROM rooms r
 		JOIN room_members me
 			ON me.room_id = r.id AND me.user_id = $1
@@ -207,7 +208,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			&s.ID, &s.Type, &s.Name, &s.CreatedAt,
 			&s.PeerID, &s.PeerName, &s.PeerAvatarURL,
 			&lastContent, &lastSenderID, &lastAt,
-			&s.UnreadCount,
+			&s.UnreadCount, &s.PeerLastReadAt,
 		); err != nil {
 			return nil, fmt.Errorf("list rooms: scan: %w", err)
 		}
@@ -329,16 +330,20 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 	return msgs, nil
 }
 
-// MarkRead updates the user's last_read_at for the given room to now.
-func (s *pgStore) MarkRead(ctx context.Context, roomID, userID string) error {
-	_, err := s.db.Exec(ctx,
-		`UPDATE room_members SET last_read_at = NOW() WHERE room_id = $1 AND user_id = $2`,
+// MarkRead updates the user's last_read_at for the given room to now and
+// returns the timestamp that was written so the caller can broadcast it.
+func (s *pgStore) MarkRead(ctx context.Context, roomID, userID string) (time.Time, error) {
+	var readAt time.Time
+	err := s.db.QueryRow(ctx,
+		`UPDATE room_members SET last_read_at = NOW()
+		 WHERE room_id = $1 AND user_id = $2
+		 RETURNING last_read_at`,
 		roomID, userID,
-	)
+	).Scan(&readAt)
 	if err != nil {
-		return fmt.Errorf("mark read: %w", err)
+		return time.Time{}, fmt.Errorf("mark read: %w", err)
 	}
-	return nil
+	return readAt, nil
 }
 
 // ViewOnceMessage atomically records that viewerID has viewed the message.

@@ -167,8 +167,12 @@ func TestIntegration_ChatFlow(t *testing.T) {
 
 	// --- MarkRead ---
 
-	if err := store.MarkRead(ctx, room.ID, u1); err != nil {
+	readAt, err := store.MarkRead(ctx, room.ID, u1)
+	if err != nil {
 		t.Fatalf("MarkRead: %v", err)
+	}
+	if readAt.IsZero() {
+		t.Error("MarkRead returned zero time")
 	}
 
 	// After marking read, unread_count for u1 should drop to 0.

@@ -23,6 +23,7 @@ type mockStore struct {
 	msgsErr         error
 	memberErr       error
 	membersErr      error
+	markReadTime    time.Time
 	markReadErr     error
 	viewOnceMsg     *chat.Message
 	viewOnceKeys    []string
@@ -60,8 +61,8 @@ func (m *mockStore) SaveMessage(_ context.Context, _ chat.SaveMessageParams) (*c
 func (m *mockStore) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
 	return m.msgs, m.msgsErr
 }
-func (m *mockStore) MarkRead(_ context.Context, _, _ string) error {
-	return m.markReadErr
+func (m *mockStore) MarkRead(_ context.Context, _, _ string) (time.Time, error) {
+	return m.markReadTime, m.markReadErr
 }
 func (m *mockStore) ViewOnceMessage(_ context.Context, _, _, _ string) (*chat.Message, []string, error) {
 	return m.viewOnceMsg, m.viewOnceKeys, m.viewOnceErr
@@ -240,15 +241,21 @@ func TestService_ListMembers_Error(t *testing.T) {
 }
 
 func TestService_MarkRead_Success(t *testing.T) {
-	svc := chat.NewService(&mockStore{})
-	if err := svc.MarkRead(t.Context(), "r-1", "u-1"); err != nil {
+	now := time.Now()
+	svc := chat.NewService(&mockStore{markReadTime: now})
+	readAt, err := svc.MarkRead(t.Context(), "r-1", "u-1")
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !readAt.Equal(now) {
+		t.Errorf("readAt = %v, want %v", readAt, now)
 	}
 }
 
 func TestService_MarkRead_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{markReadErr: errors.New("db error")})
-	if err := svc.MarkRead(t.Context(), "r-1", "u-1"); err == nil {
+	_, err := svc.MarkRead(t.Context(), "r-1", "u-1")
+	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }

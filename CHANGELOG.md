@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-24 — Read receipts
+
+### Added
+- Read receipts: when a user marks a room as read, a `{"event":"read_receipt","room_id":"…","user_id":"…","read_at":"…"}` WS frame is broadcast to all room members
+- `MarkRead` now returns the written `last_read_at` timestamp (via `RETURNING last_read_at`) so the handler can broadcast the exact DB value
+- `NotifyRoomRead func(roomID, userID string, readAt time.Time)` callback added to `HandlerConfig` and wired in `main.go`
+- `peer_last_read_at` field added to `RoomSummary` / `ListRooms` response — seeds the initial read-receipt state without an extra round-trip
+- `readReceipts: Map<userId, timestampMs>` state in `useChat` — updated on every incoming `read_receipt` WS event and exported as `ReadReceipts` type
+- Single ✓ (gray) on own messages — confirms delivery to server
+- Double ✓✓ (indigo) on own messages when peer's effective read-at ≥ message created_at; effective read-at is `max(peer_last_read_at from API, WS receipt)`
+- `PUT /chat/rooms/{id}/read` called automatically whenever a new WS message from another user arrives while the room is open, giving the sender instant ✓✓
+
 ## [1.4.0] - 2026-03-24 — Typing indicators
 
 ### Added

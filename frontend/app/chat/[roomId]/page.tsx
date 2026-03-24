@@ -46,6 +46,7 @@ interface RoomSummary {
   peer_id: string
   peer_name: string
   peer_avatar_url: string
+  peer_last_read_at?: string
 }
 
 // ─── Lightbox ────────────────────────────────────────────────────────────────
@@ -117,7 +118,7 @@ export default function ChatRoomPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers } = useChat(roomId, token)
+  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
@@ -158,6 +159,28 @@ export default function ChatRoomPage() {
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => {})
   }, [status, token, roomId])
+
+  // Mark room as read when a new message from another user arrives and the tab
+  // is visible. Also re-fires when the tab becomes visible again so messages
+  // received while the tab was hidden are marked promptly on focus.
+  useEffect(() => {
+    if (!token || !roomId || liveMessages.length === 0) return
+
+    function markRead() {
+      if (document.visibilityState !== "visible") return
+      const last = liveMessages[liveMessages.length - 1]
+      if (last?.sender_id !== userID) {
+        fetch(`${API_URL}/chat/rooms/${roomId}/read`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {})
+      }
+    }
+
+    markRead()
+    document.addEventListener("visibilitychange", markRead)
+    return () => document.removeEventListener("visibilitychange", markRead)
+  }, [liveMessages, roomId, token, userID])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -261,6 +284,14 @@ export default function ChatRoomPage() {
     allMessages
       .filter((m) => m.expires_at && new Date(m.expires_at).getTime() <= now)
       .map((m) => m.id),
+  )
+
+  // Effective peer read-at: max of the initial value from ListRooms and any
+  // real-time read_receipt events received over WebSocket.
+  const peerId = room?.peer_id ?? ""
+  const peerReadAtMs = Math.max(
+    room?.peer_last_read_at ? new Date(room.peer_last_read_at).getTime() : 0,
+    readReceipts.get(peerId) ?? 0,
   )
 
   if (status === "loading") {
@@ -509,6 +540,21 @@ export default function ChatRoomPage() {
                   <span className="text-[10px] text-gray-600">
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
+                  {isOwn && (() => {
+                    const isRead = peerId && peerReadAtMs > 0 && new Date(msg.created_at).getTime() <= peerReadAtMs
+                    return isRead ? (
+                      // Double checkmark — read
+                      <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 12.5l5 5L18 6" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12.5l5 5L22.5 6" />
+                      </svg>
+                    ) : (
+                      // Single checkmark — sent
+                      <svg className="h-3.5 w-3.5 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6" />
+                      </svg>
+                    )
+                  })()}
                 </div>
               </div>
             </div>

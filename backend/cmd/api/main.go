@@ -160,6 +160,15 @@ func main() {
 	}
 	chatHandler := chat.NewHandler(chatSvc, chat.HandlerConfig{
 		NotifyMessageDeleted: notifyDeleted,
+		NotifyRoomRead: func(roomID, userID string, readAt time.Time) {
+			data, _ := json.Marshal(map[string]any{
+				"event":   "read_receipt",
+				"room_id": roomID,
+				"user_id": userID,
+				"read_at": readAt,
+			})
+			chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
+		},
 		DeleteFiles: func(ctx context.Context, keys []string) {
 			for _, key := range keys {
 				if err := fileStorage.Delete(ctx, key); err != nil {
