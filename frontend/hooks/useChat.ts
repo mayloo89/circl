@@ -22,7 +22,12 @@ export interface ChatMessage {
 
 export interface SendOpts {
   viewOnce?: boolean
-  ttl?: string // "1h" | "24h" | "7d"
+  ttl?: string // "15m" | "30m" | "1h" | "6h" | "12h" | "24h"
+}
+
+export interface TypingUser {
+  userId: string
+  displayName: string
 }
 
 const chatMessageTypes = new Set(["text", "image", "video", "file"])
@@ -32,13 +37,15 @@ const chatMessageTypes = new Set(["text", "image", "video", "file"])
  *
  * - Connects when both `roomId` and `token` are available.
  * - Reconnects automatically with exponential backoff on error.
- * - Returns the live message list, connection state, send functions, and
- *   a set of IDs for messages deleted via message_deleted events.
+ * - Returns the live message list, connection state, send functions,
+ *   a set of IDs for messages deleted via message_deleted events,
+ *   the current typing users, and a sendTyping function.
  */
 export function useChat(roomId: string | null, token: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
+  const [typingUsers, setTypingUsers] = useState<Map<string, { displayName: string; at: number }>>(new Map())
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
@@ -64,6 +71,12 @@ export function useChat(roomId: string | null, token: string | undefined) {
         ...(opts?.viewOnce && { view_once: true }),
         ...(opts?.ttl && { ttl: opts.ttl }),
       }))
+    }
+  }, [])
+
+  const sendTyping = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "typing" }))
     }
   }, [])
 
@@ -103,6 +116,15 @@ export function useChat(roomId: string | null, token: string | undefined) {
             // Keep the message in `messages` so the page can render a tombstone
             // in its original position. Only track the ID as deleted.
             setDeletedIds((prev) => new Set([...prev, frame.id as string]))
+          } else if (frame.event === "typing" && frame.user_id) {
+            setTypingUsers((prev) => {
+              const next = new Map(prev)
+              next.set(frame.user_id as string, {
+                displayName: (frame.display_name as string) || "",
+                at: Date.now(),
+              })
+              return next
+            })
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])
           }
@@ -120,8 +142,25 @@ export function useChat(roomId: string | null, token: string | undefined) {
       setConnected(false)
       setMessages([])
       setDeletedIds(new Set())
+      setTypingUsers(new Map())
     }
   }, [roomId, token])
 
-  return { messages, deletedIds, connected, send, sendAttachment }
+  // Clear stale typing entries (older than 3 s) on a 1 s interval.
+  useEffect(() => {
+    if (!roomId || !token) return
+    const id = setInterval(() => {
+      const cutoff = Date.now() - 3000
+      setTypingUsers((prev) => {
+        const stale = [...prev.entries()].filter(([, v]) => v.at < cutoff)
+        if (stale.length === 0) return prev
+        const next = new Map(prev)
+        for (const [k] of stale) next.delete(k)
+        return next
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [roomId, token])
+
+  return { messages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers }
 }

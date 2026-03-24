@@ -32,8 +32,13 @@ type mockStore struct {
 	deleteErr       error
 	expiredIDs      []string
 	expiredErr      error
+	displayName     string
+	displayNameErr  error
 }
 
+func (m *mockStore) GetDisplayName(_ context.Context, _ string) (string, error) {
+	return m.displayName, m.displayNameErr
+}
 func (m *mockStore) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
@@ -342,5 +347,24 @@ func TestParseTTL_Invalid(t *testing.T) {
 	_, err := chat.ParseTTL("7d")
 	if err == nil {
 		t.Error("expected error for invalid TTL, got nil")
+	}
+}
+
+func TestService_GetDisplayName_Found(t *testing.T) {
+	svc := chat.NewService(&mockStore{displayName: "Alice"})
+	name, err := svc.GetDisplayName(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "Alice" {
+		t.Errorf("name = %q, want Alice", name)
+	}
+}
+
+func TestService_GetDisplayName_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{displayNameErr: errors.New("db fail")})
+	_, err := svc.GetDisplayName(t.Context(), "u-1")
+	if err == nil {
+		t.Error("expected error, got nil")
 	}
 }

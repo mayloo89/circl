@@ -115,8 +115,9 @@ export default function ChatRoomPage() {
   const [revealedMessages, setRevealedMessages] = useState<Map<string, { msg: HistoryMessage | ChatMessage; content: string }>>(new Map())
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { messages: liveMessages, deletedIds, connected, send, sendAttachment } = useChat(roomId, token)
+  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
@@ -516,6 +517,19 @@ export default function ChatRoomPage() {
         <div ref={bottomRef} />
       </div>
 
+      {/* Typing indicator */}
+      {(() => {
+        const typers = [...typingUsers.entries()]
+          .filter(([id]) => id !== userID)
+          .map(([, { displayName }]) => displayName || "Someone")
+        if (typers.length === 0) return null
+        return (
+          <div className="px-4 py-1 text-xs text-gray-400">
+            {typers.join(", ")} {typers.length === 1 ? "is" : "are"} typing…
+          </div>
+        )
+      })()}
+
       {/* Input */}
       <div className="border-t border-gray-800 bg-gray-900 px-4 py-3">
         {ephemeral !== "off" && (
@@ -613,7 +627,15 @@ export default function ChatRoomPage() {
             type="text"
             placeholder="Message…"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              if (!typingThrottleRef.current) {
+                sendTyping()
+                typingThrottleRef.current = setTimeout(() => {
+                  typingThrottleRef.current = null
+                }, 2000)
+              }
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             className="flex-1 rounded-full border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />

@@ -47,8 +47,13 @@ type mockManager struct {
 	deleteErr       error
 	expiredIDs      []string
 	expiredErr      error
+	displayName     string
+	displayNameErr  error
 }
 
+func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error) {
+	return m.displayName, m.displayNameErr
+}
 func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
@@ -878,7 +883,7 @@ func TestWSHandler_IgnoresUnknownType(t *testing.T) {
 	defer conn.Close()
 
 	// Unknown type should be silently ignored.
-	if err := conn.WriteJSON(map[string]string{"type": "typing", "content": "..."}); err != nil {
+	if err := conn.WriteJSON(map[string]string{"type": "sticker", "content": "..."}); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}
 
@@ -1123,5 +1128,106 @@ func TestWSHandler_InvalidTTLIgnored(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Error("expected no message for invalid TTL, but received one")
+	}
+}
+
+func TestWSHandler_TypingEventBroadcast(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true, displayName: "Alice"}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Allow hub to register the client and establish the Redis subscription.
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]string{"type": "typing"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	// The typing event is published via Redis and delivered back to the sender
+	// (the hub broadcasts to all clients in the room, including the sender).
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["event"] != "typing" {
+		t.Errorf("event = %v, want typing", got["event"])
+	}
+	if got["user_id"] != testUserID {
+		t.Errorf("user_id = %v, want %q", got["user_id"], testUserID)
+	}
+	if got["display_name"] != "Alice" {
+		t.Errorf("display_name = %v, want Alice", got["display_name"])
+	}
+}
+
+func TestWSHandler_TypingEventDebounced(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true, displayName: "Bob"}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send two typing frames in rapid succession; only the first should be broadcast.
+	for range 2 {
+		if err := conn.WriteJSON(map[string]string{"type": "typing"}); err != nil {
+			t.Fatalf("WriteJSON: %v", err)
+		}
+	}
+
+	// Read the first (and only) typing event.
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["event"] != "typing" {
+		t.Errorf("event = %v, want typing", got["event"])
+	}
+
+	// No second typing event should arrive within the debounce window.
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected no second typing event (debounced), but received one")
 	}
 }

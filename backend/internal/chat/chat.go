@@ -137,6 +137,9 @@ type Store interface {
 	TombstoneMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 	// ListExpiredMessages returns the IDs of messages whose expires_at has passed.
 	ListExpiredMessages(ctx context.Context) ([]string, error)
+	// GetDisplayName returns the display_name for the given user from their profile.
+	// Returns an empty string when no profile row exists.
+	GetDisplayName(ctx context.Context, userID string) (string, error)
 }
 
 // Manager is the interface used by HTTP and WebSocket handlers.
@@ -153,6 +156,9 @@ type Manager interface {
 	DeleteMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 	TombstoneMessage(ctx context.Context, messageID string) (roomID string, storageKeys []string, err error)
 	ListExpiredMessages(ctx context.Context) ([]string, error)
+	// GetDisplayName returns the display_name for the given user from their profile.
+	// Returns an empty string when no profile row exists.
+	GetDisplayName(ctx context.Context, userID string) (string, error)
 }
 
 // Service is the application-layer implementation of Manager.
@@ -212,4 +218,8 @@ func (s *Service) TombstoneMessage(ctx context.Context, messageID string) (strin
 
 func (s *Service) ListExpiredMessages(ctx context.Context) ([]string, error) {
 	return s.store.ListExpiredMessages(ctx)
+}
+
+func (s *Service) GetDisplayName(ctx context.Context, userID string) (string, error) {
+	return s.store.GetDisplayName(ctx, userID)
 }

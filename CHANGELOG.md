@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-03-24 — Typing indicators
+
+### Added
+- Real-time typing indicators: when a user types in a chat room, a `{"event":"typing","user_id":"…","room_id":"…","display_name":"…"}` WS frame is broadcast to all room members
+- 2-second server-side debounce per client prevents flooding the hub with typing events
+- `GetDisplayName` store method (queries `profiles` table) used by the WS handler to populate `display_name` on the typing frame
+- `"X is typing…"` indicator rendered above the input bar; filters out the current user's own events; supports "are typing" for multiple concurrent typers
+- Client-side 2-second throttle on the text input `onChange` to limit typing frame frequency
+- Auto-clear: typing entries older than 3 s are removed from the map via a 1-second interval in `useChat`
+- `sendTyping()` exported from `useChat` hook
+
 ## [1.3.0] - 2026-03-23 — Chat attachments and ephemeral messages
 
 ### Added

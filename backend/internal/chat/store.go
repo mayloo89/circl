@@ -494,6 +494,23 @@ func (s *pgStore) TombstoneMessage(ctx context.Context, messageID string) (strin
 	return roomID, keys, nil
 }
 
+// GetDisplayName returns the display_name for the given user from their profile.
+// Returns an empty string when no profile row exists.
+func (s *pgStore) GetDisplayName(ctx context.Context, userID string) (string, error) {
+	var name string
+	err := s.db.QueryRow(ctx,
+		`SELECT COALESCE(display_name, '') FROM profiles WHERE user_id = $1`,
+		userID,
+	).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get display name: %w", err)
+	}
+	return name, nil
+}
+
 // ListExpiredMessages returns the IDs of messages whose TTL has elapsed.
 func (s *pgStore) ListExpiredMessages(ctx context.Context) ([]string, error) {
 	rows, err := s.db.Query(ctx,

@@ -36,11 +36,20 @@ var upgrader = websocket.Upgrader{
 
 // Client represents a single WebSocket connection from an authenticated user.
 type Client struct {
-	hub    *Hub
-	conn   *websocket.Conn
-	send   chan []byte
-	userID string
-	roomID string
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
+	userID      string
+	roomID      string
+	displayName string
+}
+
+// typingFrame is the WS frame broadcast to room members when a user is typing.
+type typingFrame struct {
+	Event       string `json:"event"`
+	UserID      string `json:"user_id"`
+	RoomID      string `json:"room_id"`
+	DisplayName string `json:"display_name"`
 }
 
 // serverMessage is the JSON envelope sent from the server to connected clients.
@@ -414,12 +423,15 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 			return
 		}
 
+		displayName, _ := svc.GetDisplayName(r.Context(), userID)
+
 		client := &Client{
-			hub:    hub,
-			conn:   conn,
-			send:   make(chan []byte, 256),
-			userID: userID,
-			roomID: roomID,
+			hub:         hub,
+			conn:        conn,
+			send:        make(chan []byte, 256),
+			userID:      userID,
+			roomID:      roomID,
+			displayName: displayName,
 		}
 
 		hub.register <- client
@@ -444,6 +456,8 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		return nil
 	})
 
+	var lastTypingBroadcast time.Time
+
 	for {
 		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
@@ -452,6 +466,21 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 
 		var in clientMessage
 		if err := json.Unmarshal(raw, &in); err != nil {
+			continue
+		}
+
+		if in.Type == "typing" {
+			if time.Since(lastTypingBroadcast) >= 2*time.Second {
+				lastTypingBroadcast = time.Now()
+				if data, err := json.Marshal(typingFrame{
+					Event:       "typing",
+					UserID:      c.userID,
+					RoomID:      c.roomID,
+					DisplayName: c.displayName,
+				}); err == nil {
+					_ = c.hub.Publish(context.Background(), c.roomID, data)
+				}
+			}
 			continue
 		}
 
