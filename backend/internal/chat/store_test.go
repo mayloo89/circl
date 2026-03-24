@@ -183,6 +183,43 @@ func TestIntegration_ChatFlow(t *testing.T) {
 	}
 }
 
+func TestIntegration_GetDisplayName(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool)
+	ctx := t.Context()
+
+	uid := createTestUser(t, pool, "chat_dn_test@example.com")
+
+	// No profile row yet — should return empty string, no error.
+	name, err := store.GetDisplayName(ctx, uid)
+	if err != nil {
+		t.Fatalf("GetDisplayName (no profile): %v", err)
+	}
+	if name != "" {
+		t.Errorf("name = %q, want empty", name)
+	}
+
+	// Insert a profile row.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO profiles (user_id, display_name, bio) VALUES ($1, 'Test User', '')
+		 ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name`,
+		uid,
+	); err != nil {
+		t.Fatalf("insert profile: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM profiles WHERE user_id = $1`, uid) //nolint:errcheck
+	})
+
+	name, err = store.GetDisplayName(ctx, uid)
+	if err != nil {
+		t.Fatalf("GetDisplayName (with profile): %v", err)
+	}
+	if name != "Test User" {
+		t.Errorf("name = %q, want %q", name, "Test User")
+	}
+}
+
 func TestIntegration_CreateGroup(t *testing.T) {
 	pool := openTestDB(t)
 	store := NewStore(pool)
