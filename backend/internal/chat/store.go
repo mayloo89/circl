@@ -168,6 +168,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			COALESCE(pp.avatar_url, '')                      AS peer_avatar_url,
 			COALESCE(lm.content, '')                         AS last_content,
 			COALESCE(lm.sender_id::text, '')                 AS last_sender_id,
+			COALESCE(lm.type, '')                            AS last_type,
 			lm.created_at                                    AS last_at,
 			(
 				SELECT COUNT(*)::int
@@ -187,7 +188,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 		LEFT JOIN profiles pp
 			ON pp.user_id = peer.id
 		LEFT JOIN LATERAL (
-			SELECT content, sender_id, created_at
+			SELECT type, content, sender_id, created_at
 			FROM messages
 			WHERE room_id = r.id
 			ORDER BY created_at DESC
@@ -204,13 +205,13 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 	var summaries []RoomSummary
 	for rows.Next() {
 		var s RoomSummary
-		var lastContent, lastSenderID string
+		var lastContent, lastSenderID, lastType string
 		var lastAt *time.Time
 
 		if err := rows.Scan(
 			&s.ID, &s.Type, &s.Name, &s.CreatedAt,
 			&s.PeerID, &s.PeerName, &s.PeerAvatarURL,
-			&lastContent, &lastSenderID, &lastAt,
+			&lastContent, &lastSenderID, &lastType, &lastAt,
 			&s.UnreadCount, &s.PeerLastReadAt,
 		); err != nil {
 			return nil, fmt.Errorf("list rooms: scan: %w", err)
@@ -219,6 +220,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 		if lastAt != nil {
 			s.LastMessage = &MessageSummary{
 				SenderID:  lastSenderID,
+				Type:      lastType,
 				Content:   lastContent,
 				CreatedAt: *lastAt,
 			}

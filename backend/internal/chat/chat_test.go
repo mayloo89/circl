@@ -164,6 +164,31 @@ func TestService_ListRooms_Success(t *testing.T) {
 	}
 }
 
+func TestService_ListRooms_LastMessageType(t *testing.T) {
+	now := time.Now()
+	want := []chat.RoomSummary{{
+		ID: "r-1",
+		LastMessage: &chat.MessageSummary{
+			SenderID:  "u-2",
+			Type:      chat.MessageTypeImage,
+			Content:   "https://example.com/img.jpg",
+			CreatedAt: now,
+		},
+	}}
+	svc := chat.NewService(&mockStore{rooms: want})
+
+	got, err := svc.ListRooms(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got[0].LastMessage == nil {
+		t.Fatal("LastMessage is nil")
+	}
+	if got[0].LastMessage.Type != chat.MessageTypeImage {
+		t.Errorf("Type = %q, want %q", got[0].LastMessage.Type, chat.MessageTypeImage)
+	}
+}
+
 func TestService_ListRooms_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{roomsErr: errors.New("db error")})
 	_, err := svc.ListRooms(t.Context(), "u-1")
