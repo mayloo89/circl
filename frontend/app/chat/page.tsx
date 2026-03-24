@@ -205,12 +205,12 @@ export default function ChatPage() {
                     </div>
                     <div className="flex flex-none flex-col items-end gap-1.5">
                       {room.last_message && (
-                        <span className="text-[10px] text-gray-600">
+                        <span className="text-xs text-gray-600">
                           {relativeTime(room.last_message.created_at)}
                         </span>
                       )}
                       {room.unread_count > 0 && (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold text-white">
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-xs font-semibold text-white">
                           {room.unread_count > 99 ? "99+" : room.unread_count}
                         </span>
                       )}

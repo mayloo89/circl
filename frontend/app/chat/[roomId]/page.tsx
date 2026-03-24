@@ -500,7 +500,7 @@ export default function ChatRoomPage() {
                             </svg>
                             {isViewOnce ? "View-once message" : "Message expired"}
                           </div>
-                          <span className="mt-1 text-[10px] text-gray-700">
+                          <span className="mt-1 text-xs text-gray-700">
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </>
@@ -616,7 +616,7 @@ export default function ChatRoomPage() {
 
                           <div className="mt-1 flex items-center gap-1.5">
                             {msg.expires_at && !isViewOnce && (
-                              <span className={`flex items-center gap-1 text-[10px] font-medium ${expiryColorClass(msg.expires_at, now)}`}>
+                              <span className={`flex items-center gap-1 text-xs font-medium ${expiryColorClass(msg.expires_at, now)}`}>
                                 <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                   <circle cx="12" cy="12" r="9" />
                                   <path strokeLinecap="round" d="M12 7v5l3 3" />
@@ -624,7 +624,7 @@ export default function ChatRoomPage() {
                                 {formatExpiry(msg.expires_at, now)}
                               </span>
                             )}
-                            <span className="text-[10px] text-gray-600">
+                            <span className="text-xs text-gray-600">
                               {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
                             {isOwn && (
@@ -634,7 +634,7 @@ export default function ChatRoomPage() {
                             )}
                           </div>
                           {msg.id === lastSeenOwnMsgId && (
-                            <span className="mt-0.5 text-[10px] text-indigo-400">Seen</span>
+                            <span className="mt-0.5 text-xs text-indigo-400">Seen</span>
                           )}
                         </>
                       )}
