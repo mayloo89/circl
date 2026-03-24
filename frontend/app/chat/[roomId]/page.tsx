@@ -358,6 +358,13 @@ export default function ChatRoomPage() {
     readReceipts.get(peerId) ?? 0,
   )
 
+  // ID of the last own message the peer has seen — shows the "Seen" label.
+  const lastSeenOwnMsgId = peerReadAtMs > 0
+    ? [...allMessages].reverse().find(
+        (m) => m.sender_id === userID && new Date(m.created_at).getTime() <= peerReadAtMs
+      )?.id
+    : undefined
+
   if (status === "loading") {
     return (
       <div className="flex h-full items-center justify-center bg-gray-950">
@@ -619,20 +626,15 @@ export default function ChatRoomPage() {
                             <span className="text-[10px] text-gray-600">
                               {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
-                            {isOwn && lastInGroup && (() => {
-                              const isRead = peerId && peerReadAtMs > 0 && new Date(msg.created_at).getTime() <= peerReadAtMs
-                              return isRead ? (
-                                <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 12.5l5 5L18 6" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12.5l5 5L22.5 6" />
-                                </svg>
-                              ) : (
-                                <svg className="h-3.5 w-3.5 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6" />
-                                </svg>
-                              )
-                            })()}
+                            {isOwn && (
+                              <svg className="h-3.5 w-3.5 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6" />
+                              </svg>
+                            )}
                           </div>
+                          {msg.id === lastSeenOwnMsgId && (
+                            <span className="mt-0.5 text-[10px] text-indigo-400">Seen</span>
+                          )}
                         </>
                       )}
                     </div>
