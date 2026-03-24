@@ -63,6 +63,7 @@ type serverMessage struct {
 	SenderName      string     `json:"sender_name,omitempty"`
 	SenderAvatarURL string     `json:"sender_avatar_url,omitempty"`
 	Content         string     `json:"content,omitempty"`
+	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
 	ViewOnce        bool       `json:"view_once,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at,omitempty"`
@@ -542,6 +543,7 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			SenderName:      msg.SenderName,
 			SenderAvatarURL: msg.SenderAvatarURL,
 			Content:         content,
+			ThumbnailURL:    msg.ThumbnailURL,
 			ViewOnce:        msg.ViewOnce,
 			ExpiresAt:       msg.ExpiresAt,
 			CreatedAt:       msg.CreatedAt,

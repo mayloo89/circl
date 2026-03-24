@@ -92,6 +92,9 @@ type Message struct {
 	SenderAvatarURL string     `json:"sender_avatar_url"`
 	Type            string     `json:"type"`
 	Content         string     `json:"content"`
+	// ThumbnailURL is the public URL of the image thumbnail, generated
+	// asynchronously after upload. Empty for non-image messages.
+	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	ViewOnce        bool       `json:"view_once"`
 	// Tombstone is true when the message content has been permanently erased

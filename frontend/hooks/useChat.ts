@@ -14,6 +14,7 @@ export interface ChatMessage {
   sender_name: string
   sender_avatar_url: string
   content: string
+  thumbnail_url?: string
   view_once: boolean
   tombstone?: boolean
   expires_at?: string

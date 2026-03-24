@@ -33,6 +33,7 @@ interface HistoryMessage {
   sender_avatar_url: string
   type: string
   content: string
+  thumbnail_url?: string
   view_once: boolean
   tombstone?: boolean
   expires_at?: string
@@ -494,7 +495,7 @@ export default function ChatRoomPage() {
                       className="block overflow-hidden rounded-2xl"
                     >
                       <Image
-                        src={msg.content}
+                        src={("thumbnail_url" in msg && msg.thumbnail_url) ? msg.thumbnail_url : msg.content}
                         alt="image"
                         width={240}
                         height={180}

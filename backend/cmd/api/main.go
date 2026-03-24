@@ -101,15 +101,6 @@ func main() {
 	chatHub := chat.NewHub(rdb)
 	go chatHub.Run(appCtx)
 
-	chatStore := chat.NewStore(pool)
-	chatSvc := chat.NewService(chatStore)
-	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
-		hub.Notify(recipientID, notifications.Event{
-			Type:    "new_message",
-			Payload: map[string]string{"room_id": roomID},
-		})
-	})
-
 	presenceStore := presence.NewStore(rdb, pool)
 	presenceHandler := presence.NewHandler(presenceStore, hub)
 
@@ -149,6 +140,15 @@ func main() {
 	default:
 		log.Fatalf("Unknown storage provider: %s", storageProvider)
 	}
+
+	chatStore := chat.NewStore(pool, fileStorage.PublicURL)
+	chatSvc := chat.NewService(chatStore)
+	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
+		hub.Notify(recipientID, notifications.Event{
+			Type:    "new_message",
+			Payload: map[string]string{"room_id": roomID},
+		})
+	})
 
 	notifyDeleted := func(roomID, messageID string) {
 		data, _ := json.Marshal(map[string]string{

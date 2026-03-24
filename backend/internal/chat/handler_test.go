@@ -305,6 +305,23 @@ func TestListMessages_Success(t *testing.T) {
 	}
 }
 
+func TestListMessages_ThumbnailURL(t *testing.T) {
+	msgs := []chat.Message{{ID: "m-1", Type: "image", Content: "https://example.com/img.jpg", ThumbnailURL: "https://example.com/thumb.jpg"}}
+	h := chat.NewHandler(&mockManager{isMember: true, msgs: msgs})
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1/messages", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	var got []chat.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got[0].ThumbnailURL != "https://example.com/thumb.jpg" {
+		t.Errorf("ThumbnailURL = %q, want https://example.com/thumb.jpg", got[0].ThumbnailURL)
+	}
+}
+
 func TestListMessages_InvalidBefore(t *testing.T) {
 	h := chat.NewHandler(&mockManager{isMember: true})
 	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1/messages?before=notadate", nil))
@@ -1261,5 +1278,56 @@ func TestWSHandler_TypingEventDebounced(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Error("expected no second typing event (debounced), but received one")
+	}
+}
+
+func TestWSHandler_ThumbnailURLBroadcast(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	now := time.Now()
+	savedMsg := &chat.Message{
+		ID:           "m-2",
+		RoomID:       "r-1",
+		SenderID:     testUserID,
+		Type:         "image",
+		Content:      "https://example.com/img.jpg",
+		ThumbnailURL: "https://example.com/thumb.jpg",
+		CreatedAt:    now,
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]string{"type": "attachment", "content": "https://example.com/img.jpg", "mime_type": "image/jpeg", "upload_id": "u-1"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["thumbnail_url"] != "https://example.com/thumb.jpg" {
+		t.Errorf("thumbnail_url = %v, want https://example.com/thumb.jpg", got["thumbnail_url"])
 	}
 }

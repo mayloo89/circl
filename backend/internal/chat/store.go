@@ -11,12 +11,15 @@ import (
 )
 
 type pgStore struct {
-	db *pgxpool.Pool
+	db        *pgxpool.Pool
+	publicURL func(key string) string
 }
 
 // NewStore returns a Postgres-backed Store.
-func NewStore(db *pgxpool.Pool) Store {
-	return &pgStore{db: db}
+// publicURL converts a storage key to a publicly reachable URL; used to
+// populate ThumbnailURL on messages returned by ListMessages.
+func NewStore(db *pgxpool.Pool, publicURL func(key string) string) Store {
+	return &pgStore{db: db, publicURL: publicURL}
 }
 
 // dmKey returns the canonical key for a DM room: the lexicographically smaller
@@ -294,10 +297,12 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 			m.id, m.room_id, m.sender_id,
 			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
 			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.created_at
+			m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.created_at,
+			COALESCE(up.thumbnail_key, '') AS thumbnail_key
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		LEFT JOIN profiles p ON p.user_id = m.sender_id
+		LEFT JOIN uploads up ON up.message_id = m.id
 		WHERE m.room_id = $1
 		  AND ($2::timestamptz IS NULL OR m.created_at < $2)
 		  AND (m.expires_at IS NULL OR m.expires_at > NOW() OR m.tombstone)
@@ -313,11 +318,16 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 	var msgs []Message
 	for rows.Next() {
 		var m Message
+		var thumbnailKey string
 		if err := rows.Scan(
 			&m.ID, &m.RoomID, &m.SenderID, &m.SenderName, &m.SenderAvatarURL,
 			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.Tombstone, &m.CreatedAt,
+			&thumbnailKey,
 		); err != nil {
 			return nil, fmt.Errorf("list messages: scan: %w", err)
+		}
+		if thumbnailKey != "" && s.publicURL != nil {
+			m.ThumbnailURL = s.publicURL(thumbnailKey)
 		}
 		msgs = append(msgs, m)
 	}
