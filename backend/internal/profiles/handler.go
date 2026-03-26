@@ -13,6 +13,7 @@ import (
 type ProfileManager interface {
 	GetMyProfile(ctx context.Context, userID string) (*Profile, error)
 	UpdateMyProfile(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error)
+	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 	GetPublicProfile(ctx context.Context, userID string) (*Profile, error)
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, userID, photoID string) error
@@ -51,6 +52,7 @@ func NewHandler(svc ProfileManager) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /profiles/me", getMyProfile(svc))
 	mux.HandleFunc("PUT /profiles/me", updateMyProfile(svc))
+	mux.HandleFunc("PUT /profiles/me/avatar", updateAvatar(svc))
 	mux.HandleFunc("POST /profiles/me/photos", addPhoto(svc))
 	mux.HandleFunc("DELETE /profiles/me/photos/{photoID}", deletePhoto(svc))
 	mux.HandleFunc("GET /profiles/{userID}", getPublicProfile(svc))
@@ -123,6 +125,29 @@ func getPublicProfile(svc ProfileManager) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, toResponse(profile))
+	}
+}
+
+func updateAvatar(svc ProfileManager) http.HandlerFunc {
+	type request struct {
+		AvatarURL string `json:"avatar_url"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			return
+		}
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			return
+		}
+		if err := svc.UpdateAvatar(r.Context(), userID, req.AvatarURL); err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

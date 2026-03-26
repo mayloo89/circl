@@ -34,6 +34,7 @@ type Profile struct {
 type Store interface {
 	GetByUserID(ctx context.Context, userID string) (*Profile, error)
 	Upsert(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error)
+	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 	GetPhotosByUserID(ctx context.Context, userID string) ([]ProfilePhoto, error)
 	CountPhotos(ctx context.Context, userID string) (int, error)
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
@@ -103,6 +104,11 @@ func (s *Service) UpdateMyProfile(ctx context.Context, userID, displayName, bio,
 	}
 	profile.Photos = photos
 	return profile, nil
+}
+
+// UpdateAvatar updates only the avatar URL for the given user.
+func (s *Service) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	return s.store.UpdateAvatar(ctx, userID, avatarURL)
 }
 
 // AddPhoto adds a showcase photo for the given user.

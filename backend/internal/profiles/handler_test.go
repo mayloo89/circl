@@ -47,6 +47,10 @@ func (m *mockProfileManager) DeletePhoto(_ context.Context, _, _ string) error {
 	return m.deletePhotoErr
 }
 
+func (m *mockProfileManager) UpdateAvatar(_ context.Context, _, _ string) error {
+	return nil
+}
+
 // serve wraps the handler with auth middleware and serves the request.
 func serve(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 	middleware.RequireAuth(testSecret)(h).ServeHTTP(rec, r)

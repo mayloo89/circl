@@ -143,20 +143,19 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file) return
     setAvatarSuccess("")
+    setAvatarError("")
     const result = await upload(file, "avatar")
     if (!result) return
-    const res = await fetch(`${API_URL}/profiles/me`, {
+    const res = await fetch(`${API_URL}/profiles/me/avatar`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ display_name: displayName, bio, avatar_url: result.url }),
+      body: JSON.stringify({ avatar_url: result.url }),
     })
     if (!res.ok) {
-      setAvatarError("Avatar uploaded but failed to save.")
+      setAvatarError("Failed to save avatar.")
       return
     }
-    const updated: Profile = await res.json()
-    setProfile(updated)
-    setAvatarURL(updated.avatar_url)
+    setAvatarURL(result.url)
     setAvatarSuccess("Avatar updated.")
   }
 

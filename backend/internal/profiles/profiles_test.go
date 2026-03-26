@@ -46,6 +46,10 @@ func (m *mockStore) DeletePhoto(_ context.Context, _, _ string) error {
 	return m.deleteErr
 }
 
+func (m *mockStore) UpdateAvatar(_ context.Context, _, _ string) error {
+	return nil
+}
+
 // --- GetMyProfile ---
 
 func TestGetMyProfile_ExistingProfile(t *testing.T) {

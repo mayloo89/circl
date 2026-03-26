@@ -75,6 +75,18 @@ func (s *pgStore) Upsert(ctx context.Context, userID, displayName, bio, avatarUR
 	return &p, nil
 }
 
+// UpdateAvatar updates only the avatar_url for the given user.
+func (s *pgStore) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE profiles SET avatar_url = NULLIF($2, ''), updated_at = now() WHERE user_id = $1`,
+		userID, avatarURL,
+	)
+	if err != nil {
+		return fmt.Errorf("update avatar: %w", err)
+	}
+	return nil
+}
+
 // GetPhotosByUserID returns all showcase photos for a user ordered by position.
 func (s *pgStore) GetPhotosByUserID(ctx context.Context, userID string) ([]ProfilePhoto, error) {
 	rows, err := s.pool.Query(ctx,
