@@ -100,6 +100,63 @@ func TestNewStore(t *testing.T) {
 	}
 }
 
+// --- CountPhotos ---
+
+func TestPgStore_CountPhotos_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
+		*dest[0].(*int) = 3
+		return nil
+	}}}}
+
+	n, err := store.CountPhotos(t.Context(), "user-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("count = %d, want 3", n)
+	}
+}
+
+func TestPgStore_CountPhotos_Error(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
+		return errors.New("db error")
+	}}}}
+
+	_, err := store.CountPhotos(t.Context(), "user-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- AddPhoto ---
+
+func TestPgStore_AddPhoto_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
+		*dest[0].(*string) = "ph-1"
+		*dest[1].(*string) = "https://example.com/1.jpg"
+		return nil
+	}}}}
+
+	p, err := store.AddPhoto(t.Context(), "user-1", "https://example.com/1.jpg")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.ID != "ph-1" {
+		t.Errorf("ID = %q, want ph-1", p.ID)
+	}
+}
+
+func TestPgStore_AddPhoto_Error(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
+		return errors.New("db error")
+	}}}}
+
+	_, err := store.AddPhoto(t.Context(), "user-1", "https://example.com/1.jpg")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 // --- Integration ---
 
 func TestProfiles_Integration(t *testing.T) {
@@ -152,6 +209,46 @@ func TestProfiles_Integration(t *testing.T) {
 		}
 		if p.DisplayName != "Alice" {
 			t.Errorf("DisplayName = %q, want %q", p.DisplayName, "Alice")
+		}
+	})
+
+	t.Run("add and delete profile photos", func(t *testing.T) {
+		ph, err := svc.AddPhoto(t.Context(), userID, "https://example.com/1.jpg")
+		if err != nil {
+			t.Fatalf("add photo error: %v", err)
+		}
+		if ph.ID == "" {
+			t.Fatal("expected non-empty photo ID")
+		}
+
+		p, err := svc.GetMyProfile(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile error: %v", err)
+		}
+		if len(p.Photos) != 1 {
+			t.Errorf("photos len = %d, want 1", len(p.Photos))
+		}
+
+		if err := svc.DeletePhoto(t.Context(), userID, ph.ID); err != nil {
+			t.Fatalf("delete photo error: %v", err)
+		}
+
+		p, err = svc.GetMyProfile(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile after delete error: %v", err)
+		}
+		if len(p.Photos) != 0 {
+			t.Errorf("photos len = %d, want 0 after delete", len(p.Photos))
+		}
+	})
+
+	t.Run("get public profile", func(t *testing.T) {
+		p, err := svc.GetPublicProfile(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get public profile error: %v", err)
+		}
+		if p.UserID != userID {
+			t.Errorf("UserID = %q, want %q", p.UserID, userID)
 		}
 	})
 }

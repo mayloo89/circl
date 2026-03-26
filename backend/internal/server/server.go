@@ -55,7 +55,7 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 	// Protected routes — requireAuth validates the Bearer JWT before forwarding.
 	r.Group(func(g chi.Router) {
 		g.Use(requireAuth)
-		g.Handle("/profiles/me", profileHandler)
+		g.Mount("/profiles", profileHandler)
 		g.Mount("/", contactsHandler)
 		g.Mount("/chat", chatHandler)
 		g.Mount("/presence", presenceHandler)
