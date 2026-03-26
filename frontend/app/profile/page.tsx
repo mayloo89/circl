@@ -53,6 +53,14 @@ function ProfileSkeleton() {
   )
 }
 
+function useAutoReset(value: string, setValue: (v: string) => void, delay = 10_000) {
+  useEffect(() => {
+    if (!value) return
+    const id = setTimeout(() => setValue(""), delay)
+    return () => clearTimeout(id)
+  }, [value, setValue, delay])
+}
+
 export default function ProfilePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -70,6 +78,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  useAutoReset(formSuccess, setFormSuccess)
+  useAutoReset(avatarSuccess, setAvatarSuccess)
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
