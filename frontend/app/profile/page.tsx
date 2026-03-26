@@ -130,10 +130,20 @@ export default function ProfilePage() {
     if (!file) return
     setAvatarSuccess("")
     const result = await upload(file, "avatar")
-    if (result) {
-      setAvatarURL(result.url)
-      setAvatarSuccess("Avatar ready — click Save to apply.")
+    if (!result) return
+    const res = await fetch(`${API_URL}/profiles/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ display_name: displayName, bio, avatar_url: result.url }),
+    })
+    if (!res.ok) {
+      setFormError("Avatar uploaded but failed to save.")
+      return
     }
+    const updated: Profile = await res.json()
+    setProfile(updated)
+    setAvatarURL(updated.avatar_url)
+    setAvatarSuccess("Avatar updated.")
   }
 
   async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
