@@ -26,9 +26,14 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Presence**: online/offline dot on contacts list, "Online" / "Last seen X ago" in DM chat header, instant updates via SSE
 - ✅ **Storage infrastructure**: Storage interface abstraction, LocalStorage (dev), uploads API (request → confirm lifecycle)
 - ✅ **Profile avatars**: upload from profile page, displayed in navbar, contacts list, chat list, chat room header, and message bubbles
-- ⏳ **Chat attachments**: pending
-- ⏳ **S3 storage**: pending
-- ⏳ **Image processing**: pending
+- ✅ **Chat attachments**: images, videos, and files in chat; ephemeral (view-once + TTL) messages
+- ✅ **S3-compatible storage**: MinIO backend with pre-signed PUT URLs; Docker Compose dev and prod setup
+- ✅ **Image processing**: asynq background worker — EXIF strip and 480px thumbnail generation for JPEG/PNG uploads
+- ✅ **Typing indicators**: real-time "X is typing…" via WebSocket with 2s server-side debounce
+- ✅ **Read receipts**: ✓ / ✓✓ on sent messages; updates in real time via WebSocket
+- ✅ **Image thumbnails in chat**: thumbnails served from storage instead of full-res URLs in message list
+- ✅ **Chat UI**: message grouping, date separators, skeleton loaders, new-message animation, relative timestamps, attachment type previews
+- ✅ **Public profiles + gallery**: public profile view, photo gallery (up to 6 photos), profile navigation from contacts and chat header
 
 ## Local setup
 
@@ -139,7 +144,11 @@ All protected routes require `Authorization: Bearer <token>`.
 | `POST` | `/auth/register` | — | Create account |
 | `POST` | `/auth/login` | — | Login, returns JWT |
 | `GET` | `/profiles/me` | ✅ | Get own profile (auto-created) |
-| `PUT` | `/profiles/me` | ✅ | Update display name, bio, and avatar URL |
+| `PUT` | `/profiles/me` | ✅ | Update display name and bio |
+| `PUT` | `/profiles/me/avatar` | ✅ | Update avatar URL independently |
+| `GET` | `/profiles/{userID}` | ✅ | Get any user's public profile + gallery |
+| `POST` | `/profiles/me/photos` | ✅ | Add a gallery photo (max 6) |
+| `DELETE` | `/profiles/me/photos/{id}` | ✅ | Delete a gallery photo |
 | `GET` | `/users/search?q=` | ✅ | Search users by email/name |
 | `POST` | `/contacts` | ✅ | Send a contact request |
 | `GET` | `/contacts` | ✅ | List accepted contacts |
@@ -169,7 +178,8 @@ circl/
 │   │   ├── chat/          # Chat list and room pages
 │   │   ├── contacts/      # Contacts page
 │   │   ├── login/         # Login page
-│   │   ├── profile/       # Profile page
+│   │   ├── profile/       # Private profile page (edit)
+│   │   │   └── [userId]/  # Public profile page (read-only)
 │   │   └── register/      # Register page
 │   ├── components/        # Shared UI components (NavBar, SignOutButton)
 │   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)

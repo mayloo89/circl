@@ -8,6 +8,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-03-26 — Public profiles and photo gallery
+
+### Added
+- `profile_photos` table (migration `000010`): up to 6 showcase photos per user, ordered by position, cascades on user deletion
+- DB trigger `trg_create_profile_on_register` (migration `000011`): auto-creates an empty profile row when a user registers — no lazy creation needed
+- `CategoryGallery` upload category: jpeg/png/webp, max 10 MB; DB constraint updated (migration `000012`)
+- `GET /profiles/{userID}` — public profile endpoint (requires auth); returns profile + gallery photos
+- `PUT /profiles/me/avatar` — dedicated endpoint to update avatar URL independently from display name/bio
+- `POST /profiles/me/photos` — add a gallery photo (max 6 enforced at service layer)
+- `DELETE /profiles/me/photos/{photoID}` — remove a gallery photo (ownership verified)
+- `Store` interface extended: `GetPhotosByUserID`, `CountPhotos`, `AddPhoto`, `DeletePhoto`, `UpdateAvatar`
+- Service methods: `GetPublicProfile`, `AddPhoto`, `DeletePhoto`, `UpdateAvatar`
+- `/profile/[userId]` public profile page: avatar, display name, bio, gallery (lightbox), contact action button (4 states: Add / Request sent / Accept / Message)
+- Profile navigation entry points: avatar+name in contacts list (all 3 sections) and DM chat header
+- Client-side file validation in `useUpload`: size and type checked before the network request with friendly error messages (e.g. "File is too large. Maximum size is 5 MB.")
+
+### Changed
+- `/profile` private page redesigned: skeleton loader, bio character counter (max 280), save button disabled when no changes, orange highlight on unsaved fields, auto-save avatar on upload, success messages auto-dismiss after 10 seconds
+- Gallery section: always shows all 6 slots (filled + empty), trash icon delete button always visible, inline delete confirmation overlay, error feedback scoped to gallery section
+- `PUT /profiles/me` no longer updates avatar — use `PUT /profiles/me/avatar` instead
+- Server now mounts all profile routes via `Mount("/profiles", ...)` instead of `Handle("/profiles/me", ...)`
+
+## [1.5.3] - 2026-03-25 — Chat UI/UX improvements
+
+### Added
+- Message grouping: consecutive messages from the same sender within a 5-minute window share avatar and sender name; gap between grouped messages is tighter
+- Date separators between messages sent on different calendar days (`Today`, `Yesterday`, weekday, or `Day Month`)
+- Skeleton loaders in chat room (animated bubbles) and room list (3 shimmer rows) replacing plain "Loading…" text
+- New-message entrance animation (`animate-message-in`, 0.18s ease-out) applied to messages received via WebSocket; respects `prefers-reduced-motion`
+- `aria-label` on all icon-only buttons (attach, close lightbox, back, ephemeral mode); visually hidden `<label>` for message and search inputs (WCAG 2.1)
+- `active:scale-95` press feedback on image, video, and view-once tap targets
+- Empty state for room list: icon, description, and "Go to contacts" CTA; retry button on error state
+- Relative timestamps on room list rows (`now`, `2m`, `3h`, `yesterday`, weekday, `24 Mar`)
+- Attachment type preview in room list uses SVG icons instead of emoji; button padding on contacts page raised to `py-2` (44px touch target)
+- `MessageSummary.Type` field so the room list renders the correct attachment preview icon
+
+### Changed
+- Font size for timestamps and metadata raised from 10px to 12px
+- `@media (prefers-reduced-motion: reduce)` block in `globals.css` disables all animations
+
+## [1.5.2] - 2026-03-24 — Image thumbnails in chat
+
+### Added
+- `thumbnail_url` field on `Message` and WebSocket `serverMessage` — populated when the image processing worker has finished
+- `chat.NewStore` accepts a `publicURL func(string) string` injected from the storage provider to convert storage keys to URLs
+- Image bubbles in the message list display the thumbnail when available, falling back to the full-resolution URL; clicking still opens the lightbox with the full-res URL
+- `LEFT JOIN uploads` on `message_id` in `ListMessages` SQL to fetch `thumbnail_key`
+
 ## [1.5.0] - 2026-03-24 — Read receipts
 
 ### Added
@@ -30,6 +78,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Client-side 2-second throttle on the text input `onChange` to limit typing frame frequency
 - Auto-clear: typing entries older than 3 s are removed from the map via a 1-second interval in `useChat`
 - `sendTyping()` exported from `useChat` hook
+
+## [1.3.2] - 2026-03-23 — Image processing worker
+
+### Added
+- `internal/worker` package: `Client` (enqueuer) and `Server` (processor) wrapping asynq; non-blocking `Start`, graceful `Shutdown`
+- `image:process` task: decodes JPEG / PNG / WebP / GIF, re-encodes JPEG/PNG (stripping all EXIF metadata including GPS coordinates and device model), generates a 480px JPEG thumbnail stored at `thumbnails/{storage_key}.jpg`
+- `thumbnail_key *string` column on `uploads` (migration `000007_add_thumbnail_key`)
+- `Store.SetThumbnailKey` method and `Service.SetEnqueuer` — image uploads trigger processing after confirm; enqueue errors are logged but do not fail the HTTP response
+- `GetObject` / `PutObject` added to `Storage` interface, `LocalStorage`, and `S3Storage`
+
+## [1.3.1] - 2026-03-23 — S3-compatible storage and Docker setup
+
+### Added
+- `S3Storage` implementing the `Storage` interface via `minio-go/v7`; pre-signed PUT URLs expire after 15 minutes — file bytes never pass through the backend
+- `minioClient` interface injected for unit test coverage without a running server
+- `STORAGE_PROVIDER=s3` wired in `main.go`; parses `S3_ENDPOINT`, auto-sets `UseSSL` from URL scheme; `local` remains the default
+- `docker-compose.yml` — dev infra: Postgres 17, Redis 7, MinIO with health checks and named volumes
+- `docker-compose.prod.yml` — full stack: infra + `minio-init` (bucket creation, public policy) + backend + frontend, startup order guaranteed by health checks
+- `backend/Dockerfile` — multi-stage: compiles in `golang:1.25-alpine`, runs in `alpine:3.21`
+- `frontend/Dockerfile` — multi-stage: builds with `node:22-alpine`, `output: standalone`, runs as non-root `nextjs` user (uid 1001)
+- `env.production.example` — production variable template with inline documentation
+- `NEXT_PUBLIC_IMAGE_HOSTNAME` build arg for `next/image` to allow MinIO/CDN URLs
 
 ## [1.3.0] - 2026-03-23 — Chat attachments and ephemeral messages
 
