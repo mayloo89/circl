@@ -10,6 +10,25 @@ export interface UploadResult {
   url: string
 }
 
+type UploadCategory = "avatar" | "chat-attachment" | "gallery"
+
+const MAX_SIZES: Record<UploadCategory, number> = {
+  avatar: 5 * 1024 * 1024,
+  "chat-attachment": 50 * 1024 * 1024,
+  gallery: 10 * 1024 * 1024,
+}
+
+const ALLOWED_TYPES: Record<UploadCategory, string[]> = {
+  avatar: ["image/jpeg", "image/png", "image/webp"],
+  "chat-attachment": ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "application/pdf"],
+  gallery: ["image/jpeg", "image/png", "image/webp"],
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+  return `${(bytes / 1024).toFixed(0)} KB`
+}
+
 /**
  * Provides an `upload` function that handles the full 3-step upload flow:
  * 1. POST /uploads/request → get an upload URL
@@ -22,9 +41,21 @@ export function useUpload(token: string | undefined) {
 
   async function upload(
     file: File,
-    category: "avatar" | "chat-attachment" | "gallery",
+    category: UploadCategory,
   ): Promise<UploadResult | null> {
     if (!token) return null
+
+    const maxSize = MAX_SIZES[category]
+    if (file.size > maxSize) {
+      setError(`File is too large. Maximum size is ${formatBytes(maxSize)}.`)
+      return null
+    }
+
+    if (!ALLOWED_TYPES[category].includes(file.type)) {
+      setError(`File type not allowed. Accepted: ${ALLOWED_TYPES[category].join(", ")}.`)
+      return null
+    }
+
     setUploading(true)
     setError("")
 
