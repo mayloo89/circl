@@ -76,6 +76,7 @@ export default function ProfilePage() {
   const { upload, uploading: uploadingAvatar, error: uploadError } = useUpload(session?.accessToken)
 
   const token = session?.accessToken
+  const isDirty = profile !== null && (displayName !== profile.display_name || bio !== profile.bio)
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
@@ -259,7 +260,11 @@ export default function ProfilePage() {
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                  displayName !== (profile?.display_name ?? "")
+                    ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
+                    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                }`}
                 required
               />
             </div>
@@ -277,7 +282,11 @@ export default function ProfilePage() {
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
                 maxLength={MAX_BIO}
-                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                  bio !== (profile?.bio ?? "")
+                    ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
+                    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                }`}
               />
             </div>
 
@@ -287,7 +296,11 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={saving || uploadingAvatar}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              className={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                isDirty
+                  ? "bg-orange-600 hover:bg-orange-500 focus:ring-orange-500"
+                  : "bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500"
+              }`}
             >
               {saving && (
                 <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -295,7 +308,7 @@ export default function ProfilePage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : isDirty ? "Save changes" : "Save"}
             </button>
           </form>
         </div>
