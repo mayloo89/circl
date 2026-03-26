@@ -73,19 +73,11 @@ func (s *Service) GetMyProfile(ctx context.Context, userID string) (*Profile, er
 }
 
 // GetPublicProfile returns the profile (with photos) for any user by ID.
-// If the user exists but has never saved a profile, an empty one is created.
-// Returns ErrNotFound if the user does not exist.
+// Returns ErrNotFound if the user has no profile.
 func (s *Service) GetPublicProfile(ctx context.Context, userID string) (*Profile, error) {
 	profile, err := s.store.GetByUserID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			profile, err = s.store.Upsert(ctx, userID, "", "", "")
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
+		return nil, err
 	}
 	photos, err := s.store.GetPhotosByUserID(ctx, userID)
 	if err != nil {
