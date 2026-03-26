@@ -21,7 +21,7 @@ type Category string
 const (
 	CategoryAvatar         Category = "avatar"
 	CategoryChatAttachment Category = "chat-attachment"
-	CategoryProfilePhoto   Category = "profile-photo"
+	CategoryGallery        Category = "gallery"
 )
 
 // allowedTypes maps each category to its permitted MIME types.
@@ -40,7 +40,7 @@ var allowedTypes = map[Category][]string{
 		"video/quicktime",
 		"application/pdf",
 	},
-	CategoryProfilePhoto: {
+	CategoryGallery: {
 		"image/jpeg",
 		"image/png",
 		"image/webp",
@@ -51,7 +51,7 @@ var allowedTypes = map[Category][]string{
 var maxSizes = map[Category]int64{
 	CategoryAvatar:         5 * 1024 * 1024,  // 5 MB
 	CategoryChatAttachment: 50 * 1024 * 1024, // 50 MB
-	CategoryProfilePhoto:   10 * 1024 * 1024, // 10 MB
+	CategoryGallery:        10 * 1024 * 1024, // 10 MB
 }
 
 // ParseCategory converts a string to a Category, returning an error if invalid.

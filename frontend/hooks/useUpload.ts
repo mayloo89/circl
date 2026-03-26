@@ -22,7 +22,7 @@ export function useUpload(token: string | undefined) {
 
   async function upload(
     file: File,
-    category: "avatar" | "chat-attachment" | "profile-photo",
+    category: "avatar" | "chat-attachment" | "gallery",
   ): Promise<UploadResult | null> {
     if (!token) return null
     setUploading(true)

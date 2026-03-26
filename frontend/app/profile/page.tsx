@@ -138,7 +138,7 @@ export default function ProfilePage() {
     setError("")
     setUploadingPhoto(true)
     try {
-      const result = await upload(file, "profile-photo")
+      const result = await upload(file, "gallery")
       if (!result) return
       const res = await fetch(`${API_URL}/profiles/me/photos`, {
         method: "POST",

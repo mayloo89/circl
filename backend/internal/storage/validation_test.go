@@ -13,7 +13,7 @@ func TestParseCategory(t *testing.T) {
 	}{
 		{"avatar", CategoryAvatar, nil},
 		{"chat-attachment", CategoryChatAttachment, nil},
-		{"profile-photo", CategoryProfilePhoto, nil},
+		{"gallery", CategoryGallery, nil},
 		{"invalid", "", ErrInvalidCategory},
 		{"", "", ErrInvalidCategory},
 	}
@@ -46,10 +46,10 @@ func TestValidateUpload(t *testing.T) {
 		{"valid chat mp4", CategoryChatAttachment, "video/mp4", 1024, nil},
 		{"chat too large", CategoryChatAttachment, "image/jpeg", 51 * 1024 * 1024, ErrFileTooLarge},
 		{"chat exe rejected", CategoryChatAttachment, "application/x-msdownload", 1024, ErrInvalidContentType},
-		{"valid profile photo jpeg", CategoryProfilePhoto, "image/jpeg", 1024, nil},
-		{"valid profile photo webp", CategoryProfilePhoto, "image/webp", 1024, nil},
-		{"profile photo gif rejected", CategoryProfilePhoto, "image/gif", 1024, ErrInvalidContentType},
-		{"profile photo too large", CategoryProfilePhoto, "image/jpeg", 11 * 1024 * 1024, ErrFileTooLarge},
+		{"valid gallery jpeg", CategoryGallery, "image/jpeg", 1024, nil},
+		{"valid gallery webp", CategoryGallery, "image/webp", 1024, nil},
+		{"gallery gif rejected", CategoryGallery, "image/gif", 1024, ErrInvalidContentType},
+		{"gallery too large", CategoryGallery, "image/jpeg", 11 * 1024 * 1024, ErrFileTooLarge},
 		{"invalid category", Category("bogus"), "image/jpeg", 1024, ErrInvalidCategory},
 	}
 	for _, tt := range tests {
@@ -95,7 +95,7 @@ func TestMaxSize(t *testing.T) {
 	if got := MaxSize(CategoryChatAttachment); got != 50*1024*1024 {
 		t.Errorf("MaxSize(chat-attachment) = %d, want %d", got, 50*1024*1024)
 	}
-	if got := MaxSize(CategoryProfilePhoto); got != 10*1024*1024 {
-		t.Errorf("MaxSize(profile-photo) = %d, want %d", got, 10*1024*1024)
+	if got := MaxSize(CategoryGallery); got != 10*1024*1024 {
+		t.Errorf("MaxSize(gallery) = %d, want %d", got, 10*1024*1024)
 	}
 }
