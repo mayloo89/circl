@@ -55,7 +55,6 @@ Everything that needs to happen before deploying Circl to production.
 | `NEXTAUTH_SECRET` | dev value | Generate with `openssl rand -base64 32` |
 | `BACKEND_URL` | `http://localhost:8080` | Internal backend URL (server-side only) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | `https://api.yourdomain.com` |
-| `NEXT_PUBLIC_WS_URL` | `ws://localhost:8080` | `wss://api.yourdomain.com` |
 
 ---
 
@@ -188,16 +187,27 @@ Currently runs lint + tests only. Need to add:
 
 ---
 
-## 7. Features Not Yet Production-Ready
+## 7. Feature Readiness
 
-| Feature | Status | What's needed |
-|---------|--------|---------------|
-| S3Storage | Not implemented | Implement `storage.S3Storage`, wire in main.go |
-| Image processing | Not implemented | asynq worker for resize, thumbnails, EXIF strip |
-| Chat attachments | Not implemented | Send images/files in chat messages |
-| Rate limiting | Config exists, no middleware | Implement per-IP and per-user rate limiter |
-| Ephemeral messages | Schema ready, logic not enforced | TTL cleanup worker, view-once delivery |
-| Token refresh | Hardcoded 24h expiry | Implement refresh token rotation |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| S3-compatible storage (MinIO) | ✅ Done (PR #19) | `S3Storage` via `minio-go/v7`; Docker Compose dev + prod |
+| Image processing | ✅ Done (PR #20) | asynq worker; EXIF strip; 480px thumbnails |
+| Chat attachments | ✅ Done (PR #18) | Images, videos, files; lightbox |
+| Ephemeral messages | ✅ Done (PR #21) | View-once; TTL 15m–24h; tombstones; cleaner worker |
+| Public profiles + gallery | ✅ Done (PR #27) | `GET /profiles/{id}`; up to 6 gallery photos |
+| Rate limiting | ⚠️ Not implemented | Config vars exist; no middleware yet (Phase 4 / PR #40) |
+| Token refresh | ⚠️ Not implemented | 24h hardcoded expiry; rotation planned in Phase 8 (PR #49) |
+| Component design system | ⚠️ Not started | Planned Phase 1 (PR #29–31) |
+| Frontend tests | ⚠️ Not started | Planned Phase 2 (PR #32–33) |
+| Backend integration tests | ⚠️ Not started | Planned Phase 2 (PR #34) |
+| Expanded profiles / explore | ⚠️ Not started | Planned Phase 3 (PR #35–37) |
+| Blocking / reporting | ⚠️ Not started | Planned Phase 4 (PR #38–40) |
+| Push notifications | ⚠️ Not started | Planned Phase 5 (PR #41) |
+| Structured logging (zerolog) | ⚠️ Not started | Planned Phase 7 (PR #45) |
+| OpenTelemetry / Prometheus | ⚠️ Not started | Planned Phase 7 (PR #46–47) |
+| Sentry error tracking | ⚠️ Not started | Planned Phase 7 (PR #46) |
+| CSP / HSTS / CSRF hardening | ⚠️ Not started | Planned Phase 8 (PR #48–51) |
 
 ---
 
