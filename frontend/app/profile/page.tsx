@@ -61,11 +61,15 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("")
   const [bio, setBio] = useState("")
   const [avatarURL, setAvatarURL] = useState("")
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+  const [formError, setFormError] = useState("")
+  const [formSuccess, setFormSuccess] = useState("")
+  const [avatarSuccess, setAvatarSuccess] = useState("")
+  const [galleryError, setGalleryError] = useState("")
+  const [loadError, setLoadError] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -90,14 +94,14 @@ export default function ProfilePage() {
         setBio(data.bio)
         setAvatarURL(data.avatar_url)
       })
-      .catch(() => setError("Failed to load profile."))
+      .catch(() => setLoadError("Failed to load profile."))
       .finally(() => setLoading(false))
   }, [status, token])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError("")
-    setSuccess("")
+    setFormError("")
+    setFormSuccess("")
     setSaving(true)
 
     try {
@@ -108,13 +112,14 @@ export default function ProfilePage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error ?? "Failed to update profile.")
+        setFormError(data.error ?? "Failed to update profile.")
         return
       }
       const updated: Profile = await res.json()
       setProfile(updated)
       setAvatarURL(updated.avatar_url)
-      setSuccess("Profile updated.")
+      setAvatarSuccess("")
+      setFormSuccess("Profile updated.")
     } finally {
       setSaving(false)
     }
@@ -123,19 +128,18 @@ export default function ProfilePage() {
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setError("")
-    setSuccess("")
+    setAvatarSuccess("")
     const result = await upload(file, "avatar")
     if (result) {
       setAvatarURL(result.url)
-      setSuccess("Avatar ready — click Save to apply.")
+      setAvatarSuccess("Avatar ready — click Save to apply.")
     }
   }
 
   async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setError("")
+    setGalleryError("")
     setUploadingPhoto(true)
     try {
       const result = await upload(file, "gallery")
@@ -147,7 +151,7 @@ export default function ProfilePage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error ?? "Failed to add photo.")
+        setGalleryError(data.error ?? "Failed to add photo.")
         return
       }
       const photo: ProfilePhoto = await res.json()
@@ -159,13 +163,14 @@ export default function ProfilePage() {
   }
 
   async function handleDeletePhoto(photoID: string) {
-    setError("")
+    setGalleryError("")
+    setConfirmDeleteId(null)
     const res = await fetch(`${API_URL}/profiles/me/photos/${photoID}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) {
-      setError("Failed to delete photo.")
+      setGalleryError("Failed to delete photo.")
       return
     }
     setProfile((prev) => prev ? { ...prev, photos: prev.photos.filter((p) => p.id !== photoID) } : prev)
@@ -180,7 +185,7 @@ export default function ProfilePage() {
   }
 
   const photos = profile?.photos ?? []
-  const canAddPhoto = photos.length < MAX_PHOTOS && !uploadingPhoto
+  const slots = Array.from({ length: MAX_PHOTOS }, (_, i) => photos[i] ?? null)
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
@@ -198,15 +203,8 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {(error || uploadError) && (
-          <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">
-            {error || uploadError}
-          </p>
-        )}
-        {success && (
-          <p className="rounded-md bg-green-950 p-3 text-sm text-green-400 ring-1 ring-green-900">
-            {success}
-          </p>
+        {loadError && (
+          <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{loadError}</p>
         )}
 
         {/* Profile card */}
@@ -233,6 +231,11 @@ export default function ProfilePage() {
             </button>
             <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="hidden" />
             <p className="text-sm text-gray-500">{session?.user?.email}</p>
+            {(uploadError || avatarSuccess) && (
+              <p className={`text-xs ${uploadError ? "text-red-400" : "text-green-400"}`}>
+                {uploadError || avatarSuccess}
+              </p>
+            )}
           </div>
 
           {/* Form */}
@@ -268,6 +271,9 @@ export default function ProfilePage() {
               />
             </div>
 
+            {formError && <p className="text-sm text-red-400">{formError}</p>}
+            {formSuccess && <p className="text-sm text-green-400">{formSuccess}</p>}
+
             <button
               type="submit"
               disabled={saving || uploadingAvatar}
@@ -284,56 +290,89 @@ export default function ProfilePage() {
           </form>
         </div>
 
-        {/* Photos */}
+        {/* Gallery */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Photos</h2>
+            <h2 className="text-lg font-semibold text-white">Gallery</h2>
             <span className="text-xs text-gray-500">{photos.length}/{MAX_PHOTOS}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {photos.map((photo) => (
-              <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-gray-800">
-                <Image
-                  src={photo.url}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 512px) 33vw, 170px"
-                />
-                <button
-                  aria-label="Delete photo"
-                  onClick={() => handleDeletePhoto(photo.id)}
-                  className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100 focus:opacity-100"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
+            {slots.map((photo, i) => {
+              if (photo) {
+                const isConfirming = confirmDeleteId === photo.id
+                return (
+                  <div key={photo.id} className="relative aspect-square overflow-hidden rounded-lg bg-gray-800">
+                    <Image
+                      src={photo.url}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 512px) 33vw, 170px"
+                    />
+                    {isConfirming ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75 p-2">
+                        <p className="text-center text-xs font-medium text-white">Delete photo?</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleDeletePhoto(photo.id)}
+                            className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-500"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="rounded bg-gray-700 px-2.5 py-1 text-xs text-gray-200 hover:bg-gray-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        aria-label="Delete photo"
+                        onClick={() => setConfirmDeleteId(photo.id)}
+                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-red-600"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )
+              }
 
-            {canAddPhoto && (
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                disabled={uploadingPhoto}
-                className="flex aspect-square items-center justify-center rounded-lg border-2 border-dashed border-gray-700 text-gray-600 transition-colors hover:border-indigo-600 hover:text-indigo-500"
-              >
-                {uploadingPhoto ? (
-                  <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                )}
-                <span className="sr-only">Add photo</span>
-              </button>
-            )}
+              // Empty slot
+              const isUploadSlot = i === photos.length
+              return (
+                <div key={`empty-${i}`} className="aspect-square rounded-lg border-2 border-dashed border-gray-800">
+                  {isUploadSlot && (
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                      className="flex h-full w-full items-center justify-center text-gray-600 transition-colors hover:border-indigo-600 hover:text-indigo-500"
+                    >
+                      {uploadingPhoto ? (
+                        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                      )}
+                      <span className="sr-only">Add photo</span>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
           </div>
+
+          {galleryError && <p className="mt-3 text-sm text-red-400">{galleryError}</p>}
 
           <input
             ref={photoInputRef}
