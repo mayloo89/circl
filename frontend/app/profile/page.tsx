@@ -295,7 +295,7 @@ export default function ProfilePage() {
 
             <button
               type="submit"
-              disabled={saving || uploadingAvatar}
+              disabled={saving || uploadingAvatar || !isDirty}
               className={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 ${
                 isDirty
                   ? "bg-orange-600 hover:bg-orange-500 focus:ring-orange-500"
