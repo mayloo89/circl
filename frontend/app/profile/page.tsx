@@ -72,6 +72,7 @@ export default function ProfilePage() {
   const [formError, setFormError] = useState("")
   const [formSuccess, setFormSuccess] = useState("")
   const [avatarSuccess, setAvatarSuccess] = useState("")
+  const [avatarError, setAvatarError] = useState("")
   const [galleryError, setGalleryError] = useState("")
   const [loadError, setLoadError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -81,6 +82,7 @@ export default function ProfilePage() {
 
   useAutoReset(formSuccess, setFormSuccess)
   useAutoReset(avatarSuccess, setAvatarSuccess)
+  useAutoReset(avatarError, setAvatarError)
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -149,7 +151,7 @@ export default function ProfilePage() {
       body: JSON.stringify({ display_name: displayName, bio, avatar_url: result.url }),
     })
     if (!res.ok) {
-      setFormError("Avatar uploaded but failed to save.")
+      setAvatarError("Avatar uploaded but failed to save.")
       return
     }
     const updated: Profile = await res.json()
@@ -253,9 +255,9 @@ export default function ProfilePage() {
             </button>
             <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="hidden" />
             <p className="text-sm text-gray-500">{session?.user?.email}</p>
-            {(uploadError || avatarSuccess) && (
-              <p className={`text-xs ${uploadError ? "text-red-400" : "text-green-400"}`}>
-                {uploadError || avatarSuccess}
+            {(uploadError || avatarError || avatarSuccess) && (
+              <p className={`text-xs ${(uploadError || avatarError) ? "text-red-400" : "text-green-400"}`}>
+                {uploadError || avatarError || avatarSuccess}
               </p>
             )}
           </div>
