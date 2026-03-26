@@ -246,7 +246,7 @@ export default function ContactsPage() {
       <div className="w-full max-w-lg space-y-8 px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Contacts</h1>
-          <button onClick={() => router.push("/")} className="text-sm text-gray-400 hover:text-gray-200">
+          <button aria-label="Go to home" onClick={() => router.push("/")} className="text-sm text-gray-400 hover:text-gray-200">
             ← Home
           </button>
         </div>
@@ -258,7 +258,9 @@ export default function ContactsPage() {
         {/* Search */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
           <h2 className="mb-3 text-lg font-semibold text-white">Add Contact</h2>
+          <label htmlFor="contact-search" className="sr-only">Search contacts</label>
           <input
+            id="contact-search"
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
@@ -281,7 +283,7 @@ export default function ContactsPage() {
                   </div>
                   <button
                     onClick={() => sendRequest(u.id)}
-                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
+                    className="rounded bg-indigo-600 px-3 py-2 text-xs text-white hover:bg-indigo-500"
                   >
                     Add
                   </button>
@@ -316,13 +318,13 @@ export default function ContactsPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => accept(r.contact_id)}
-                      className="rounded bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-600"
+                      className="rounded bg-green-700 px-3 py-2 text-xs text-white hover:bg-green-600"
                     >
                       Accept
                     </button>
                     <button
                       onClick={() => remove(r.contact_id)}
-                      className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-200 hover:bg-gray-600"
+                      className="rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 hover:bg-gray-600"
                     >
                       Decline
                     </button>
@@ -352,7 +354,7 @@ export default function ContactsPage() {
                   </div>
                   <button
                     onClick={() => cancelSent(r.contact_id)}
-                    className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-200 hover:bg-gray-600"
+                    className="rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 hover:bg-gray-600"
                   >
                     Cancel
                   </button>
@@ -391,13 +393,13 @@ export default function ContactsPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => startDM(c.user_id)}
-                      className="rounded bg-indigo-700 px-3 py-1 text-xs text-white hover:bg-indigo-600"
+                      className="rounded bg-indigo-700 px-3 py-2 text-xs text-white hover:bg-indigo-600"
                     >
                       Message
                     </button>
                     <button
                       onClick={() => remove(c.contact_id)}
-                      className="rounded bg-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-800"
+                      className="rounded bg-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-800"
                     >
                       Remove
                     </button>

@@ -111,6 +111,7 @@ function Lightbox({ url, type, onClose }: { url: string; type: string; onClose: 
       onClick={onClose}
     >
       <button
+        aria-label="Close"
         className="absolute right-4 top-4 rounded-full p-2 text-white/70 hover:text-white"
         onClick={onClose}
       >
@@ -388,7 +389,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
+        <button aria-label="Back to messages" onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
           ←
         </button>
         {room ? (
@@ -432,6 +433,16 @@ export default function ChatRoomPage() {
       <div className="flex-1 overflow-y-auto py-4">
         {historyLoading ? (
           <MessageSkeletons />
+        ) : allMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800">
+              <svg className="h-7 w-7 text-gray-600" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+              </svg>
+            </span>
+            <p className="text-sm font-medium text-gray-400">No messages yet</p>
+            <p className="text-xs text-gray-600">Say hello to start the conversation.</p>
+          </div>
         ) : (
           <div className="px-4">
             {allMessages.map((msg, i) => {
@@ -499,7 +510,7 @@ export default function ChatRoomPage() {
                             </svg>
                             {isViewOnce ? "View-once message" : "Message expired"}
                           </div>
-                          <span className="mt-1 text-[10px] text-gray-700">
+                          <span className="mt-1 text-xs text-gray-700">
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </>
@@ -524,7 +535,7 @@ export default function ChatRoomPage() {
                               msg.type === "image" || msg.type === "video" || msg.type === "file" ? (
                                 <button
                                   onClick={() => handleViewOnce(msg.id)}
-                                  className="flex w-44 flex-col items-center gap-3 py-3"
+                                  className="flex w-44 flex-col items-center gap-3 py-3 transition-transform active:scale-95"
                                 >
                                   <div className="relative">
                                     <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/30" />
@@ -552,7 +563,7 @@ export default function ChatRoomPage() {
                               ) : (
                                 <button
                                   onClick={() => handleViewOnce(msg.id)}
-                                  className="flex items-center gap-2 px-1 py-0.5"
+                                  className="flex items-center gap-2 px-1 py-0.5 transition-transform active:scale-95"
                                 >
                                   <div className="relative flex-none">
                                     <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/30" />
@@ -578,7 +589,7 @@ export default function ChatRoomPage() {
                             ) : msg.type === "image" && msg.content ? (
                               <button
                                 onClick={() => setMediaModal({ url: msg.content, type: "image" })}
-                                className="block overflow-hidden rounded-2xl"
+                                className="block overflow-hidden rounded-2xl transition-transform active:scale-95"
                               >
                                 <Image
                                   src={("thumbnail_url" in msg && msg.thumbnail_url) ? msg.thumbnail_url : msg.content}
@@ -591,7 +602,7 @@ export default function ChatRoomPage() {
                             ) : msg.type === "video" && msg.content ? (
                               <button
                                 onClick={() => setMediaModal({ url: msg.content, type: "video" })}
-                                className={`flex items-center gap-2 px-4 py-2 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
+                                className={`flex items-center gap-2 px-4 py-2 transition-transform active:scale-95 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
                               >
                                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M8 5v14l11-7z" />
@@ -615,7 +626,7 @@ export default function ChatRoomPage() {
 
                           <div className="mt-1 flex items-center gap-1.5">
                             {msg.expires_at && !isViewOnce && (
-                              <span className={`flex items-center gap-1 text-[10px] font-medium ${expiryColorClass(msg.expires_at, now)}`}>
+                              <span className={`flex items-center gap-1 text-xs font-medium ${expiryColorClass(msg.expires_at, now)}`}>
                                 <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                   <circle cx="12" cy="12" r="9" />
                                   <path strokeLinecap="round" d="M12 7v5l3 3" />
@@ -623,7 +634,7 @@ export default function ChatRoomPage() {
                                 {formatExpiry(msg.expires_at, now)}
                               </span>
                             )}
-                            <span className="text-[10px] text-gray-600">
+                            <span className="text-xs text-gray-600">
                               {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
                             {isOwn && (
@@ -633,7 +644,7 @@ export default function ChatRoomPage() {
                             )}
                           </div>
                           {msg.id === lastSeenOwnMsgId && (
-                            <span className="mt-0.5 text-[10px] text-indigo-400">Seen</span>
+                            <span className="mt-0.5 text-xs text-indigo-400">Seen</span>
                           )}
                         </>
                       )}
@@ -694,6 +705,7 @@ export default function ChatRoomPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={!connected || uploading}
+            aria-label="Attach file"
             title="Attach file"
             className="flex-none rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
           >
@@ -714,6 +726,7 @@ export default function ChatRoomPage() {
             <button
               onClick={() => setShowEphemeralMenu((v) => !v)}
               disabled={!connected}
+              aria-label="Ephemeral message"
               title="Ephemeral message"
               className={`rounded-full p-2 transition-colors disabled:opacity-40 ${
                 ephemeral !== "off"
@@ -753,7 +766,9 @@ export default function ChatRoomPage() {
             )}
           </div>
 
+          <label htmlFor="message-input" className="sr-only">Message</label>
           <input
+            id="message-input"
             type="text"
             placeholder="Message…"
             value={input}
