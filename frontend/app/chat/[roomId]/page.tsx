@@ -395,31 +395,38 @@ export default function ChatRoomPage() {
         {room ? (
           <>
             {room.type === "dm" ? (
-              room.peer_avatar_url ? (
-                <Image src={room.peer_avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
-              ) : (
-                <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
-                  {(room.peer_name || "?")[0].toUpperCase()}
-                </span>
-              )
-            ) : null}
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-white">
-                {room.type === "dm" ? room.peer_name : room.name}
-              </span>
-              {room.type === "dm" && room.peer_id ? (
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-1.5 w-1.5 rounded-full ${presence[room.peer_id]?.online ? "bg-green-400" : "bg-gray-600"}`} />
-                  <span className="text-xs text-gray-400">
-                    {presence[room.peer_id]?.online
-                      ? "Online"
-                      : presence[room.peer_id]?.last_seen_at
-                      ? formatLastSeen(presence[room.peer_id].last_seen_at)
-                      : "Offline"}
+              <button
+                onClick={() => router.push(`/profile/${room.peer_id}`)}
+                className="flex items-center gap-3 hover:opacity-80"
+              >
+                {room.peer_avatar_url ? (
+                  <Image src={room.peer_avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
+                ) : (
+                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
+                    {(room.peer_name || "?")[0].toUpperCase()}
                   </span>
+                )}
+                <div className="flex flex-col text-left">
+                  <span className="text-sm font-medium text-white">{room.peer_name}</span>
+                  {room.peer_id ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full ${presence[room.peer_id]?.online ? "bg-green-400" : "bg-gray-600"}`} />
+                      <span className="text-xs text-gray-400">
+                        {presence[room.peer_id]?.online
+                          ? "Online"
+                          : presence[room.peer_id]?.last_seen_at
+                          ? formatLastSeen(presence[room.peer_id].last_seen_at)
+                          : "Offline"}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
+              </button>
+            ) : (
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-white">{room.name}</span>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex items-center gap-2">

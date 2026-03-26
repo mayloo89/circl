@@ -305,7 +305,10 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {pending.map((r) => (
                 <li key={r.contact_id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push(`/profile/${r.user_id}`)}
+                    className="flex items-center gap-3 text-left hover:opacity-80"
+                  >
                     {r.avatar_url ? (
                       <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
                     ) : (
@@ -314,7 +317,7 @@ export default function ContactsPage() {
                       </span>
                     )}
                     <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
-                  </div>
+                  </button>
                   <div className="flex gap-2">
                     <button
                       onClick={() => accept(r.contact_id)}
@@ -342,7 +345,10 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {sent.map((r) => (
                 <li key={r.contact_id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push(`/profile/${r.user_id}`)}
+                    className="flex items-center gap-3 text-left hover:opacity-80"
+                  >
                     {r.avatar_url ? (
                       <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
                     ) : (
@@ -351,7 +357,7 @@ export default function ContactsPage() {
                       </span>
                     )}
                     <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
-                  </div>
+                  </button>
                   <button
                     onClick={() => cancelSent(r.contact_id)}
                     className="rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 hover:bg-gray-600"
@@ -373,7 +379,10 @@ export default function ContactsPage() {
             <ul className="divide-y divide-gray-700">
               {contacts.map((c) => (
                 <li key={c.contact_id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push(`/profile/${c.user_id}`)}
+                    className="flex items-center gap-3 text-left hover:opacity-80"
+                  >
                     <div className="relative flex-none">
                       {c.avatar_url ? (
                         <Image src={c.avatar_url} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-700" />
@@ -389,7 +398,7 @@ export default function ContactsPage() {
                       />
                     </div>
                     <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
-                  </div>
+                  </button>
                   <div className="flex gap-2">
                     <button
                       onClick={() => startDM(c.user_id)}
