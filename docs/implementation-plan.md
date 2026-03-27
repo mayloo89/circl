@@ -64,22 +64,41 @@
 
 ## 8. Roadmap
 
-- [x] **Foundation**: repo, CI/CD (GitHub Actions), linters, dev/prod environments, secrets.
-- [x] **Auth**: registration and login with bcrypt; JWT HS256; `RequireAuth` middleware; NextAuth.js credentials provider; httpOnly cookies.
-- [x] **Private profiles**: `GET/PUT /profiles/me`; lazy profile creation; profile page in frontend.
-- [x] **Contacts**: user search; send/accept/decline/cancel requests; `DELETE /contacts/{id}`; `pending → accepted` state machine.
-- [x] **Real-time notifications (SSE)**: `notifications.Hub`; `GET /notifications/stream?token=`; `contact_request`, `contact_accepted`, `contact_removed` events; NavBar badge; `NotificationsContext` (single SSE connection per session, event bus for all subscribers).
-- [x] **Chat and rooms**: WebSocket (`GET /chat/rooms/{id}/ws?token=`); Redis Pub/Sub fan-out; DMs and group rooms; Postgres persistence; paginated history; unread counts; NavBar badge via `new_message` SSE event; ephemeral message schema (`expires_at`, `view_once`).
-- [x] **Presence**: Redis heartbeat with TTL; `POST /presence/heartbeat` (20s interval, tab-visibility-aware); `DELETE /presence/heartbeat` (immediate offline on logout); `GET /presence?ids=` batch query; `presence_online` / `presence_offline` SSE fan-out to contacts; green dot on contacts list; peer name + online status in DM chat header; `last_seen_at` persisted in Postgres; `formatLastSeen` utility.
-- [x] **Media — storage infra**: `Storage` interface (LocalStorage for dev, S3Storage for prod); `uploads` table; `POST /uploads/request` + `POST /uploads/{id}/confirm` lifecycle; file validation (type, size); `useUpload` frontend hook.
-- [ ] **Media — avatar upload**: profile avatar UI; `PUT /profiles/me` with `avatar_url`; avatar display in contacts and chat.
-- [ ] **Media — chat attachments**: attachment button in chat; image/file/video messages; render in message list.
-- [ ] **Media — S3 provider**: `S3Storage` implementation (aws-sdk-go-v2); pre-signed URLs; CDN delivery.
-- [ ] **Media — image processing**: asynq worker; resize/thumbnails; strip EXIF metadata.
-- [ ] **Ephemeral messages**: TTL cleanup worker (`expires_at`); view-once logic (`view_once` + `message_views`); automatic deletion.
-- [ ] **Typing indicators and read receipts**: `typing` and `read` events over WebSocket.
-- [ ] **QA / hardening**: e2e tests (Playwright); SAST/Dependabot; CSP/HSTS/CORS review; rate limiting.
-- [ ] **Observability and deployment**: structured logs, metrics, tracing (OpenTelemetry); deploy to Vercel + Fly.io/Render; managed DB and Redis.
+### Completed
+
+- [x] **Foundation** (PR #1): repo, CI/CD (GitHub Actions), linters, dev/prod environments, secrets.
+- [x] **Auth** (PR #2): registration and login with bcrypt; JWT HS256; `RequireAuth` middleware; NextAuth.js credentials provider; httpOnly cookies.
+- [x] **Private profiles** (PR #2): `GET/PUT /profiles/me`; lazy profile creation; profile page in frontend.
+- [x] **Contacts** (PR #9–10): user search; send/accept/decline/cancel requests; `DELETE /contacts/{id}`; `pending → accepted` state machine; real-time SSE notifications.
+- [x] **Modern Go refactor** (PR #11): `cmp.Or`, `strings.SplitSeq`, `t.Context()` throughout.
+- [x] **Real-time notifications (SSE)** (PR #14): `notifications.Hub`; `GET /notifications/stream?token=`; `contact_request`, `contact_accepted`, `contact_removed` events; NavBar badge; `NotificationsContext`.
+- [x] **Chat and rooms** (PR #14): WebSocket (`GET /chat/rooms/{id}/ws?token=`); Redis Pub/Sub fan-out; DMs and group rooms; Postgres persistence; paginated history; unread counts.
+- [x] **Presence** (PR #15): Redis heartbeat with TTL; batch `GET /presence?ids=`; `presence_online`/`presence_offline` SSE; green dot on contacts; last seen in DM header; `formatLastSeen`.
+- [x] **Media — storage infra** (PR #16): `Storage` interface; `LocalStorage`; `uploads` table; request/confirm lifecycle; `useUpload` hook.
+- [x] **Media — avatar upload** (PR #17): profile avatar UI; `PUT /profiles/me/avatar`; avatar in navbar/contacts/chat.
+- [x] **Media — chat attachments** (PR #18): attachment button; image/file/video messages; lightbox.
+- [x] **Media — S3 provider** (PR #19): `S3Storage` via `minio-go/v7`; Docker Compose dev/prod; Dockerfiles for backend and frontend.
+- [x] **Media — image processing** (PR #20): asynq worker; EXIF strip; 480px JPEG thumbnails; `thumbnail_key` on uploads.
+- [x] **Ephemeral messages** (PR #21): view-once tap-to-view; TTL options (15m–24h); tombstones; TTL countdown badge; cleaner worker.
+- [x] **Typing indicators** (PR #22): `typing` WS frame; server-side debounce; "X is typing…" UI with auto-clear.
+- [x] **Read receipts** (PR #23): `read_receipt` WS broadcast; ✓/✓✓ checkmarks; `peer_last_read_at` seeded from API.
+- [x] **Image thumbnails in chat** (PR #24): `thumbnail_url` on messages; `LEFT JOIN uploads` in `ListMessages`; thumbnail display with lightbox fallback.
+- [x] **Chat UI improvements** (PR #25): message grouping; date separators; skeleton loaders; new-message animation; relative timestamps on room list; empty and error states.
+- [x] **Chat UX fixes** (PR #26): additional UX polish and bug fixes.
+- [x] **Public profiles and photo gallery** (PR #27): `profile_photos` table; `GET /profiles/{userID}`; gallery upload/delete; public profile page with contact action button; DB trigger for auto profile creation.
+
+### Upcoming — see full roadmap in development plan
+
+- [ ] **Phase 1 — Frontend refactor & design system**: extract UI primitives, domain components, Next.js middleware.
+- [ ] **Phase 2 — Testing foundation**: vitest + testing-library + Playwright; backend integration tests; 98%+ coverage.
+- [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
+- [ ] **Phase 4 — Safety & moderation**: blocking; reporting; account lockout.
+- [ ] **Phase 5 — Push notifications & enhanced real-time**: Web Push; infinite scroll; message deletion; group chat UI.
+- [ ] **Phase 6 — Settings**: notification prefs, privacy controls, change password, delete account.
+- [ ] **Phase 7 — Observability**: zerolog; OpenTelemetry; Prometheus metrics; Sentry.
+- [ ] **Phase 8 — Security hardening**: CSP/HSTS headers; CSRF; token rotation; input validation; security audit.
+- [ ] **Phase 9 — Deployment**: production hosting (Fly.io + Vercel + Neon + Upstash); CI/CD pipeline.
+- [ ] **Phase 10 — Polish & launch**: accessibility audit; onboarding flow; landing page; final docs.
 
 ## 9. Testing strategy
 - Unit: handlers and services (auth, chat, profiles, contacts).
