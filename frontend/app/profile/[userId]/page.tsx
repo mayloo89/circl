@@ -73,10 +73,6 @@ export default function PublicProfilePage() {
   const myID = session?.user?.id
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/login")
-  }, [status, router])
-
-  useEffect(() => {
     if (myID && userId && myID === userId) router.replace("/profile")
   }, [myID, userId, router])
 

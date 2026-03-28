@@ -61,10 +61,6 @@ export default function ContactsPage() {
   const contactUserIDs = contacts.map((c) => c.user_id)
   const presence = usePresence(contactUserIDs, token, subscribe)
 
-  useEffect(() => {
-    if (status === "unauthenticated") router.push("/login")
-  }, [status, router])
-
   const fetchPending = useCallback(async () => {
     if (!token) return
     try {
