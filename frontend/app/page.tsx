@@ -1,15 +1,10 @@
 import { auth } from "@/lib/auth"
 import Link from "next/link"
-import { redirect } from "next/navigation"
 
 import SignOutButton from "@/components/SignOutButton"
 
 export default async function Home() {
   const session = await auth()
-
-  if (!session?.user) {
-    redirect("/login")
-  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950">
@@ -17,7 +12,7 @@ export default async function Home() {
         <div>
           <h1 className="text-center text-3xl font-bold text-white">Welcome to Circl</h1>
           <p className="mt-2 text-center text-gray-400">
-            Hello, {session.user.name || session.user.email}
+            Hello, {session?.user?.name || session?.user?.email}
           </p>
         </div>
 

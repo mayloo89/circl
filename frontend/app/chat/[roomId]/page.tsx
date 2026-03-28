@@ -84,7 +84,6 @@ export default function ChatRoomPage() {
   const presence = usePresence(peerIDs, token, subscribe)
 
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
-  useEffect(() => { if (status === "unauthenticated") router.push("/login") }, [status, router])
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId) return

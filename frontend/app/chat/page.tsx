@@ -101,10 +101,6 @@ export default function ChatPage() {
   const token = session?.accessToken
   const { clearChatBadge } = useNotificationsContext()
 
-  useEffect(() => {
-    if (status === "unauthenticated") router.push("/login")
-  }, [status, router])
-
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
 
   function loadRooms() {

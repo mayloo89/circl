@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
+import { registerSchema } from "@/lib/validation"
+
 export default function RegisterPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -17,8 +19,9 @@ export default function RegisterPage() {
     e.preventDefault()
     setError("")
 
-    if (password !== confirm) {
-      setError("Passwords do not match")
+    const parsed = registerSchema.safeParse({ email, password, confirm })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].message)
       return
     }
 
@@ -27,7 +30,7 @@ export default function RegisterPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
       })
 
       if (res.status === 409) {
@@ -48,8 +51,8 @@ export default function RegisterPage() {
 
       // Auto-login after successful registration
       const result = await signIn("credentials", {
-        email,
-        password,
+        email: parsed.data.email,
+        password: parsed.data.password,
         redirect: false,
       })
 

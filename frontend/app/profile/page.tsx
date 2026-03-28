@@ -95,10 +95,6 @@ export default function ProfilePage() {
   const isDirty = profile !== null && (displayName !== profile.display_name || bio !== profile.bio)
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/login")
-  }, [status, router])
-
-  useEffect(() => {
     if (status !== "authenticated" || !token) return
     fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.json())
