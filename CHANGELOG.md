@@ -8,18 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-03-28 — Next.js middleware and form validation
+## [1.9.0] - 2026-03-28 — Route guard cleanup and form validation
 
 ### Added
-- `middleware.ts` — centralized route protection using NextAuth v5 `auth` wrapper; redirects unauthenticated users to `/login` and authenticated users away from `/login`/`/register`
 - `lib/validation.ts` — Zod schemas (`loginSchema`, `registerSchema`) for auth forms with typed `LoginInput` / `RegisterInput` exports
 - `zod` dependency for schema-based validation
 
 ### Changed
 - `app/login/page.tsx` — validates email and password with `loginSchema` before calling `signIn`
 - `app/register/page.tsx` — validates email, password length, and password confirmation with `registerSchema`; replaces manual `password !== confirm` check
-- `app/page.tsx` — removed redundant server-side auth redirect (middleware now handles all protection)
-- `app/chat/page.tsx`, `app/chat/[roomId]/page.tsx`, `app/contacts/page.tsx`, `app/profile/page.tsx`, `app/profile/[userId]/page.tsx` — removed per-page `useEffect` auth redirects
+- `app/page.tsx` — removed redundant server-side auth redirect (`proxy.ts` already handles all route protection)
+- `app/chat/page.tsx`, `app/chat/[roomId]/page.tsx`, `app/contacts/page.tsx`, `app/profile/page.tsx`, `app/profile/[userId]/page.tsx` — removed per-page `useEffect` auth redirects (redundant with `proxy.ts`)
 
 ## [1.8.0] - 2026-03-28 — Domain component library
 
