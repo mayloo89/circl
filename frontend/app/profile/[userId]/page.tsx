@@ -5,6 +5,11 @@ import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
+import Avatar from "@/components/ui/Avatar"
+import Button from "@/components/ui/Button"
+import Modal from "@/components/ui/Modal"
+import Skeleton from "@/components/ui/Skeleton"
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 interface ProfilePhoto {
@@ -30,21 +35,21 @@ function ProfileSkeleton() {
   return (
     <div className="w-full max-w-lg space-y-6 px-4">
       <div className="flex items-center justify-between">
-        <span className="h-8 w-24 animate-pulse rounded bg-gray-800" />
-        <span className="h-5 w-16 animate-pulse rounded bg-gray-800" />
+        <Skeleton className="h-8 w-24" />
+        <Skeleton className="h-5 w-16" />
       </div>
       <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
         <div className="flex flex-col items-center gap-4">
-          <span className="h-24 w-24 animate-pulse rounded-full bg-gray-800" />
-          <span className="h-5 w-36 animate-pulse rounded bg-gray-800" />
-          <span className="h-4 w-48 animate-pulse rounded bg-gray-800" />
-          <span className="h-10 w-32 animate-pulse rounded-full bg-gray-800" />
+          <Skeleton className="h-24 w-24 rounded-full" />
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-10 w-32 rounded-full" />
         </div>
       </div>
       <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
         <div className="grid grid-cols-3 gap-3">
           {[0, 1, 2].map((i) => (
-            <span key={i} className="aspect-square animate-pulse rounded-lg bg-gray-800" />
+            <Skeleton key={i} className="aspect-square rounded-lg" />
           ))}
         </div>
       </div>
@@ -214,13 +219,7 @@ export default function PublicProfilePage() {
         <div className="w-full max-w-lg px-4">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-white">Profile</h1>
-            <button
-              aria-label="Go back"
-              onClick={() => router.back()}
-              className="text-sm text-gray-400 hover:text-gray-200"
-            >
-              ← Back
-            </button>
+            <Button variant="ghost" aria-label="Go back" onClick={() => router.back()}>← Back</Button>
           </div>
           <p className="mt-6 rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">
             {error || "Profile not found."}
@@ -233,29 +232,24 @@ export default function PublicProfilePage() {
   return (
     <>
       {/* Lightbox */}
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      <Modal open={!!lightbox} onClose={() => setLightbox(null)}>
+        <button
+          aria-label="Close lightbox"
+          className="absolute right-4 top-4 rounded-full p-2 text-white/70 hover:text-white"
           onClick={() => setLightbox(null)}
         >
-          <button
-            aria-label="Close"
-            className="absolute right-4 top-4 rounded-full p-2 text-white/70 hover:text-white"
-            onClick={() => setLightbox(null)}
-          >
-            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={lightbox}
-            alt=""
-            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={lightbox!}
+          alt=""
+          className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </Modal>
 
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
         <div className="w-full max-w-lg space-y-6 px-4">
@@ -263,13 +257,7 @@ export default function PublicProfilePage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-white">Profile</h1>
-            <button
-              aria-label="Go back"
-              onClick={() => router.back()}
-              className="text-sm text-gray-400 hover:text-gray-200"
-            >
-              ← Back
-            </button>
+            <Button variant="ghost" aria-label="Go back" onClick={() => router.back()}>← Back</Button>
           </div>
 
           {error && (
@@ -279,20 +267,7 @@ export default function PublicProfilePage() {
           {/* Identity card */}
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
             <div className="flex flex-col items-center gap-4 text-center">
-              {/* Avatar */}
-              {profile.avatar_url ? (
-                <Image
-                  src={profile.avatar_url}
-                  alt=""
-                  width={96}
-                  height={96}
-                  className="h-24 w-24 rounded-full object-cover ring-2 ring-gray-700"
-                />
-              ) : (
-                <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-700 text-3xl text-gray-300 ring-2 ring-gray-600">
-                  {(profile.display_name || "?")[0].toUpperCase()}
-                </span>
-              )}
+              <Avatar src={profile.avatar_url} name={profile.display_name || "?"} size="xl" />
 
               <div>
                 <h2 className="text-xl font-bold text-white">{profile.display_name}</h2>
@@ -303,16 +278,12 @@ export default function PublicProfilePage() {
 
               {/* Contact action */}
               {contactStatus === "loading" && (
-                <span className="h-10 w-32 animate-pulse rounded-full bg-gray-800" />
+                <Skeleton className="h-10 w-32 rounded-full" />
               )}
               {contactStatus === "contact" && (
-                <button
-                  onClick={handleStartDM}
-                  disabled={actionLoading}
-                  className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                >
+                <Button variant="primary" size="md" pill onClick={handleStartDM} disabled={actionLoading}>
                   Message
-                </button>
+                </Button>
               )}
               {contactStatus === "sent" && (
                 <span className="rounded-full bg-gray-800 px-5 py-2 text-sm text-gray-400 ring-1 ring-gray-700">
@@ -320,25 +291,24 @@ export default function PublicProfilePage() {
                 </span>
               )}
               {contactStatus === "incoming" && (
-                <button
-                  onClick={handleAccept}
-                  disabled={actionLoading}
-                  className="rounded-full bg-green-700 px-5 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
-                >
+                <Button variant="success" size="md" pill onClick={handleAccept} disabled={actionLoading}>
                   Accept request
-                </button>
+                </Button>
               )}
               {contactStatus === "none" && (
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
+                  pill
                   onClick={handleAddContact}
                   disabled={actionLoading}
-                  className="flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                  className="flex items-center gap-2"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
                   </svg>
                   Add contact
-                </button>
+                </Button>
               )}
             </div>
           </div>

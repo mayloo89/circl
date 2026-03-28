@@ -9,6 +9,9 @@ import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type ChatMessage, type SendOpts } from "@/hooks/useChat"
 import { usePresence, formatLastSeen } from "@/hooks/usePresence"
 import { useUpload } from "@/hooks/useUpload"
+import Avatar from "@/components/ui/Avatar"
+import PresenceDot from "@/components/ui/PresenceDot"
+import Skeleton from "@/components/ui/Skeleton"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -147,24 +150,24 @@ function MessageSkeletons() {
     <div className="space-y-4 px-4 py-4">
       {/* incoming */}
       <div className="flex items-end gap-2">
-        <span className="h-7 w-7 flex-none animate-pulse rounded-full bg-gray-800" />
+        <Skeleton className="h-7 w-7 flex-none rounded-full" />
         <div className="space-y-1">
-          <span className="block h-3 w-16 animate-pulse rounded bg-gray-800/60" />
-          <span className="block h-9 w-48 animate-pulse rounded-2xl bg-gray-800" />
+          <Skeleton className="h-3 w-16 bg-gray-800/60" />
+          <Skeleton className="h-9 w-48 rounded-2xl" />
         </div>
       </div>
       {/* outgoing */}
       <div className="flex justify-end">
-        <span className="block h-9 w-36 animate-pulse rounded-2xl bg-indigo-900/50" />
+        <Skeleton className="h-9 w-36 rounded-2xl bg-indigo-900/50" />
       </div>
       {/* incoming long */}
       <div className="flex items-end gap-2">
-        <span className="h-7 w-7 flex-none animate-pulse rounded-full bg-gray-800" />
-        <span className="block h-9 w-64 animate-pulse rounded-2xl bg-gray-800" />
+        <Skeleton className="h-7 w-7 flex-none rounded-full" />
+        <Skeleton className="h-9 w-64 rounded-2xl" />
       </div>
       {/* outgoing */}
       <div className="flex justify-end">
-        <span className="block h-9 w-52 animate-pulse rounded-2xl bg-indigo-900/50" />
+        <Skeleton className="h-9 w-52 rounded-2xl bg-indigo-900/50" />
       </div>
     </div>
   )
@@ -399,18 +402,12 @@ export default function ChatRoomPage() {
                 onClick={() => router.push(`/profile/${room.peer_id}`)}
                 className="flex items-center gap-3 hover:opacity-80"
               >
-                {room.peer_avatar_url ? (
-                  <Image src={room.peer_avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
-                ) : (
-                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
-                    {(room.peer_name || "?")[0].toUpperCase()}
-                  </span>
-                )}
+                <Avatar src={room.peer_avatar_url} name={room.peer_name || "?"} size="md" />
                 <div className="flex flex-col text-left">
                   <span className="text-sm font-medium text-white">{room.peer_name}</span>
                   {room.peer_id ? (
                     <div className="flex items-center gap-1.5">
-                      <span className={`h-1.5 w-1.5 rounded-full ${presence[room.peer_id]?.online ? "bg-green-400" : "bg-gray-600"}`} />
+                      <PresenceDot online={presence[room.peer_id]?.online ?? false} size="sm" />
                       <span className="text-xs text-gray-400">
                         {presence[room.peer_id]?.online
                           ? "Online"
@@ -484,13 +481,7 @@ export default function ChatRoomPage() {
                     {!isOwn && (
                       <div className="mr-2 mt-auto flex-none self-end">
                         {lastInGroup ? (
-                          avatarUrl ? (
-                            <Image src={avatarUrl} alt="" width={28} height={28} className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-700" />
-                          ) : (
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-700 text-xs text-gray-300 ring-1 ring-gray-600">
-                              {(msg.sender_name || "?")[0].toUpperCase()}
-                            </span>
-                          )
+                          <Avatar src={avatarUrl} name={msg.sender_name || "?"} size="sm" />
                         ) : (
                           <div className="h-7 w-7" />
                         )}

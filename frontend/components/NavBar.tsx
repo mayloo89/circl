@@ -1,11 +1,12 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
+import Avatar from "@/components/ui/Avatar"
+import Badge from "@/components/ui/Badge"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -40,27 +41,17 @@ export default function NavBar() {
         <Link href="/chat" className="relative text-sm text-gray-300 hover:text-white">
           Messages
           {unreadChatCount > 0 && (
-            <span className="absolute -right-4 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-semibold text-white">
-              {unreadChatCount > 9 ? "9+" : unreadChatCount}
-            </span>
+            <Badge count={unreadChatCount} max={9} variant="dot" className="absolute -right-4 -top-2" />
           )}
         </Link>
         <Link href="/contacts" className="relative text-sm text-gray-300 hover:text-white">
           Contacts
           {pendingCount > 0 && (
-            <span className="absolute -right-4 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-semibold text-white">
-              {pendingCount > 9 ? "9+" : pendingCount}
-            </span>
+            <Badge count={pendingCount} max={9} variant="dot" className="absolute -right-4 -top-2" />
           )}
         </Link>
         <Link href="/profile" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
-          {avatarURL ? (
-            <Image src={avatarURL} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover ring-1 ring-gray-700" />
-          ) : (
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-700 text-xs text-gray-300 ring-1 ring-gray-600">
-              {displayName ? displayName[0].toUpperCase() : "?"}
-            </span>
-          )}
+          <Avatar src={avatarURL} name={displayName || "?"} size="xs" />
           Profile
         </Link>
       </div>

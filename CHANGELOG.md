@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-03-28 — UI primitive component library
+
+### Added
+- `components/ui/Avatar` — image with initial-letter fallback; 5 sizes (xs → xl); gray/indigo color variants for user vs group room contexts
+- `components/ui/Badge` — count badge with dot/count/pill variants; used for nav overlays, unread counts, and section headings
+- `components/ui/Button` — unified button with 6 variants (primary, secondary, danger, success, ghost, warning), 3 sizes, pill shape, and `loading` prop with inline spinner
+- `components/ui/Input` — labeled text input with `error`, `helper`, `dirty` (orange border for unsaved changes), and `labelHidden` props
+- `components/ui/Skeleton` — `animate-pulse` primitive block; page-level loading composites now compose it
+- `components/ui/Modal` — full-screen backdrop with Escape key and backdrop-click dismissal; replaces inline lightbox in `/profile/[userId]`
+- `components/ui/Toast` — global toast notification system: `ToastProvider` (wired in `providers.tsx`) + `useToast()` hook
+- `components/ui/PresenceDot` — sm/md sized online/offline indicator; replaces inline `<span>` in contacts list and chat header
+- `loading.tsx` and `error.tsx` route boundaries for all authenticated segments: `/chat`, `/chat/[roomId]`, `/contacts`, `/profile`, `/profile/[userId]`
+
+### Changed
+- `NavBar` — uses `Avatar` and `Badge`
+- `app/contacts/page.tsx` — uses `Avatar`, `Badge`, `Button`, `Input`, `PresenceDot`
+- `app/chat/page.tsx` — uses `Avatar`, `Badge`, `Button`, `Skeleton`
+- `app/chat/[roomId]/page.tsx` — uses `Avatar`, `PresenceDot`, `Skeleton`
+- `app/profile/page.tsx` — uses `Button`, `Input`, `Skeleton`
+- `app/profile/[userId]/page.tsx` — uses `Avatar`, `Button`, `Modal`, `Skeleton`
+
 ## [1.6.0] - 2026-03-26 — Public profiles and photo gallery
 
 ### Added

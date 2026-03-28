@@ -86,10 +86,13 @@
 - [x] **Chat UI improvements** (PR #25): message grouping; date separators; skeleton loaders; new-message animation; relative timestamps on room list; empty and error states.
 - [x] **Chat UX fixes** (PR #26): additional UX polish and bug fixes.
 - [x] **Public profiles and photo gallery** (PR #27): `profile_photos` table; `GET /profiles/{userID}`; gallery upload/delete; public profile page with contact action button; DB trigger for auto profile creation.
+- [x] **Documentation and memory cleanup** (PR #28): roadmap sync, stale memory files updated, dead env var and unused dependency removed.
+- [x] **UI primitive component library** (PR #29): `Avatar`, `Badge`, `Button`, `Input`, `Skeleton`, `Modal`, `Toast`, `PresenceDot` in `components/ui/`; route `loading.tsx`/`error.tsx` for all authenticated segments; all callers updated.
 
 ### Upcoming — see full roadmap in development plan
 
-- [ ] **Phase 1 — Frontend refactor & design system**: extract UI primitives, domain components, Next.js middleware.
+- [ ] **Phase 1 — domain components** (PR #30): `MessageBubble`, `ChatInput`, `Lightbox`, `ContactCard`, `PhotoGallery`, etc.; break `chat/[roomId]/page.tsx` from ~805 lines to ~150.
+- [ ] **Phase 1 — Next.js middleware** (PR #31): centralized route protection, form validation (zod).
 - [ ] **Phase 2 — Testing foundation**: vitest + testing-library + Playwright; backend integration tests; 98%+ coverage.
 - [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
 - [ ] **Phase 4 — Safety & moderation**: blocking; reporting; account lockout.
