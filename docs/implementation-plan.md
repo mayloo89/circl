@@ -88,10 +88,11 @@
 - [x] **Public profiles and photo gallery** (PR #27): `profile_photos` table; `GET /profiles/{userID}`; gallery upload/delete; public profile page with contact action button; DB trigger for auto profile creation.
 - [x] **Documentation and memory cleanup** (PR #28): roadmap sync, stale memory files updated, dead env var and unused dependency removed.
 - [x] **UI primitive component library** (PR #29): `Avatar`, `Badge`, `Button`, `Input`, `Skeleton`, `Modal`, `Toast`, `PresenceDot` in `components/ui/`; route `loading.tsx`/`error.tsx` for all authenticated segments; all callers updated.
+- [x] **Domain component library** (PR #30): `MessageBubble`, `DateSeparator`, `TypingIndicator`, `ChatInput`, `Lightbox` in `components/chat/`; `ContactCard`, `SearchBar` in `components/contacts/`; `PhotoGallery`, `ProfileHeader` in `components/profile/`; shared `types/chat.ts` and `lib/chatHelpers.ts`; `chat/[roomId]/page.tsx` reduced from ~800 to ~210 lines.
 
 ### Upcoming — see full roadmap in development plan
 
-- [ ] **Phase 1 — domain components** (PR #30): `MessageBubble`, `ChatInput`, `Lightbox`, `ContactCard`, `PhotoGallery`, etc.; break `chat/[roomId]/page.tsx` from ~805 lines to ~150.
+- [ ] **Phase 1 — Next.js middleware** (PR #31): centralized route protection, form validation (zod).
 - [ ] **Phase 1 — Next.js middleware** (PR #31): centralized route protection, form validation (zod).
 - [ ] **Phase 2 — Testing foundation**: vitest + testing-library + Playwright; backend integration tests; 98%+ coverage.
 - [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.

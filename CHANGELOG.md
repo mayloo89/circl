@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-03-28 — Domain component library
+
+### Added
+- `types/chat.ts` — shared chat types: `HistoryMessage`, `AnyMessage`, `EphemeralMode`, `EPHEMERAL_LABELS`
+- `lib/chatHelpers.ts` — message grouping utilities: `isFirstInGroup`, `isLastInGroup`, `sameCalendarDay`, `formatDaySeparator`, `formatExpiry`, `expiryColorClass`
+- `components/chat/Lightbox` — unified image/video lightbox; wraps `Modal`; replaces duplicated inline lightboxes in chat room and public profile
+- `components/chat/MessageBubble` — full message rendering: tombstone, view-once (own/other), image, video, file, text; expiry countdown; read receipt; animation support
+- `components/chat/DateSeparator` — horizontal rule with "Today / Yesterday / weekday" label
+- `components/chat/TypingIndicator` — "X is typing…" bar; renders nothing when no typers
+- `components/chat/ChatInput` — complete input bar: attach button, ephemeral mode menu, typing throttle, text input, send button; input state is owned internally
+- `components/contacts/ContactCard` — unified contact list row with 4 variants: `search-result`, `pending`, `sent`, `contact`; includes presence dot for accepted contacts
+- `components/contacts/SearchBar` — search input + results list in a card; used in contacts page
+- `components/profile/PhotoGallery` — photo grid with two modes: `editable` (upload slot, delete with confirm overlay) and view-only (tap to open lightbox); confirm state is internal
+- `components/profile/ProfileHeader` — public profile identity card: avatar, name, bio, and contact action button (4 states: add / sent / incoming / message)
+
+### Changed
+- `app/chat/[roomId]/page.tsx` — reduced from ~800 lines to ~210 using `MessageBubble`, `DateSeparator`, `TypingIndicator`, `ChatInput`, `Lightbox`
+- `app/contacts/page.tsx` — uses `ContactCard` and `SearchBar`
+- `app/profile/page.tsx` — uses `PhotoGallery` (editable mode)
+- `app/profile/[userId]/page.tsx` — uses `ProfileHeader`, `PhotoGallery` (view mode), and `Lightbox`
+
 ## [1.7.0] - 2026-03-28 — UI primitive component library
 
 ### Added

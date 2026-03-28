@@ -9,6 +9,7 @@ import { useUpload } from "@/hooks/useUpload"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
+import PhotoGallery from "@/components/profile/PhotoGallery"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const MAX_BIO = 280
@@ -81,7 +82,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useAutoReset(formSuccess, setFormSuccess)
   useAutoReset(avatarSuccess, setAvatarSuccess)
@@ -100,10 +100,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return
-
-    fetch(`${API_URL}/profiles/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.json())
       .then((data: Profile) => {
         setProfile(data)
@@ -120,18 +117,13 @@ export default function ProfilePage() {
     setFormError("")
     setFormSuccess("")
     setSaving(true)
-
     try {
       const res = await fetch(`${API_URL}/profiles/me`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ display_name: displayName, bio, avatar_url: avatarURL }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        setFormError(data.error ?? "Failed to update profile.")
-        return
-      }
+      if (!res.ok) { const data = await res.json(); setFormError(data.error ?? "Failed to update profile."); return }
       const updated: Profile = await res.json()
       setProfile(updated)
       setAvatarURL(updated.avatar_url)
@@ -154,10 +146,7 @@ export default function ProfilePage() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ avatar_url: result.url }),
     })
-    if (!res.ok) {
-      setAvatarError("Failed to save avatar.")
-      return
-    }
+    if (!res.ok) { setAvatarError("Failed to save avatar."); return }
     setAvatarURL(result.url)
     setAvatarSuccess("Avatar updated.")
   }
@@ -175,11 +164,7 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url: result.url }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        setGalleryError(data.error ?? "Failed to add photo.")
-        return
-      }
+      if (!res.ok) { const data = await res.json(); setGalleryError(data.error ?? "Failed to add photo."); return }
       const photo: ProfilePhoto = await res.json()
       setProfile((prev) => prev ? { ...prev, photos: [...prev.photos, photo] } : prev)
     } finally {
@@ -190,15 +175,11 @@ export default function ProfilePage() {
 
   async function handleDeletePhoto(photoID: string) {
     setGalleryError("")
-    setConfirmDeleteId(null)
     const res = await fetch(`${API_URL}/profiles/me/photos/${photoID}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) {
-      setGalleryError("Failed to delete photo.")
-      return
-    }
+    if (!res.ok) { setGalleryError("Failed to delete photo."); return }
     setProfile((prev) => prev ? { ...prev, photos: prev.photos.filter((p) => p.id !== photoID) } : prev)
   }
 
@@ -210,14 +191,10 @@ export default function ProfilePage() {
     )
   }
 
-  const photos = profile?.photos ?? []
-  const slots = Array.from({ length: MAX_PHOTOS }, (_, i) => photos[i] ?? null)
-
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-lg space-y-6 px-4">
 
-        {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">My Profile</h1>
           <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
@@ -229,7 +206,7 @@ export default function ProfilePage() {
 
         {/* Profile card */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          {/* Avatar upload button — custom widget, not a plain Avatar display */}
+          {/* Avatar upload — custom interactive widget */}
           <div className="flex flex-col items-center gap-3">
             <button
               type="button"
@@ -258,7 +235,6 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <Input
               label="Display Name"
@@ -306,88 +282,23 @@ export default function ProfilePage() {
           </form>
         </div>
 
-        {/* Gallery */}
-        <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Gallery</h2>
-            <span className="text-xs text-gray-500">{photos.length}/{MAX_PHOTOS}</span>
-          </div>
+        <PhotoGallery
+          photos={profile?.photos ?? []}
+          maxPhotos={MAX_PHOTOS}
+          editable
+          uploading={uploadingPhoto}
+          onAdd={() => photoInputRef.current?.click()}
+          onDelete={handleDeletePhoto}
+          error={galleryError}
+        />
 
-          <div className="grid grid-cols-3 gap-3">
-            {slots.map((photo, i) => {
-              if (photo) {
-                const isConfirming = confirmDeleteId === photo.id
-                return (
-                  <div key={photo.id} className="relative aspect-square overflow-hidden rounded-lg bg-gray-800">
-                    <Image
-                      src={photo.url}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 512px) 33vw, 170px"
-                    />
-                    {isConfirming ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75 p-2">
-                        <p className="text-center text-xs font-medium text-white">Delete photo?</p>
-                        <div className="flex gap-2">
-                          <Button variant="danger" size="sm" onClick={() => handleDeletePhoto(photo.id)}>Delete</Button>
-                          <Button variant="secondary" size="sm" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        aria-label="Delete photo"
-                        onClick={() => setConfirmDeleteId(photo.id)}
-                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-red-600"
-                      >
-                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                )
-              }
-
-              // Empty slot
-              const isUploadSlot = i === photos.length
-              return (
-                <div key={`empty-${i}`} className="aspect-square rounded-lg border-2 border-dashed border-gray-800">
-                  {isUploadSlot && (
-                    <button
-                      type="button"
-                      onClick={() => photoInputRef.current?.click()}
-                      disabled={uploadingPhoto}
-                      className="flex h-full w-full items-center justify-center text-gray-600 transition-colors hover:border-indigo-600 hover:text-indigo-500"
-                    >
-                      {uploadingPhoto ? (
-                        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                      ) : (
-                        <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                        </svg>
-                      )}
-                      <span className="sr-only">Add photo</span>
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {galleryError && <p className="mt-3 text-sm text-red-400">{galleryError}</p>}
-
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleAddPhoto}
-            className="hidden"
-          />
-        </div>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleAddPhoto}
+          className="hidden"
+        />
 
       </div>
     </div>
