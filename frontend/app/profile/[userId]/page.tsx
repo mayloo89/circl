@@ -1,14 +1,14 @@
 "use client"
 
-import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
-import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
-import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
+import PhotoGallery from "@/components/profile/PhotoGallery"
+import ProfileHeader, { type ContactStatus } from "@/components/profile/ProfileHeader"
+import Lightbox from "@/components/chat/Lightbox"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -24,8 +24,6 @@ interface PublicProfile {
   avatar_url: string
   photos: ProfilePhoto[]
 }
-
-type ContactStatus = "none" | "contact" | "sent" | "incoming" | "loading"
 
 interface SentRequest  { contact_id: string; user_id: string }
 interface AcceptedContact { contact_id: string; user_id: string }
@@ -78,11 +76,8 @@ export default function PublicProfilePage() {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
 
-  // Redirect to own private profile if viewing self
   useEffect(() => {
-    if (myID && userId && myID === userId) {
-      router.replace("/profile")
-    }
+    if (myID && userId && myID === userId) router.replace("/profile")
   }, [myID, userId, router])
 
   useEffect(() => {
@@ -95,44 +90,24 @@ export default function PublicProfilePage() {
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }),
     ])
       .then(async ([profileRes, contactsRes, sentRes, pendingRes]) => {
-        if (profileRes.status === 404) {
-          setError("Profile not found.")
-          return
-        }
+        if (profileRes.status === 404) { setError("Profile not found."); return }
         if (!profileRes.ok) throw new Error("Failed to load profile.")
 
-        const [prof, contacts, sent, pending]: [
-          PublicProfile,
-          AcceptedContact[],
-          SentRequest[],
-          PendingRequest[],
-        ] = await Promise.all([
-          profileRes.json(),
-          contactsRes.ok ? contactsRes.json() : [],
-          sentRes.ok ? sentRes.json() : [],
-          pendingRes.ok ? pendingRes.json() : [],
-        ])
+        const [prof, contacts, sent, pending]: [PublicProfile, AcceptedContact[], SentRequest[], PendingRequest[]] =
+          await Promise.all([
+            profileRes.json(),
+            contactsRes.ok ? contactsRes.json() : [],
+            sentRes.ok ? sentRes.json() : [],
+            pendingRes.ok ? pendingRes.json() : [],
+          ])
 
         setProfile(prof)
-
         const accepted = contacts.find((c) => c.user_id === userId)
-        if (accepted) {
-          setContactStatus("contact")
-          setContactId(accepted.contact_id)
-          return
-        }
+        if (accepted) { setContactStatus("contact"); setContactId(accepted.contact_id); return }
         const sentEntry = sent.find((s) => s.user_id === userId)
-        if (sentEntry) {
-          setContactStatus("sent")
-          setContactId(sentEntry.contact_id)
-          return
-        }
+        if (sentEntry) { setContactStatus("sent"); setContactId(sentEntry.contact_id); return }
         const incomingEntry = pending.find((p) => p.user_id === userId)
-        if (incomingEntry) {
-          setContactStatus("incoming")
-          setContactId(incomingEntry.contact_id)
-          return
-        }
+        if (incomingEntry) { setContactStatus("incoming"); setContactId(incomingEntry.contact_id); return }
         setContactStatus("none")
       })
       .catch(() => setError("Failed to load profile."))
@@ -149,14 +124,8 @@ export default function PublicProfilePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ addressee_id: userId }),
       })
-      if (res.status === 409) {
-        setContactStatus("sent")
-        return
-      }
-      if (!res.ok) {
-        setError("Failed to send contact request.")
-        return
-      }
+      if (res.status === 409) { setContactStatus("sent"); return }
+      if (!res.ok) { setError("Failed to send contact request."); return }
       const contact = await res.json()
       setContactId(contact.id)
       setContactStatus("sent")
@@ -174,10 +143,7 @@ export default function PublicProfilePage() {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) {
-        setError("Failed to accept contact.")
-        return
-      }
+      if (!res.ok) { setError("Failed to accept contact."); return }
       setContactStatus("contact")
     } finally {
       setActionLoading(false)
@@ -194,10 +160,7 @@ export default function PublicProfilePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ peer_id: userId }),
       })
-      if (!res.ok) {
-        setError("Failed to open conversation.")
-        return
-      }
+      if (!res.ok) { setError("Failed to open conversation."); return }
       const room = await res.json()
       router.push(`/chat/${room.id}`)
     } finally {
@@ -231,30 +194,13 @@ export default function PublicProfilePage() {
 
   return (
     <>
-      {/* Lightbox */}
-      <Modal open={!!lightbox} onClose={() => setLightbox(null)}>
-        <button
-          aria-label="Close lightbox"
-          className="absolute right-4 top-4 rounded-full p-2 text-white/70 hover:text-white"
-          onClick={() => setLightbox(null)}
-        >
-          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={lightbox!}
-          alt=""
-          className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Modal>
+      {lightbox && (
+        <Lightbox url={lightbox} type="image" onClose={() => setLightbox(null)} />
+      )}
 
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
         <div className="w-full max-w-lg space-y-6 px-4">
 
-          {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-white">Profile</h1>
             <Button variant="ghost" aria-label="Go back" onClick={() => router.back()}>← Back</Button>
@@ -264,78 +210,19 @@ export default function PublicProfilePage() {
             <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
           )}
 
-          {/* Identity card */}
-          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <Avatar src={profile.avatar_url} name={profile.display_name || "?"} size="xl" />
+          <ProfileHeader
+            profile={profile}
+            contactStatus={contactStatus}
+            actionLoading={actionLoading}
+            onAddContact={handleAddContact}
+            onAccept={handleAccept}
+            onStartDM={handleStartDM}
+          />
 
-              <div>
-                <h2 className="text-xl font-bold text-white">{profile.display_name}</h2>
-                {profile.bio && (
-                  <p className="mt-1 max-w-xs text-sm text-gray-400">{profile.bio}</p>
-                )}
-              </div>
-
-              {/* Contact action */}
-              {contactStatus === "loading" && (
-                <Skeleton className="h-10 w-32 rounded-full" />
-              )}
-              {contactStatus === "contact" && (
-                <Button variant="primary" size="md" pill onClick={handleStartDM} disabled={actionLoading}>
-                  Message
-                </Button>
-              )}
-              {contactStatus === "sent" && (
-                <span className="rounded-full bg-gray-800 px-5 py-2 text-sm text-gray-400 ring-1 ring-gray-700">
-                  Request sent
-                </span>
-              )}
-              {contactStatus === "incoming" && (
-                <Button variant="success" size="md" pill onClick={handleAccept} disabled={actionLoading}>
-                  Accept request
-                </Button>
-              )}
-              {contactStatus === "none" && (
-                <Button
-                  variant="primary"
-                  size="md"
-                  pill
-                  onClick={handleAddContact}
-                  disabled={actionLoading}
-                  className="flex items-center gap-2"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                  </svg>
-                  Add contact
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Photos */}
-          {profile.photos.length > 0 && (
-            <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-              <h2 className="mb-4 text-lg font-semibold text-white">Photos</h2>
-              <div className="grid grid-cols-3 gap-3">
-                {profile.photos.map((photo) => (
-                  <button
-                    key={photo.id}
-                    onClick={() => setLightbox(photo.url)}
-                    className="relative aspect-square overflow-hidden rounded-lg bg-gray-800 transition-transform active:scale-95"
-                  >
-                    <Image
-                      src={photo.url}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 512px) 33vw, 170px"
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <PhotoGallery
+            photos={profile.photos}
+            onPhotoClick={setLightbox}
+          />
 
         </div>
       </div>

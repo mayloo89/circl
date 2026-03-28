@@ -6,11 +6,10 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { usePresence } from "@/hooks/usePresence"
-import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
-import Input from "@/components/ui/Input"
-import PresenceDot from "@/components/ui/PresenceDot"
+import ContactCard from "@/components/contacts/ContactCard"
+import SearchBar from "@/components/contacts/SearchBar"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -86,39 +85,23 @@ export default function ContactsPage() {
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
       fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
     ])
-      .then(([c, p, s]) => {
-        setContacts(c)
-        setPending(p)
-        setSent(s)
-      })
+      .then(([c, p, s]) => { setContacts(c); setPending(p); setSent(s) })
       .catch(() => setError("Failed to load contacts."))
       .finally(() => setLoading(false))
   }, [status, token])
 
-  // Keep a ref to the event handler so the subscription (registered once on
-  // mount) always calls the latest version — avoids stale closures over
-  // `sent`, `pending`, etc. without re-subscribing on every state change.
+  // Stable subscription via ref to avoid stale closures.
   const handleEventRef = useRef<Parameters<typeof subscribe>[0]>(() => {})
   useEffect(() => {
     handleEventRef.current = (e) => {
-      if (e.type === "contact_request") {
-        // Re-fetch to get the requester's display_name / email.
-        fetchPending()
-      }
+      if (e.type === "contact_request") { fetchPending() }
       if (e.type === "contact_accepted") {
-        // Move the matching sent entry into accepted contacts.
         const matched = sent.find((s) => s.contact_id === e.payload.contact_id)
         if (matched) {
           setSent((prev) => prev.filter((s) => s.contact_id !== e.payload.contact_id))
           setContacts((prev) => {
             if (prev.some((c) => c.contact_id === matched.contact_id)) return prev
-            return [...prev, {
-              contact_id: matched.contact_id,
-              user_id: matched.user_id,
-              email: matched.email,
-              display_name: matched.display_name,
-              avatar_url: matched.avatar_url,
-            }]
+            return [...prev, { contact_id: matched.contact_id, user_id: matched.user_id, email: matched.email, display_name: matched.display_name, avatar_url: matched.avatar_url }]
           })
         }
       }
@@ -130,24 +113,16 @@ export default function ContactsPage() {
       }
     }
   })
-
-  // Stable subscription: registers once on mount, calls through the ref.
-  useEffect(() => {
-    return subscribe((e) => handleEventRef.current(e))
-  }, [subscribe])
+  useEffect(() => { return subscribe((e) => handleEventRef.current(e)) }, [subscribe])
 
   async function search(q: string) {
     setSearchQuery(q)
-    if (!q.trim()) {
-      setSearchResults([])
-      return
-    }
+    if (!q.trim()) { setSearchResults([]); return }
     try {
       const res = await fetch(`${API_URL}/users/search?q=${encodeURIComponent(q)}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      const data = await res.json()
-      setSearchResults(data)
+      setSearchResults(await res.json())
     } catch {
       setSearchResults([])
     }
@@ -160,19 +135,11 @@ export default function ContactsPage() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ addressee_id: addresseeID }),
     })
-    if (res.status === 409) {
-      setError("Contact request already sent.")
-      return
-    }
-    if (!res.ok) {
-      setError("Failed to send contact request.")
-      return
-    }
+    if (res.status === 409) { setError("Contact request already sent."); return }
+    if (!res.ok) { setError("Failed to send contact request."); return }
     const contact = await res.json()
     const user = searchResults.find((u) => u.id === addresseeID)
-    if (user) {
-      setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
-    }
+    if (user) setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
     setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
   }
 
@@ -182,10 +149,7 @@ export default function ContactsPage() {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) {
-      setError("Failed to accept contact.")
-      return
-    }
+    if (!res.ok) { setError("Failed to accept contact."); return }
     const accepted = pending.find((r) => r.contact_id === contactID)
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
     if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
@@ -198,10 +162,7 @@ export default function ContactsPage() {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) {
-      setError("Failed to cancel request.")
-      return
-    }
+    if (!res.ok) { setError("Failed to cancel request."); return }
     setSent((prev) => prev.filter((r) => r.contact_id !== contactID))
   }
 
@@ -212,10 +173,7 @@ export default function ContactsPage() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ peer_id: peerID }),
     })
-    if (!res.ok) {
-      setError("Failed to open conversation.")
-      return
-    }
+    if (!res.ok) { setError("Failed to open conversation."); return }
     const room = await res.json()
     router.push(`/chat/${room.id}`)
   }
@@ -226,10 +184,7 @@ export default function ContactsPage() {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) {
-      setError("Failed to remove contact.")
-      return
-    }
+    if (!res.ok) { setError("Failed to remove contact."); return }
     setContacts((prev) => prev.filter((c) => c.contact_id !== contactID))
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
     refreshPendingCount()
@@ -255,34 +210,13 @@ export default function ContactsPage() {
           <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
         )}
 
-        {/* Search */}
-        <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          <h2 className="mb-3 text-lg font-semibold text-white">Add Contact</h2>
-          <Input
-            label="Search contacts"
-            labelHidden
-            id="contact-search"
-            type="text"
-            placeholder="Search by name or email..."
-            value={searchQuery}
-            onChange={(e) => search(e.target.value)}
-          />
-          {searchResults.length > 0 && (
-            <ul className="mt-3 divide-y divide-gray-700">
-              {searchResults.map((u) => (
-                <li key={u.id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <Avatar src={u.avatar_url} name={u.display_name || u.email} size="md" />
-                    <span className="text-sm text-gray-200">{u.display_name || u.email}</span>
-                  </div>
-                  <Button variant="primary" size="sm" onClick={() => sendRequest(u.id)}>Add</Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <SearchBar
+          value={searchQuery}
+          onChange={search}
+          results={searchResults}
+          onAdd={sendRequest}
+        />
 
-        {/* Pending requests */}
         {pending.length > 0 && (
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
             <h2 className="mb-3 flex items-center text-lg font-semibold text-white">
@@ -291,46 +225,42 @@ export default function ContactsPage() {
             </h2>
             <ul className="divide-y divide-gray-700">
               {pending.map((r) => (
-                <li key={r.contact_id} className="flex items-center justify-between py-2">
-                  <button
-                    onClick={() => router.push(`/profile/${r.user_id}`)}
-                    className="flex items-center gap-3 text-left hover:opacity-80"
-                  >
-                    <Avatar src={r.avatar_url} name={r.display_name || r.email} size="md" />
-                    <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
-                  </button>
-                  <div className="flex gap-2">
-                    <Button variant="success" size="sm" onClick={() => accept(r.contact_id)}>Accept</Button>
-                    <Button variant="secondary" size="sm" onClick={() => remove(r.contact_id)}>Decline</Button>
-                  </div>
-                </li>
+                <ContactCard
+                  key={r.contact_id}
+                  userId={r.user_id}
+                  email={r.email}
+                  displayName={r.display_name}
+                  avatarUrl={r.avatar_url}
+                  variant="pending"
+                  onNavigate={() => router.push(`/profile/${r.user_id}`)}
+                  onPrimary={() => accept(r.contact_id)}
+                  onSecondary={() => remove(r.contact_id)}
+                />
               ))}
             </ul>
           </div>
         )}
 
-        {/* Sent requests */}
         {sent.length > 0 && (
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
             <h2 className="mb-3 text-lg font-semibold text-white">Sent Requests</h2>
             <ul className="divide-y divide-gray-700">
               {sent.map((r) => (
-                <li key={r.contact_id} className="flex items-center justify-between py-2">
-                  <button
-                    onClick={() => router.push(`/profile/${r.user_id}`)}
-                    className="flex items-center gap-3 text-left hover:opacity-80"
-                  >
-                    <Avatar src={r.avatar_url} name={r.display_name || r.email} size="md" />
-                    <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
-                  </button>
-                  <Button variant="secondary" size="sm" onClick={() => cancelSent(r.contact_id)}>Cancel</Button>
-                </li>
+                <ContactCard
+                  key={r.contact_id}
+                  userId={r.user_id}
+                  email={r.email}
+                  displayName={r.display_name}
+                  avatarUrl={r.avatar_url}
+                  variant="sent"
+                  onNavigate={() => router.push(`/profile/${r.user_id}`)}
+                  onSecondary={() => cancelSent(r.contact_id)}
+                />
               ))}
             </ul>
           </div>
         )}
 
-        {/* Contact list */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
           <h2 className="mb-3 text-lg font-semibold text-white">My Contacts ({contacts.length})</h2>
           {contacts.length === 0 ? (
@@ -338,26 +268,18 @@ export default function ContactsPage() {
           ) : (
             <ul className="divide-y divide-gray-700">
               {contacts.map((c) => (
-                <li key={c.contact_id} className="flex items-center justify-between py-2">
-                  <button
-                    onClick={() => router.push(`/profile/${c.user_id}`)}
-                    className="flex items-center gap-3 text-left hover:opacity-80"
-                  >
-                    <div className="relative flex-none">
-                      <Avatar src={c.avatar_url} name={c.display_name || c.email} size="md" />
-                      <PresenceDot
-                        online={presence[c.user_id]?.online ?? false}
-                        size="md"
-                        className="absolute -bottom-0.5 -right-0.5 ring-2 ring-gray-900"
-                      />
-                    </div>
-                    <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
-                  </button>
-                  <div className="flex gap-2">
-                    <Button variant="primary" size="sm" onClick={() => startDM(c.user_id)}>Message</Button>
-                    <Button variant="danger" size="sm" onClick={() => remove(c.contact_id)}>Remove</Button>
-                  </div>
-                </li>
+                <ContactCard
+                  key={c.contact_id}
+                  userId={c.user_id}
+                  email={c.email}
+                  displayName={c.display_name}
+                  avatarUrl={c.avatar_url}
+                  variant="contact"
+                  online={presence[c.user_id]?.online ?? false}
+                  onNavigate={() => router.push(`/profile/${c.user_id}`)}
+                  onPrimary={() => startDM(c.user_id)}
+                  onSecondary={() => remove(c.contact_id)}
+                />
               ))}
             </ul>
           )}
