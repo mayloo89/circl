@@ -1,12 +1,16 @@
 "use client"
 
-import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { usePresence } from "@/hooks/usePresence"
+import Avatar from "@/components/ui/Avatar"
+import Badge from "@/components/ui/Badge"
+import Button from "@/components/ui/Button"
+import Input from "@/components/ui/Input"
+import PresenceDot from "@/components/ui/PresenceDot"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -103,8 +107,6 @@ export default function ContactsPage() {
       }
       if (e.type === "contact_accepted") {
         // Move the matching sent entry into accepted contacts.
-        // Read `sent` outside the updater to avoid nested setState calls
-        // (double-invocation in StrictMode).
         const matched = sent.find((s) => s.contact_id === e.payload.contact_id)
         if (matched) {
           setSent((prev) => prev.filter((s) => s.contact_id !== e.payload.contact_id))
@@ -246,9 +248,7 @@ export default function ContactsPage() {
       <div className="w-full max-w-lg space-y-8 px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Contacts</h1>
-          <button aria-label="Go to home" onClick={() => router.push("/")} className="text-sm text-gray-400 hover:text-gray-200">
-            ← Home
-          </button>
+          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
         </div>
 
         {error && (
@@ -258,35 +258,24 @@ export default function ContactsPage() {
         {/* Search */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
           <h2 className="mb-3 text-lg font-semibold text-white">Add Contact</h2>
-          <label htmlFor="contact-search" className="sr-only">Search contacts</label>
-          <input
+          <Input
+            label="Search contacts"
+            labelHidden
             id="contact-search"
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => search(e.target.value)}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           {searchResults.length > 0 && (
             <ul className="mt-3 divide-y divide-gray-700">
               {searchResults.map((u) => (
                 <li key={u.id} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-3">
-                    {u.avatar_url ? (
-                      <Image src={u.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
-                    ) : (
-                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
-                        {(u.display_name || u.email)[0].toUpperCase()}
-                      </span>
-                    )}
+                    <Avatar src={u.avatar_url} name={u.display_name || u.email} size="md" />
                     <span className="text-sm text-gray-200">{u.display_name || u.email}</span>
                   </div>
-                  <button
-                    onClick={() => sendRequest(u.id)}
-                    className="rounded bg-indigo-600 px-3 py-2 text-xs text-white hover:bg-indigo-500"
-                  >
-                    Add
-                  </button>
+                  <Button variant="primary" size="sm" onClick={() => sendRequest(u.id)}>Add</Button>
                 </li>
               ))}
             </ul>
@@ -296,11 +285,9 @@ export default function ContactsPage() {
         {/* Pending requests */}
         {pending.length > 0 && (
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 text-lg font-semibold text-white">
+            <h2 className="mb-3 flex items-center text-lg font-semibold text-white">
               Pending Requests
-              <span className="ml-2 rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">
-                {pending.length}
-              </span>
+              <Badge count={pending.length} variant="pill" className="ml-2" />
             </h2>
             <ul className="divide-y divide-gray-700">
               {pending.map((r) => (
@@ -309,28 +296,12 @@ export default function ContactsPage() {
                     onClick={() => router.push(`/profile/${r.user_id}`)}
                     className="flex items-center gap-3 text-left hover:opacity-80"
                   >
-                    {r.avatar_url ? (
-                      <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
-                    ) : (
-                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
-                        {(r.display_name || r.email)[0].toUpperCase()}
-                      </span>
-                    )}
+                    <Avatar src={r.avatar_url} name={r.display_name || r.email} size="md" />
                     <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
                   </button>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => accept(r.contact_id)}
-                      className="rounded bg-green-700 px-3 py-2 text-xs text-white hover:bg-green-600"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => remove(r.contact_id)}
-                      className="rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 hover:bg-gray-600"
-                    >
-                      Decline
-                    </button>
+                    <Button variant="success" size="sm" onClick={() => accept(r.contact_id)}>Accept</Button>
+                    <Button variant="secondary" size="sm" onClick={() => remove(r.contact_id)}>Decline</Button>
                   </div>
                 </li>
               ))}
@@ -349,21 +320,10 @@ export default function ContactsPage() {
                     onClick={() => router.push(`/profile/${r.user_id}`)}
                     className="flex items-center gap-3 text-left hover:opacity-80"
                   >
-                    {r.avatar_url ? (
-                      <Image src={r.avatar_url} alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-gray-700" />
-                    ) : (
-                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
-                        {(r.display_name || r.email)[0].toUpperCase()}
-                      </span>
-                    )}
+                    <Avatar src={r.avatar_url} name={r.display_name || r.email} size="md" />
                     <span className="text-sm text-gray-200">{r.display_name || r.email}</span>
                   </button>
-                  <button
-                    onClick={() => cancelSent(r.contact_id)}
-                    className="rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
+                  <Button variant="secondary" size="sm" onClick={() => cancelSent(r.contact_id)}>Cancel</Button>
                 </li>
               ))}
             </ul>
@@ -384,34 +344,18 @@ export default function ContactsPage() {
                     className="flex items-center gap-3 text-left hover:opacity-80"
                   >
                     <div className="relative flex-none">
-                      {c.avatar_url ? (
-                        <Image src={c.avatar_url} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-700" />
-                      ) : (
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-sm text-gray-300 ring-1 ring-gray-600">
-                          {(c.display_name || c.email)[0].toUpperCase()}
-                        </span>
-                      )}
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-gray-900 ${
-                          presence[c.user_id]?.online ? "bg-green-400" : "bg-gray-600"
-                        }`}
+                      <Avatar src={c.avatar_url} name={c.display_name || c.email} size="md" />
+                      <PresenceDot
+                        online={presence[c.user_id]?.online ?? false}
+                        size="md"
+                        className="absolute -bottom-0.5 -right-0.5 ring-2 ring-gray-900"
                       />
                     </div>
                     <span className="text-sm text-gray-200">{c.display_name || c.email}</span>
                   </button>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => startDM(c.user_id)}
-                      className="rounded bg-indigo-700 px-3 py-2 text-xs text-white hover:bg-indigo-600"
-                    >
-                      Message
-                    </button>
-                    <button
-                      onClick={() => remove(c.contact_id)}
-                      className="rounded bg-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-800"
-                    >
-                      Remove
-                    </button>
+                    <Button variant="primary" size="sm" onClick={() => startDM(c.user_id)}>Message</Button>
+                    <Button variant="danger" size="sm" onClick={() => remove(c.contact_id)}>Remove</Button>
                   </div>
                 </li>
               ))}

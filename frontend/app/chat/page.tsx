@@ -1,12 +1,15 @@
 "use client"
 
-import Image from "next/image"
-import { useSession } from "next-auth/react"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
+import Avatar from "@/components/ui/Avatar"
+import Badge from "@/components/ui/Badge"
+import Button from "@/components/ui/Button"
+import Skeleton from "@/components/ui/Skeleton"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -79,10 +82,10 @@ function LastMessagePreview({ msg }: { msg: MessageSummary }) {
 function RoomSkeleton() {
   return (
     <li className="flex items-center gap-3 px-6 py-4">
-      <span className="h-10 w-10 flex-none animate-pulse rounded-full bg-gray-800" />
+      <Skeleton className="h-10 w-10 flex-none rounded-full" />
       <div className="flex-1 space-y-2">
-        <span className="block h-3.5 w-32 animate-pulse rounded bg-gray-800" />
-        <span className="block h-3 w-48 animate-pulse rounded bg-gray-800/70" />
+        <Skeleton className="h-3.5 w-32" />
+        <Skeleton className="h-3 w-48 bg-gray-800/70" />
       </div>
     </li>
   )
@@ -128,24 +131,13 @@ export default function ChatPage() {
       <div className="w-full max-w-lg space-y-6 px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Messages</h1>
-          <button
-            aria-label="Go to home"
-            onClick={() => router.push("/")}
-            className="text-sm text-gray-400 hover:text-gray-200"
-          >
-            ← Home
-          </button>
+          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
         </div>
 
         {error && (
           <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
             <p className="text-sm text-red-400">{error}</p>
-            <button
-              onClick={loadRooms}
-              className="ml-3 shrink-0 rounded bg-red-800 px-3 py-1.5 text-xs text-red-200 hover:bg-red-700"
-            >
-              Retry
-            </button>
+            <Button variant="danger" size="sm" onClick={loadRooms} className="ml-3 shrink-0">Retry</Button>
           </div>
         )}
 
@@ -165,12 +157,9 @@ export default function ChatPage() {
                 <p className="text-sm font-medium text-gray-300">No conversations yet</p>
                 <p className="mt-1 text-xs text-gray-500">Start a chat from a contact&apos;s profile.</p>
               </div>
-              <button
-                onClick={() => router.push("/contacts")}
-                className="mt-1 rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
-              >
+              <Button variant="primary" size="sm" pill onClick={() => router.push("/contacts")} className="mt-1">
                 Go to contacts
-              </button>
+              </Button>
             </div>
           ) : (
             <ul className="divide-y divide-gray-800">
@@ -178,21 +167,14 @@ export default function ChatPage() {
                 <li key={room.id}>
                   <Link
                     href={`/chat/${room.id}`}
-                    className="flex items-center gap-3 px-6 py-4 hover:bg-gray-800/60 transition-colors"
+                    className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-800/60"
                   >
-                    {room.type === "dm" ? (
-                      room.peer_avatar_url ? (
-                        <Image src={room.peer_avatar_url} alt="" width={40} height={40} className="h-10 w-10 flex-none rounded-full object-cover ring-1 ring-gray-700" />
-                      ) : (
-                        <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gray-700 text-sm font-medium text-gray-300 ring-1 ring-gray-600">
-                          {(room.peer_name || "?")[0].toUpperCase()}
-                        </span>
-                      )
-                    ) : (
-                      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-indigo-700 text-sm font-medium text-white ring-1 ring-indigo-600">
-                        {(room.name || "G")[0].toUpperCase()}
-                      </span>
-                    )}
+                    <Avatar
+                      src={room.type === "dm" ? room.peer_avatar_url : undefined}
+                      name={room.type === "dm" ? (room.peer_name || "?") : (room.name || "G")}
+                      size="lg"
+                      color={room.type === "group" ? "indigo" : "gray"}
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-white">
                         {room.type === "dm" ? room.peer_name || "Unknown" : room.name}
@@ -210,9 +192,7 @@ export default function ChatPage() {
                         </span>
                       )}
                       {room.unread_count > 0 && (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-xs font-semibold text-white">
-                          {room.unread_count > 99 ? "99+" : room.unread_count}
-                        </span>
+                        <Badge count={room.unread_count} max={99} />
                       )}
                     </div>
                   </Link>

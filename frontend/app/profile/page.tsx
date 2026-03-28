@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 
 import { useUpload } from "@/hooks/useUpload"
+import Button from "@/components/ui/Button"
+import Input from "@/components/ui/Input"
+import Skeleton from "@/components/ui/Skeleton"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const MAX_BIO = 280
@@ -29,24 +32,24 @@ function ProfileSkeleton() {
   return (
     <div className="w-full max-w-lg space-y-6 px-4">
       <div className="flex items-center justify-between">
-        <span className="h-8 w-32 animate-pulse rounded bg-gray-800" />
-        <span className="h-5 w-16 animate-pulse rounded bg-gray-800" />
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-5 w-16" />
       </div>
       <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
         <div className="flex flex-col items-center gap-4">
-          <span className="h-24 w-24 animate-pulse rounded-full bg-gray-800" />
-          <span className="h-4 w-28 animate-pulse rounded bg-gray-800" />
+          <Skeleton className="h-24 w-24 rounded-full" />
+          <Skeleton className="h-4 w-28" />
         </div>
         <div className="mt-6 space-y-4">
           <div className="space-y-1.5">
-            <span className="block h-3.5 w-24 animate-pulse rounded bg-gray-800" />
-            <span className="block h-10 w-full animate-pulse rounded-md bg-gray-800" />
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-10 w-full rounded-md" />
           </div>
           <div className="space-y-1.5">
-            <span className="block h-3.5 w-16 animate-pulse rounded bg-gray-800" />
-            <span className="block h-20 w-full animate-pulse rounded-md bg-gray-800" />
+            <Skeleton className="h-3.5 w-16" />
+            <Skeleton className="h-20 w-full rounded-md" />
           </div>
-          <span className="block h-10 w-full animate-pulse rounded-md bg-gray-800" />
+          <Skeleton className="h-10 w-full rounded-md" />
         </div>
       </div>
     </div>
@@ -217,13 +220,7 @@ export default function ProfilePage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">My Profile</h1>
-          <button
-            aria-label="Go to home"
-            onClick={() => router.push("/")}
-            className="text-sm text-gray-400 hover:text-gray-200"
-          >
-            ← Home
-          </button>
+          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
         </div>
 
         {loadError && (
@@ -232,7 +229,7 @@ export default function ProfilePage() {
 
         {/* Profile card */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          {/* Avatar */}
+          {/* Avatar upload button — custom widget, not a plain Avatar display */}
           <div className="flex flex-col items-center gap-3">
             <button
               type="button"
@@ -263,23 +260,15 @@ export default function ProfilePage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="displayName" className="block text-sm font-medium text-gray-300">
-                Display Name
-              </label>
-              <input
-                id="displayName"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
-                  displayName !== (profile?.display_name ?? "")
-                    ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
-                    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
-                }`}
-                required
-              />
-            </div>
+            <Input
+              label="Display Name"
+              id="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              dirty={displayName !== (profile?.display_name ?? "")}
+              required
+            />
 
             <div>
               <div className="flex items-center justify-between">
@@ -305,23 +294,15 @@ export default function ProfilePage() {
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             {formSuccess && <p className="text-sm text-green-400">{formSuccess}</p>}
 
-            <button
+            <Button
               type="submit"
+              variant={isDirty ? "warning" : "primary"}
+              loading={saving}
               disabled={saving || uploadingAvatar || !isDirty}
-              className={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                isDirty
-                  ? "bg-orange-600 hover:bg-orange-500 focus:ring-orange-500"
-                  : "bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500"
-              }`}
+              className="w-full focus:ring-offset-gray-900"
             >
-              {saving && (
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
               {saving ? "Saving…" : isDirty ? "Save changes" : "Save"}
-            </button>
+            </Button>
           </form>
         </div>
 
@@ -349,18 +330,8 @@ export default function ProfilePage() {
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75 p-2">
                         <p className="text-center text-xs font-medium text-white">Delete photo?</p>
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleDeletePhoto(photo.id)}
-                            className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-500"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteId(null)}
-                            className="rounded bg-gray-700 px-2.5 py-1 text-xs text-gray-200 hover:bg-gray-600"
-                          >
-                            Cancel
-                          </button>
+                          <Button variant="danger" size="sm" onClick={() => handleDeletePhoto(photo.id)}>Delete</Button>
+                          <Button variant="secondary" size="sm" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
                         </div>
                       </div>
                     ) : (
