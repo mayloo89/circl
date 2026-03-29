@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-29 — Playwright E2E testing
+
+### Added
+- `playwright.config.ts` — Playwright setup: chromium project, sequential workers, retry-on-failure in CI, `npm run dev` webServer with `reuseExistingServer` locally
+- `e2e/fixtures.ts` — base test fixture with `createUser` (API-level user creation) and `loginAs` helpers; `authenticatedPage` fixture for single-user tests
+- `e2e/auth.spec.ts` — register new account, login with valid credentials, wrong password error, duplicate email error
+- `e2e/profile.spec.ts` — view My Profile page, update display name, navigate home
+- `e2e/contacts.spec.ts` — search by email, send contact request, accept request, open DM from contacts
+- `e2e/chat.spec.ts` — full real-time flow: two users become contacts, both open the same DM room, user A sends a message, both see it
+- `npm run test:e2e`, `npm run test:e2e:ui`, `npm run test:e2e:debug` scripts
+- `@playwright/test` devDependency
+- CI `e2e` job with Postgres 17 + Redis 7 service containers, Go backend auto-start (`STORAGE_PROVIDER=local`), and artifact upload on failure
+
 ## [2.0.0] - 2026-03-28 — Frontend testing foundation
 
 ### Added
