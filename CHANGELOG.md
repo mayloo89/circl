@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-03-29 — Backend integration tests
+
+### Added
+- `internal/testutil` package — `OpenDB`, `CreateUser`, and `NewRedis` helpers shared across all integration test files; skips gracefully when `TEST_DATABASE_URL` is not set
+- `internal/chat/store_test.go` — integration tests for the remaining `pgStore` methods: `ViewOnceMessage` (sender rejection, non-view-once rejection, unknown message, successful tombstone), `DeleteMessage` (success + `ErrNotFound` on second delete), `TombstoneMessage` (converts expired message to tombstone, verifies `ListMessages` shows the tombstone, `ErrNotFound` for unknown ID), `ListExpiredMessages`
+- `internal/uploads/store_test.go` — integration tests for `pgStore`: `Create` (ID and `CreatedAt` populated), `GetByID` (found + `ErrNotFound`), `Commit` (success, `ErrNotPending` on re-commit), `SetThumbnailKey` (success, `ErrNotFound`)
+- CI `backend-integration` job with Postgres 17 + Redis 7 service containers; builds the API binary to run migrations, then runs the full test suite with `TEST_DATABASE_URL`
+
 ## [2.1.0] - 2026-03-29 — Playwright E2E testing
 
 ### Added
