@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-28 — Frontend testing foundation
+
+### Added
+- `vitest.config.ts` — vitest setup with jsdom, `@vitejs/plugin-react`, path alias (`@/`), and module-level mocks for `next/image` and `next/navigation`
+- `test/setup.ts` — global test setup: `@testing-library/jest-dom` matchers + MSW server lifecycle
+- `test/msw-server.ts` — shared MSW `setupServer` instance for handler overrides per test
+- `test/__mocks__/next-image.tsx` — `next/image` mock rendering a plain `<img>` tag
+- `test/__mocks__/next-navigation.ts` — `next/navigation` hook mocks (`useRouter`, `useParams`, etc.)
+- `components/ui/__tests__/` — full test suite for all 8 UI primitives: `Avatar`, `Badge`, `Button`, `Input`, `Modal`, `PresenceDot`, `Skeleton`, `Toast`
+- `hooks/__tests__/useUpload.test.ts` — 3-step upload flow, file size/type validation, all error paths, network failure
+- `hooks/__tests__/useHeartbeat.test.ts` — initial beat, interval setup, visibility-change behavior, cleanup
+- `hooks/__tests__/usePresence.test.ts` — presence fetch, polling interval, SSE online/offline updates, `formatLastSeen` helper
+- `lib/__tests__/chatHelpers.test.ts` — full coverage of `sameCalendarDay`, `formatDaySeparator`, `isFirstInGroup`, `isLastInGroup`, `formatExpiry`, `expiryColorClass`
+- `lib/__tests__/validation.test.ts` — `loginSchema` and `registerSchema` happy path and all rejection cases
+- `npm run test`, `npm run test:watch`, `npm run test:coverage` scripts
+- vitest, @vitejs/plugin-react, @testing-library/react, @testing-library/user-event, @testing-library/jest-dom, jsdom, msw, @vitest/coverage-v8 devDependencies
+
+### Changed
+- `hooks/useUpload.ts` — added `/* v8 ignore next 2 */` on the unreachable KB branch of `formatBytes` (all category limits are ≥ 1 MB)
+
 ## [1.9.0] - 2026-03-28 — Route guard cleanup and form validation
 
 ### Added

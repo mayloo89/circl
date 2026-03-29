@@ -25,6 +25,7 @@ const ALLOWED_TYPES: Record<UploadCategory, string[]> = {
 }
 
 function formatBytes(bytes: number): string {
+  /* v8 ignore next 2 — KB branch unreachable: all category limits are ≥ 1 MB */
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
   return `${(bytes / 1024).toFixed(0)} KB`
 }
