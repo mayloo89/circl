@@ -94,9 +94,12 @@
 ### Upcoming — see full roadmap in development plan
 
 - [x] **Frontend testing foundation** (PR #32): vitest + @testing-library/react + msw; 129 tests across all `components/ui/*`, `hooks/useUpload`, `hooks/useHeartbeat`, `hooks/usePresence`, `lib/chatHelpers`, `lib/validation`; 99.56% statements, 100% branches and functions.
-- [ ] **Phase 2 — E2E testing**: Playwright; backend integration tests; 98%+ coverage.
+- [x] **Playwright E2E testing** (PR #33): `@playwright/test`; `playwright.config.ts`; fixtures with API-level user creation; auth, profile, contacts, and real-time chat flows; CI job with Postgres + Redis service containers and backend auto-start.
+- [ ] **Backend integration tests** (PR #34): real Postgres + Redis; 98%+ backend coverage.
+- [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
 - [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
 - [ ] **Phase 4 — Safety & moderation**: blocking; reporting; account lockout.
+
 - [ ] **Phase 5 — Push notifications & enhanced real-time**: Web Push; infinite scroll; message deletion; group chat UI.
 - [ ] **Phase 6 — Settings**: notification prefs, privacy controls, change password, delete account.
 - [ ] **Phase 7 — Observability**: zerolog; OpenTelemetry; Prometheus metrics; Sentry.
