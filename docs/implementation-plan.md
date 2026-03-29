@@ -97,7 +97,6 @@
 - [x] **Playwright E2E testing** (PR #33): `@playwright/test`; `playwright.config.ts`; fixtures with API-level user creation; auth, profile, contacts, and real-time chat flows; CI job with Postgres + Redis service containers and backend auto-start.
 - [ ] **Backend integration tests** (PR #34): real Postgres + Redis; 98%+ backend coverage.
 - [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
-- [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
 - [ ] **Phase 4 — Safety & moderation**: blocking; reporting; account lockout.
 
 - [ ] **Phase 5 — Push notifications & enhanced real-time**: Web Push; infinite scroll; message deletion; group chat UI.
