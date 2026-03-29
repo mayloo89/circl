@@ -2,7 +2,9 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -253,6 +255,176 @@ func TestIntegration_CreateGroup(t *testing.T) {
 		if !ok {
 			t.Errorf("user %q should be a member of the group", uid)
 		}
+	}
+}
+
+func TestIntegration_ViewOnceMessage(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
+	ctx := t.Context()
+
+	u1 := createTestUser(t, pool, "chat_vo_u1@example.com")
+	u2 := createTestUser(t, pool, "chat_vo_u2@example.com")
+
+	room, err := store.GetOrCreateDM(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("GetOrCreateDM: %v", err)
+	}
+
+	msg, err := store.SaveMessage(ctx, SaveMessageParams{
+		RoomID: room.ID, SenderID: u1, Type: MessageTypeText,
+		Content: "view once secret", ViewOnce: true,
+	})
+	if err != nil {
+		t.Fatalf("SaveMessage: %v", err)
+	}
+
+	// Sender viewing their own view-once message must be rejected.
+	_, _, err = store.ViewOnceMessage(ctx, msg.ID, room.ID, u1)
+	if !errors.Is(err, ErrForbidden) {
+		t.Errorf("sender view: err = %v, want ErrForbidden", err)
+	}
+
+	// Trying to view a non-view-once message returns ErrForbidden.
+	plain, err := store.SaveMessage(ctx, SaveMessageParams{
+		RoomID: room.ID, SenderID: u1, Type: MessageTypeText, Content: "normal",
+	})
+	if err != nil {
+		t.Fatalf("SaveMessage plain: %v", err)
+	}
+	_, _, err = store.ViewOnceMessage(ctx, plain.ID, room.ID, u2)
+	if !errors.Is(err, ErrForbidden) {
+		t.Errorf("non-view-once: err = %v, want ErrForbidden", err)
+	}
+
+	// Viewing an unknown message returns ErrNotFound.
+	_, _, err = store.ViewOnceMessage(ctx, "00000000-0000-0000-0000-000000000000", room.ID, u2)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown message: err = %v, want ErrNotFound", err)
+	}
+
+	// Legitimate view by u2 — only non-sender member, so the message is tombstoned.
+	viewed, keys, err := store.ViewOnceMessage(ctx, msg.ID, room.ID, u2)
+	if err != nil {
+		t.Fatalf("ViewOnceMessage: %v", err)
+	}
+	if viewed.ID != msg.ID {
+		t.Errorf("ID = %q, want %q", viewed.ID, msg.ID)
+	}
+	if len(keys) != 0 {
+		t.Errorf("keys = %v, want empty (no uploads linked)", keys)
+	}
+}
+
+func TestIntegration_DeleteMessage(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
+	ctx := t.Context()
+
+	u1 := createTestUser(t, pool, "chat_del_u1@example.com")
+	u2 := createTestUser(t, pool, "chat_del_u2@example.com")
+
+	room, err := store.GetOrCreateDM(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("GetOrCreateDM: %v", err)
+	}
+
+	msg, err := store.SaveMessage(ctx, SaveMessageParams{
+		RoomID: room.ID, SenderID: u1, Type: MessageTypeText, Content: "to be deleted",
+	})
+	if err != nil {
+		t.Fatalf("SaveMessage: %v", err)
+	}
+
+	roomID, keys, err := store.DeleteMessage(ctx, msg.ID)
+	if err != nil {
+		t.Fatalf("DeleteMessage: %v", err)
+	}
+	if roomID != room.ID {
+		t.Errorf("roomID = %q, want %q", roomID, room.ID)
+	}
+	if len(keys) != 0 {
+		t.Errorf("keys = %v, want empty", keys)
+	}
+
+	// Second delete must return ErrNotFound.
+	_, _, err = store.DeleteMessage(ctx, msg.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("second delete: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestIntegration_TombstoneAndExpiry(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
+	ctx := t.Context()
+
+	u1 := createTestUser(t, pool, "chat_ttl_u1@example.com")
+	u2 := createTestUser(t, pool, "chat_ttl_u2@example.com")
+
+	room, err := store.GetOrCreateDM(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("GetOrCreateDM: %v", err)
+	}
+
+	past := time.Now().Add(-time.Minute)
+	msg, err := store.SaveMessage(ctx, SaveMessageParams{
+		RoomID: room.ID, SenderID: u1, Type: MessageTypeText,
+		Content: "ephemeral", ExpiresAt: &past,
+	})
+	if err != nil {
+		t.Fatalf("SaveMessage: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM messages WHERE id = $1`, msg.ID) //nolint:errcheck
+	})
+
+	// Message should appear in ListExpiredMessages.
+	ids, err := store.ListExpiredMessages(ctx)
+	if err != nil {
+		t.Fatalf("ListExpiredMessages: %v", err)
+	}
+	if !slices.Contains(ids, msg.ID) {
+		t.Errorf("expired message %q not in ListExpiredMessages", msg.ID)
+	}
+
+	// Tombstone the message.
+	roomID, keys, err := store.TombstoneMessage(ctx, msg.ID)
+	if err != nil {
+		t.Fatalf("TombstoneMessage: %v", err)
+	}
+	if roomID != room.ID {
+		t.Errorf("roomID = %q, want %q", roomID, room.ID)
+	}
+	if len(keys) != 0 {
+		t.Errorf("keys = %v, want empty", keys)
+	}
+
+	// Tombstoned message should appear in ListMessages with tombstone=true.
+	msgs, err := store.ListMessages(ctx, room.ID, nil, 50)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	tombstoneFound := false
+	for _, m := range msgs {
+		if m.ID == msg.ID {
+			tombstoneFound = true
+			if !m.Tombstone {
+				t.Error("expected tombstone=true")
+			}
+			if m.Content != "" {
+				t.Errorf("tombstoned content = %q, want empty", m.Content)
+			}
+		}
+	}
+	if !tombstoneFound {
+		t.Errorf("tombstoned message %q not found in ListMessages", msg.ID)
+	}
+
+	// TombstoneMessage on unknown ID returns ErrNotFound.
+	_, _, err = store.TombstoneMessage(ctx, "00000000-0000-0000-0000-000000000000")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown tombstone: err = %v, want ErrNotFound", err)
 	}
 }
 
