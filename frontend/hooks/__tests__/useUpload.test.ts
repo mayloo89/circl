@@ -72,21 +72,16 @@ describe("useUpload", () => {
     expect(result.current.uploading).toBe(false)
   })
 
-  it("sets uploading to true during upload", async () => {
-    let sawUploading = false
+  it("sets uploading to false after upload completes", async () => {
     server.use(
       http.post(`${API}/uploads/request`, async () => {
         return HttpResponse.json({ upload_id: "uid-1", upload_url: STORAGE_URL })
       })
     )
     const { result } = renderHook(() => useUpload("token"))
-    const promise = act(async () => {
-      result.current.upload(makeFile(), "avatar")
+    await act(async () => {
+      await result.current.upload(makeFile(), "avatar")
     })
-    // uploading flips to true synchronously at the start of the async function
-    if (result.current.uploading) sawUploading = true
-    await promise
-    // after completion it should be false again
     expect(result.current.uploading).toBe(false)
   })
 

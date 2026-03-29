@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, act } from "@testing-library/react"
+import { render, screen, act, renderHook } from "@testing-library/react"
 import { ToastProvider, useToast } from "@/components/ui/Toast"
 
 // Helper component that exposes the toast function to tests
@@ -80,13 +80,7 @@ describe("ToastProvider", () => {
 
 describe("useToast outside provider", () => {
   it("returns a no-op toast function that does not throw", () => {
-    let toastFn!: ReturnType<typeof useToast>["toast"]
-    function Grab() {
-      toastFn = useToast().toast
-      return null
-    }
-    // No ToastProvider wrapper — uses default context value
-    render(<Grab />)
-    expect(() => toastFn("noop")).not.toThrow()
+    const { result } = renderHook(() => useToast())
+    expect(() => result.current.toast("noop")).not.toThrow()
   })
 })
