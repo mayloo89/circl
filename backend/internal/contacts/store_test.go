@@ -524,18 +524,18 @@ func TestIntegration_ContactsFlow(t *testing.T) {
 		t.Error("expected accepted contact, got none")
 	}
 
-	// Search users.
+	// Delete contact.
+	if _, err := store.Delete(ctx, c.ID, u1); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	// Search users — contact is gone so u2 must appear in results again.
 	results, err := store.SearchUsers(ctx, "ci_c2", u1)
 	if err != nil {
 		t.Fatalf("SearchUsers: %v", err)
 	}
 	if len(results) == 0 {
 		t.Error("expected search result, got none")
-	}
-
-	// Delete contact.
-	if _, err := store.Delete(ctx, c.ID, u1); err != nil {
-		t.Fatalf("Delete: %v", err)
 	}
 
 	// Second delete must return ErrNotFound.

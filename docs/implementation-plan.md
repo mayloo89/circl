@@ -95,7 +95,7 @@
 
 - [x] **Frontend testing foundation** (PR #32): vitest + @testing-library/react + msw; 129 tests across all `components/ui/*`, `hooks/useUpload`, `hooks/useHeartbeat`, `hooks/usePresence`, `lib/chatHelpers`, `lib/validation`; 99.56% statements, 100% branches and functions.
 - [x] **Playwright E2E testing** (PR #33): `@playwright/test`; `playwright.config.ts`; fixtures with API-level user creation; auth, profile, contacts, and real-time chat flows; CI job with Postgres + Redis service containers and backend auto-start.
-- [ ] **Backend integration tests** (PR #34): real Postgres + Redis; 98%+ backend coverage.
+- [x] **Backend integration tests** (PR #34): `internal/testutil` package (OpenDB, CreateUser, NewRedis); chat store integration tests (ViewOnceMessage, DeleteMessage, TombstoneMessage, ListExpiredMessages); uploads pgStore integration tests; CI `backend-integration` job with Postgres + Redis service containers.
 - [ ] **Phase 3 — Expanded profiles & discovery**: DOB/gender/location/interests; explore endpoint; geolocation.
 - [ ] **Phase 4 — Safety & moderation**: blocking; reporting; account lockout.
 
