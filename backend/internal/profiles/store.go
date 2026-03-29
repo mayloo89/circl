@@ -36,42 +36,74 @@ func NewStore(pool *pgxpool.Pool) Store {
 // GetByUserID returns the profile for the given user ID.
 func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, user_id, display_name, bio, COALESCE(avatar_url, '')
+		`SELECT id, user_id, display_name, bio, COALESCE(avatar_url, ''),
+		        date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
+		        latitude, longitude, interests
 		   FROM profiles
 		  WHERE user_id = $1`,
 		userID,
 	)
 
 	var p Profile
-	if err := row.Scan(&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL); err != nil {
+	if err := row.Scan(
+		&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL,
+		&p.DateOfBirth, &p.Gender, &p.LocationText,
+		&p.Latitude, &p.Longitude, &p.Interests,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("get profile: %w", err)
 	}
 
+	if p.Interests == nil {
+		p.Interests = []string{}
+	}
 	return &p, nil
 }
 
 // Upsert inserts or updates the profile for the given user ID.
-func (s *pgStore) Upsert(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error) {
+func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
+	interests := in.Interests
+	if interests == nil {
+		interests = []string{}
+	}
+
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO profiles (user_id, display_name, bio, avatar_url)
-		 VALUES ($1, $2, $3, NULLIF($4, ''))
+		`INSERT INTO profiles (user_id, display_name, bio, avatar_url,
+		                       date_of_birth, gender, location_text, latitude, longitude, interests)
+		 VALUES ($1, $2, $3, NULLIF($4, ''),
+		         $5, NULLIF($6, ''), NULLIF($7, ''), $8, $9, $10)
 		 ON CONFLICT (user_id) DO UPDATE
-		    SET display_name = EXCLUDED.display_name,
-		        bio          = EXCLUDED.bio,
-		        avatar_url   = EXCLUDED.avatar_url,
-		        updated_at   = now()
-		 RETURNING id, user_id, display_name, bio, COALESCE(avatar_url, '')`,
-		userID, displayName, bio, avatarURL,
+		    SET display_name  = EXCLUDED.display_name,
+		        bio           = EXCLUDED.bio,
+		        avatar_url    = EXCLUDED.avatar_url,
+		        date_of_birth = EXCLUDED.date_of_birth,
+		        gender        = EXCLUDED.gender,
+		        location_text = EXCLUDED.location_text,
+		        latitude      = EXCLUDED.latitude,
+		        longitude     = EXCLUDED.longitude,
+		        interests     = EXCLUDED.interests,
+		        updated_at    = now()
+		 RETURNING id, user_id, display_name, bio, COALESCE(avatar_url, ''),
+		           date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
+		           latitude, longitude, interests`,
+		userID, in.DisplayName, in.Bio, in.AvatarURL,
+		in.DateOfBirth, in.Gender, in.LocationText, in.Latitude, in.Longitude, interests,
 	)
 
 	var p Profile
-	if err := row.Scan(&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL); err != nil {
+	if err := row.Scan(
+		&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL,
+		&p.DateOfBirth, &p.Gender, &p.LocationText,
+		&p.Latitude, &p.Longitude, &p.Interests,
+	); err != nil {
 		return nil, fmt.Errorf("upsert profile: %w", err)
 	}
 
+	if p.Interests == nil {
+		p.Interests = []string{}
+	}
 	return &p, nil
 }
 
@@ -153,4 +185,55 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 		return ErrPhotoNotFound
 	}
 	return nil
+}
+
+// GetPreferences returns the discovery preferences for the given user.
+// Returns an empty preferences object if none have been set yet.
+func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
+	row := s.db.QueryRow(ctx,
+		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference
+		   FROM profile_preferences
+		  WHERE user_id = $1`,
+		userID,
+	)
+	var p ProfilePreferences
+	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &ProfilePreferences{UserID: userID, GenderPreference: []string{}}, nil
+		}
+		return nil, fmt.Errorf("get preferences: %w", err)
+	}
+	if p.GenderPreference == nil {
+		p.GenderPreference = []string{}
+	}
+	return &p, nil
+}
+
+// UpsertPreferences inserts or updates the discovery preferences for the given user.
+func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error) {
+	genderPref := prefs.GenderPreference
+	if genderPref == nil {
+		genderPref = []string{}
+	}
+
+	row := s.db.QueryRow(ctx,
+		`INSERT INTO profile_preferences (user_id, min_age, max_age, max_distance_km, gender_preference)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (user_id) DO UPDATE
+		    SET min_age           = EXCLUDED.min_age,
+		        max_age           = EXCLUDED.max_age,
+		        max_distance_km   = EXCLUDED.max_distance_km,
+		        gender_preference = EXCLUDED.gender_preference,
+		        updated_at        = now()
+		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference`,
+		userID, prefs.MinAge, prefs.MaxAge, prefs.MaxDistanceKm, genderPref,
+	)
+	var p ProfilePreferences
+	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference); err != nil {
+		return nil, fmt.Errorf("upsert preferences: %w", err)
+	}
+	if p.GenderPreference == nil {
+		p.GenderPreference = []string{}
+	}
+	return &p, nil
 }

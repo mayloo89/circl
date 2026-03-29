@@ -22,6 +22,10 @@ interface PublicProfile {
   display_name: string
   bio: string
   avatar_url: string
+  date_of_birth?: string
+  gender: string
+  location_text: string
+  interests: string[]
   photos: ProfilePhoto[]
 }
 
@@ -53,6 +57,16 @@ function ProfileSkeleton() {
       </div>
     </div>
   )
+}
+
+function formatAge(dateOfBirth?: string): string | null {
+  if (!dateOfBirth) return null
+  const dob = new Date(dateOfBirth)
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+  const m = today.getMonth() - dob.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
+  return `${age}`
 }
 
 export default function PublicProfilePage() {
@@ -188,6 +202,8 @@ export default function PublicProfilePage() {
     )
   }
 
+  const age = formatAge(profile.date_of_birth)
+
   return (
     <>
       {lightbox && (
@@ -214,6 +230,46 @@ export default function PublicProfilePage() {
             onAccept={handleAccept}
             onStartDM={handleStartDM}
           />
+
+          {/* Extended profile details */}
+          {(age || profile.gender || profile.location_text || profile.interests?.length > 0) && (
+            <div className="rounded-lg bg-gray-900 p-5 shadow-xl ring-1 ring-gray-800 space-y-3">
+              {(age || profile.gender || profile.location_text) && (
+                <div className="flex flex-wrap gap-3 text-sm text-gray-400">
+                  {age && profile.gender ? (
+                    <span>{age} · {profile.gender}</span>
+                  ) : age ? (
+                    <span>{age} years old</span>
+                  ) : profile.gender ? (
+                    <span>{profile.gender}</span>
+                  ) : null}
+                  {profile.location_text && (
+                    <span className="flex items-center gap-1">
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {profile.location_text}
+                    </span>
+                  )}
+                </div>
+              )}
+              {profile.interests?.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {profile.interests.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-indigo-900/50 px-3 py-1 text-xs text-indigo-300 ring-1 ring-indigo-700/60"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <PhotoGallery
             photos={profile.photos}

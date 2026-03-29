@@ -4,14 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
-const MaxProfilePhotos = 6
+const (
+	MaxProfilePhotos = 6
+	MaxInterests     = 20
+)
 
 var (
-	ErrNotFound     = errors.New("profile not found")
+	ErrNotFound      = errors.New("profile not found")
 	ErrPhotoNotFound = errors.New("photo not found")
-	ErrInvalidInput = errors.New("invalid input")
+	ErrInvalidInput  = errors.New("invalid input")
 )
 
 // ProfilePhoto is a single showcase photo on a user's profile.
@@ -22,23 +26,53 @@ type ProfilePhoto struct {
 
 // Profile represents a user's public profile data.
 type Profile struct {
-	ID          string
-	UserID      string
-	DisplayName string
-	Bio         string
-	AvatarURL   string
-	Photos      []ProfilePhoto
+	ID           string
+	UserID       string
+	DisplayName  string
+	Bio          string
+	AvatarURL    string
+	DateOfBirth  *time.Time
+	Gender       string
+	LocationText string
+	Latitude     *float64
+	Longitude    *float64
+	Interests    []string
+	Photos       []ProfilePhoto
+}
+
+// ProfileInput holds the editable fields for profile create/update.
+type ProfileInput struct {
+	DisplayName  string
+	Bio          string
+	AvatarURL    string
+	DateOfBirth  *time.Time
+	Gender       string
+	LocationText string
+	Latitude     *float64
+	Longitude    *float64
+	Interests    []string
+}
+
+// ProfilePreferences holds discovery preferences for a user.
+type ProfilePreferences struct {
+	UserID           string
+	MinAge           *int
+	MaxAge           *int
+	MaxDistanceKm    *int
+	GenderPreference []string
 }
 
 // Store is the data-access interface required by the profiles service.
 type Store interface {
 	GetByUserID(ctx context.Context, userID string) (*Profile, error)
-	Upsert(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error)
+	Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error)
 	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 	GetPhotosByUserID(ctx context.Context, userID string) ([]ProfilePhoto, error)
 	CountPhotos(ctx context.Context, userID string) (int, error)
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, photoID, userID string) error
+	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
+	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 }
 
 // Service handles profile business logic.
@@ -57,7 +91,7 @@ func (s *Service) GetMyProfile(ctx context.Context, userID string) (*Profile, er
 	profile, err := s.store.GetByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			profile, err = s.store.Upsert(ctx, userID, "", "", "")
+			profile, err = s.store.Upsert(ctx, userID, ProfileInput{})
 			if err != nil {
 				return nil, err
 			}
@@ -88,13 +122,18 @@ func (s *Service) GetPublicProfile(ctx context.Context, userID string) (*Profile
 	return profile, nil
 }
 
-// UpdateMyProfile updates the display name, bio, and avatar for the given user.
-// display_name is required.
-func (s *Service) UpdateMyProfile(ctx context.Context, userID, displayName, bio, avatarURL string) (*Profile, error) {
-	if displayName == "" {
+// UpdateMyProfile validates and updates the profile for the given user.
+func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
+	if in.DisplayName == "" {
 		return nil, fmt.Errorf("%w: display name is required", ErrInvalidInput)
 	}
-	profile, err := s.store.Upsert(ctx, userID, displayName, bio, avatarURL)
+	if in.DateOfBirth != nil && !isAtLeast18(*in.DateOfBirth) {
+		return nil, fmt.Errorf("%w: must be at least 18 years old", ErrInvalidInput)
+	}
+	if len(in.Interests) > MaxInterests {
+		return nil, fmt.Errorf("%w: maximum %d interests allowed", ErrInvalidInput, MaxInterests)
+	}
+	profile, err := s.store.Upsert(ctx, userID, in)
 	if err != nil {
 		return nil, err
 	}
@@ -130,4 +169,31 @@ func (s *Service) AddPhoto(ctx context.Context, userID, url string) (*ProfilePho
 // DeletePhoto removes a showcase photo, verifying ownership.
 func (s *Service) DeletePhoto(ctx context.Context, userID, photoID string) error {
 	return s.store.DeletePhoto(ctx, photoID, userID)
+}
+
+// GetMyPreferences returns the discovery preferences for the given user.
+func (s *Service) GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
+	return s.store.GetPreferences(ctx, userID)
+}
+
+// UpdateMyPreferences validates and persists discovery preferences.
+func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error) {
+	if prefs.MinAge != nil && *prefs.MinAge < 18 {
+		return nil, fmt.Errorf("%w: min_age must be at least 18", ErrInvalidInput)
+	}
+	if prefs.MaxAge != nil && *prefs.MaxAge > 120 {
+		return nil, fmt.Errorf("%w: max_age must be at most 120", ErrInvalidInput)
+	}
+	if prefs.MinAge != nil && prefs.MaxAge != nil && *prefs.MinAge > *prefs.MaxAge {
+		return nil, fmt.Errorf("%w: min_age must be less than or equal to max_age", ErrInvalidInput)
+	}
+	if prefs.MaxDistanceKm != nil && *prefs.MaxDistanceKm <= 0 {
+		return nil, fmt.Errorf("%w: max_distance_km must be positive", ErrInvalidInput)
+	}
+	return s.store.UpsertPreferences(ctx, userID, prefs)
+}
+
+// isAtLeast18 returns true if the given birth date is at least 18 years in the past.
+func isAtLeast18(dob time.Time) bool {
+	return !dob.After(time.Now().AddDate(-18, 0, 0))
 }

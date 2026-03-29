@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 
 import { useUpload } from "@/hooks/useUpload"
 import Button from "@/components/ui/Button"
@@ -14,6 +14,52 @@ import PhotoGallery from "@/components/profile/PhotoGallery"
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const MAX_BIO = 280
 const MAX_PHOTOS = 6
+const MAX_INTERESTS = 20
+
+const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
+
+interface LocationSuggestion {
+  label: string
+  lat: number
+  lng: number
+}
+
+function useLocationSearch(query: string) {
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
+  const [searching, setSearching] = useState(false)
+
+  const search = useCallback(async (q: string) => {
+    if (q.length < 2) { setSuggestions([]); return }
+    setSearching(true)
+    try {
+      const res = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5`,
+        { headers: { "Accept-Language": navigator.language ?? "en" } },
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      setSuggestions(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data.features.map((f: any) => {
+          const p = f.properties
+          const parts = [p.name, p.city ?? p.state, p.country].filter(Boolean)
+          return { label: parts.join(", "), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }
+        }),
+      )
+    } catch {
+      setSuggestions([])
+    } finally {
+      setSearching(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const id = setTimeout(() => search(query), 350)
+    return () => clearTimeout(id)
+  }, [query, search])
+
+  return { suggestions, searching, clear: () => setSuggestions([]) }
+}
 
 interface ProfilePhoto {
   id: string
@@ -26,6 +72,12 @@ interface Profile {
   display_name: string
   bio: string
   avatar_url: string
+  date_of_birth?: string
+  gender: string
+  location_text: string
+  latitude?: number
+  longitude?: number
+  interests: string[]
   photos: ProfilePhoto[]
 }
 
@@ -51,10 +103,17 @@ function ProfileSkeleton() {
             <Skeleton className="h-20 w-full rounded-md" />
           </div>
           <Skeleton className="h-10 w-full rounded-md" />
+          <Skeleton className="h-10 w-full rounded-md" />
+          <Skeleton className="h-10 w-full rounded-md" />
+          <Skeleton className="h-10 w-full rounded-md" />
         </div>
       </div>
     </div>
   )
+}
+
+function effectiveGender(gender: string, genderOther: string): string {
+  return gender === "Other" ? genderOther : gender
 }
 
 function useAutoReset(value: string, setValue: (v: string) => void, delay = 10_000) {
@@ -73,6 +132,14 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("")
   const [bio, setBio] = useState("")
   const [avatarURL, setAvatarURL] = useState("")
+  const [dateOfBirth, setDateOfBirth] = useState("")
+  const [gender, setGender] = useState("")
+  const [genderOther, setGenderOther] = useState("")
+  const [locationText, setLocationText] = useState("")
+  const [interests, setInterests] = useState<string[]>([])
+  const [locationQuery, setLocationQuery] = useState("")
+  const [interestInput, setInterestInput] = useState("")
+  const locationRef = useRef<HTMLDivElement>(null)
   const [formError, setFormError] = useState("")
   const [formSuccess, setFormSuccess] = useState("")
   const [avatarSuccess, setAvatarSuccess] = useState("")
@@ -83,6 +150,18 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
+  const { suggestions: locationSuggestions, searching: locationSearching, clear: clearLocationSuggestions } = useLocationSearch(locationQuery)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
+        clearLocationSuggestions()
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [clearLocationSuggestions])
+
   useAutoReset(formSuccess, setFormSuccess)
   useAutoReset(avatarSuccess, setAvatarSuccess)
   useAutoReset(avatarError, setAvatarError)
@@ -92,7 +171,14 @@ export default function ProfilePage() {
   const { upload, uploading: uploadingAvatar, error: uploadError } = useUpload(session?.accessToken)
 
   const token = session?.accessToken
-  const isDirty = profile !== null && (displayName !== profile.display_name || bio !== profile.bio)
+  const isDirty = profile !== null && (
+    displayName !== profile.display_name ||
+    bio !== profile.bio ||
+    (dateOfBirth ?? "") !== (profile.date_of_birth ?? "") ||
+    effectiveGender(gender, genderOther) !== profile.gender ||
+    locationText !== profile.location_text ||
+    JSON.stringify(interests) !== JSON.stringify(profile.interests)
+  )
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return
@@ -103,6 +189,16 @@ export default function ProfilePage() {
         setDisplayName(data.display_name)
         setBio(data.bio)
         setAvatarURL(data.avatar_url)
+        setDateOfBirth(data.date_of_birth ?? "")
+        if (data.gender && !GENDER_OPTIONS.includes(data.gender)) {
+          setGender("Other")
+          setGenderOther(data.gender)
+        } else {
+          setGender(data.gender)
+        }
+        setLocationText(data.location_text)
+        setLocationQuery(data.location_text)
+        setInterests(data.interests ?? [])
       })
       .catch(() => setLoadError("Failed to load profile."))
       .finally(() => setLoading(false))
@@ -114,10 +210,20 @@ export default function ProfilePage() {
     setFormSuccess("")
     setSaving(true)
     try {
+      const body: Record<string, unknown> = {
+        display_name: displayName,
+        bio,
+        avatar_url: avatarURL,
+        gender: effectiveGender(gender, genderOther),
+        location_text: locationText,
+        interests,
+      }
+      if (dateOfBirth) body.date_of_birth = dateOfBirth
+
       const res = await fetch(`${API_URL}/profiles/me`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ display_name: displayName, bio, avatar_url: avatarURL }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) { const data = await res.json(); setFormError(data.error ?? "Failed to update profile."); return }
       const updated: Profile = await res.json()
@@ -177,6 +283,19 @@ export default function ProfilePage() {
     })
     if (!res.ok) { setGalleryError("Failed to delete photo."); return }
     setProfile((prev) => prev ? { ...prev, photos: prev.photos.filter((p) => p.id !== photoID) } : prev)
+  }
+
+  function handleAddInterest(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter" && e.key !== ",") return
+    e.preventDefault()
+    const tag = interestInput.trim().toLowerCase().replace(/,/g, "")
+    if (!tag || interests.includes(tag) || interests.length >= MAX_INTERESTS) return
+    setInterests((prev) => [...prev, tag])
+    setInterestInput("")
+  }
+
+  function handleRemoveInterest(tag: string) {
+    setInterests((prev) => prev.filter((t) => t !== tag))
   }
 
   if (status === "loading" || loading) {
@@ -261,6 +380,126 @@ export default function ProfilePage() {
                     : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
                 }`}
               />
+            </div>
+
+            <Input
+              label="Date of birth"
+              id="dateOfBirth"
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              dirty={(dateOfBirth ?? "") !== (profile?.date_of_birth ?? "")}
+              helper="You must be at least 18 years old."
+            />
+
+            <div>
+              <label htmlFor="gender" className="block text-sm font-medium text-gray-300">Gender</label>
+              <select
+                id="gender"
+                value={gender}
+                onChange={(e) => { setGender(e.target.value); if (e.target.value !== "Other") setGenderOther("") }}
+                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white shadow-sm focus:outline-none focus:ring-1 ${
+                  effectiveGender(gender, genderOther) !== (profile?.gender ?? "")
+                    ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
+                    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                }`}
+              >
+                <option value="">Prefer not to say</option>
+                {GENDER_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              {gender === "Other" && (
+                <input
+                  type="text"
+                  value={genderOther}
+                  onChange={(e) => setGenderOther(e.target.value)}
+                  placeholder="Describe your gender…"
+                  maxLength={50}
+                  className="mt-2 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              )}
+            </div>
+
+            <div ref={locationRef} className="relative">
+              <label htmlFor="location" className="block text-sm font-medium text-gray-300">Location</label>
+              <div className="relative mt-1">
+                <input
+                  id="location"
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value) }}
+                  placeholder="e.g. Paris, France"
+                  autoComplete="off"
+                  className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                    locationText !== (profile?.location_text ?? "")
+                      ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
+                      : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                  }`}
+                />
+                {locationSearching && (
+                  <span className="absolute right-3 top-2.5 text-xs text-gray-500">searching…</span>
+                )}
+              </div>
+              {locationSuggestions.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
+                  {locationSuggestions.map((s) => (
+                    <li key={`${s.lat},${s.lng}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocationText(s.label)
+                          setLocationQuery(s.label)
+                          clearLocationSuggestions()
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                      >
+                        {s.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Interests tag input */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label htmlFor="interestInput" className="block text-sm font-medium text-gray-300">Interests</label>
+                <span className={`text-xs ${interests.length >= MAX_INTERESTS ? "text-red-400" : "text-gray-500"}`}>
+                  {interests.length}/{MAX_INTERESTS}
+                </span>
+              </div>
+              <input
+                id="interestInput"
+                type="text"
+                value={interestInput}
+                onChange={(e) => setInterestInput(e.target.value)}
+                onKeyDown={handleAddInterest}
+                placeholder="Type and press Enter to add"
+                disabled={interests.length >= MAX_INTERESTS}
+                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+              />
+              {interests.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {interests.map((tag) => (
+                    <span
+                      key={tag}
+                      className="flex items-center gap-1 rounded-full bg-indigo-900/60 px-3 py-1 text-xs text-indigo-300 ring-1 ring-indigo-700"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveInterest(tag)}
+                        aria-label={`Remove ${tag}`}
+                        className="ml-1 text-indigo-400 hover:text-white"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {formError && <p className="text-sm text-red-400">{formError}</p>}
