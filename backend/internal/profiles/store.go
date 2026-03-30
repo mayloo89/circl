@@ -36,11 +36,17 @@ func NewStore(pool *pgxpool.Pool) Store {
 // GetByUserID returns the profile for the given user ID.
 func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, user_id, display_name, bio, COALESCE(avatar_url, ''),
-		        date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
-		        latitude, longitude, interests
-		   FROM profiles
-		  WHERE user_id = $1`,
+		`SELECT p.id, p.user_id, p.display_name, p.bio, COALESCE(p.avatar_url, ''),
+		        p.date_of_birth, COALESCE(p.gender, ''), COALESCE(p.location_text, ''),
+		        p.latitude, p.longitude,
+		        ARRAY(
+		            SELECT i.name FROM profile_interests pi
+		              JOIN interests i ON i.id = pi.interest_id
+		             WHERE pi.user_id = p.user_id
+		             ORDER BY i.name
+		        ) AS interests
+		   FROM profiles p
+		  WHERE p.user_id = $1`,
 		userID,
 	)
 
@@ -63,17 +69,13 @@ func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, err
 }
 
 // Upsert inserts or updates the profile for the given user ID.
+// Interests are managed separately via SyncInterests.
 func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
-	interests := in.Interests
-	if interests == nil {
-		interests = []string{}
-	}
-
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO profiles (user_id, display_name, bio, avatar_url,
-		                       date_of_birth, gender, location_text, latitude, longitude, interests)
+		                       date_of_birth, gender, location_text, latitude, longitude)
 		 VALUES ($1, $2, $3, NULLIF($4, ''),
-		         $5, NULLIF($6, ''), NULLIF($7, ''), $8, $9, $10)
+		         $5, NULLIF($6, ''), NULLIF($7, ''), $8, $9)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET display_name  = EXCLUDED.display_name,
 		        bio           = EXCLUDED.bio,
@@ -83,28 +85,102 @@ func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*
 		        location_text = EXCLUDED.location_text,
 		        latitude      = EXCLUDED.latitude,
 		        longitude     = EXCLUDED.longitude,
-		        interests     = EXCLUDED.interests,
 		        updated_at    = now()
 		 RETURNING id, user_id, display_name, bio, COALESCE(avatar_url, ''),
 		           date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
-		           latitude, longitude, interests`,
+		           latitude, longitude`,
 		userID, in.DisplayName, in.Bio, in.AvatarURL,
-		in.DateOfBirth, in.Gender, in.LocationText, in.Latitude, in.Longitude, interests,
+		in.DateOfBirth, in.Gender, in.LocationText, in.Latitude, in.Longitude,
 	)
 
 	var p Profile
 	if err := row.Scan(
 		&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
-		&p.Latitude, &p.Longitude, &p.Interests,
+		&p.Latitude, &p.Longitude,
 	); err != nil {
 		return nil, fmt.Errorf("upsert profile: %w", err)
 	}
 
-	if p.Interests == nil {
-		p.Interests = []string{}
-	}
+	p.Interests = []string{}
 	return &p, nil
+}
+
+// SyncInterests replaces all interests for the given user atomically.
+func (s *pgStore) SyncInterests(ctx context.Context, userID string, names []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err = tx.Exec(ctx, `DELETE FROM profile_interests WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("clear interests: %w", err)
+	}
+
+	for _, name := range names {
+		if _, err = tx.Exec(ctx,
+			`INSERT INTO interests (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+			name,
+		); err != nil {
+			return fmt.Errorf("upsert interest %q: %w", name, err)
+		}
+		if _, err = tx.Exec(ctx,
+			`INSERT INTO profile_interests (user_id, interest_id)
+			 SELECT $1, id FROM interests WHERE name = $2
+			 ON CONFLICT DO NOTHING`,
+			userID, name,
+		); err != nil {
+			return fmt.Errorf("link interest %q: %w", name, err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+// SearchInterests returns interest suggestions matching the given prefix, ordered by usage count.
+func (s *pgStore) SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error) {
+	var rows pgx.Rows
+	var err error
+	if query == "" {
+		rows, err = s.pool.Query(ctx,
+			`SELECT i.name, COUNT(pi.user_id) AS usage_count
+			   FROM interests i
+			   LEFT JOIN profile_interests pi ON pi.interest_id = i.id
+			  GROUP BY i.id
+			  ORDER BY usage_count DESC, i.name
+			  LIMIT $1`,
+			limit,
+		)
+	} else {
+		rows, err = s.pool.Query(ctx,
+			`SELECT i.name, COUNT(pi.user_id) AS usage_count
+			   FROM interests i
+			   LEFT JOIN profile_interests pi ON pi.interest_id = i.id
+			  WHERE i.name ILIKE $1 || '%'
+			  GROUP BY i.id
+			  ORDER BY usage_count DESC, i.name
+			  LIMIT $2`,
+			query, limit,
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("search interests: %w", err)
+	}
+	defer rows.Close()
+
+	var suggestions []InterestSuggestion
+	for rows.Next() {
+		var s InterestSuggestion
+		if err := rows.Scan(&s.Name, &s.Count); err != nil {
+			return nil, fmt.Errorf("scan interest: %w", err)
+		}
+		suggestions = append(suggestions, s)
+	}
+	if suggestions == nil {
+		suggestions = []InterestSuggestion{}
+	}
+	return suggestions, rows.Err()
 }
 
 // UpdateAvatar updates only the avatar_url for the given user.

@@ -21,6 +21,7 @@ type mockProfileManager struct {
 	profile           *profiles.Profile
 	photo             *profiles.ProfilePhoto
 	prefs             *profiles.ProfilePreferences
+	interests         []profiles.InterestSuggestion
 	getErr            error
 	updateErr         error
 	publicErr         error
@@ -28,6 +29,7 @@ type mockProfileManager struct {
 	deletePhotoErr    error
 	getPrefsErr       error
 	updatePrefsErr    error
+	searchIntErr      error
 }
 
 func (m *mockProfileManager) GetMyProfile(_ context.Context, userID string) (*profiles.Profile, error) {
@@ -72,6 +74,16 @@ func (m *mockProfileManager) UpdateMyPreferences(_ context.Context, _ string, pr
 		prefs.GenderPreference = []string{}
 	}
 	return &prefs, nil
+}
+
+func (m *mockProfileManager) SearchInterests(_ context.Context, _ string) ([]profiles.InterestSuggestion, error) {
+	if m.searchIntErr != nil {
+		return nil, m.searchIntErr
+	}
+	if m.interests != nil {
+		return m.interests, nil
+	}
+	return []profiles.InterestSuggestion{}, nil
 }
 
 // serve wraps the handler with auth middleware and serves the request.
@@ -557,6 +569,69 @@ func TestUpdateMyPreferences_ServiceError(t *testing.T) {
 	h := profiles.NewHandler(&mockProfileManager{updatePrefsErr: errors.New("db error")})
 
 	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", `{}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- GET /profiles/interests ---
+
+func TestSearchInterests_OK(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		interests: []profiles.InterestSuggestion{{Name: "hiking", Count: 10}, {Name: "history", Count: 3}},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/interests?q=hi", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp []map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if len(resp) != 2 {
+		t.Errorf("len = %d, want 2", len(resp))
+	}
+	if resp[0]["name"] != "hiking" {
+		t.Errorf("name = %q, want hiking", resp[0]["name"])
+	}
+	if resp[0]["count"] != float64(10) {
+		t.Errorf("count = %v, want 10", resp[0]["count"])
+	}
+}
+
+func TestSearchInterests_EmptyQuery(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodGet, "/profiles/interests", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestSearchInterests_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodGet, "/profiles/interests?q=hi", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSearchInterests_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{searchIntErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodGet, "/profiles/interests?q=hi", "")
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)
 

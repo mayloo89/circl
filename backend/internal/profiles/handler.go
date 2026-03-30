@@ -20,6 +20,7 @@ type ProfileManager interface {
 	DeletePhoto(ctx context.Context, userID, photoID string) error
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
+	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
 }
 
 type photoResponse struct {
@@ -86,6 +87,7 @@ func NewHandler(svc ProfileManager) http.Handler {
 	mux.HandleFunc("PUT /profiles/me/preferences", updateMyPreferences(svc))
 	mux.HandleFunc("POST /profiles/me/photos", addPhoto(svc))
 	mux.HandleFunc("DELETE /profiles/me/photos/{photoID}", deletePhoto(svc))
+	mux.HandleFunc("GET /profiles/interests", searchInterests(svc))
 	mux.HandleFunc("GET /profiles/{userID}", getPublicProfile(svc))
 	return mux
 }
@@ -304,6 +306,33 @@ func deletePhoto(svc ProfileManager) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func searchInterests(svc ProfileManager) http.HandlerFunc {
+	type interestResponse struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			return
+		}
+
+		query := r.URL.Query().Get("q")
+		suggestions, err := svc.SearchInterests(r.Context(), query)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+
+		resp := make([]interestResponse, len(suggestions))
+		for i, s := range suggestions {
+			resp[i] = interestResponse{Name: s.Name, Count: s.Count}
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

@@ -13,14 +13,17 @@ type mockStore struct {
 	photo          *ProfilePhoto
 	photoCount     int
 	prefs          *ProfilePreferences
+	interests      []InterestSuggestion
 	getErr         error
 	upsertErr      error
+	syncErr        error
 	photosErr      error
 	countErr       error
 	addErr         error
 	deleteErr      error
 	prefsErr       error
 	upsertPrefsErr error
+	searchIntErr   error
 }
 
 func (m *mockStore) GetByUserID(_ context.Context, _ string) (*Profile, error) {
@@ -31,15 +34,15 @@ func (m *mockStore) Upsert(_ context.Context, userID string, in ProfileInput) (*
 	if m.upsertErr != nil {
 		return nil, m.upsertErr
 	}
-	interests := in.Interests
-	if interests == nil {
-		interests = []string{}
-	}
 	return &Profile{
 		ID: "prof-1", UserID: userID, DisplayName: in.DisplayName, Bio: in.Bio, AvatarURL: in.AvatarURL,
 		DateOfBirth: in.DateOfBirth, Gender: in.Gender, LocationText: in.LocationText,
-		Latitude: in.Latitude, Longitude: in.Longitude, Interests: interests,
+		Latitude: in.Latitude, Longitude: in.Longitude, Interests: []string{},
 	}, nil
+}
+
+func (m *mockStore) SyncInterests(_ context.Context, _ string, _ []string) error {
+	return m.syncErr
 }
 
 func (m *mockStore) GetPhotosByUserID(_ context.Context, _ string) ([]ProfilePhoto, error) {
@@ -80,6 +83,16 @@ func (m *mockStore) UpsertPreferences(_ context.Context, _ string, prefs Profile
 		prefs.GenderPreference = []string{}
 	}
 	return &prefs, nil
+}
+
+func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]InterestSuggestion, error) {
+	if m.searchIntErr != nil {
+		return nil, m.searchIntErr
+	}
+	if m.interests != nil {
+		return m.interests, nil
+	}
+	return []InterestSuggestion{}, nil
 }
 
 // --- GetMyProfile ---
@@ -231,6 +244,55 @@ func TestUpdateMyProfile_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{upsertErr: errors.New("db error")})
 
 	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestUpdateMyProfile_SyncInterestsError(t *testing.T) {
+	svc := NewService(&mockStore{syncErr: errors.New("db error")})
+
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Interests: []string{"hiking"}})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- SearchInterests ---
+
+func TestSearchInterests_Success(t *testing.T) {
+	svc := NewService(&mockStore{
+		interests: []InterestSuggestion{{Name: "hiking", Count: 5}, {Name: "history", Count: 2}},
+	})
+
+	results, err := svc.SearchInterests(t.Context(), "hi")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("len = %d, want 2", len(results))
+	}
+	if results[0].Name != "hiking" {
+		t.Errorf("Name = %q, want hiking", results[0].Name)
+	}
+}
+
+func TestSearchInterests_Empty(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	results, err := svc.SearchInterests(t.Context(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if results == nil {
+		t.Error("expected non-nil slice")
+	}
+}
+
+func TestSearchInterests_StoreError(t *testing.T) {
+	svc := NewService(&mockStore{searchIntErr: errors.New("db error")})
+
+	_, err := svc.SearchInterests(t.Context(), "hi")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

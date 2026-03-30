@@ -62,10 +62,17 @@ type ProfilePreferences struct {
 	GenderPreference []string
 }
 
+// InterestSuggestion is a suggested interest with its global usage count.
+type InterestSuggestion struct {
+	Name  string
+	Count int
+}
+
 // Store is the data-access interface required by the profiles service.
 type Store interface {
 	GetByUserID(ctx context.Context, userID string) (*Profile, error)
 	Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error)
+	SyncInterests(ctx context.Context, userID string, names []string) error
 	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 	GetPhotosByUserID(ctx context.Context, userID string) ([]ProfilePhoto, error)
 	CountPhotos(ctx context.Context, userID string) (int, error)
@@ -73,6 +80,7 @@ type Store interface {
 	DeletePhoto(ctx context.Context, photoID, userID string) error
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
+	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
 }
 
 // Service handles profile business logic.
@@ -137,12 +145,25 @@ func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in Profile
 	if err != nil {
 		return nil, err
 	}
+	interests := in.Interests
+	if interests == nil {
+		interests = []string{}
+	}
+	if err := s.store.SyncInterests(ctx, userID, interests); err != nil {
+		return nil, err
+	}
+	profile.Interests = interests
 	photos, err := s.store.GetPhotosByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	profile.Photos = photos
 	return profile, nil
+}
+
+// SearchInterests returns interest suggestions matching the given prefix, ordered by usage.
+func (s *Service) SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error) {
+	return s.store.SearchInterests(ctx, query, 10)
 }
 
 // UpdateAvatar updates only the avatar URL for the given user.

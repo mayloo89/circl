@@ -1,4 +1,8 @@
 DROP TABLE IF EXISTS profile_preferences;
+DROP TRIGGER IF EXISTS trg_profile_interests_tsv ON profile_interests;
+DROP FUNCTION IF EXISTS refresh_profile_tsv_on_interests();
+DROP TABLE IF EXISTS profile_interests;
+DROP TABLE IF EXISTS interests;
 
 -- Restore original TSV function (without interests)
 CREATE OR REPLACE FUNCTION refresh_profile_tsv()
@@ -17,7 +21,6 @@ CREATE TRIGGER trg_profiles_tsv
     FOR EACH ROW EXECUTE FUNCTION refresh_profile_tsv();
 
 ALTER TABLE profiles
-    DROP COLUMN IF EXISTS interests,
     DROP COLUMN IF EXISTS longitude,
     DROP COLUMN IF EXISTS latitude,
     DROP COLUMN IF EXISTS location_text,

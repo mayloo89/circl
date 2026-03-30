@@ -82,7 +82,6 @@ func TestPgStore_Upsert_Success(t *testing.T) {
 		*dest[7].(*string) = ""
 		// dest[8] = **float64 — leave nil
 		// dest[9] = **float64 — leave nil
-		*dest[10].(*[]string) = []string{}
 		return nil
 	}}}}
 
@@ -334,6 +333,60 @@ func TestProfiles_Integration(t *testing.T) {
 		}
 		if p.DateOfBirth == nil {
 			t.Error("DateOfBirth must not be nil")
+		}
+	})
+
+	t.Run("sync and search interests", func(t *testing.T) {
+		store := NewStore(pool)
+
+		if err := store.SyncInterests(t.Context(), userID, []string{"hiking", "music", "travel"}); err != nil {
+			t.Fatalf("sync interests: %v", err)
+		}
+
+		p, err := store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile: %v", err)
+		}
+		if len(p.Interests) != 3 {
+			t.Errorf("interests len = %d, want 3", len(p.Interests))
+		}
+
+		// Replace with a subset — verify old ones are removed
+		if err := store.SyncInterests(t.Context(), userID, []string{"hiking"}); err != nil {
+			t.Fatalf("sync interests (replace): %v", err)
+		}
+		p, err = store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile after replace: %v", err)
+		}
+		if len(p.Interests) != 1 || p.Interests[0] != "hiking" {
+			t.Errorf("interests = %v, want [hiking]", p.Interests)
+		}
+
+		// Search — "hik" should match "hiking"
+		suggestions, err := store.SearchInterests(t.Context(), "hik", 10)
+		if err != nil {
+			t.Fatalf("search interests: %v", err)
+		}
+		if len(suggestions) == 0 || suggestions[0].Name != "hiking" {
+			t.Errorf("suggestions = %v, want hiking first", suggestions)
+		}
+		if suggestions[0].Count < 1 {
+			t.Errorf("count = %d, want >= 1", suggestions[0].Count)
+		}
+
+		// Empty query returns popular interests
+		all, err := store.SearchInterests(t.Context(), "", 10)
+		if err != nil {
+			t.Fatalf("search all interests: %v", err)
+		}
+		if len(all) == 0 {
+			t.Error("expected at least one interest from empty query")
+		}
+
+		// Clear interests
+		if err := store.SyncInterests(t.Context(), userID, []string{}); err != nil {
+			t.Fatalf("clear interests: %v", err)
 		}
 	})
 

@@ -18,6 +18,36 @@ const MAX_INTERESTS = 20
 
 const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
 
+interface InterestSuggestion {
+  name: string
+  count: number
+}
+
+function useInterestSearch(query: string, token: string | undefined) {
+  const [suggestions, setSuggestions] = useState<InterestSuggestion[]>([])
+
+  const search = useCallback(async (q: string) => {
+    if (!token) return
+    try {
+      const res = await fetch(
+        `${API_URL}/profiles/interests?q=${encodeURIComponent(q)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) return
+      setSuggestions(await res.json())
+    } catch {
+      // silent fail
+    }
+  }, [token])
+
+  useEffect(() => {
+    const id = setTimeout(() => search(query), 300)
+    return () => clearTimeout(id)
+  }, [query, search])
+
+  return { suggestions, clear: () => setSuggestions([]) }
+}
+
 interface LocationSuggestion {
   label: string
   lat: number
@@ -139,7 +169,9 @@ export default function ProfilePage() {
   const [interests, setInterests] = useState<string[]>([])
   const [locationQuery, setLocationQuery] = useState("")
   const [interestInput, setInterestInput] = useState("")
+  const [interestFocused, setInterestFocused] = useState(false)
   const locationRef = useRef<HTMLDivElement>(null)
+  const interestRef = useRef<HTMLDivElement>(null)
   const [formError, setFormError] = useState("")
   const [formSuccess, setFormSuccess] = useState("")
   const [avatarSuccess, setAvatarSuccess] = useState("")
@@ -150,17 +182,24 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
+  const token = session?.accessToken
+
   const { suggestions: locationSuggestions, searching: locationSearching, clear: clearLocationSuggestions } = useLocationSearch(locationQuery)
+  const { suggestions: interestSuggestions, clear: clearInterestSuggestions } = useInterestSearch(interestFocused ? interestInput : "", token)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
         clearLocationSuggestions()
       }
+      if (interestRef.current && !interestRef.current.contains(e.target as Node)) {
+        setInterestFocused(false)
+        clearInterestSuggestions()
+      }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [clearLocationSuggestions])
+  }, [clearLocationSuggestions, clearInterestSuggestions])
 
   useAutoReset(formSuccess, setFormSuccess)
   useAutoReset(avatarSuccess, setAvatarSuccess)
@@ -170,7 +209,6 @@ export default function ProfilePage() {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const { upload, uploading: uploadingAvatar, error: uploadError } = useUpload(session?.accessToken)
 
-  const token = session?.accessToken
   const isDirty = profile !== null && (
     displayName !== profile.display_name ||
     bio !== profile.bio ||
@@ -285,13 +323,18 @@ export default function ProfilePage() {
     setProfile((prev) => prev ? { ...prev, photos: prev.photos.filter((p) => p.id !== photoID) } : prev)
   }
 
-  function handleAddInterest(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter" && e.key !== ",") return
-    e.preventDefault()
-    const tag = interestInput.trim().toLowerCase().replace(/,/g, "")
+  function addInterest(name: string) {
+    const tag = name.trim().toLowerCase().replace(/,/g, "")
     if (!tag || interests.includes(tag) || interests.length >= MAX_INTERESTS) return
     setInterests((prev) => [...prev, tag])
     setInterestInput("")
+    clearInterestSuggestions()
+  }
+
+  function handleAddInterest(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter" && e.key !== ",") return
+    e.preventDefault()
+    addInterest(interestInput)
   }
 
   function handleRemoveInterest(tag: string) {
@@ -463,7 +506,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Interests tag input */}
-            <div>
+            <div ref={interestRef} className="relative">
               <div className="flex items-center justify-between">
                 <label htmlFor="interestInput" className="block text-sm font-medium text-gray-300">Interests</label>
                 <span className={`text-xs ${interests.length >= MAX_INTERESTS ? "text-red-400" : "text-gray-500"}`}>
@@ -476,10 +519,30 @@ export default function ProfilePage() {
                 value={interestInput}
                 onChange={(e) => setInterestInput(e.target.value)}
                 onKeyDown={handleAddInterest}
+                onFocus={() => setInterestFocused(true)}
                 placeholder="Type and press Enter to add"
                 disabled={interests.length >= MAX_INTERESTS}
+                autoComplete="off"
                 className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
               />
+              {interestSuggestions.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
+                  {interestSuggestions
+                    .filter((s) => !interests.includes(s.name))
+                    .map((s) => (
+                      <li key={s.name}>
+                        <button
+                          type="button"
+                          onClick={() => addInterest(s.name)}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                        >
+                          <span>{s.name}</span>
+                          <span className="text-xs text-gray-500">{s.count}</span>
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
               {interests.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {interests.map((tag) => (
