@@ -99,6 +99,7 @@ interface ProfilePhoto {
 interface Profile {
   id: string
   user_id: string
+  username: string
   display_name: string
   bio: string
   avatar_url: string
@@ -109,6 +110,35 @@ interface Profile {
   longitude?: number
   interests: string[]
   photos: ProfilePhoto[]
+}
+
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid"
+
+function useUsernameAvailability(username: string, token: string | undefined, currentUsername: string) {
+  const [status, setStatus] = useState<UsernameStatus>("idle")
+
+  useEffect(() => {
+    if (!username || username === currentUsername) { setStatus("idle"); return }
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) { setStatus("invalid"); return }
+    setStatus("checking")
+    const id = setTimeout(async () => {
+      if (!token) return
+      try {
+        const res = await fetch(
+          `${API_URL}/profiles/available?username=${encodeURIComponent(username)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (!res.ok) return
+        const data = await res.json()
+        setStatus(data.available ? "available" : "taken")
+      } catch {
+        setStatus("idle")
+      }
+    }, 400)
+    return () => clearTimeout(id)
+  }, [username, token, currentUsername])
+
+  return status
 }
 
 function ProfileSkeleton() {
@@ -159,6 +189,7 @@ export default function ProfilePage() {
   const router = useRouter()
 
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [username, setUsername] = useState("")
   const [displayName, setDisplayName] = useState("")
   const [bio, setBio] = useState("")
   const [avatarURL, setAvatarURL] = useState("")
@@ -184,6 +215,7 @@ export default function ProfilePage() {
 
   const token = session?.accessToken
 
+  const usernameStatus = useUsernameAvailability(username, token, profile?.username ?? "")
   const { suggestions: locationSuggestions, searching: locationSearching, clear: clearLocationSuggestions } = useLocationSearch(locationQuery)
   const { suggestions: interestSuggestions, clear: clearInterestSuggestions } = useInterestSearch(interestFocused ? interestInput : "", token)
 
@@ -210,6 +242,7 @@ export default function ProfilePage() {
   const { upload, uploading: uploadingAvatar, error: uploadError } = useUpload(session?.accessToken)
 
   const isDirty = profile !== null && (
+    username !== (profile.username ?? "") ||
     displayName !== profile.display_name ||
     bio !== profile.bio ||
     (dateOfBirth ?? "") !== (profile.date_of_birth ?? "") ||
@@ -224,6 +257,7 @@ export default function ProfilePage() {
       .then((res) => res.json())
       .then((data: Profile) => {
         setProfile(data)
+        setUsername(data.username ?? "")
         setDisplayName(data.display_name ?? "")
         setBio(data.bio ?? "")
         setAvatarURL(data.avatar_url)
@@ -249,14 +283,15 @@ export default function ProfilePage() {
     setSaving(true)
     try {
       const body: Record<string, unknown> = {
+        username,
         display_name: displayName,
         bio,
         avatar_url: avatarURL,
         gender: effectiveGender(gender, genderOther),
         location_text: locationText,
         interests,
+        date_of_birth: dateOfBirth || undefined,
       }
-      if (dateOfBirth) body.date_of_birth = dateOfBirth
 
       const res = await fetch(`${API_URL}/profiles/me`, {
         method: "PUT",
@@ -266,6 +301,7 @@ export default function ProfilePage() {
       if (!res.ok) { const data = await res.json(); setFormError(data.error ?? "Failed to update profile."); return }
       const updated: Profile = await res.json()
       setProfile(updated)
+      setUsername(updated.username ?? "")
       setAvatarURL(updated.avatar_url)
       setAvatarSuccess("")
       setFormSuccess("Profile updated.")
@@ -349,6 +385,8 @@ export default function ProfilePage() {
     )
   }
 
+  const profileIncomplete = profile !== null && (!profile.username || !profile.date_of_birth)
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-lg space-y-6 px-4">
@@ -357,6 +395,19 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold text-white">My Profile</h1>
           <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
         </div>
+
+        {profileIncomplete && (
+          <div className="rounded-lg bg-amber-950 p-4 ring-1 ring-amber-700">
+            <p className="text-sm font-medium text-amber-300">Complete your profile to use Circl</p>
+            <p className="mt-1 text-xs text-amber-400">
+              {!profile.username && !profile.date_of_birth
+                ? "Set your username and date of birth below."
+                : !profile.username
+                ? "Set your username below."
+                : "Set your date of birth below."}
+            </p>
+          </div>
+        )}
 
         {loadError && (
           <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{loadError}</p>
@@ -394,6 +445,44 @@ export default function ProfilePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <div className="flex items-center justify-between">
+                <label htmlFor="username" className="block text-sm font-medium text-gray-300">
+                  Username <span className="text-red-400">*</span>
+                </label>
+                {username && username !== (profile?.username ?? "") && (
+                  <span className={`text-xs ${
+                    usernameStatus === "available" ? "text-green-400" :
+                    usernameStatus === "taken" ? "text-red-400" :
+                    usernameStatus === "invalid" ? "text-yellow-400" :
+                    "text-gray-500"
+                  }`}>
+                    {usernameStatus === "checking" ? "Checking…" :
+                     usernameStatus === "available" ? "✓ Available" :
+                     usernameStatus === "taken" ? "✗ Taken" :
+                     usernameStatus === "invalid" ? "3–30 chars, lowercase, digits, _" : ""}
+                  </span>
+                )}
+              </div>
+              <div className="relative mt-1">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">@</span>
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  maxLength={30}
+                  placeholder="your_username"
+                  required
+                  className={`block w-full rounded-md border bg-gray-800 pl-7 pr-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                    username !== (profile?.username ?? "")
+                      ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
+                      : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                  }`}
+                />
+              </div>
+            </div>
+
             <Input
               label="Display Name"
               id="displayName"
@@ -572,7 +661,7 @@ export default function ProfilePage() {
               type="submit"
               variant={isDirty ? "warning" : "primary"}
               loading={saving}
-              disabled={saving || uploadingAvatar || !isDirty}
+              disabled={saving || uploadingAvatar || !isDirty || usernameStatus === "checking" || usernameStatus === "taken" || usernameStatus === "invalid"}
               className="w-full focus:ring-offset-gray-900"
             >
               {saving ? "Saving…" : isDirty ? "Save changes" : "Save"}

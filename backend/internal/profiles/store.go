@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,51 +34,77 @@ func NewStore(pool *pgxpool.Pool) Store {
 	return &pgStore{db: &pgxQuerier{pool: pool}, pool: pool}
 }
 
-// GetByUserID returns the profile for the given user ID.
-func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, error) {
-	row := s.db.QueryRow(ctx,
-		`SELECT p.id, p.user_id, p.display_name, p.bio, COALESCE(p.avatar_url, ''),
-		        p.date_of_birth, COALESCE(p.gender, ''), COALESCE(p.location_text, ''),
-		        p.latitude, p.longitude,
-		        ARRAY(
-		            SELECT i.name FROM profile_interests pi
-		              JOIN interests i ON i.id = pi.interest_id
-		             WHERE pi.user_id = p.user_id
-		             ORDER BY i.name
-		        ) AS interests
-		   FROM profiles p
-		  WHERE p.user_id = $1`,
-		userID,
-	)
+const profileSelectSQL = `
+	SELECT p.id, p.user_id, COALESCE(p.username, ''), p.display_name, p.bio, COALESCE(p.avatar_url, ''),
+	       p.date_of_birth, COALESCE(p.gender, ''), COALESCE(p.location_text, ''),
+	       p.latitude, p.longitude,
+	       ARRAY(
+	           SELECT i.name FROM profile_interests pi
+	             JOIN interests i ON i.id = pi.interest_id
+	            WHERE pi.user_id = p.user_id
+	            ORDER BY i.name
+	       ) AS interests
+	  FROM profiles p`
 
+func scanProfile(row rowScanner) (*Profile, error) {
 	var p Profile
 	if err := row.Scan(
-		&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL,
+		&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
 		&p.Latitude, &p.Longitude, &p.Interests,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("get profile: %w", err)
+		return nil, fmt.Errorf("scan profile: %w", err)
 	}
-
 	if p.Interests == nil {
 		p.Interests = []string{}
 	}
 	return &p, nil
 }
 
+func isUniqueViolation(err error, constraintName string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == constraintName
+}
+
+// GetByUserID returns the profile for the given user ID.
+func (s *pgStore) GetByUserID(ctx context.Context, userID string) (*Profile, error) {
+	row := s.db.QueryRow(ctx, profileSelectSQL+` WHERE p.user_id = $1`, userID)
+	return scanProfile(row)
+}
+
+// GetByUsername returns the profile for the given username.
+func (s *pgStore) GetByUsername(ctx context.Context, username string) (*Profile, error) {
+	row := s.db.QueryRow(ctx, profileSelectSQL+` WHERE p.username = $1`, username)
+	return scanProfile(row)
+}
+
+// IsUsernameAvailable returns true if no profile has the given username.
+func (s *pgStore) IsUsernameAvailable(ctx context.Context, username string) (bool, error) {
+	var exists bool
+	row := s.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM profiles WHERE username = $1)`,
+		username,
+	)
+	if err := row.Scan(&exists); err != nil {
+		return false, fmt.Errorf("check username: %w", err)
+	}
+	return !exists, nil
+}
+
 // Upsert inserts or updates the profile for the given user ID.
 // Interests are managed separately via SyncInterests.
 func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO profiles (user_id, display_name, bio, avatar_url,
+		`INSERT INTO profiles (user_id, username, display_name, bio, avatar_url,
 		                       date_of_birth, gender, location_text, latitude, longitude)
-		 VALUES ($1, $2, $3, NULLIF($4, ''),
-		         $5, NULLIF($6, ''), NULLIF($7, ''), $8, $9)
+		 VALUES ($1, NULLIF($2, ''), $3, $4, NULLIF($5, ''),
+		         $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10)
 		 ON CONFLICT (user_id) DO UPDATE
-		    SET display_name  = EXCLUDED.display_name,
+		    SET username      = COALESCE(NULLIF(EXCLUDED.username, ''), profiles.username),
+		        display_name  = EXCLUDED.display_name,
 		        bio           = EXCLUDED.bio,
 		        avatar_url    = EXCLUDED.avatar_url,
 		        date_of_birth = EXCLUDED.date_of_birth,
@@ -86,19 +113,22 @@ func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*
 		        latitude      = EXCLUDED.latitude,
 		        longitude     = EXCLUDED.longitude,
 		        updated_at    = now()
-		 RETURNING id, user_id, display_name, bio, COALESCE(avatar_url, ''),
+		 RETURNING id, user_id, COALESCE(username, ''), display_name, bio, COALESCE(avatar_url, ''),
 		           date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
 		           latitude, longitude`,
-		userID, in.DisplayName, in.Bio, in.AvatarURL,
+		userID, in.Username, in.DisplayName, in.Bio, in.AvatarURL,
 		in.DateOfBirth, in.Gender, in.LocationText, in.Latitude, in.Longitude,
 	)
 
 	var p Profile
 	if err := row.Scan(
-		&p.ID, &p.UserID, &p.DisplayName, &p.Bio, &p.AvatarURL,
+		&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
 		&p.Latitude, &p.Longitude,
 	); err != nil {
+		if isUniqueViolation(err, "profiles_username_key") {
+			return nil, ErrUsernameTaken
+		}
 		return nil, fmt.Errorf("upsert profile: %w", err)
 	}
 
