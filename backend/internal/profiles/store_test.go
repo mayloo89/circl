@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,6 +28,12 @@ func TestPgStore_GetByUserID_Success(t *testing.T) {
 		*dest[2].(*string) = "Alice"
 		*dest[3].(*string) = "Bio"
 		*dest[4].(*string) = ""
+		// dest[5] = **time.Time (date_of_birth) — leave nil
+		*dest[6].(*string) = "" // gender
+		*dest[7].(*string) = "" // location_text
+		// dest[8] = **float64 (latitude) — leave nil
+		// dest[9] = **float64 (longitude) — leave nil
+		*dest[10].(*[]string) = []string{} // interests
 		return nil
 	}}}}
 
@@ -70,10 +77,15 @@ func TestPgStore_Upsert_Success(t *testing.T) {
 		*dest[2].(*string) = "Alice"
 		*dest[3].(*string) = "Bio"
 		*dest[4].(*string) = ""
+		// dest[5] = **time.Time (date_of_birth) — leave nil
+		*dest[6].(*string) = ""
+		*dest[7].(*string) = ""
+		// dest[8] = **float64 — leave nil
+		// dest[9] = **float64 — leave nil
 		return nil
 	}}}}
 
-	p, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio", "")
+	p, err := store.Upsert(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Bio: "Bio"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -87,7 +99,7 @@ func TestPgStore_Upsert_QueryError(t *testing.T) {
 		return errors.New("db error")
 	}}}}
 
-	_, err := store.Upsert(t.Context(), "user-1", "Alice", "Bio", "")
+	_, err := store.Upsert(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Bio: "Bio"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -157,6 +169,95 @@ func TestPgStore_AddPhoto_Error(t *testing.T) {
 	}
 }
 
+// --- GetPreferences ---
+
+func TestPgStore_GetPreferences_NotFound(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
+		return pgx.ErrNoRows
+	}}}}
+
+	p, err := store.GetPreferences(t.Context(), "user-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.UserID != "user-1" {
+		t.Errorf("UserID = %q, want user-1", p.UserID)
+	}
+	if len(p.GenderPreference) != 0 {
+		t.Errorf("GenderPreference = %v, want empty", p.GenderPreference)
+	}
+}
+
+func TestPgStore_GetPreferences_Error(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
+		return errors.New("db error")
+	}}}}
+
+	_, err := store.GetPreferences(t.Context(), "user-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_GetPreferences_Success(t *testing.T) {
+	minAge := 25
+	maxAge := 40
+	dist := 100
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
+		*dest[0].(*string) = "user-1"
+		*dest[1].(**int) = &minAge
+		*dest[2].(**int) = &maxAge
+		*dest[3].(**int) = &dist
+		*dest[4].(*[]string) = []string{"female"}
+		return nil
+	}}}}
+
+	p, err := store.GetPreferences(t.Context(), "user-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.MinAge == nil || *p.MinAge != 25 {
+		t.Errorf("MinAge = %v, want 25", p.MinAge)
+	}
+}
+
+// --- UpsertPreferences ---
+
+func TestPgStore_UpsertPreferences_Success(t *testing.T) {
+	minAge := 20
+	maxAge := 35
+	dist := 50
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
+		*dest[0].(*string) = "user-1"
+		*dest[1].(**int) = &minAge
+		*dest[2].(**int) = &maxAge
+		*dest[3].(**int) = &dist
+		*dest[4].(*[]string) = []string{"female"}
+		return nil
+	}}}}
+
+	p, err := store.UpsertPreferences(t.Context(), "user-1", ProfilePreferences{
+		MinAge: &minAge, MaxAge: &maxAge, MaxDistanceKm: &dist, GenderPreference: []string{"female"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.MaxAge == nil || *p.MaxAge != 35 {
+		t.Errorf("MaxAge = %v, want 35", p.MaxAge)
+	}
+}
+
+func TestPgStore_UpsertPreferences_Error(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
+		return errors.New("db error")
+	}}}}
+
+	_, err := store.UpsertPreferences(t.Context(), "user-1", ProfilePreferences{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 // --- Integration ---
 
 func TestProfiles_Integration(t *testing.T) {
@@ -196,10 +297,21 @@ func TestProfiles_Integration(t *testing.T) {
 		if p.UserID != userID {
 			t.Errorf("UserID = %q, want %q", p.UserID, userID)
 		}
+		if p.Interests == nil {
+			t.Error("Interests must not be nil")
+		}
 	})
 
-	t.Run("update and retrieve profile", func(t *testing.T) {
-		_, err := svc.UpdateMyProfile(t.Context(), userID, "Alice", "Hello!", "")
+	t.Run("update profile with new fields", func(t *testing.T) {
+		dob := time.Date(1995, 6, 15, 0, 0, 0, 0, time.UTC)
+		_, err := svc.UpdateMyProfile(t.Context(), userID, ProfileInput{
+			DisplayName:  "Alice",
+			Bio:          "Hello!",
+			Gender:       "female",
+			DateOfBirth:  &dob,
+			LocationText: "Paris",
+			Interests:    []string{"hiking", "music"},
+		})
 		if err != nil {
 			t.Fatalf("update error: %v", err)
 		}
@@ -208,7 +320,73 @@ func TestProfiles_Integration(t *testing.T) {
 			t.Fatalf("get error: %v", err)
 		}
 		if p.DisplayName != "Alice" {
-			t.Errorf("DisplayName = %q, want %q", p.DisplayName, "Alice")
+			t.Errorf("DisplayName = %q, want Alice", p.DisplayName)
+		}
+		if p.Gender != "female" {
+			t.Errorf("Gender = %q, want female", p.Gender)
+		}
+		if p.LocationText != "Paris" {
+			t.Errorf("LocationText = %q, want Paris", p.LocationText)
+		}
+		if len(p.Interests) != 2 {
+			t.Errorf("Interests len = %d, want 2", len(p.Interests))
+		}
+		if p.DateOfBirth == nil {
+			t.Error("DateOfBirth must not be nil")
+		}
+	})
+
+	t.Run("sync and search interests", func(t *testing.T) {
+		store := NewStore(pool)
+
+		if err := store.SyncInterests(t.Context(), userID, []string{"hiking", "music", "travel"}); err != nil {
+			t.Fatalf("sync interests: %v", err)
+		}
+
+		p, err := store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile: %v", err)
+		}
+		if len(p.Interests) != 3 {
+			t.Errorf("interests len = %d, want 3", len(p.Interests))
+		}
+
+		// Replace with a subset — verify old ones are removed
+		if err := store.SyncInterests(t.Context(), userID, []string{"hiking"}); err != nil {
+			t.Fatalf("sync interests (replace): %v", err)
+		}
+		p, err = store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile after replace: %v", err)
+		}
+		if len(p.Interests) != 1 || p.Interests[0] != "hiking" {
+			t.Errorf("interests = %v, want [hiking]", p.Interests)
+		}
+
+		// Search — "hik" should match "hiking"
+		suggestions, err := store.SearchInterests(t.Context(), "hik", 10)
+		if err != nil {
+			t.Fatalf("search interests: %v", err)
+		}
+		if len(suggestions) == 0 || suggestions[0].Name != "hiking" {
+			t.Errorf("suggestions = %v, want hiking first", suggestions)
+		}
+		if suggestions[0].Count < 1 {
+			t.Errorf("count = %d, want >= 1", suggestions[0].Count)
+		}
+
+		// Empty query returns popular interests
+		all, err := store.SearchInterests(t.Context(), "", 10)
+		if err != nil {
+			t.Fatalf("search all interests: %v", err)
+		}
+		if len(all) == 0 {
+			t.Error("expected at least one interest from empty query")
+		}
+
+		// Clear interests
+		if err := store.SyncInterests(t.Context(), userID, []string{}); err != nil {
+			t.Fatalf("clear interests: %v", err)
 		}
 	})
 
@@ -249,6 +427,28 @@ func TestProfiles_Integration(t *testing.T) {
 		}
 		if p.UserID != userID {
 			t.Errorf("UserID = %q, want %q", p.UserID, userID)
+		}
+	})
+
+	t.Run("upsert and retrieve preferences", func(t *testing.T) {
+		minAge := 22
+		maxAge := 38
+		dist := 100
+		_, err := svc.UpdateMyPreferences(t.Context(), userID, ProfilePreferences{
+			MinAge: &minAge, MaxAge: &maxAge, MaxDistanceKm: &dist, GenderPreference: []string{"female"},
+		})
+		if err != nil {
+			t.Fatalf("update preferences error: %v", err)
+		}
+		p, err := svc.GetMyPreferences(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get preferences error: %v", err)
+		}
+		if p.MinAge == nil || *p.MinAge != 22 {
+			t.Errorf("MinAge = %v, want 22", p.MinAge)
+		}
+		if len(p.GenderPreference) != 1 {
+			t.Errorf("GenderPreference len = %d, want 1", len(p.GenderPreference))
 		}
 	})
 }

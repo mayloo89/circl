@@ -18,20 +18,25 @@ import (
 const testSecret = "supersecretfortesting-mustbe32chars!!"
 
 type mockProfileManager struct {
-	profile        *profiles.Profile
-	photo          *profiles.ProfilePhoto
-	getErr         error
-	updateErr      error
-	publicErr      error
-	addPhotoErr    error
-	deletePhotoErr error
+	profile           *profiles.Profile
+	photo             *profiles.ProfilePhoto
+	prefs             *profiles.ProfilePreferences
+	interests         []profiles.InterestSuggestion
+	getErr            error
+	updateErr         error
+	publicErr         error
+	addPhotoErr       error
+	deletePhotoErr    error
+	getPrefsErr       error
+	updatePrefsErr    error
+	searchIntErr      error
 }
 
 func (m *mockProfileManager) GetMyProfile(_ context.Context, userID string) (*profiles.Profile, error) {
 	return m.profile, m.getErr
 }
 
-func (m *mockProfileManager) UpdateMyProfile(_ context.Context, _, _, _, _ string) (*profiles.Profile, error) {
+func (m *mockProfileManager) UpdateMyProfile(_ context.Context, _ string, _ profiles.ProfileInput) (*profiles.Profile, error) {
 	return m.profile, m.updateErr
 }
 
@@ -49,6 +54,36 @@ func (m *mockProfileManager) DeletePhoto(_ context.Context, _, _ string) error {
 
 func (m *mockProfileManager) UpdateAvatar(_ context.Context, _, _ string) error {
 	return nil
+}
+
+func (m *mockProfileManager) GetMyPreferences(_ context.Context, _ string) (*profiles.ProfilePreferences, error) {
+	if m.getPrefsErr != nil {
+		return nil, m.getPrefsErr
+	}
+	if m.prefs != nil {
+		return m.prefs, nil
+	}
+	return &profiles.ProfilePreferences{GenderPreference: []string{}}, nil
+}
+
+func (m *mockProfileManager) UpdateMyPreferences(_ context.Context, _ string, prefs profiles.ProfilePreferences) (*profiles.ProfilePreferences, error) {
+	if m.updatePrefsErr != nil {
+		return nil, m.updatePrefsErr
+	}
+	if prefs.GenderPreference == nil {
+		prefs.GenderPreference = []string{}
+	}
+	return &prefs, nil
+}
+
+func (m *mockProfileManager) SearchInterests(_ context.Context, _ string) ([]profiles.InterestSuggestion, error) {
+	if m.searchIntErr != nil {
+		return nil, m.searchIntErr
+	}
+	if m.interests != nil {
+		return m.interests, nil
+	}
+	return []profiles.InterestSuggestion{}, nil
 }
 
 // serve wraps the handler with auth middleware and serves the request.
@@ -76,7 +111,7 @@ func authedReq(t *testing.T, method, path, body string) *http.Request {
 
 func TestGetMyProfile_OK(t *testing.T) {
 	h := profiles.NewHandler(&mockProfileManager{
-		profile: &profiles.Profile{ID: "p1", UserID: "user-123", DisplayName: "Alice", Bio: "Hey", Photos: []profiles.ProfilePhoto{}},
+		profile: &profiles.Profile{ID: "p1", UserID: "user-123", DisplayName: "Alice", Bio: "Hey", Interests: []string{}, Photos: []profiles.ProfilePhoto{}},
 	})
 
 	req := authedReq(t, http.MethodGet, "/profiles/me", "")
@@ -93,6 +128,9 @@ func TestGetMyProfile_OK(t *testing.T) {
 	}
 	if resp["photos"] == nil {
 		t.Error("photos field missing from response")
+	}
+	if resp["interests"] == nil {
+		t.Error("interests field missing from response")
 	}
 }
 
@@ -136,7 +174,7 @@ func TestGetMyProfile_NoUserIDInContext(t *testing.T) {
 
 func TestUpdateMyProfile_OK(t *testing.T) {
 	h := profiles.NewHandler(&mockProfileManager{
-		profile: &profiles.Profile{ID: "p1", UserID: "user-123", DisplayName: "Alice", Bio: "Updated", Photos: []profiles.ProfilePhoto{}},
+		profile: &profiles.Profile{ID: "p1", UserID: "user-123", DisplayName: "Alice", Bio: "Updated", Interests: []string{}, Photos: []profiles.ProfilePhoto{}},
 	})
 
 	req := authedReq(t, http.MethodPut, "/profiles/me", `{"display_name":"Alice","bio":"Updated"}`)
@@ -145,6 +183,38 @@ func TestUpdateMyProfile_OK(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestUpdateMyProfile_WithNewFields(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{ID: "p1", UserID: "user-123", DisplayName: "Alice", Gender: "female", Interests: []string{"music"}, Photos: []profiles.ProfilePhoto{}},
+	})
+
+	body := `{"display_name":"Alice","gender":"female","date_of_birth":"1995-06-15","interests":["music"]}`
+	req := authedReq(t, http.MethodPut, "/profiles/me", body)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["gender"] != "female" {
+		t.Errorf("gender = %q, want female", resp["gender"])
+	}
+}
+
+func TestUpdateMyProfile_InvalidDOBFormat(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me", `{"display_name":"Alice","date_of_birth":"not-a-date"}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
@@ -214,7 +284,8 @@ func TestGetPublicProfile_OK(t *testing.T) {
 	h := profiles.NewHandler(&mockProfileManager{
 		profile: &profiles.Profile{
 			ID: "p1", UserID: "user-456", DisplayName: "Bob", Bio: "Hello",
-			Photos: []profiles.ProfilePhoto{{ID: "ph-1", URL: "https://example.com/1.jpg"}},
+			Interests: []string{"travel"},
+			Photos:    []profiles.ProfilePhoto{{ID: "ph-1", URL: "https://example.com/1.jpg"}},
 		},
 	})
 
@@ -383,6 +454,184 @@ func TestDeletePhoto_ServiceError(t *testing.T) {
 	h := profiles.NewHandler(&mockProfileManager{deletePhotoErr: errors.New("db error")})
 
 	req := authedReq(t, http.MethodDelete, "/profiles/me/photos/ph-1", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- GET /profiles/me/preferences ---
+
+func TestGetMyPreferences_OK(t *testing.T) {
+	minAge := 25
+	maxAge := 40
+	h := profiles.NewHandler(&mockProfileManager{
+		prefs: &profiles.ProfilePreferences{MinAge: &minAge, MaxAge: &maxAge, GenderPreference: []string{"female"}},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/me/preferences", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["min_age"] != float64(25) {
+		t.Errorf("min_age = %v, want 25", resp["min_age"])
+	}
+}
+
+func TestGetMyPreferences_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodGet, "/profiles/me/preferences", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestGetMyPreferences_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{getPrefsErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodGet, "/profiles/me/preferences", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- PUT /profiles/me/preferences ---
+
+func TestUpdateMyPreferences_OK(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	body := `{"min_age":20,"max_age":35,"max_distance_km":50,"gender_preference":["female"]}`
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", body)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["max_age"] != float64(35) {
+		t.Errorf("max_age = %v, want 35", resp["max_age"])
+	}
+}
+
+func TestUpdateMyPreferences_InvalidInput(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{updatePrefsErr: profiles.ErrInvalidInput})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", `{"min_age":10}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestUpdateMyPreferences_MalformedJSON(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", "{bad")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestUpdateMyPreferences_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodPut, "/profiles/me/preferences", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestUpdateMyPreferences_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{updatePrefsErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", `{}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- GET /profiles/interests ---
+
+func TestSearchInterests_OK(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		interests: []profiles.InterestSuggestion{{Name: "hiking", Count: 10}, {Name: "history", Count: 3}},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/interests?q=hi", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp []map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if len(resp) != 2 {
+		t.Errorf("len = %d, want 2", len(resp))
+	}
+	if resp[0]["name"] != "hiking" {
+		t.Errorf("name = %q, want hiking", resp[0]["name"])
+	}
+	if resp[0]["count"] != float64(10) {
+		t.Errorf("count = %v, want 10", resp[0]["count"])
+	}
+}
+
+func TestSearchInterests_EmptyQuery(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodGet, "/profiles/interests", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestSearchInterests_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodGet, "/profiles/interests?q=hi", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSearchInterests_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{searchIntErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodGet, "/profiles/interests?q=hi", "")
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)
 

@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-03-29 — Expanded profiles
+
+### Added
+- Migration `000013_expand_profiles` — adds `date_of_birth DATE`, `gender VARCHAR(50)`, `location_text VARCHAR(255)`, `latitude DOUBLE PRECISION`, `longitude DOUBLE PRECISION`, `interests TEXT[]` to `profiles`; updates full-text search trigger to include interests at weight C; adds `profile_preferences` table (`min_age`, `max_age`, `max_distance_km`, `gender_preference TEXT[]`)
+- `GET /profiles/me/preferences` and `PUT /profiles/me/preferences` — read and update search preferences with validation (min_age ≥ 18, max_age ≤ 120, min ≤ max, distance > 0, max 20 gender preferences)
+- `ProfileInput` struct with all editable profile fields; `ProfilePreferences` struct for preference CRUD
+- Service-layer validation: DOB must be ≥ 18 years ago; max 20 interests
+- `profiles_test.go` — `TestUpdateMyProfile_WithNewFields`, `TestUpdateMyProfile_TooYoung`, `TestUpdateMyProfile_TooManyInterests`, `TestGetMyPreferences_*`, `TestUpdateMyPreferences_*` (6 validation cases)
+- `handler_test.go` — `TestUpdateMyProfile_WithNewFields`, `TestUpdateMyProfile_InvalidDOBFormat`, `TestGetMyPreferences_*`, `TestUpdateMyPreferences_*`
+- `store_test.go` — `TestPgStore_GetPreferences_*`, `TestPgStore_UpsertPreferences_*`; integration subtest for new fields and preferences
+- Profile edit page — date of birth picker, gender dropdown (Man/Woman/Non-binary/Other + free-text for Other), location autocomplete via Photon/OSM (debounced, no API key), interests tag input (Enter/comma to add, × to remove, max 20)
+- Public profile page — displays age (computed from DOB), gender, location with map pin icon, interests as chips
+
+### Changed
+- `GET /profiles/me` and `PUT /profiles/me` — accept and return `date_of_birth`, `gender`, `location_text`, `latitude`, `longitude`, `interests`
+- `GET /profiles/{userID}` — returns new fields on public profile
+
 ## [2.2.0] - 2026-03-29 — Backend integration tests
 
 ### Added
