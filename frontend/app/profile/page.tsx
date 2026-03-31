@@ -224,18 +224,18 @@ export default function ProfilePage() {
       .then((res) => res.json())
       .then((data: Profile) => {
         setProfile(data)
-        setDisplayName(data.display_name)
-        setBio(data.bio)
+        setDisplayName(data.display_name ?? "")
+        setBio(data.bio ?? "")
         setAvatarURL(data.avatar_url)
         setDateOfBirth(data.date_of_birth ?? "")
         if (data.gender && !GENDER_OPTIONS.includes(data.gender)) {
           setGender("Other")
           setGenderOther(data.gender)
         } else {
-          setGender(data.gender)
+          setGender(data.gender ?? "")
         }
-        setLocationText(data.location_text)
-        setLocationQuery(data.location_text)
+        setLocationText(data.location_text ?? "")
+        setLocationQuery(data.location_text ?? "")
         setInterests(data.interests ?? [])
       })
       .catch(() => setLoadError("Failed to load profile."))
