@@ -128,9 +128,9 @@ export default function ChatRoomPage() {
 
   const [now, setNow] = useState(0)
   useEffect(() => {
-    setNow(Date.now())
+    const initial = setTimeout(() => setNow(Date.now()), 0)
     const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
+    return () => { clearTimeout(initial); clearInterval(id) }
   }, [])
 
   // Combine history + live messages, deduplicating by id.

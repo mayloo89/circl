@@ -123,10 +123,10 @@ function useUsernameAvailability(username: string, token: string | undefined, cu
   const [status, setStatus] = useState<UsernameStatus>("idle")
 
   useEffect(() => {
-    if (!username || username === currentUsername) { setStatus("idle"); return }
-    if (!/^[a-z0-9_]{3,30}$/.test(username)) { setStatus("invalid"); return }
-    setStatus("checking")
     const id = setTimeout(async () => {
+      if (!username || username === currentUsername) { setStatus("idle"); return }
+      if (!/^[a-z0-9_]{3,30}$/.test(username)) { setStatus("invalid"); return }
+      setStatus("checking")
       if (!token) return
       try {
         const res = await fetch(

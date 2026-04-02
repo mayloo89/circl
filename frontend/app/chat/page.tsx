@@ -99,9 +99,9 @@ export default function ChatPage() {
   const [error, setError] = useState("")
   const [now, setNow] = useState(0)
   useEffect(() => {
-    setNow(Date.now())
+    const initial = setTimeout(() => setNow(Date.now()), 0)
     const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
+    return () => { clearTimeout(initial); clearInterval(id) }
   }, [])
 
   const token = session?.accessToken
