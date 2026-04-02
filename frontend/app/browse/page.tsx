@@ -169,11 +169,12 @@ interface FilterPanelProps {
   prefs: Preferences
   sortByDistance: boolean
   selectedInterests: string[]
+  token: string
   onApply: (p: Preferences, sortByDistance: boolean, interests: string[]) => void
   saving: boolean
 }
 
-function FilterPanel({ prefs, sortByDistance, selectedInterests, onApply, saving }: FilterPanelProps) {
+function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply, saving }: FilterPanelProps) {
   const [draft, setDraft] = useState<Preferences>(prefs)
   const [draftSort, setDraftSort] = useState(sortByDistance)
   const [draftInterests, setDraftInterests] = useState<string[]>(selectedInterests)
@@ -188,14 +189,16 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, onApply, saving
     if (interestQuery.length < 1) { setInterestSuggestions([]); return }
     const id = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_URL}/profiles/interests?q=${encodeURIComponent(interestQuery)}&limit=8`)
+        const res = await fetch(`${API_URL}/profiles/interests?q=${encodeURIComponent(interestQuery)}&limit=8`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         if (!res.ok) return
         const data: { name: string }[] = await res.json()
         setInterestSuggestions(data.map((d) => d.name).filter((n) => !draftInterests.includes(n)))
       } catch { /* ignore */ }
     }, 250)
     return () => clearTimeout(id)
-  }, [interestQuery, draftInterests])
+  }, [interestQuery, draftInterests, token])
 
   function addInterest(name: string) {
     setDraftInterests((prev) => prev.includes(name) ? prev : [...prev, name])
@@ -482,7 +485,7 @@ export default function BrowsePage() {
       <div className="flex gap-6">
         {/* Filter sidebar */}
         <aside className="hidden w-56 shrink-0 lg:block">
-          <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} onApply={handleApplyFilters} saving={savingPrefs} />
+          <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} token={token!} onApply={handleApplyFilters} saving={savingPrefs} />
         </aside>
 
         {/* Results */}
@@ -493,7 +496,7 @@ export default function BrowsePage() {
               Filters
             </summary>
             <div className="mt-3">
-              <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} onApply={handleApplyFilters} saving={savingPrefs} />
+              <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} token={token!} onApply={handleApplyFilters} saving={savingPrefs} />
             </div>
           </details>
 
