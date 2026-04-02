@@ -9,6 +9,8 @@ test.describe("auth", () => {
 
     await page.goto("/register")
     await page.locator("#email").fill(email)
+    await page.locator("#username").fill(`newuser${ts}`.slice(0, 30))
+    await page.locator("#date-of-birth").fill("1990-06-15")
     await page.locator("#password").fill(password)
     await page.locator("#confirm").fill(password)
     await page.getByRole("button", { name: "Create account" }).click()
@@ -42,9 +44,12 @@ test.describe("auth", () => {
 
   test("shows error when registering a duplicate email", async ({ page, request }) => {
     const user = await createUser(request)
+    const ts = Date.now()
 
     await page.goto("/register")
     await page.locator("#email").fill(user.email)
+    await page.locator("#username").fill(`dupuser${ts}`.slice(0, 30))
+    await page.locator("#date-of-birth").fill("1990-06-15")
     await page.locator("#password").fill(user.password)
     await page.locator("#confirm").fill(user.password)
     await page.getByRole("button", { name: "Create account" }).click()

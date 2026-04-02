@@ -12,6 +12,7 @@ export async function createUser(request: APIRequestContext): Promise<TestUser> 
   const ts = `${Date.now()}.${Math.random().toString(36).slice(2, 6)}`
   const email = `e2e.${ts}@example.com`
   const password = "Password1!"
+  const username = `e2e_${ts.replace(".", "_")}`
 
   const res = await request.post(`${API}/auth/register`, {
     data: { email, password },
@@ -20,6 +21,18 @@ export async function createUser(request: APIRequestContext): Promise<TestUser> 
     throw new Error(`Failed to register test user: ${await res.text()}`)
   }
   const data = await res.json()
+
+  await request.put(`${API}/profiles/me`, {
+    headers: { Authorization: `Bearer ${data.token}` },
+    data: {
+      username,
+      display_name: email.split("@")[0],
+      date_of_birth: "1990-01-01",
+      bio: "",
+      interests: [],
+    },
+  })
+
   return { id: data.id, email, password }
 }
 
