@@ -130,15 +130,9 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
             {profile.gender && <span>{profile.gender}</span>}
-            {profile.location_text && (
-              <>
-                {profile.gender && <span>·</span>}
-                <span>{profile.location_text}</span>
-              </>
-            )}
             {distance && (
               <>
-                {(profile.gender || profile.location_text) && <span>·</span>}
+                {profile.gender && <span>·</span>}
                 <span>{distance}</span>
               </>
             )}
