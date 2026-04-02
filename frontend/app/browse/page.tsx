@@ -314,7 +314,7 @@ export default function BrowsePage() {
   const fetchInFlight = useRef(false)
 
   const loadProfiles = useCallback(
-    async (pageNum: number, append: boolean) => {
+    async (pageNum: number, append: boolean, sortDist: boolean) => {
       if (!token || fetchInFlight.current) return
       fetchInFlight.current = true
       if (pageNum === 0) setInitialLoading(true)
@@ -322,7 +322,7 @@ export default function BrowsePage() {
       setError("")
 
       try {
-        const sortParam = sortByDistance ? "&sort=distance" : ""
+        const sortParam = sortDist ? "&sort=distance" : ""
         const res = await fetch(
           `${API_URL}/profiles/browse?page=${pageNum}&limit=${PAGE_SIZE}${sortParam}`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -339,7 +339,7 @@ export default function BrowsePage() {
         setLoadingMore(false)
       }
     },
-    [token, sortByDistance]
+    [token]
   )
 
   // Load preferences + first page in parallel
@@ -355,7 +355,7 @@ export default function BrowsePage() {
       })
       .catch(() => {})
 
-    loadProfiles(0, false)
+    loadProfiles(0, false, false)
   }, [status, token, loadProfiles])
 
   async function handleApplyFilters(updated: Preferences, newSortByDistance: boolean) {
@@ -375,15 +375,14 @@ export default function BrowsePage() {
       setSavingPrefs(false)
     }
     setSortByDistance(newSortByDistance)
-    // Reload from first page with new filters
     setPage(0)
-    loadProfiles(0, false)
+    loadProfiles(0, false, newSortByDistance)
   }
 
   function handleLoadMore() {
     const next = page + 1
     setPage(next)
-    loadProfiles(next, true)
+    loadProfiles(next, true, sortByDistance)
   }
 
   if (status === "loading" || initialLoading) {
