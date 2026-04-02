@@ -16,6 +16,8 @@ type ProfileManager interface {
 	UpdateMyProfile(ctx context.Context, userID string, in ProfileInput) (*Profile, error)
 	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 	GetPublicProfile(ctx context.Context, userID string) (*Profile, error)
+	GetPublicProfileByUsername(ctx context.Context, username string) (*Profile, error)
+	IsUsernameAvailable(ctx context.Context, username string) (bool, error)
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, userID, photoID string) error
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
@@ -31,6 +33,7 @@ type photoResponse struct {
 type profileResponse struct {
 	ID           string          `json:"id"`
 	UserID       string          `json:"user_id"`
+	Username     string          `json:"username"`
 	DisplayName  string          `json:"display_name"`
 	Bio          string          `json:"bio"`
 	AvatarURL    string          `json:"avatar_url"`
@@ -44,6 +47,7 @@ type profileResponse struct {
 }
 
 type updateRequest struct {
+	Username     string   `json:"username"`
 	DisplayName  string   `json:"display_name"`
 	Bio          string   `json:"bio"`
 	AvatarURL    string   `json:"avatar_url"`
@@ -88,7 +92,8 @@ func NewHandler(svc ProfileManager) http.Handler {
 	mux.HandleFunc("POST /profiles/me/photos", addPhoto(svc))
 	mux.HandleFunc("DELETE /profiles/me/photos/{photoID}", deletePhoto(svc))
 	mux.HandleFunc("GET /profiles/interests", searchInterests(svc))
-	mux.HandleFunc("GET /profiles/{userID}", getPublicProfile(svc))
+	mux.HandleFunc("GET /profiles/available", checkUsernameAvailable(svc))
+	mux.HandleFunc("GET /profiles/{ref}", getPublicProfileByRef(svc))
 	return mux
 }
 
@@ -125,6 +130,7 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 		}
 
 		in := ProfileInput{
+			Username:     req.Username,
 			DisplayName:  req.DisplayName,
 			Bio:          req.Bio,
 			AvatarURL:    req.AvatarURL,
@@ -149,6 +155,10 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
 				return
 			}
+			if errors.Is(err, ErrUsernameTaken) {
+				writeJSON(w, http.StatusConflict, errorResponse{"username already taken"})
+				return
+			}
 			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			return
 		}
@@ -157,7 +167,8 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 	}
 }
 
-func getPublicProfile(svc ProfileManager) http.HandlerFunc {
+// getPublicProfileByRef serves GET /profiles/{ref} where ref is either a UUID or a username.
+func getPublicProfileByRef(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -165,8 +176,16 @@ func getPublicProfile(svc ProfileManager) http.HandlerFunc {
 			return
 		}
 
-		targetUserID := r.PathValue("userID")
-		profile, err := svc.GetPublicProfile(r.Context(), targetUserID)
+		ref := r.PathValue("ref")
+		var (
+			profile *Profile
+			err     error
+		)
+		if isUUID(ref) {
+			profile, err = svc.GetPublicProfile(r.Context(), ref)
+		} else {
+			profile, err = svc.GetPublicProfileByUsername(r.Context(), ref)
+		}
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errorResponse{"profile not found"})
@@ -175,7 +194,6 @@ func getPublicProfile(svc ProfileManager) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			return
 		}
-
 		writeJSON(w, http.StatusOK, toResponse(profile))
 	}
 }
@@ -336,6 +354,48 @@ func searchInterests(svc ProfileManager) http.HandlerFunc {
 	}
 }
 
+// isUUID returns true if s looks like a UUID (8-4-4-4-12 hex format).
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return false
+			}
+		} else if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func checkUsernameAvailable(svc ProfileManager) http.HandlerFunc {
+	type availableResponse struct {
+		Available bool `json:"available"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			return
+		}
+		username := r.URL.Query().Get("username")
+		if username == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"username query parameter is required"})
+			return
+		}
+		available, err := svc.IsUsernameAvailable(r.Context(), username)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+		writeJSON(w, http.StatusOK, availableResponse{Available: available})
+	}
+}
+
+
 func toResponse(p *Profile) profileResponse {
 	photos := make([]photoResponse, len(p.Photos))
 	for i, ph := range p.Photos {
@@ -348,6 +408,7 @@ func toResponse(p *Profile) profileResponse {
 	resp := profileResponse{
 		ID:           p.ID,
 		UserID:       p.UserID,
+		Username:     p.Username,
 		DisplayName:  p.DisplayName,
 		Bio:          p.Bio,
 		AvatarURL:    p.AvatarURL,

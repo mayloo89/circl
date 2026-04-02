@@ -57,19 +57,20 @@ describe("formatDaySeparator", () => {
   it("returns 'Today' for the current date", () => {
     const now = new Date()
     const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0)
-    expect(formatDaySeparator(todayNoon.toISOString())).toBe("Today")
+    expect(formatDaySeparator(todayNoon.toISOString(), now.getTime())).toBe("Today")
   })
 
   it("returns 'Yesterday' for the previous date", () => {
-    const yesterday = new Date()
+    const now = new Date()
+    const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
     const d = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 12, 0, 0)
-    expect(formatDaySeparator(d.toISOString())).toBe("Yesterday")
+    expect(formatDaySeparator(d.toISOString(), now.getTime())).toBe("Yesterday")
   })
 
   it("returns a formatted string for dates older than yesterday", () => {
     const old = "2020-06-15T12:00:00Z"
-    const result = formatDaySeparator(old)
+    const result = formatDaySeparator(old, Date.now())
     expect(result).not.toBe("Today")
     expect(result).not.toBe("Yesterday")
     expect(result.length).toBeGreaterThan(0)

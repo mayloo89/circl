@@ -33,22 +33,22 @@ describe("loginSchema", () => {
   })
 })
 
+const validBase = {
+  email: "new@example.com",
+  password: "strongpass",
+  confirm: "strongpass",
+  username: "testuser",
+  date_of_birth: "1990-06-15",
+}
+
 describe("registerSchema", () => {
   it("accepts valid registration data", () => {
-    const result = registerSchema.safeParse({
-      email: "new@example.com",
-      password: "strongpass",
-      confirm: "strongpass",
-    })
+    const result = registerSchema.safeParse(validBase)
     expect(result.success).toBe(true)
   })
 
   it("rejects an invalid email", () => {
-    const result = registerSchema.safeParse({
-      email: "bad-email",
-      password: "strongpass",
-      confirm: "strongpass",
-    })
+    const result = registerSchema.safeParse({ ...validBase, email: "bad-email" })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("Please enter a valid email address")
@@ -56,11 +56,7 @@ describe("registerSchema", () => {
   })
 
   it("rejects a password shorter than 8 characters", () => {
-    const result = registerSchema.safeParse({
-      email: "new@example.com",
-      password: "short",
-      confirm: "short",
-    })
+    const result = registerSchema.safeParse({ ...validBase, password: "short", confirm: "short" })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("Password must be at least 8 characters")
@@ -68,14 +64,40 @@ describe("registerSchema", () => {
   })
 
   it("rejects mismatched passwords", () => {
-    const result = registerSchema.safeParse({
-      email: "new@example.com",
-      password: "strongpass",
-      confirm: "different",
-    })
+    const result = registerSchema.safeParse({ ...validBase, confirm: "different" })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("Passwords do not match")
     }
+  })
+
+  it("rejects an invalid username", () => {
+    const result = registerSchema.safeParse({ ...validBase, username: "ab" })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain("3")
+    }
+  })
+
+  it("rejects a username with invalid characters", () => {
+    const result = registerSchema.safeParse({ ...validBase, username: "Test User!" })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects a user under 18", () => {
+    const dob = new Date()
+    dob.setFullYear(dob.getFullYear() - 17)
+    const result = registerSchema.safeParse({ ...validBase, date_of_birth: dob.toISOString().slice(0, 10) })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("You must be at least 18 years old")
+    }
+  })
+
+  it("accepts a user exactly 18", () => {
+    const dob = new Date()
+    dob.setFullYear(dob.getFullYear() - 18)
+    const result = registerSchema.safeParse({ ...validBase, date_of_birth: dob.toISOString().slice(0, 10) })
+    expect(result.success).toBe(true)
   })
 })

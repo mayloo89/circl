@@ -22,6 +22,7 @@ type mockProfileManager struct {
 	photo             *profiles.ProfilePhoto
 	prefs             *profiles.ProfilePreferences
 	interests         []profiles.InterestSuggestion
+	usernameAvailable bool
 	getErr            error
 	updateErr         error
 	publicErr         error
@@ -30,6 +31,7 @@ type mockProfileManager struct {
 	getPrefsErr       error
 	updatePrefsErr    error
 	searchIntErr      error
+	usernameAvailErr  error
 }
 
 func (m *mockProfileManager) GetMyProfile(_ context.Context, userID string) (*profiles.Profile, error) {
@@ -42,6 +44,14 @@ func (m *mockProfileManager) UpdateMyProfile(_ context.Context, _ string, _ prof
 
 func (m *mockProfileManager) GetPublicProfile(_ context.Context, _ string) (*profiles.Profile, error) {
 	return m.profile, m.publicErr
+}
+
+func (m *mockProfileManager) GetPublicProfileByUsername(_ context.Context, _ string) (*profiles.Profile, error) {
+	return m.profile, m.publicErr
+}
+
+func (m *mockProfileManager) IsUsernameAvailable(_ context.Context, _ string) (bool, error) {
+	return m.usernameAvailable, m.usernameAvailErr
 }
 
 func (m *mockProfileManager) AddPhoto(_ context.Context, _, _ string) (*profiles.ProfilePhoto, error) {
@@ -637,5 +647,136 @@ func TestSearchInterests_ServiceError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- GET /profiles/available ---
+
+func TestCheckUsernameAvailable_Available(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{usernameAvailable: true})
+
+	req := authedReq(t, http.MethodGet, "/profiles/available?username=alice42", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["available"] != true {
+		t.Errorf("available = %v, want true", resp["available"])
+	}
+}
+
+func TestCheckUsernameAvailable_Taken(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{usernameAvailable: false})
+
+	req := authedReq(t, http.MethodGet, "/profiles/available?username=alice42", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["available"] != false {
+		t.Errorf("available = %v, want false", resp["available"])
+	}
+}
+
+func TestCheckUsernameAvailable_MissingParam(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodGet, "/profiles/available", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCheckUsernameAvailable_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodGet, "/profiles/available?username=alice42", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestCheckUsernameAvailable_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{usernameAvailErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodGet, "/profiles/available?username=alice42", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- GET /profiles/@{username} ---
+
+func TestGetPublicProfileByUsername_OK(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{ID: "p1", UserID: "u1", Username: "alice", DisplayName: "Alice", Interests: []string{}, Photos: []profiles.ProfilePhoto{}},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/alice", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["username"] != "alice" {
+		t.Errorf("username = %v, want alice", resp["username"])
+	}
+}
+
+func TestGetPublicProfileByRef_ByUUID(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{ID: "p1", UserID: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", DisplayName: "Bob", Interests: []string{}, Photos: []profiles.ProfilePhoto{}},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestGetPublicProfileByUsername_NotFound(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{publicErr: profiles.ErrNotFound})
+
+	req := authedReq(t, http.MethodGet, "/profiles/nobody", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestGetPublicProfileByUsername_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodGet, "/profiles/alice", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }

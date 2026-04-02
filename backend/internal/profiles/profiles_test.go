@@ -8,26 +8,36 @@ import (
 )
 
 type mockStore struct {
-	profile        *Profile
-	photos         []ProfilePhoto
-	photo          *ProfilePhoto
-	photoCount     int
-	prefs          *ProfilePreferences
-	interests      []InterestSuggestion
-	getErr         error
-	upsertErr      error
-	syncErr        error
-	photosErr      error
-	countErr       error
-	addErr         error
-	deleteErr      error
-	prefsErr       error
-	upsertPrefsErr error
-	searchIntErr   error
+	profile           *Profile
+	photos            []ProfilePhoto
+	photo             *ProfilePhoto
+	photoCount        int
+	prefs             *ProfilePreferences
+	interests         []InterestSuggestion
+	usernameAvailable bool
+	getErr            error
+	upsertErr         error
+	syncErr           error
+	photosErr         error
+	countErr          error
+	addErr            error
+	deleteErr         error
+	prefsErr          error
+	upsertPrefsErr    error
+	searchIntErr      error
+	usernameAvailErr  error
 }
 
 func (m *mockStore) GetByUserID(_ context.Context, _ string) (*Profile, error) {
 	return m.profile, m.getErr
+}
+
+func (m *mockStore) GetByUsername(_ context.Context, _ string) (*Profile, error) {
+	return m.profile, m.getErr
+}
+
+func (m *mockStore) IsUsernameAvailable(_ context.Context, _ string) (bool, error) {
+	return m.usernameAvailable, m.usernameAvailErr
 }
 
 func (m *mockStore) Upsert(_ context.Context, userID string, in ProfileInput) (*Profile, error) {
@@ -35,7 +45,7 @@ func (m *mockStore) Upsert(_ context.Context, userID string, in ProfileInput) (*
 		return nil, m.upsertErr
 	}
 	return &Profile{
-		ID: "prof-1", UserID: userID, DisplayName: in.DisplayName, Bio: in.Bio, AvatarURL: in.AvatarURL,
+		ID: "prof-1", UserID: userID, Username: in.Username, DisplayName: in.DisplayName, Bio: in.Bio, AvatarURL: in.AvatarURL,
 		DateOfBirth: in.DateOfBirth, Gender: in.Gender, LocationText: in.LocationText,
 		Latitude: in.Latitude, Longitude: in.Longitude, Interests: []string{},
 	}, nil
@@ -93,6 +103,12 @@ func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]Inter
 		return m.interests, nil
 	}
 	return []InterestSuggestion{}, nil
+}
+
+// validDOB returns a DOB 25 years in the past (always valid for 18+ check).
+func validDOB() *time.Time {
+	t := time.Now().AddDate(-25, 0, 0)
+	return &t
 }
 
 // --- GetMyProfile ---
@@ -173,7 +189,7 @@ func TestGetMyProfile_IncludesPhotos(t *testing.T) {
 func TestUpdateMyProfile_Success(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	p, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Bio: "Bio here"})
+	p, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Bio: "Bio here", DateOfBirth: validDOB()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -183,14 +199,14 @@ func TestUpdateMyProfile_Success(t *testing.T) {
 }
 
 func TestUpdateMyProfile_WithNewFields(t *testing.T) {
-	dob := time.Now().AddDate(-25, 0, 0)
 	lat := 48.8566
 	lon := 2.3522
 	svc := NewService(&mockStore{})
 
 	p, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+		Username:     "alice42",
 		DisplayName:  "Alice",
-		DateOfBirth:  &dob,
+		DateOfBirth:  validDOB(),
 		Gender:       "female",
 		LocationText: "Paris",
 		Latitude:     &lat,
@@ -199,6 +215,9 @@ func TestUpdateMyProfile_WithNewFields(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Username != "alice42" {
+		t.Errorf("Username = %q, want alice42", p.Username)
 	}
 	if p.Gender != "female" {
 		t.Errorf("Gender = %q, want female", p.Gender)
@@ -211,19 +230,52 @@ func TestUpdateMyProfile_WithNewFields(t *testing.T) {
 func TestUpdateMyProfile_EmptyDisplayName(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{Bio: "Bio"})
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{Bio: "Bio", DateOfBirth: validDOB()})
 	if err == nil {
 		t.Fatal("expected error for empty display name")
 	}
 }
 
+func TestUpdateMyProfile_MissingDOB(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice"})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
 func TestUpdateMyProfile_TooYoung(t *testing.T) {
-	dob := time.Now().AddDate(-17, 0, 0) // 17 years old
+	dob := time.Now().AddDate(-17, 0, 0)
 	svc := NewService(&mockStore{})
 
 	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", DateOfBirth: &dob})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestUpdateMyProfile_InvalidUsername(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	for _, bad := range []string{"AB", "hello world", "toolongusernamethatexceedsthirtycharacters", "UPPER"} {
+		_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+			Username: bad, DisplayName: "Alice", DateOfBirth: validDOB(),
+		})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("username %q: got %v, want ErrInvalidInput", bad, err)
+		}
+	}
+}
+
+func TestUpdateMyProfile_UsernameTaken(t *testing.T) {
+	svc := NewService(&mockStore{upsertErr: ErrUsernameTaken})
+
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+		Username: "alice", DisplayName: "Alice", DateOfBirth: validDOB(),
+	})
+	if !errors.Is(err, ErrUsernameTaken) {
+		t.Errorf("got %v, want ErrUsernameTaken", err)
 	}
 }
 
@@ -234,7 +286,7 @@ func TestUpdateMyProfile_TooManyInterests(t *testing.T) {
 	}
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Interests: interests})
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", DateOfBirth: validDOB(), Interests: interests})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -243,7 +295,7 @@ func TestUpdateMyProfile_TooManyInterests(t *testing.T) {
 func TestUpdateMyProfile_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{upsertErr: errors.New("db error")})
 
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice"})
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", DateOfBirth: validDOB()})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -252,9 +304,86 @@ func TestUpdateMyProfile_StoreError(t *testing.T) {
 func TestUpdateMyProfile_SyncInterestsError(t *testing.T) {
 	svc := NewService(&mockStore{syncErr: errors.New("db error")})
 
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", Interests: []string{"hiking"}})
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{DisplayName: "Alice", DateOfBirth: validDOB(), Interests: []string{"hiking"}})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- IsUsernameAvailable ---
+
+func TestIsUsernameAvailable_Available(t *testing.T) {
+	svc := NewService(&mockStore{usernameAvailable: true})
+
+	ok, err := svc.IsUsernameAvailable(t.Context(), "alice42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Error("expected available=true")
+	}
+}
+
+func TestIsUsernameAvailable_Taken(t *testing.T) {
+	svc := NewService(&mockStore{usernameAvailable: false})
+
+	ok, err := svc.IsUsernameAvailable(t.Context(), "alice42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("expected available=false")
+	}
+}
+
+func TestIsUsernameAvailable_InvalidFormat(t *testing.T) {
+	svc := NewService(&mockStore{usernameAvailable: true})
+
+	// Invalid format → false without hitting store
+	ok, err := svc.IsUsernameAvailable(t.Context(), "AB bad!")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("expected available=false for invalid format")
+	}
+}
+
+func TestIsUsernameAvailable_StoreError(t *testing.T) {
+	svc := NewService(&mockStore{usernameAvailErr: errors.New("db error")})
+
+	_, err := svc.IsUsernameAvailable(t.Context(), "alice42")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetPublicProfileByUsername ---
+
+func TestGetPublicProfileByUsername_Success(t *testing.T) {
+	svc := NewService(&mockStore{
+		profile: &Profile{ID: "prof-1", UserID: "user-2", Username: "bob", DisplayName: "Bob"},
+		photos:  []ProfilePhoto{{ID: "ph-1", URL: "https://example.com/1.jpg"}},
+	})
+
+	p, err := svc.GetPublicProfileByUsername(t.Context(), "bob")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Username != "bob" {
+		t.Errorf("Username = %q, want bob", p.Username)
+	}
+	if len(p.Photos) != 1 {
+		t.Errorf("Photos len = %d, want 1", len(p.Photos))
+	}
+}
+
+func TestGetPublicProfileByUsername_NotFound(t *testing.T) {
+	svc := NewService(&mockStore{getErr: ErrNotFound})
+
+	_, err := svc.GetPublicProfileByUsername(t.Context(), "nobody")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("got %v, want ErrNotFound", err)
 	}
 }
 

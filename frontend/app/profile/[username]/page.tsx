@@ -19,6 +19,7 @@ interface ProfilePhoto {
 
 interface PublicProfile {
   user_id: string
+  username: string
   display_name: string
   bio: string
   avatar_url: string
@@ -73,7 +74,7 @@ export default function PublicProfilePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const params = useParams()
-  const userId = typeof params.userId === "string" ? params.userId : null
+  const username = typeof params.username === "string" ? params.username : null
 
   const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [contactStatus, setContactStatus] = useState<ContactStatus>("loading")
@@ -87,14 +88,10 @@ export default function PublicProfilePage() {
   const myID = session?.user?.id
 
   useEffect(() => {
-    if (myID && userId && myID === userId) router.replace("/profile")
-  }, [myID, userId, router])
-
-  useEffect(() => {
-    if (status !== "authenticated" || !token || !userId) return
+    if (status !== "authenticated" || !token || !username) return
 
     Promise.all([
-      fetch(`${API_URL}/profiles/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_URL}/profiles/${username}`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -111,28 +108,31 @@ export default function PublicProfilePage() {
             pendingRes.ok ? pendingRes.json() : [],
           ])
 
+        if (myID && prof.user_id === myID) { router.replace("/profile"); return }
+
         setProfile(prof)
-        const accepted = contacts.find((c) => c.user_id === userId)
+        const targetUserID = prof.user_id
+        const accepted = contacts.find((c) => c.user_id === targetUserID)
         if (accepted) { setContactStatus("contact"); setContactId(accepted.contact_id); return }
-        const sentEntry = sent.find((s) => s.user_id === userId)
+        const sentEntry = sent.find((s) => s.user_id === targetUserID)
         if (sentEntry) { setContactStatus("sent"); setContactId(sentEntry.contact_id); return }
-        const incomingEntry = pending.find((p) => p.user_id === userId)
+        const incomingEntry = pending.find((p) => p.user_id === targetUserID)
         if (incomingEntry) { setContactStatus("incoming"); setContactId(incomingEntry.contact_id); return }
         setContactStatus("none")
       })
       .catch(() => setError("Failed to load profile."))
       .finally(() => setLoading(false))
-  }, [status, token, userId])
+  }, [status, token, username, myID, router])
 
   async function handleAddContact() {
-    if (!userId) return
+    if (!profile) return
     setActionLoading(true)
     setError("")
     try {
       const res = await fetch(`${API_URL}/contacts`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ addressee_id: userId }),
+        body: JSON.stringify({ addressee_id: profile.user_id }),
       })
       if (res.status === 409) { setContactStatus("sent"); return }
       if (!res.ok) { setError("Failed to send contact request."); return }
@@ -161,14 +161,14 @@ export default function PublicProfilePage() {
   }
 
   async function handleStartDM() {
-    if (!userId) return
+    if (!profile) return
     setActionLoading(true)
     setError("")
     try {
       const res = await fetch(`${API_URL}/chat/rooms/dm`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ peer_id: userId }),
+        body: JSON.stringify({ peer_id: profile.user_id }),
       })
       if (!res.ok) { setError("Failed to open conversation."); return }
       const room = await res.json()

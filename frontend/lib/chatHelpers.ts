@@ -11,13 +11,13 @@ export function sameCalendarDay(a: string, b: string): boolean {
   )
 }
 
-export function formatDaySeparator(dateStr: string): string {
-  const now = new Date()
-  const yesterday = new Date(now)
+export function formatDaySeparator(dateStr: string, nowMs: number): string {
+  const now = new Date(nowMs)
+  const yesterday = new Date(nowMs)
   yesterday.setDate(now.getDate() - 1)
   if (sameCalendarDay(dateStr, now.toISOString())) return "Today"
   if (sameCalendarDay(dateStr, yesterday.toISOString())) return "Yesterday"
-  return new Date(dateStr).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })
+  return new Date(dateStr).toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })
 }
 
 export function isFirstInGroup(msgs: AnyMessage[], i: number): boolean {

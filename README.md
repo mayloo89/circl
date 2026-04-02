@@ -3,7 +3,7 @@
 Private profiles and real-time chat. Only authenticated users can view, search, and message other users.
 
 ## Stack
-- **Frontend**: Next.js 15+ (App Router) + React 19 + TypeScript + Tailwind CSS 4
+- **Frontend**: Next.js 16+ (App Router) + React 19 + TypeScript + Tailwind CSS 4
 - **Backend**: Go 1.25+ (chi router) + WebSockets
 - **Auth**: NextAuth.js (Auth.js) v5 — JWT + httpOnly cookies
 - **DB**: PostgreSQL 17+, migrations via golang-migrate
@@ -34,6 +34,9 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Image thumbnails in chat**: thumbnails served from storage instead of full-res URLs in message list
 - ✅ **Chat UI**: message grouping, date separators, skeleton loaders, new-message animation, relative timestamps, attachment type previews
 - ✅ **Public profiles + gallery**: public profile view, photo gallery (up to 6 photos), profile navigation from contacts and chat header
+- ✅ **Usernames**: unique handles (`[a-z0-9_]`, 3–30 chars), immutable once set, used in all profile URLs (`/profile/[username]`)
+- ✅ **Extended profiles**: date of birth (18+ enforced), gender, location (autocomplete via Photon/OSM), interests tags
+- ✅ **Registration with profile seeding**: username + DOB collected at signup, profile seeded immediately after account creation
 
 ## Local setup
 
@@ -146,10 +149,12 @@ All protected routes require `Authorization: Bearer <token>`.
 | `GET` | `/profiles/me` | ✅ | Get own profile (auto-created) |
 | `PUT` | `/profiles/me` | ✅ | Update display name and bio |
 | `PUT` | `/profiles/me/avatar` | ✅ | Update avatar URL independently |
-| `GET` | `/profiles/{userID}` | ✅ | Get any user's public profile + gallery |
+| `GET` | `/profiles/{ref}` | ✅ | Get any user's public profile + gallery (ref = UUID or username) |
+| `GET` | `/profiles/available?username=` | ✅ | Check username availability |
 | `POST` | `/profiles/me/photos` | ✅ | Add a gallery photo (max 6) |
 | `DELETE` | `/profiles/me/photos/{id}` | ✅ | Delete a gallery photo |
-| `GET` | `/users/search?q=` | ✅ | Search users by email/name |
+| `GET` | `/users/search?q=` | ✅ | Search users by email, display name, or username |
+| `GET` | `/profiles/interests?q=` | ✅ | Autocomplete interests from existing tags |
 | `POST` | `/contacts` | ✅ | Send a contact request |
 | `GET` | `/contacts` | ✅ | List accepted contacts |
 | `GET` | `/contacts/pending` | ✅ | List incoming pending requests |
@@ -179,7 +184,7 @@ circl/
 │   │   ├── contacts/      # Contacts page
 │   │   ├── login/         # Login page
 │   │   ├── profile/       # Private profile page (edit)
-│   │   │   └── [userId]/  # Public profile page (read-only)
+│   │   │   └── [username]/  # Public profile page (read-only)
 │   │   └── register/      # Register page
 │   ├── components/        # Shared UI components (NavBar, SignOutButton)
 │   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)

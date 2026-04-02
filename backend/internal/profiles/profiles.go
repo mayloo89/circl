@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -13,9 +14,12 @@ const (
 )
 
 var (
-	ErrNotFound      = errors.New("profile not found")
-	ErrPhotoNotFound = errors.New("photo not found")
-	ErrInvalidInput  = errors.New("invalid input")
+	ErrNotFound        = errors.New("profile not found")
+	ErrPhotoNotFound   = errors.New("photo not found")
+	ErrInvalidInput    = errors.New("invalid input")
+	ErrUsernameTaken   = errors.New("username already taken")
+
+	usernameRe = regexp.MustCompile(`^[a-z0-9_]{3,30}$`)
 )
 
 // ProfilePhoto is a single showcase photo on a user's profile.
@@ -28,6 +32,7 @@ type ProfilePhoto struct {
 type Profile struct {
 	ID           string
 	UserID       string
+	Username     string
 	DisplayName  string
 	Bio          string
 	AvatarURL    string
@@ -42,6 +47,7 @@ type Profile struct {
 
 // ProfileInput holds the editable fields for profile create/update.
 type ProfileInput struct {
+	Username     string
 	DisplayName  string
 	Bio          string
 	AvatarURL    string
@@ -71,6 +77,8 @@ type InterestSuggestion struct {
 // Store is the data-access interface required by the profiles service.
 type Store interface {
 	GetByUserID(ctx context.Context, userID string) (*Profile, error)
+	GetByUsername(ctx context.Context, username string) (*Profile, error)
+	IsUsernameAvailable(ctx context.Context, username string) (bool, error)
 	Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error)
 	SyncInterests(ctx context.Context, userID string, names []string) error
 	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
@@ -122,7 +130,7 @@ func (s *Service) GetPublicProfile(ctx context.Context, userID string) (*Profile
 	if err != nil {
 		return nil, err
 	}
-	photos, err := s.store.GetPhotosByUserID(ctx, userID)
+	photos, err := s.store.GetPhotosByUserID(ctx, profile.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -130,12 +138,41 @@ func (s *Service) GetPublicProfile(ctx context.Context, userID string) (*Profile
 	return profile, nil
 }
 
+// GetPublicProfileByUsername returns the profile (with photos) for any user by username.
+// Returns ErrNotFound if the username does not exist.
+func (s *Service) GetPublicProfileByUsername(ctx context.Context, username string) (*Profile, error) {
+	profile, err := s.store.GetByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	photos, err := s.store.GetPhotosByUserID(ctx, profile.UserID)
+	if err != nil {
+		return nil, err
+	}
+	profile.Photos = photos
+	return profile, nil
+}
+
+// IsUsernameAvailable returns true if the username is valid format and not taken.
+func (s *Service) IsUsernameAvailable(ctx context.Context, username string) (bool, error) {
+	if !usernameRe.MatchString(username) {
+		return false, nil
+	}
+	return s.store.IsUsernameAvailable(ctx, username)
+}
+
 // UpdateMyProfile validates and updates the profile for the given user.
 func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
 	if in.DisplayName == "" {
 		return nil, fmt.Errorf("%w: display name is required", ErrInvalidInput)
 	}
-	if in.DateOfBirth != nil && !isAtLeast18(*in.DateOfBirth) {
+	if in.Username != "" && !usernameRe.MatchString(in.Username) {
+		return nil, fmt.Errorf("%w: username must be 3–30 characters, lowercase letters, digits, or underscores", ErrInvalidInput)
+	}
+	if in.DateOfBirth == nil {
+		return nil, fmt.Errorf("%w: date of birth is required", ErrInvalidInput)
+	}
+	if !isAtLeast18(*in.DateOfBirth) {
 		return nil, fmt.Errorf("%w: must be at least 18 years old", ErrInvalidInput)
 	}
 	if len(in.Interests) > MaxInterests {

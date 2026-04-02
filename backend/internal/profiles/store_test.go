@@ -25,15 +25,16 @@ func TestPgStore_GetByUserID_Success(t *testing.T) {
 	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
 		*dest[0].(*string) = "prof-1"
 		*dest[1].(*string) = "user-1"
-		*dest[2].(*string) = "Alice"
-		*dest[3].(*string) = "Bio"
-		*dest[4].(*string) = ""
-		// dest[5] = **time.Time (date_of_birth) — leave nil
-		*dest[6].(*string) = "" // gender
-		*dest[7].(*string) = "" // location_text
-		// dest[8] = **float64 (latitude) — leave nil
-		// dest[9] = **float64 (longitude) — leave nil
-		*dest[10].(*[]string) = []string{} // interests
+		*dest[2].(*string) = ""      // username
+		*dest[3].(*string) = "Alice" // display_name
+		*dest[4].(*string) = "Bio"
+		*dest[5].(*string) = ""
+		// dest[6] = **time.Time (date_of_birth) — leave nil
+		*dest[7].(*string) = "" // gender
+		*dest[8].(*string) = "" // location_text
+		// dest[9] = **float64 (latitude) — leave nil
+		// dest[10] = **float64 (longitude) — leave nil
+		*dest[11].(*[]string) = []string{} // interests
 		return nil
 	}}}}
 
@@ -74,14 +75,15 @@ func TestPgStore_Upsert_Success(t *testing.T) {
 	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
 		*dest[0].(*string) = "prof-1"
 		*dest[1].(*string) = "user-1"
-		*dest[2].(*string) = "Alice"
-		*dest[3].(*string) = "Bio"
-		*dest[4].(*string) = ""
-		// dest[5] = **time.Time (date_of_birth) — leave nil
-		*dest[6].(*string) = ""
+		*dest[2].(*string) = ""      // username
+		*dest[3].(*string) = "Alice" // display_name
+		*dest[4].(*string) = "Bio"
+		*dest[5].(*string) = ""
+		// dest[6] = **time.Time (date_of_birth) — leave nil
 		*dest[7].(*string) = ""
-		// dest[8] = **float64 — leave nil
+		*dest[8].(*string) = ""
 		// dest[9] = **float64 — leave nil
+		// dest[10] = **float64 — leave nil
 		return nil
 	}}}}
 
@@ -420,13 +422,62 @@ func TestProfiles_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("get public profile", func(t *testing.T) {
+	t.Run("get public profile by ID", func(t *testing.T) {
 		p, err := svc.GetPublicProfile(t.Context(), userID)
 		if err != nil {
 			t.Fatalf("get public profile error: %v", err)
 		}
 		if p.UserID != userID {
 			t.Errorf("UserID = %q, want %q", p.UserID, userID)
+		}
+	})
+
+	t.Run("username availability and lookup", func(t *testing.T) {
+		store := NewStore(pool)
+
+		// Not taken yet
+		available, err := store.IsUsernameAvailable(t.Context(), "testuser42")
+		if err != nil {
+			t.Fatalf("availability check error: %v", err)
+		}
+		if !available {
+			t.Error("expected username to be available")
+		}
+
+		// Set username via upsert
+		dob := time.Date(1995, 6, 15, 0, 0, 0, 0, time.UTC)
+		_, err = store.Upsert(t.Context(), userID, ProfileInput{
+			Username: "testuser42", DisplayName: "Alice", DateOfBirth: &dob,
+		})
+		if err != nil {
+			t.Fatalf("upsert with username error: %v", err)
+		}
+
+		// Now it should be taken
+		available, err = store.IsUsernameAvailable(t.Context(), "testuser42")
+		if err != nil {
+			t.Fatalf("availability check error: %v", err)
+		}
+		if available {
+			t.Error("expected username to be taken")
+		}
+
+		// Lookup by username
+		p, err := store.GetByUsername(t.Context(), "testuser42")
+		if err != nil {
+			t.Fatalf("get by username error: %v", err)
+		}
+		if p.UserID != userID {
+			t.Errorf("UserID = %q, want %q", p.UserID, userID)
+		}
+		if p.Username != "testuser42" {
+			t.Errorf("Username = %q, want testuser42", p.Username)
+		}
+
+		// Non-existent username returns ErrNotFound
+		_, err = store.GetByUsername(t.Context(), "doesnotexist")
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("got %v, want ErrNotFound", err)
 		}
 	})
 
