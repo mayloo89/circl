@@ -27,7 +27,7 @@ function useInterestSearch(query: string, token: string | undefined) {
   const [suggestions, setSuggestions] = useState<InterestSuggestion[]>([])
 
   const search = useCallback(async (q: string) => {
-    if (!token) return
+    if (!token || !q) return
     try {
       const res = await fetch(
         `${API_URL}/profiles/interests?q=${encodeURIComponent(q)}`,
@@ -54,7 +54,7 @@ interface LocationSuggestion {
   lng: number
 }
 
-function useLocationSearch(query: string) {
+function useLocationSearch(query: string, enabled: boolean) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
   const [searching, setSearching] = useState(false)
 
@@ -68,14 +68,18 @@ function useLocationSearch(query: string) {
       )
       if (!res.ok) return
       const data = await res.json()
-      setSuggestions(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        data.features.map((f: any) => {
-          const p = f.properties
-          const parts = [p.name, p.city ?? p.state, p.country].filter(Boolean)
-          return { label: parts.join(", "), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }
-        }),
-      )
+      const seen = new Set<string>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const results = data.features.flatMap((f: any) => {
+        const p = f.properties
+        const parts = [p.name, p.city ?? p.state, p.country].filter(Boolean)
+        const label = parts.join(", ")
+        const key = `${label}-${f.geometry.coordinates[1]},${f.geometry.coordinates[0]}`
+        if (seen.has(key)) return []
+        seen.add(key)
+        return [{ label, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }]
+      })
+      setSuggestions(results)
     } catch {
       setSuggestions([])
     } finally {
@@ -84,9 +88,10 @@ function useLocationSearch(query: string) {
   }, [])
 
   useEffect(() => {
+    if (!enabled) return
     const id = setTimeout(() => search(query), 350)
     return () => clearTimeout(id)
-  }, [query, search])
+  }, [query, search, enabled])
 
   return { suggestions, searching, clear: () => setSuggestions([]) }
 }
@@ -199,6 +204,7 @@ export default function ProfilePage() {
   const [locationText, setLocationText] = useState("")
   const [interests, setInterests] = useState<string[]>([])
   const [locationQuery, setLocationQuery] = useState("")
+  const [locationEdited, setLocationEdited] = useState(false)
   const [interestInput, setInterestInput] = useState("")
   const [interestFocused, setInterestFocused] = useState(false)
   const locationRef = useRef<HTMLDivElement>(null)
@@ -216,7 +222,7 @@ export default function ProfilePage() {
   const token = session?.accessToken
 
   const usernameStatus = useUsernameAvailability(username, token, profile?.username ?? "")
-  const { suggestions: locationSuggestions, searching: locationSearching, clear: clearLocationSuggestions } = useLocationSearch(locationQuery)
+  const { suggestions: locationSuggestions, searching: locationSearching, clear: clearLocationSuggestions } = useLocationSearch(locationQuery, locationEdited)
   const { suggestions: interestSuggestions, clear: clearInterestSuggestions } = useInterestSearch(interestFocused ? interestInput : "", token)
 
   useEffect(() => {
@@ -450,7 +456,7 @@ export default function ProfilePage() {
                 <label htmlFor="username" className="block text-sm font-medium text-gray-300">
                   Username <span className="text-red-400">*</span>
                 </label>
-                {username && username !== (profile?.username ?? "") && (
+                {!profile?.username && username && (
                   <span className={`text-xs ${
                     usernameStatus === "available" ? "text-green-400" :
                     usernameStatus === "taken" ? "text-red-400" :
@@ -470,17 +476,23 @@ export default function ProfilePage() {
                   id="username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  onChange={profile?.username ? undefined : (e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  readOnly={!!profile?.username}
                   maxLength={30}
                   placeholder="your_username"
                   required
-                  className={`block w-full rounded-md border bg-gray-800 pl-7 pr-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
-                    username !== (profile?.username ?? "")
-                      ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
-                      : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                  className={`block w-full rounded-md border bg-gray-800 pl-7 pr-3 py-2 placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                    profile?.username
+                      ? "border-gray-700 text-gray-400 cursor-not-allowed"
+                      : username !== (profile?.username ?? "")
+                      ? "border-orange-500 text-white focus:border-orange-400 focus:ring-orange-400"
+                      : "border-gray-700 text-white focus:border-indigo-500 focus:ring-indigo-500"
                   }`}
                 />
               </div>
+              {profile?.username && (
+                <p className="mt-1 text-xs text-gray-500">Username cannot be changed once set.</p>
+              )}
             </div>
 
             <Input
@@ -560,7 +572,7 @@ export default function ProfilePage() {
                   id="location"
                   type="text"
                   value={locationQuery}
-                  onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value) }}
+                  onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value); setLocationEdited(true) }}
                   placeholder="e.g. Paris, France"
                   autoComplete="off"
                   className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
@@ -576,12 +588,13 @@ export default function ProfilePage() {
               {locationSuggestions.length > 0 && (
                 <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
                   {locationSuggestions.map((s) => (
-                    <li key={`${s.lat},${s.lng}`}>
+                    <li key={`${s.label}-${s.lat},${s.lng}`}>
                       <button
                         type="button"
                         onClick={() => {
                           setLocationText(s.label)
                           setLocationQuery(s.label)
+                          setLocationEdited(false)
                           clearLocationSuggestions()
                         }}
                         className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
@@ -661,7 +674,7 @@ export default function ProfilePage() {
               type="submit"
               variant={isDirty ? "warning" : "primary"}
               loading={saving}
-              disabled={saving || uploadingAvatar || !isDirty || usernameStatus === "checking" || usernameStatus === "taken" || usernameStatus === "invalid"}
+              disabled={saving || uploadingAvatar || !isDirty || (!profile?.username && (usernameStatus === "checking" || usernameStatus === "taken" || usernameStatus === "invalid"))}
               className="w-full focus:ring-offset-gray-900"
             >
               {saving ? "Saving…" : isDirty ? "Save changes" : "Save"}

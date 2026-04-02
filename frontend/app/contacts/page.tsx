@@ -15,6 +15,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 interface UserSummary {
   id: string
+  username: string
   email: string
   display_name: string
   avatar_url: string
@@ -23,6 +24,7 @@ interface UserSummary {
 interface PendingRequest {
   contact_id: string
   user_id: string
+  username: string
   email: string
   display_name: string
   avatar_url: string
@@ -31,6 +33,7 @@ interface PendingRequest {
 interface SentRequest {
   contact_id: string
   user_id: string
+  username: string
   email: string
   display_name: string
   avatar_url: string
@@ -39,6 +42,7 @@ interface SentRequest {
 interface AcceptedContact {
   contact_id: string
   user_id: string
+  username: string
   email: string
   display_name: string
   avatar_url: string
@@ -97,7 +101,7 @@ export default function ContactsPage() {
           setSent((prev) => prev.filter((s) => s.contact_id !== e.payload.contact_id))
           setContacts((prev) => {
             if (prev.some((c) => c.contact_id === matched.contact_id)) return prev
-            return [...prev, { contact_id: matched.contact_id, user_id: matched.user_id, email: matched.email, display_name: matched.display_name, avatar_url: matched.avatar_url }]
+            return [...prev, { contact_id: matched.contact_id, user_id: matched.user_id, username: matched.username, email: matched.email, display_name: matched.display_name, avatar_url: matched.avatar_url }]
           })
         }
       }
@@ -135,7 +139,7 @@ export default function ContactsPage() {
     if (!res.ok) { setError("Failed to send contact request."); return }
     const contact = await res.json()
     const user = searchResults.find((u) => u.id === addresseeID)
-    if (user) setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
+    if (user) setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, username: user.username, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
     setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
   }
 
@@ -148,7 +152,7 @@ export default function ContactsPage() {
     if (!res.ok) { setError("Failed to accept contact."); return }
     const accepted = pending.find((r) => r.contact_id === contactID)
     setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
-    if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
+    if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, username: accepted.username, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
     refreshPendingCount()
   }
 
@@ -228,7 +232,7 @@ export default function ContactsPage() {
                   displayName={r.display_name}
                   avatarUrl={r.avatar_url}
                   variant="pending"
-                  onNavigate={() => router.push(`/profile/${r.user_id}`)}
+                  onNavigate={() => router.push(`/profile/${r.username || r.user_id}`)}
                   onPrimary={() => accept(r.contact_id)}
                   onSecondary={() => remove(r.contact_id)}
                 />
@@ -249,7 +253,7 @@ export default function ContactsPage() {
                   displayName={r.display_name}
                   avatarUrl={r.avatar_url}
                   variant="sent"
-                  onNavigate={() => router.push(`/profile/${r.user_id}`)}
+                  onNavigate={() => router.push(`/profile/${r.username || r.user_id}`)}
                   onSecondary={() => cancelSent(r.contact_id)}
                 />
               ))}
@@ -272,7 +276,7 @@ export default function ContactsPage() {
                   avatarUrl={c.avatar_url}
                   variant="contact"
                   online={presence[c.user_id]?.online ?? false}
-                  onNavigate={() => router.push(`/profile/${c.user_id}`)}
+                  onNavigate={() => router.push(`/profile/${c.username || c.user_id}`)}
                   onPrimary={() => startDM(c.user_id)}
                   onSecondary={() => remove(c.contact_id)}
                 />

@@ -36,6 +36,7 @@ type Contact struct {
 type UserSummary struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`
+	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
 }
@@ -45,6 +46,7 @@ type UserSummary struct {
 type AcceptedContact struct {
 	ContactID   string `json:"contact_id"`
 	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
@@ -55,6 +57,7 @@ type AcceptedContact struct {
 type PendingRequest struct {
 	ContactID   string `json:"contact_id"`
 	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
@@ -65,6 +68,7 @@ type PendingRequest struct {
 type SentRequest struct {
 	ContactID   string `json:"contact_id"`
 	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`

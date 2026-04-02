@@ -26,6 +26,7 @@ interface RoomSummary {
   type: "dm" | "group"
   name: string
   peer_id: string
+  peer_username: string
   peer_name: string
   peer_avatar_url: string
   peer_last_read_at?: string
@@ -125,8 +126,9 @@ export default function ChatRoomPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [history, liveMessages])
 
-  const [now, setNow] = useState(() => Date.now())
+  const [now, setNow] = useState(0)
   useEffect(() => {
+    setNow(Date.now())
     const id = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(id)
   }, [])
@@ -219,7 +221,7 @@ export default function ChatRoomPage() {
         </button>
         {room ? (
           room.type === "dm" ? (
-            <button onClick={() => router.push(`/profile/${room.peer_id}`)} className="flex items-center gap-3 hover:opacity-80">
+            <button onClick={() => router.push(`/profile/${room.peer_username || room.peer_id}`)} className="flex items-center gap-3 hover:opacity-80">
               <Avatar src={room.peer_avatar_url} name={room.peer_name || "?"} size="md" />
               <div className="flex flex-col text-left">
                 <span className="text-sm font-medium text-white">{room.peer_name}</span>
@@ -277,7 +279,7 @@ export default function ChatRoomPage() {
 
               return (
                 <div key={msg.id}>
-                  {showDateSep && <DateSeparator label={formatDaySeparator(msg.created_at)} />}
+                  {showDateSep && <DateSeparator label={formatDaySeparator(msg.created_at, now)} />}
                   <MessageBubble
                     msg={msg}
                     isOwn={isOwn}

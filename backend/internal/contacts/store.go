@@ -101,7 +101,7 @@ func (s *pgStore) Delete(ctx context.Context, contactID, userID string) (*Contac
 // ListAccepted returns all accepted contacts for the given user.
 func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, u.id, u.email,
+		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
 		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
 		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM contacts c
@@ -125,7 +125,7 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedCo
 // ListPending returns incoming pending contact requests for the given user.
 func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, u.id, u.email,
+		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
 		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
 		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM contacts c
@@ -145,7 +145,7 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]Pendin
 // ListSent returns outgoing pending contact requests sent by the given user.
 func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentRequest, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, u.id, u.email,
+		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
 		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
 		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM contacts c
@@ -162,17 +162,17 @@ func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentReque
 	return scanSentRequests(rows)
 }
 
-// SearchUsers finds users by email or display_name prefix, excluding the caller
-// and any user who already has a contact relationship (any status) with the caller.
+// SearchUsers finds users by email, display_name, or username prefix, excluding
+// the caller and any user who already has a contact relationship with the caller.
 func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) ([]UserSummary, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT u.id, u.email,
+		SELECT u.id, COALESCE(p.username, ''), u.email,
 		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
 		       COALESCE(p.avatar_url, '') AS avatar_url
 		FROM users u
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id <> $1
-		  AND (u.email ILIKE $2 OR p.display_name ILIKE $2)
+		  AND (u.email ILIKE $2 OR p.display_name ILIKE $2 OR p.username ILIKE $2)
 		  AND NOT EXISTS (
 		    SELECT 1 FROM contacts c
 		    WHERE (c.requester_id = $1 AND c.addressee_id = u.id)
@@ -193,7 +193,7 @@ func scanAcceptedContacts(rows pgx.Rows) ([]AcceptedContact, error) {
 	var results []AcceptedContact
 	for rows.Next() {
 		var c AcceptedContact
-		if err := rows.Scan(&c.ContactID, &c.UserID, &c.Email, &c.DisplayName, &c.AvatarURL); err != nil {
+		if err := rows.Scan(&c.ContactID, &c.UserID, &c.Username, &c.Email, &c.DisplayName, &c.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan accepted contact: %w", err)
 		}
 		results = append(results, c)
@@ -211,7 +211,7 @@ func scanPendingRequests(rows pgx.Rows) ([]PendingRequest, error) {
 	var results []PendingRequest
 	for rows.Next() {
 		var r PendingRequest
-		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName, &r.AvatarURL); err != nil {
+		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Username, &r.Email, &r.DisplayName, &r.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan pending request: %w", err)
 		}
 		results = append(results, r)
@@ -229,7 +229,7 @@ func scanSentRequests(rows pgx.Rows) ([]SentRequest, error) {
 	var results []SentRequest
 	for rows.Next() {
 		var r SentRequest
-		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Email, &r.DisplayName, &r.AvatarURL); err != nil {
+		if err := rows.Scan(&r.ContactID, &r.UserID, &r.Username, &r.Email, &r.DisplayName, &r.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan sent request: %w", err)
 		}
 		results = append(results, r)
@@ -247,7 +247,7 @@ func scanUserSummaries(rows pgx.Rows) ([]UserSummary, error) {
 	var results []UserSummary
 	for rows.Next() {
 		var u UserSummary
-		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan user summary: %w", err)
 		}
 		results = append(results, u)

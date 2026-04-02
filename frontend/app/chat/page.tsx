@@ -32,8 +32,8 @@ interface RoomSummary {
   created_at: string
 }
 
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
+function relativeTime(dateStr: string, now: number): string {
+  const diff = now - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60_000)
   if (mins < 1) return "now"
   if (mins < 60) return `${mins}m`
@@ -41,8 +41,8 @@ function relativeTime(dateStr: string): string {
   if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
   if (days === 1) return "yesterday"
-  if (days < 7) return new Date(dateStr).toLocaleDateString([], { weekday: "short" })
-  return new Date(dateStr).toLocaleDateString([], { month: "short", day: "numeric" })
+  if (days < 7) return new Date(dateStr).toLocaleDateString("en", { weekday: "short" })
+  return new Date(dateStr).toLocaleDateString("en", { month: "short", day: "numeric" })
 }
 
 function LastMessagePreview({ msg }: { msg: MessageSummary }) {
@@ -97,6 +97,12 @@ export default function ChatPage() {
   const [rooms, setRooms] = useState<RoomSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [now, setNow] = useState(0)
+  useEffect(() => {
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const token = session?.accessToken
   const { clearChatBadge } = useNotificationsContext()
@@ -184,7 +190,7 @@ export default function ChatPage() {
                     <div className="flex flex-none flex-col items-end gap-1.5">
                       {room.last_message && (
                         <span className="text-xs text-gray-600">
-                          {relativeTime(room.last_message.created_at)}
+                          {relativeTime(room.last_message.created_at, now)}
                         </span>
                       )}
                       {room.unread_count > 0 && (

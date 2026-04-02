@@ -74,6 +74,7 @@ type RoomSummary struct {
 	Type           string          `json:"type"`
 	Name           string          `json:"name"`
 	PeerID         string          `json:"peer_id,omitempty"`
+	PeerUsername   string          `json:"peer_username,omitempty"`
 	PeerName       string          `json:"peer_name,omitempty"`
 	PeerAvatarURL  string          `json:"peer_avatar_url,omitempty"`
 	// PeerLastReadAt is the peer's last_read_at timestamp for DM rooms.

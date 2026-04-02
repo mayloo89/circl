@@ -163,7 +163,8 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			r.type,
 			COALESCE(r.name, '')                             AS name,
 			r.created_at,
-			COALESCE(peer.id::text, '')                                    AS peer_id,
+			COALESCE(peer.id::text, '')                      AS peer_id,
+			COALESCE(pp.username, '')                        AS peer_username,
 			COALESCE(NULLIF(pp.display_name, ''), peer.email, '') AS peer_name,
 			COALESCE(pp.avatar_url, '')                      AS peer_avatar_url,
 			COALESCE(lm.content, '')                         AS last_content,
@@ -210,7 +211,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 
 		if err := rows.Scan(
 			&s.ID, &s.Type, &s.Name, &s.CreatedAt,
-			&s.PeerID, &s.PeerName, &s.PeerAvatarURL,
+			&s.PeerID, &s.PeerUsername, &s.PeerName, &s.PeerAvatarURL,
 			&lastContent, &lastSenderID, &lastType, &lastAt,
 			&s.UnreadCount, &s.PeerLastReadAt,
 		); err != nil {
