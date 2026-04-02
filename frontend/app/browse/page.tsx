@@ -96,7 +96,7 @@ function SendRequestButton({ userID, token }: { userID: string; token: string })
 }
 
 function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string }) {
-  const heroURL = profile.first_photo_url || profile.avatar_url
+  const heroURL = profile.avatar_url
   const distance = formatDistance(profile.distance_km)
 
   return (
