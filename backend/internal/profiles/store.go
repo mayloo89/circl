@@ -356,7 +356,7 @@ WHERE p.user_id <> $1
           POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
       )) <= prefs.max_distance_km
   )
-ORDER BY distance_km ASC NULLS LAST, p.created_at DESC, p.id ASC
+ORDER BY p.created_at DESC, p.id ASC
 LIMIT $2 OFFSET $3`
 
 // Browse returns a paginated list of profiles for the browse/explore view.
