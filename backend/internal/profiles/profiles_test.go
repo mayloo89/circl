@@ -726,3 +726,65 @@ func TestBrowse_NilDOBSkipsAge(t *testing.T) {
 		t.Error("Age should be nil when DateOfBirth is nil")
 	}
 }
+
+// --- UpdateAvatar ---
+
+func TestUpdateAvatar_Success(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	if err := svc.UpdateAvatar(t.Context(), "user-1", "https://example.com/avatar.jpg"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// --- calcAge edge cases ---
+
+func TestCalcAge_BirthdayNotYetThisYear(t *testing.T) {
+	// If today is January and birthday is in December, age is (year diff - 1).
+	now := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
+	dob := time.Date(2000, time.December, 25, 0, 0, 0, 0, time.UTC)
+	// 2024 - 2000 = 24, but birthday hasn't occurred yet → 23
+	age := calcAge(dob, now)
+	if age != 23 {
+		t.Errorf("calcAge = %d, want 23", age)
+	}
+}
+
+func TestCalcAge_SameDayNotYet(t *testing.T) {
+	// Same month, but today's day is before birthday day.
+	now := time.Date(2024, time.June, 10, 0, 0, 0, 0, time.UTC)
+	dob := time.Date(2000, time.June, 20, 0, 0, 0, 0, time.UTC)
+	// 2024 - 2000 = 24, but day 10 < 20 → 23
+	age := calcAge(dob, now)
+	if age != 23 {
+		t.Errorf("calcAge = %d, want 23", age)
+	}
+}
+
+// --- GetPublicProfile photos error ---
+
+func TestGetPublicProfile_PhotosError(t *testing.T) {
+	svc := NewService(&mockStore{
+		profile:   &Profile{ID: "prof-1", UserID: "user-2", DisplayName: "Bob"},
+		photosErr: errors.New("db error"),
+	})
+
+	_, err := svc.GetPublicProfile(t.Context(), "user-2")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetPublicProfileByUsername photos error ---
+
+func TestGetPublicProfileByUsername_PhotosError(t *testing.T) {
+	svc := NewService(&mockStore{
+		profile:   &Profile{ID: "prof-1", UserID: "user-2", Username: "bob", DisplayName: "Bob"},
+		photosErr: errors.New("db error"),
+	})
+
+	_, err := svc.GetPublicProfileByUsername(t.Context(), "bob")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

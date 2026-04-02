@@ -27,6 +27,7 @@ type mockProfileManager struct {
 	usernameAvailable bool
 	getErr            error
 	updateErr         error
+	updateAvatarErr   error
 	publicErr         error
 	addPhotoErr       error
 	deletePhotoErr    error
@@ -65,7 +66,7 @@ func (m *mockProfileManager) DeletePhoto(_ context.Context, _, _ string) error {
 }
 
 func (m *mockProfileManager) UpdateAvatar(_ context.Context, _, _ string) error {
-	return nil
+	return m.updateAvatarErr
 }
 
 func (m *mockProfileManager) GetMyPreferences(_ context.Context, _ string) (*profiles.ProfilePreferences, error) {
@@ -880,5 +881,180 @@ func TestBrowseProfiles_ServiceError(t *testing.T) {
 	serve(h, req, rec)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- PUT /profiles/me/avatar ---
+
+func TestUpdateAvatar_OK(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/avatar", `{"avatar_url":"https://example.com/avatar.jpg"}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestUpdateAvatar_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodPut, "/profiles/me/avatar", strings.NewReader(`{"avatar_url":"https://example.com/avatar.jpg"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestUpdateAvatar_MalformedJSON(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/avatar", "{bad")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// --- toResponse with DateOfBirth ---
+
+func TestGetMyProfile_ResponseIncludesDateOfBirth(t *testing.T) {
+	dob := time.Date(1995, 6, 15, 0, 0, 0, 0, time.UTC)
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{
+			ID: "p1", UserID: "user-123", DisplayName: "Alice",
+			DateOfBirth: &dob, Interests: []string{}, Photos: []profiles.ProfilePhoto{},
+		},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/me", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["date_of_birth"] != "1995-06-15" {
+		t.Errorf("date_of_birth = %v, want 1995-06-15", resp["date_of_birth"])
+	}
+}
+
+// --- toPreferencesResponse with nil GenderPreference ---
+
+func TestGetMyPreferences_NilGenderPreferenceBecomesEmptySlice(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		prefs: &profiles.ProfilePreferences{GenderPreference: nil},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/me/preferences", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	gp, ok := resp["gender_preference"]
+	if !ok {
+		t.Fatal("gender_preference field missing")
+	}
+	// Should be an empty array, not null
+	arr, ok := gp.([]any)
+	if !ok || len(arr) != 0 {
+		t.Errorf("gender_preference = %v, want []", gp)
+	}
+}
+
+// --- updateAvatar service error ---
+
+func TestUpdateAvatar_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{updateAvatarErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/avatar", `{"avatar_url":"https://example.com/avatar.jpg"}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- updateMyProfile username taken conflict ---
+
+func TestUpdateMyProfile_UsernameTaken(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{updateErr: profiles.ErrUsernameTaken})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me", `{"display_name":"Alice","username":"taken"}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+}
+
+// --- isUUID edge cases via GET /profiles/{ref} ---
+
+func TestGetPublicProfile_NonDashAtDashPosition(t *testing.T) {
+	// 36 chars, valid hex elsewhere, but 'X' at position 8 instead of '-' → isUUID returns false
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{ID: "p1", UserID: "u1", DisplayName: "Bob", Interests: []string{}, Photos: []profiles.ProfilePhoto{}},
+	})
+	// a0eebc99X9c0b-4ef8-bb6d-6bb9bd380a11 is exactly 36 chars, dash expected at pos 8 but has 'X'
+	req := authedReq(t, http.MethodGet, "/profiles/a0eebc99X9c0b-4ef8-bb6d-6bb9bd380a11", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+	// Falls through to username lookup, succeeds with 200
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestGetPublicProfile_InvalidHexCharAt36Len(t *testing.T) {
+	// 36 chars, valid dash positions, but 'z' at position 0 (invalid hex)
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{ID: "p1", UserID: "u1", DisplayName: "Bob", Interests: []string{}, Photos: []profiles.ProfilePhoto{}},
+	})
+	req := authedReq(t, http.MethodGet, "/profiles/z0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+	// Falls through to username lookup, succeeds with 200
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+// --- toResponse with nil interests ---
+
+func TestGetMyProfile_NilInterestsBecomesEmptySlice(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{ID: "p1", UserID: "user-123", DisplayName: "Alice", Interests: nil, Photos: []profiles.ProfilePhoto{}},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/me", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	interests, ok := resp["interests"]
+	if !ok {
+		t.Fatal("interests field missing")
+	}
+	arr, ok := interests.([]any)
+	if !ok || len(arr) != 0 {
+		t.Errorf("interests = %v, want []", interests)
 	}
 }
