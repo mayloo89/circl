@@ -24,7 +24,7 @@ type ProfileManager interface {
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
-	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool) (*BrowsePage, error)
+	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) (*BrowsePage, error)
 }
 
 type photoResponse struct {
@@ -483,8 +483,9 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 			}
 		}
 		sortByDistance := r.URL.Query().Get("sort") == "distance"
+		interests := r.URL.Query()["interests"]
 
-		result, err := svc.Browse(r.Context(), userID, limit, page*limit, sortByDistance)
+		result, err := svc.Browse(r.Context(), userID, limit, page*limit, sortByDistance, interests)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			return

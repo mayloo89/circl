@@ -168,17 +168,44 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
 interface FilterPanelProps {
   prefs: Preferences
   sortByDistance: boolean
-  onApply: (p: Preferences, sortByDistance: boolean) => void
+  selectedInterests: string[]
+  onApply: (p: Preferences, sortByDistance: boolean, interests: string[]) => void
   saving: boolean
 }
 
-function FilterPanel({ prefs, sortByDistance, onApply, saving }: FilterPanelProps) {
+function FilterPanel({ prefs, sortByDistance, selectedInterests, onApply, saving }: FilterPanelProps) {
   const [draft, setDraft] = useState<Preferences>(prefs)
   const [draftSort, setDraftSort] = useState(sortByDistance)
+  const [draftInterests, setDraftInterests] = useState<string[]>(selectedInterests)
+  const [interestQuery, setInterestQuery] = useState("")
+  const [interestSuggestions, setInterestSuggestions] = useState<string[]>([])
 
-  // Sync when parent prefs load for the first time
   useEffect(() => { setDraft(prefs) }, [prefs])
   useEffect(() => { setDraftSort(sortByDistance) }, [sortByDistance])
+  useEffect(() => { setDraftInterests(selectedInterests) }, [selectedInterests])
+
+  useEffect(() => {
+    if (interestQuery.length < 1) { setInterestSuggestions([]); return }
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/profiles/interests?q=${encodeURIComponent(interestQuery)}&limit=8`)
+        if (!res.ok) return
+        const data: { name: string }[] = await res.json()
+        setInterestSuggestions(data.map((d) => d.name).filter((n) => !draftInterests.includes(n)))
+      } catch { /* ignore */ }
+    }, 250)
+    return () => clearTimeout(id)
+  }, [interestQuery, draftInterests])
+
+  function addInterest(name: string) {
+    setDraftInterests((prev) => prev.includes(name) ? prev : [...prev, name])
+    setInterestQuery("")
+    setInterestSuggestions([])
+  }
+
+  function removeInterest(name: string) {
+    setDraftInterests((prev) => prev.filter((i) => i !== name))
+  }
 
   function toggleGender(g: string) {
     setDraft((d) => {
@@ -261,6 +288,48 @@ function FilterPanel({ prefs, sortByDistance, onApply, saving }: FilterPanelProp
         </div>
       </div>
 
+      {/* Interests */}
+      <div className="space-y-2">
+        <p className="text-xs text-gray-400 font-medium">Interests</p>
+        <div className="relative">
+          <input
+            type="text"
+            value={interestQuery}
+            onChange={(e) => setInterestQuery(e.target.value)}
+            placeholder="Search…"
+            className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-indigo-500"
+          />
+          {interestSuggestions.length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
+              {interestSuggestions.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    onClick={() => addInterest(s)}
+                    className="w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-700"
+                  >
+                    {s}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {draftInterests.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {draftInterests.map((tag) => (
+              <span
+                key={tag}
+                className="flex items-center gap-1 rounded-full bg-indigo-900/50 px-2 py-0.5 text-xs text-indigo-300 ring-1 ring-indigo-700/60"
+              >
+                {tag}
+                <button type="button" onClick={() => removeInterest(tag)} className="hover:text-white">×</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Sort by distance */}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
@@ -276,7 +345,7 @@ function FilterPanel({ prefs, sortByDistance, onApply, saving }: FilterPanelProp
         variant="primary"
         size="sm"
         loading={saving}
-        onClick={() => onApply(draft, draftSort)}
+        onClick={() => onApply(draft, draftSort, draftInterests)}
         className="w-full"
       >
         Apply
@@ -304,11 +373,12 @@ export default function BrowsePage() {
   })
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [sortByDistance, setSortByDistance] = useState(false)
+  const [filterInterests, setFilterInterests] = useState<string[]>([])
 
   const fetchInFlight = useRef(false)
 
   const loadProfiles = useCallback(
-    async (pageNum: number, append: boolean, sortDist: boolean) => {
+    async (pageNum: number, append: boolean, sortDist: boolean, interests: string[]) => {
       if (!token || fetchInFlight.current) return
       fetchInFlight.current = true
       if (pageNum === 0) setInitialLoading(true)
@@ -317,8 +387,9 @@ export default function BrowsePage() {
 
       try {
         const sortParam = sortDist ? "&sort=distance" : ""
+        const interestParams = interests.map((i) => `&interests=${encodeURIComponent(i)}`).join("")
         const res = await fetch(
-          `${API_URL}/profiles/browse?page=${pageNum}&limit=${PAGE_SIZE}${sortParam}`,
+          `${API_URL}/profiles/browse?page=${pageNum}&limit=${PAGE_SIZE}${sortParam}${interestParams}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         if (!res.ok) throw new Error("Failed to load profiles.")
@@ -349,10 +420,10 @@ export default function BrowsePage() {
       })
       .catch(() => {})
 
-    loadProfiles(0, false, false)
+    loadProfiles(0, false, false, [])
   }, [status, token, loadProfiles])
 
-  async function handleApplyFilters(updated: Preferences, newSortByDistance: boolean) {
+  async function handleApplyFilters(updated: Preferences, newSortByDistance: boolean, newInterests: string[]) {
     if (!token) return
     setSavingPrefs(true)
     try {
@@ -369,14 +440,15 @@ export default function BrowsePage() {
       setSavingPrefs(false)
     }
     setSortByDistance(newSortByDistance)
+    setFilterInterests(newInterests)
     setPage(0)
-    loadProfiles(0, false, newSortByDistance)
+    loadProfiles(0, false, newSortByDistance, newInterests)
   }
 
   function handleLoadMore() {
     const next = page + 1
     setPage(next)
-    loadProfiles(next, true, sortByDistance)
+    loadProfiles(next, true, sortByDistance, filterInterests)
   }
 
   if (status === "loading" || initialLoading) {
@@ -410,7 +482,7 @@ export default function BrowsePage() {
       <div className="flex gap-6">
         {/* Filter sidebar */}
         <aside className="hidden w-56 shrink-0 lg:block">
-          <FilterPanel prefs={prefs} sortByDistance={sortByDistance} onApply={handleApplyFilters} saving={savingPrefs} />
+          <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} onApply={handleApplyFilters} saving={savingPrefs} />
         </aside>
 
         {/* Results */}
@@ -421,7 +493,7 @@ export default function BrowsePage() {
               Filters
             </summary>
             <div className="mt-3">
-              <FilterPanel prefs={prefs} sortByDistance={sortByDistance} onApply={handleApplyFilters} saving={savingPrefs} />
+              <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} onApply={handleApplyFilters} saving={savingPrefs} />
             </div>
           </details>
 

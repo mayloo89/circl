@@ -111,7 +111,7 @@ type Store interface {
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
-	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool) ([]BrowseProfile, error)
+	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) ([]BrowseProfile, error)
 }
 
 // Service handles profile business logic.
@@ -276,8 +276,8 @@ func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs 
 
 // Browse returns a paginated list of profiles visible to the given user,
 // filtered by their stored discovery preferences.
-func (s *Service) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool) (*BrowsePage, error) {
-	profiles, err := s.store.Browse(ctx, userID, limit+1, offset, sortByDistance)
+func (s *Service) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) (*BrowsePage, error) {
+	profiles, err := s.store.Browse(ctx, userID, limit+1, offset, sortByDistance, interests)
 	if err != nil {
 		return nil, err
 	}

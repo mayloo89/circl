@@ -355,16 +355,27 @@ WHERE p.user_id <> $1
           COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
           POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
       )) <= prefs.max_distance_km
+  )
+  AND (
+      cardinality($4::text[]) = 0
+      OR EXISTS (
+          SELECT 1 FROM profile_interests pi
+          JOIN interests i ON i.id = pi.interest_id
+          WHERE pi.user_id = p.user_id AND i.name = ANY($4::text[])
+      )
   )`
 
 // Browse returns a paginated list of profiles for the browse/explore view.
-func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool) ([]BrowseProfile, error) {
+func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) ([]BrowseProfile, error) {
+	if interests == nil {
+		interests = []string{}
+	}
 	orderBy := "p.created_at DESC, p.id ASC"
 	if sortByDistance {
 		orderBy = "distance_km ASC NULLS LAST, p.created_at DESC, p.id ASC"
 	}
 	sql := browseSQLBody + "\nORDER BY " + orderBy + "\nLIMIT $2 OFFSET $3"
-	rows, err := s.pool.Query(ctx, sql, userID, limit, offset)
+	rows, err := s.pool.Query(ctx, sql, userID, limit, offset, interests)
 	if err != nil {
 		return nil, fmt.Errorf("browse profiles: %w", err)
 	}
