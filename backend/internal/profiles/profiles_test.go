@@ -107,7 +107,7 @@ func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]Inter
 	return []InterestSuggestion{}, nil
 }
 
-func (m *mockStore) Browse(_ context.Context, _ string, _, _ int) ([]BrowseProfile, error) {
+func (m *mockStore) Browse(_ context.Context, _ string, _, _ int, _ bool) ([]BrowseProfile, error) {
 	if m.browseErr != nil {
 		return nil, m.browseErr
 	}
@@ -664,7 +664,7 @@ func TestBrowse_ReturnsProfiles(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 10, 0)
+	page, err := svc.Browse(t.Context(), "requester", 10, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -690,7 +690,7 @@ func TestBrowse_HasMore(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 2, 0)
+	page, err := svc.Browse(t.Context(), "requester", 2, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -705,7 +705,7 @@ func TestBrowse_HasMore(t *testing.T) {
 func TestBrowse_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{browseErr: errors.New("db error")})
 
-	_, err := svc.Browse(t.Context(), "requester", 20, 0)
+	_, err := svc.Browse(t.Context(), "requester", 20, 0, false)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -718,7 +718,7 @@ func TestBrowse_NilDOBSkipsAge(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 10, 0)
+	page, err := svc.Browse(t.Context(), "requester", 10, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -130,14 +130,17 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
             {profile.gender && <span>{profile.gender}</span>}
-            {distance && (
+            {profile.location_text && (
               <>
                 {profile.gender && <span>·</span>}
-                <span>{distance}</span>
+                <span>{profile.location_text}</span>
               </>
             )}
-            {!profile.gender && !distance && profile.location_text && (
-              <span>{profile.location_text}</span>
+            {distance && (
+              <>
+                {(profile.gender || profile.location_text) && <span>·</span>}
+                <span>{distance}</span>
+              </>
             )}
           </div>
         </div>
@@ -170,15 +173,18 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
 
 interface FilterPanelProps {
   prefs: Preferences
-  onApply: (p: Preferences) => void
+  sortByDistance: boolean
+  onApply: (p: Preferences, sortByDistance: boolean) => void
   saving: boolean
 }
 
-function FilterPanel({ prefs, onApply, saving }: FilterPanelProps) {
+function FilterPanel({ prefs, sortByDistance, onApply, saving }: FilterPanelProps) {
   const [draft, setDraft] = useState<Preferences>(prefs)
+  const [draftSort, setDraftSort] = useState(sortByDistance)
 
   // Sync when parent prefs load for the first time
   useEffect(() => { setDraft(prefs) }, [prefs])
+  useEffect(() => { setDraftSort(sortByDistance) }, [sortByDistance])
 
   function toggleGender(g: string) {
     setDraft((d) => {
@@ -261,11 +267,22 @@ function FilterPanel({ prefs, onApply, saving }: FilterPanelProps) {
         </div>
       </div>
 
+      {/* Sort by distance */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={draftSort}
+          onChange={(e) => setDraftSort(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-indigo-500"
+        />
+        <span className="text-xs text-gray-300">Sort by distance</span>
+      </label>
+
       <Button
         variant="primary"
         size="sm"
         loading={saving}
-        onClick={() => onApply(draft)}
+        onClick={() => onApply(draft, draftSort)}
         className="w-full"
       >
         Apply
@@ -292,6 +309,7 @@ export default function BrowsePage() {
     gender_preference: [],
   })
   const [savingPrefs, setSavingPrefs] = useState(false)
+  const [sortByDistance, setSortByDistance] = useState(false)
 
   const fetchInFlight = useRef(false)
 
@@ -304,8 +322,9 @@ export default function BrowsePage() {
       setError("")
 
       try {
+        const sortParam = sortByDistance ? "&sort=distance" : ""
         const res = await fetch(
-          `${API_URL}/profiles/browse?page=${pageNum}&limit=${PAGE_SIZE}`,
+          `${API_URL}/profiles/browse?page=${pageNum}&limit=${PAGE_SIZE}${sortParam}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         if (!res.ok) throw new Error("Failed to load profiles.")
@@ -320,7 +339,7 @@ export default function BrowsePage() {
         setLoadingMore(false)
       }
     },
-    [token]
+    [token, sortByDistance]
   )
 
   // Load preferences + first page in parallel
@@ -339,7 +358,7 @@ export default function BrowsePage() {
     loadProfiles(0, false)
   }, [status, token, loadProfiles])
 
-  async function handleApplyFilters(updated: Preferences) {
+  async function handleApplyFilters(updated: Preferences, newSortByDistance: boolean) {
     if (!token) return
     setSavingPrefs(true)
     try {
@@ -355,6 +374,7 @@ export default function BrowsePage() {
     } finally {
       setSavingPrefs(false)
     }
+    setSortByDistance(newSortByDistance)
     // Reload from first page with new filters
     setPage(0)
     loadProfiles(0, false)
@@ -397,7 +417,7 @@ export default function BrowsePage() {
       <div className="flex gap-6">
         {/* Filter sidebar */}
         <aside className="hidden w-56 shrink-0 lg:block">
-          <FilterPanel prefs={prefs} onApply={handleApplyFilters} saving={savingPrefs} />
+          <FilterPanel prefs={prefs} sortByDistance={sortByDistance} onApply={handleApplyFilters} saving={savingPrefs} />
         </aside>
 
         {/* Results */}
@@ -408,7 +428,7 @@ export default function BrowsePage() {
               Filters
             </summary>
             <div className="mt-3">
-              <FilterPanel prefs={prefs} onApply={handleApplyFilters} saving={savingPrefs} />
+              <FilterPanel prefs={prefs} sortByDistance={sortByDistance} onApply={handleApplyFilters} saving={savingPrefs} />
             </div>
           </details>
 

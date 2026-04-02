@@ -293,7 +293,7 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 	return nil
 }
 
-const browseSQL = `
+const browseSQLBody = `
 WITH r AS (
     SELECT latitude AS lat, longitude AS lng
     FROM profiles WHERE user_id = $1
@@ -355,13 +355,16 @@ WHERE p.user_id <> $1
           COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
           POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
       )) <= prefs.max_distance_km
-  )
-ORDER BY p.created_at DESC, p.id ASC
-LIMIT $2 OFFSET $3`
+  )`
 
 // Browse returns a paginated list of profiles for the browse/explore view.
-func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int) ([]BrowseProfile, error) {
-	rows, err := s.pool.Query(ctx, browseSQL, userID, limit, offset)
+func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool) ([]BrowseProfile, error) {
+	orderBy := "p.created_at DESC, p.id ASC"
+	if sortByDistance {
+		orderBy = "distance_km ASC NULLS LAST, p.created_at DESC, p.id ASC"
+	}
+	sql := browseSQLBody + "\nORDER BY " + orderBy + "\nLIMIT $2 OFFSET $3"
+	rows, err := s.pool.Query(ctx, sql, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("browse profiles: %w", err)
 	}

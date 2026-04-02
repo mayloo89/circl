@@ -547,7 +547,7 @@ func TestBrowse_Integration(t *testing.T) {
 	}
 
 	t.Run("returns other users with username and DOB", func(t *testing.T) {
-		results, err := store.Browse(t.Context(), requesterID, 20, 0)
+		results, err := store.Browse(t.Context(), requesterID, 20, 0, false)
 		if err != nil {
 			t.Fatalf("browse: %v", err)
 		}
@@ -566,7 +566,7 @@ func TestBrowse_Integration(t *testing.T) {
 	})
 
 	t.Run("excludes requester from results", func(t *testing.T) {
-		results, err := store.Browse(t.Context(), requesterID, 20, 0)
+		results, err := store.Browse(t.Context(), requesterID, 20, 0, false)
 		if err != nil {
 			t.Fatalf("browse: %v", err)
 		}
@@ -579,14 +579,14 @@ func TestBrowse_Integration(t *testing.T) {
 
 	t.Run("pagination: limit and offset", func(t *testing.T) {
 		// Fetch page 0 with limit 1, then page 1; should not overlap
-		page0, err := store.Browse(t.Context(), requesterID, 1, 0)
+		page0, err := store.Browse(t.Context(), requesterID, 1, 0, false)
 		if err != nil {
 			t.Fatalf("browse page 0: %v", err)
 		}
 		if len(page0) == 0 {
 			t.Skip("no results, skipping pagination test")
 		}
-		page1, err := store.Browse(t.Context(), requesterID, 1, 1)
+		page1, err := store.Browse(t.Context(), requesterID, 1, 1, false)
 		if err != nil {
 			t.Fatalf("browse page 1: %v", err)
 		}
