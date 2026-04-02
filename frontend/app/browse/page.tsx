@@ -180,17 +180,19 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
   const [draftInterests, setDraftInterests] = useState<string[]>(selectedInterests)
   const [interestQuery, setInterestQuery] = useState("")
   const [interestSuggestions, setInterestSuggestions] = useState<string[]>([])
+  const tokenRef = useRef(token)
 
   useEffect(() => { setDraft(prefs) }, [prefs])
   useEffect(() => { setDraftSort(sortByDistance) }, [sortByDistance])
   useEffect(() => { setDraftInterests(selectedInterests) }, [selectedInterests])
+  useEffect(() => { tokenRef.current = token }, [token])
 
   useEffect(() => {
     if (interestQuery.length < 1) { setInterestSuggestions([]); return }
     const id = setTimeout(async () => {
       try {
         const res = await fetch(`${API_URL}/profiles/interests?q=${encodeURIComponent(interestQuery)}&limit=8`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
         })
         if (!res.ok) return
         const data: { name: string }[] = await res.json()
@@ -198,7 +200,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
       } catch { /* ignore */ }
     }, 250)
     return () => clearTimeout(id)
-  }, [interestQuery, draftInterests, token])
+  }, [interestQuery, draftInterests])
 
   function addInterest(name: string) {
     setDraftInterests((prev) => prev.includes(name) ? prev : [...prev, name])
