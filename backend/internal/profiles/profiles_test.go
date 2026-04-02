@@ -14,6 +14,8 @@ type mockStore struct {
 	photoCount        int
 	prefs             *ProfilePreferences
 	interests         []InterestSuggestion
+	browseProfiles    []BrowseProfile
+	browseErr         error
 	usernameAvailable bool
 	getErr            error
 	upsertErr         error
@@ -103,6 +105,16 @@ func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]Inter
 		return m.interests, nil
 	}
 	return []InterestSuggestion{}, nil
+}
+
+func (m *mockStore) Browse(_ context.Context, _ string, _, _ int) ([]BrowseProfile, error) {
+	if m.browseErr != nil {
+		return nil, m.browseErr
+	}
+	if m.browseProfiles != nil {
+		return m.browseProfiles, nil
+	}
+	return []BrowseProfile{}, nil
 }
 
 // validDOB returns a DOB 25 years in the past (always valid for 18+ check).
@@ -638,5 +650,79 @@ func TestUpdateMyPreferences_StoreError(t *testing.T) {
 	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- Browse ---
+
+func TestBrowse_ReturnsProfiles(t *testing.T) {
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", Username: "alice", DisplayName: "Alice", DateOfBirth: &dob},
+			{ID: "p2", UserID: "u2", Username: "bob", DisplayName: "Bob", DateOfBirth: &dob},
+		},
+	})
+
+	page, err := svc.Browse(t.Context(), "requester", 10, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(page.Profiles) != 2 {
+		t.Errorf("len = %d, want 2", len(page.Profiles))
+	}
+	if page.HasMore {
+		t.Error("HasMore should be false")
+	}
+	if page.Profiles[0].Age == nil {
+		t.Error("Age should be computed from DateOfBirth")
+	}
+}
+
+func TestBrowse_HasMore(t *testing.T) {
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Store returns limit+1 rows to signal more pages
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", DateOfBirth: &dob},
+			{ID: "p2", UserID: "u2", DateOfBirth: &dob},
+			{ID: "p3", UserID: "u3", DateOfBirth: &dob},
+		},
+	})
+
+	page, err := svc.Browse(t.Context(), "requester", 2, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(page.Profiles) != 2 {
+		t.Errorf("len = %d, want 2 (extra trimmed)", len(page.Profiles))
+	}
+	if !page.HasMore {
+		t.Error("HasMore should be true")
+	}
+}
+
+func TestBrowse_StoreError(t *testing.T) {
+	svc := NewService(&mockStore{browseErr: errors.New("db error")})
+
+	_, err := svc.Browse(t.Context(), "requester", 20, 0)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestBrowse_NilDOBSkipsAge(t *testing.T) {
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", DateOfBirth: nil},
+		},
+	})
+
+	page, err := svc.Browse(t.Context(), "requester", 10, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page.Profiles[0].Age != nil {
+		t.Error("Age should be nil when DateOfBirth is nil")
 	}
 }

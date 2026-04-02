@@ -74,6 +74,28 @@ type InterestSuggestion struct {
 	Count int
 }
 
+// BrowseProfile is a profile summary for the browse/explore view.
+type BrowseProfile struct {
+	ID            string
+	UserID        string
+	Username      string
+	DisplayName   string
+	AvatarURL     string
+	DateOfBirth   *time.Time
+	Age           *int
+	Gender        string
+	LocationText  string
+	DistanceKm    *float64
+	FirstPhotoURL string
+	Interests     []string
+}
+
+// BrowsePage is a paginated set of browse results.
+type BrowsePage struct {
+	Profiles []BrowseProfile
+	HasMore  bool
+}
+
 // Store is the data-access interface required by the profiles service.
 type Store interface {
 	GetByUserID(ctx context.Context, userID string) (*Profile, error)
@@ -89,6 +111,7 @@ type Store interface {
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
+	Browse(ctx context.Context, userID string, limit, offset int) ([]BrowseProfile, error)
 }
 
 // Service handles profile business logic.
@@ -251,7 +274,36 @@ func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs 
 	return s.store.UpsertPreferences(ctx, userID, prefs)
 }
 
+// Browse returns a paginated list of profiles visible to the given user,
+// filtered by their stored discovery preferences.
+func (s *Service) Browse(ctx context.Context, userID string, limit, offset int) (*BrowsePage, error) {
+	profiles, err := s.store.Browse(ctx, userID, limit+1, offset)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(profiles) > limit
+	if hasMore {
+		profiles = profiles[:limit]
+	}
+	now := time.Now()
+	for i := range profiles {
+		if profiles[i].DateOfBirth != nil {
+			a := calcAge(*profiles[i].DateOfBirth, now)
+			profiles[i].Age = &a
+		}
+	}
+	return &BrowsePage{Profiles: profiles, HasMore: hasMore}, nil
+}
+
 // isAtLeast18 returns true if the given birth date is at least 18 years in the past.
 func isAtLeast18(dob time.Time) bool {
 	return !dob.After(time.Now().AddDate(-18, 0, 0))
+}
+
+func calcAge(dob, now time.Time) int {
+	a := now.Year() - dob.Year()
+	if now.Month() < dob.Month() || (now.Month() == dob.Month() && now.Day() < dob.Day()) {
+		a--
+	}
+	return a
 }

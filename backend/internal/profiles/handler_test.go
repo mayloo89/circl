@@ -22,6 +22,8 @@ type mockProfileManager struct {
 	photo             *profiles.ProfilePhoto
 	prefs             *profiles.ProfilePreferences
 	interests         []profiles.InterestSuggestion
+	browsePage        *profiles.BrowsePage
+	browseErr         error
 	usernameAvailable bool
 	getErr            error
 	updateErr         error
@@ -94,6 +96,16 @@ func (m *mockProfileManager) SearchInterests(_ context.Context, _ string) ([]pro
 		return m.interests, nil
 	}
 	return []profiles.InterestSuggestion{}, nil
+}
+
+func (m *mockProfileManager) Browse(_ context.Context, _ string, _, _ int) (*profiles.BrowsePage, error) {
+	if m.browseErr != nil {
+		return nil, m.browseErr
+	}
+	if m.browsePage != nil {
+		return m.browsePage, nil
+	}
+	return &profiles.BrowsePage{Profiles: []profiles.BrowseProfile{}, HasMore: false}, nil
 }
 
 // serve wraps the handler with auth middleware and serves the request.
@@ -778,5 +790,95 @@ func TestGetPublicProfileByUsername_Unauthorized(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- GET /profiles/browse ---
+
+func TestBrowseProfiles_OK(t *testing.T) {
+	age := 28
+	h := profiles.NewHandler(&mockProfileManager{
+		browsePage: &profiles.BrowsePage{
+			Profiles: []profiles.BrowseProfile{
+				{ID: "p1", UserID: "u1", Username: "alice", DisplayName: "Alice", Age: &age, Interests: []string{"hiking"}},
+			},
+			HasMore: false,
+		},
+	})
+
+	req := authedReq(t, http.MethodGet, "/profiles/browse", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var body struct {
+		Profiles []struct {
+			ID       string `json:"id"`
+			Username string `json:"username"`
+			Age      *int   `json:"age"`
+		} `json:"profiles"`
+		HasMore bool `json:"has_more"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Profiles) != 1 {
+		t.Fatalf("profiles len = %d, want 1", len(body.Profiles))
+	}
+	if body.Profiles[0].Username != "alice" {
+		t.Errorf("username = %q, want alice", body.Profiles[0].Username)
+	}
+	if body.Profiles[0].Age == nil || *body.Profiles[0].Age != 28 {
+		t.Errorf("age = %v, want 28", body.Profiles[0].Age)
+	}
+	if body.HasMore {
+		t.Error("has_more should be false")
+	}
+}
+
+func TestBrowseProfiles_PageAndLimit(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodGet, "/profiles/browse?page=2&limit=5", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var body struct {
+		Page  int `json:"page"`
+		Limit int `json:"limit"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Page != 2 {
+		t.Errorf("page = %d, want 2", body.Page)
+	}
+	if body.Limit != 5 {
+		t.Errorf("limit = %d, want 5", body.Limit)
+	}
+}
+
+func TestBrowseProfiles_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+	req := httptest.NewRequest(http.MethodGet, "/profiles/browse", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestBrowseProfiles_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{browseErr: errors.New("db error")})
+	req := authedReq(t, http.MethodGet, "/profiles/browse", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
 	}
 }
