@@ -932,8 +932,8 @@ func TestIntegration_BlockFlow(t *testing.T) {
 		}
 	}
 
-	// Unblock.
-	if err := store.Unblock(ctx, u1, u2); err != nil {
+	// Unblock (u2 blocked u1, so unblock with u2 as blocker).
+	if err := store.Unblock(ctx, u2, u1); err != nil {
 		t.Fatalf("Unblock: %v", err)
 	}
 
@@ -946,8 +946,8 @@ func TestIntegration_BlockFlow(t *testing.T) {
 		t.Error("expected not blocked after Unblock()")
 	}
 
-	// Double unblock must return ErrNotFound.
-	if err := store.Unblock(ctx, u1, u2); !errors.Is(err, ErrNotFound) {
+	// Double unblock must return ErrNotFound (try u2->u1 again).
+	if err := store.Unblock(ctx, u2, u1); !errors.Is(err, ErrNotFound) {
 		t.Errorf("double unblock: err = %v, want ErrNotFound", err)
 	}
 }
