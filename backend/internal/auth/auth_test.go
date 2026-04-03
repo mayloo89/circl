@@ -102,7 +102,7 @@ func TestService_Login_SuspendedAccount(t *testing.T) {
 func TestService_Register_Success(t *testing.T) {
 	svc := NewService(&mockStore{})
 
-	user, err := svc.Register(t.Context(), "new@example.com", "securepass")
+	user, err := svc.Register(t.Context(), "new@example.com", "Secure1pass")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestService_Register_PasswordTooLong(t *testing.T) {
 func TestService_Register_EmailTaken(t *testing.T) {
 	svc := NewService(&mockStore{createErr: ErrEmailTaken})
 
-	_, err := svc.Register(t.Context(), "taken@example.com", "securepass")
+	_, err := svc.Register(t.Context(), "taken@example.com", "Secure1pass")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("got %v, want ErrEmailTaken", err)
 	}
@@ -176,16 +176,31 @@ func TestValidateEmail(t *testing.T) {
 // --- validatePassword ---
 
 func TestValidatePassword(t *testing.T) {
+	maxValid := make([]byte, maxPasswordLen)
+	for i := range maxValid {
+		switch i % 3 {
+		case 0:
+			maxValid[i] = 'A'
+		case 1:
+			maxValid[i] = 'a'
+		default:
+			maxValid[i] = '1'
+		}
+	}
+
 	tests := []struct {
 		name    string
 		input   string
 		wantErr bool
 	}{
-		{"valid", "securepass", false},
-		{"exactly min length", "12345678", false},
-		{"too short", "short", true},
+		{"valid", "Secure1pass", false},
+		{"exactly min length", "Abc1defg", false},
+		{"too short", "Ab1d", true},
 		{"too long", string(make([]byte, maxPasswordLen+1)), true},
-		{"exactly max length", string(make([]byte, maxPasswordLen)), false},
+		{"exactly max length", string(maxValid), false},
+		{"missing uppercase", "secure1pass", true},
+		{"missing lowercase", "SECURE1PASS", true},
+		{"missing digit", "SecurePass!", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

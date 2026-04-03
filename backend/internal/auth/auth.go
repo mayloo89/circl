@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"unicode"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,6 +26,10 @@ var (
 
 	// ErrInvalidInput is returned for malformed or out-of-range input.
 	ErrInvalidInput = errors.New("invalid input")
+
+	// ErrAccountLocked is returned when the account has been temporarily locked
+	// due to too many consecutive failed login attempts.
+	ErrAccountLocked = errors.New("account locked")
 )
 
 // User holds the data returned after a successful login or registration.
@@ -117,13 +122,28 @@ func validateEmail(email string) error {
 	return nil
 }
 
-// validatePassword checks that the password meets length requirements.
+// validatePassword checks that the password meets length and complexity requirements.
+// Complexity rule: at least one uppercase letter, one lowercase letter, and one digit.
 func validatePassword(password string) error {
 	if len(password) < minPasswordLen {
 		return fmt.Errorf("%w: password must be at least %d characters", ErrInvalidInput, minPasswordLen)
 	}
 	if len(password) > maxPasswordLen {
 		return fmt.Errorf("%w: password too long", ErrInvalidInput)
+	}
+	var hasUpper, hasLower, hasDigit bool
+	for _, c := range password {
+		switch {
+		case unicode.IsUpper(c):
+			hasUpper = true
+		case unicode.IsLower(c):
+			hasLower = true
+		case unicode.IsDigit(c):
+			hasDigit = true
+		}
+	}
+	if !hasUpper || !hasLower || !hasDigit {
+		return fmt.Errorf("%w: password must contain at least one uppercase letter, one lowercase letter, and one digit", ErrInvalidInput)
 	}
 	return nil
 }
