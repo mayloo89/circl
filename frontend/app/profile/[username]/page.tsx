@@ -86,6 +86,7 @@ export default function PublicProfilePage() {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [reportConfirmOpen, setReportConfirmOpen] = useState(false)
   const [reportError, setReportError] = useState("")
+  const [reportSuccess, setReportSuccess] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -241,7 +242,7 @@ export default function PublicProfilePage() {
         return
       }
       setReportConfirmOpen(false)
-      setError("Report submitted successfully.")
+      setReportSuccess(true)
     } finally {
       setActionLoading(false)
     }
@@ -307,6 +308,9 @@ export default function PublicProfilePage() {
 
           {error && (
             <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
+          )}
+          {reportSuccess && (
+            <p className="rounded-md bg-green-950 p-3 text-sm text-green-400 ring-1 ring-green-900">Report submitted. Thank you.</p>
           )}
 
           <ProfileHeader

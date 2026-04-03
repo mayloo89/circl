@@ -96,20 +96,8 @@ func scanReport(r *Report) func(dest ...any) error {
 		*dest[4].(*string) = r.Description
 		*dest[5].(*string) = r.Status
 		*dest[6].(*time.Time) = r.CreatedAt
-		return nil
-	}
-}
-
-// scanReportWithUserInfo is a helper that fills a ReportWithUserInfo via Scan dest pointers.
-func scanReportWithUserInfo(r *ReportWithUserInfo) func(dest ...any) error {
-	return func(dest ...any) error {
-		*dest[0].(*string) = r.ID
-		*dest[1].(*string) = r.ReporterID
-		*dest[2].(*string) = r.ReportedUserID
-		*dest[3].(*string) = r.Reason
-		*dest[4].(*string) = r.Description
-		*dest[5].(*string) = r.Status
-		*dest[6].(*time.Time) = r.CreatedAt
+		*dest[7].(**time.Time) = r.ReviewedAt
+		*dest[8].(**string) = r.ReviewedBy
 		return nil
 	}
 }
@@ -143,6 +131,38 @@ func TestStore_Create_Success(t *testing.T) {
 	}
 	if got.Status != "pending" {
 		t.Errorf("Status = %q, want pending", got.Status)
+	}
+}
+
+func TestStore_Create_WithReviewedFields(t *testing.T) {
+	now := time.Now()
+	reviewedBy := "admin-1"
+	report := &Report{
+		ID:             "r-1",
+		ReporterID:     "u-1",
+		ReportedUserID: "u-2",
+		Reason:         "spam",
+		Status:         "reviewed",
+		CreatedAt:      now,
+		ReviewedAt:     &now,
+		ReviewedBy:     &reviewedBy,
+	}
+	q := &mockReportQuerier{
+		rowFn: func() pgx.Row {
+			return &mockReportRow{scanFn: scanReport(report)}
+		},
+	}
+	s := &pgStore{db: q}
+
+	got, err := s.Create(context.Background(), "u-1", "u-2", "spam", "")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if got.ReviewedAt == nil {
+		t.Error("ReviewedAt should not be nil")
+	}
+	if got.ReviewedBy == nil || *got.ReviewedBy != "admin-1" {
+		t.Errorf("ReviewedBy = %v, want admin-1", got.ReviewedBy)
 	}
 }
 

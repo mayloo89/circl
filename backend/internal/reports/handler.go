@@ -13,8 +13,6 @@ import (
 func NewHandler(m *Manager) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/", m.CreateReport)
-	r.Get("/", m.ListReports)
-	r.Put("/{id}/status", m.UpdateReportStatus)
 	return r
 }
 
@@ -74,16 +72,13 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(report)
 }
 
-// ListReports handles GET /reports (admin/moderator only in the future).
+// ListReports is reserved for admin use and will be wired up when a role model is in place.
 func (m *Manager) ListReports(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	// TODO: Add role check for admin/moderator
-	// For now, any authenticated user can list (will be restricted later)
 
 	status := r.URL.Query().Get("status")
 
@@ -101,16 +96,13 @@ func (m *Manager) ListReports(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(reports)
 }
 
-// UpdateReportStatus handles PUT /reports/{id}/status (admin/moderator only in the future).
+// UpdateReportStatus is reserved for admin use and will be wired up when a role model is in place.
 func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 	reviewerID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	// TODO: Add role check for admin/moderator
-	// For now, any authenticated user can update (will be restricted later)
 
 	reportID := chi.URLParam(r, "id")
 	if reportID == "" {
