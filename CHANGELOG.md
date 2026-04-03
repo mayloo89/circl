@@ -8,6 +8,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-04-03 — User blocking
+
+### Added
+- Migration `000015_create_blocks` — adds `blocks` table (`blocker_id`, `blocked_id`, unique pair, no-self constraint)
+- `POST /contacts/{id}/block` — block a user; automatically removes any existing contact relationship
+- `DELETE /contacts/{id}/block` — unblock a previously blocked user
+- `GET /contacts/blocked` — list all users that the caller has blocked
+- `IsBlocked` bidirectional check: if A blocks B, both directions are suppressed everywhere
+- `SendRequest` now checks `IsBlocked` and returns 403 if either party has blocked the other
+- Browse/Search exclusion: blocked users are excluded from `GET /profiles/browse` and `GET /users/search`
+- Contact list exclusion: blocked users excluded from `ListAccepted`, `ListPending`, `ListSent`
+- Chat room suppression: `getDMHandler` returns 403 if either party is blocked; `ListRooms` hides DM rooms with blocked peers
+- WebSocket message filtering: messages from blocked senders are silently dropped
+- `IsBlockedInRoom` batch query optimization — uses PostgreSQL `ANY($2)` to check all members in a single query (N+1 → 2 queries)
+- `ConfirmDialog` UI component — reusable modal for destructive confirmations (block/unblock actions)
+- Frontend block/unblock UI: profile page block button, contacts page "Blocked Users" section, DM room header block button
+
+### Changed
+- Contact list queries (`ListAccepted`, `ListPending`, `ListSent`) now exclude users with block relationships (bidirectional)
+
+### Security
+- Blocking is strictly caller-scoped (JWT-enforced)
+- No information leak: blocked users' profiles remain accessible by direct URL; only interaction is suppressed
+
+### Testing
+- `contacts/contacts_test.go` — 3 new service tests for `IsBlockedInRoom`
+- `contacts/store_test.go` — `TestIntegration_BlockFlow` covers full block lifecycle, `TestIntegration_IsBlockedInRoom` covers batch query with 7 scenarios
+- `chat/handler_test.go` — 4 new WebSocket block logic tests
+- `profiles/store_test.go` — 2 new integration tests for browse exclusion after blocking
+- 98%+ test coverage across all packages
+
 ## [2.4.0] - 2026-04-02 — Browse/explore
 
 ### Added
