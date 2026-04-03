@@ -10,24 +10,26 @@ import (
 
 // mockStore is a test double for contacts.Store.
 type mockStore struct {
-	contact         *contacts.Contact
-	accepted        []contacts.AcceptedContact
-	users           []contacts.UserSummary
-	pending         []contacts.PendingRequest
-	sent            []contacts.SentRequest
-	blocked         []contacts.BlockedUser
-	sendErr         error
-	acceptErr       error
-	deleteErr       error
-	listErr         error
-	pendingErr      error
-	sentErr         error
-	searchErr       error
-	blockErr        error
-	unblockErr      error
-	listBlockedErr  error
-	isBlockedResult bool
-	isBlockedErr    error
+	contact               *contacts.Contact
+	accepted              []contacts.AcceptedContact
+	users                 []contacts.UserSummary
+	pending               []contacts.PendingRequest
+	sent                  []contacts.SentRequest
+	blocked               []contacts.BlockedUser
+	sendErr               error
+	acceptErr             error
+	deleteErr             error
+	listErr               error
+	pendingErr            error
+	sentErr               error
+	searchErr             error
+	blockErr              error
+	unblockErr            error
+	listBlockedErr        error
+	isBlockedResult       bool
+	isBlockedErr          error
+	isBlockedInRoomResult bool
+	isBlockedInRoomErr    error
 }
 
 func (m *mockStore) SendRequest(_ context.Context, _, _ string) (*contacts.Contact, error) {
@@ -62,6 +64,9 @@ func (m *mockStore) ListBlocked(_ context.Context, _ string) ([]contacts.Blocked
 }
 func (m *mockStore) IsBlocked(_ context.Context, _, _ string) (bool, error) {
 	return m.isBlockedResult, m.isBlockedErr
+}
+func (m *mockStore) IsBlockedInRoom(_ context.Context, _ string, _ []string) (bool, error) {
+	return m.isBlockedInRoomResult, m.isBlockedInRoomErr
 }
 
 func newService(store contacts.Store) *contacts.Service {
@@ -379,5 +384,42 @@ func TestService_IsBlocked_False(t *testing.T) {
 	}
 	if got {
 		t.Error("expected false, got true")
+	}
+}
+
+func TestService_IsBlockedInRoom_True(t *testing.T) {
+	svc := newService(&mockStore{
+		isBlockedInRoomResult: true,
+	})
+
+	got, err := svc.IsBlockedInRoom(t.Context(), "u-1", []string{"u-2", "u-3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got {
+		t.Error("expected true, got false")
+	}
+}
+
+func TestService_IsBlockedInRoom_False(t *testing.T) {
+	svc := newService(&mockStore{})
+
+	got, err := svc.IsBlockedInRoom(t.Context(), "u-1", []string{"u-2", "u-3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got {
+		t.Error("expected false, got true")
+	}
+}
+
+func TestService_IsBlockedInRoom_Error(t *testing.T) {
+	svc := newService(&mockStore{
+		isBlockedInRoomErr: errors.New("db error"),
+	})
+
+	_, err := svc.IsBlockedInRoom(t.Context(), "u-1", []string{"u-2"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

@@ -149,15 +149,19 @@ func main() {
 		if err != nil {
 			return false
 		}
+		// Filter out the sender from the members list
+		otherMembers := make([]string, 0, len(members)-1)
 		for _, uid := range members {
 			if uid != senderID {
-				blocked, err := contactSvc.IsBlocked(ctx, senderID, uid)
-				if err == nil && blocked {
-					return true
-				}
+				otherMembers = append(otherMembers, uid)
 			}
 		}
-		return false
+		// Batch check if sender is blocked by any member in one query
+		blocked, err := contactSvc.IsBlockedInRoom(ctx, senderID, otherMembers)
+		if err != nil {
+			return false
+		}
+		return blocked
 	}
 
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {

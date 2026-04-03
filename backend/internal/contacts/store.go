@@ -284,6 +284,28 @@ func (s *pgStore) IsBlocked(ctx context.Context, userA, userB string) (bool, err
 	return exists, nil
 }
 
+// IsBlockedInRoom returns true if userID is blocked by any user in otherUserIDs.
+// This is optimized for batch checking to avoid N+1 queries in WebSocket message delivery.
+func (s *pgStore) IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error) {
+	if len(otherUserIDs) == 0 {
+		return false, nil
+	}
+
+	var exists bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+		    SELECT 1 FROM blocks
+		    WHERE (blocker_id = $1 AND blocked_id = ANY($2))
+		       OR (blocker_id = ANY($2) AND blocked_id = $1)
+		)`,
+		userID, otherUserIDs,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("is blocked in room: %w", err)
+	}
+	return exists, nil
+}
+
 func scanBlockedUsers(rows pgx.Rows) ([]BlockedUser, error) {
 	var results []BlockedUser
 	for rows.Next() {

@@ -15,10 +15,10 @@ const (
 
 // Sentinel errors returned by the service and store layers.
 var (
-	ErrNotFound      = errors.New("contact not found")
-	ErrAlreadyExists = errors.New("contact request already exists")
-	ErrSelfContact   = errors.New("cannot add yourself as a contact")
-	ErrForbidden     = errors.New("forbidden")
+	ErrNotFound       = errors.New("contact not found")
+	ErrAlreadyExists  = errors.New("contact request already exists")
+	ErrSelfContact    = errors.New("cannot add yourself as a contact")
+	ErrForbidden      = errors.New("forbidden")
 	ErrAlreadyBlocked = errors.New("user already blocked")
 )
 
@@ -115,6 +115,8 @@ type Store interface {
 	ListBlocked(ctx context.Context, blockerID string) ([]BlockedUser, error)
 	// IsBlocked returns true if userA has blocked userB or userB has blocked userA.
 	IsBlocked(ctx context.Context, userA, userB string) (bool, error)
+	// IsBlockedInRoom returns true if userID is blocked by any user in the given list.
+	IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error)
 }
 
 // Service implements the contacts business logic.
@@ -196,4 +198,9 @@ func (s *Service) ListBlocked(ctx context.Context, userID string) ([]BlockedUser
 // IsBlocked returns true if userA has blocked userB or userB has blocked userA.
 func (s *Service) IsBlocked(ctx context.Context, userA, userB string) (bool, error) {
 	return s.store.IsBlocked(ctx, userA, userB)
+}
+
+// IsBlockedInRoom returns true if userID is blocked by any user in the otherUserIDs list.
+func (s *Service) IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error) {
+	return s.store.IsBlockedInRoom(ctx, userID, otherUserIDs)
 }

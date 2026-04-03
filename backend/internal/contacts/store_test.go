@@ -951,3 +951,123 @@ func TestIntegration_BlockFlow(t *testing.T) {
 		t.Errorf("double unblock: err = %v, want ErrNotFound", err)
 	}
 }
+
+// TestIntegration_IsBlockedInRoom verifies the batch block check for room scenarios.
+func TestIntegration_IsBlockedInRoom(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		t.Skip("DATABASE_URL not set; skipping integration test")
+	}
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer pool.Close()
+
+	store := NewStore(pool)
+	ctx := context.Background()
+
+	// Create 4 users: u1, u2, u3, u4.
+	var u1, u2, u3, u4 string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, status) VALUES ('isblocked-room-1@example.com', 'x', 'active') ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id`,
+	).Scan(&u1); err != nil {
+		t.Fatalf("create u1: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, status) VALUES ('isblocked-room-2@example.com', 'x', 'active') ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id`,
+	).Scan(&u2); err != nil {
+		t.Fatalf("create u2: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, status) VALUES ('isblocked-room-3@example.com', 'x', 'active') ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id`,
+	).Scan(&u3); err != nil {
+		t.Fatalf("create u3: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, status) VALUES ('isblocked-room-4@example.com', 'x', 'active') ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id`,
+	).Scan(&u4); err != nil {
+		t.Fatalf("create u4: %v", err)
+	}
+	defer pool.Exec(context.Background(), `DELETE FROM users WHERE id IN ($1,$2,$3,$4)`, u1, u2, u3, u4)
+
+	// Test 1: No blocks - should return false.
+	blocked, err := store.IsBlockedInRoom(ctx, u1, []string{u2, u3, u4})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom no blocks: %v", err)
+	}
+	if blocked {
+		t.Error("expected not blocked when no blocks exist")
+	}
+
+	// Test 2: Empty list - should return false.
+	blocked, err = store.IsBlockedInRoom(ctx, u1, []string{})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom empty list: %v", err)
+	}
+	if blocked {
+		t.Error("expected not blocked with empty otherUserIDs list")
+	}
+
+	// Test 3: u2 blocks u1 - should return true.
+	if err := store.Block(ctx, u2, u1); err != nil {
+		t.Fatalf("Block u2->u1: %v", err)
+	}
+	blocked, err = store.IsBlockedInRoom(ctx, u1, []string{u2, u3, u4})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom after u2 blocks u1: %v", err)
+	}
+	if !blocked {
+		t.Error("expected blocked when u2 blocks u1")
+	}
+
+	// Test 4: u1 in different list (doesn't include blocker) - should return false.
+	blocked, err = store.IsBlockedInRoom(ctx, u1, []string{u3, u4})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom without blocker in list: %v", err)
+	}
+	if blocked {
+		t.Error("expected not blocked when blocker not in otherUserIDs list")
+	}
+
+	// Test 5: Bidirectional - u1 blocks u3 - should return true.
+	if err := store.Block(ctx, u1, u3); err != nil {
+		t.Fatalf("Block u1->u3: %v", err)
+	}
+	blocked, err = store.IsBlockedInRoom(ctx, u1, []string{u3, u4})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom bidirectional u1->u3: %v", err)
+	}
+	if !blocked {
+		t.Error("expected blocked when u1 blocks u3 (bidirectional)")
+	}
+
+	// Test 6: Multiple blocks - verify ANY block returns true.
+	blocked, err = store.IsBlockedInRoom(ctx, u1, []string{u2, u3, u4})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom multiple blocks: %v", err)
+	}
+	if !blocked {
+		t.Error("expected blocked when multiple block relationships exist")
+	}
+
+	// Test 7: After unblocking all - should return false.
+	if err := store.Unblock(ctx, u2, u1); err != nil {
+		t.Fatalf("Unblock u2->u1: %v", err)
+	}
+	if err := store.Unblock(ctx, u1, u3); err != nil {
+		t.Fatalf("Unblock u1->u3: %v", err)
+	}
+	blocked, err = store.IsBlockedInRoom(ctx, u1, []string{u2, u3, u4})
+	if err != nil {
+		t.Fatalf("IsBlockedInRoom after unblocking all: %v", err)
+	}
+	if blocked {
+		t.Error("expected not blocked after unblocking all relationships")
+	}
+}
