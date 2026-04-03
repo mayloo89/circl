@@ -10,16 +10,18 @@ import (
 // Claims holds the JWT payload. Subject (sub) contains the user ID.
 type Claims struct {
 	jwt.RegisteredClaims
+	IsAdmin bool `json:"is_admin,omitempty"`
 }
 
-// Generate creates a signed HS256 JWT for the given userID.
-func Generate(userID, secret string, expiry time.Duration) (string, error) {
+// Generate creates a signed HS256 JWT for the given userID and admin flag.
+func Generate(userID string, isAdmin bool, secret string, expiry time.Duration) (string, error) {
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 		},
+		IsAdmin: isAdmin,
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

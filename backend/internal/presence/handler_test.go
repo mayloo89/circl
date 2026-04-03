@@ -59,7 +59,7 @@ func newTestStore(t *testing.T) (*presence.Store, *miniredis.Miniredis) {
 }
 
 func authedReq(r *http.Request, userID string) *http.Request {
-	tok, _ := token.Generate(userID, testSecret, time.Hour)
+	tok, _ := token.Generate(userID, false, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }

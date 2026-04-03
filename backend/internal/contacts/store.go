@@ -202,6 +202,7 @@ func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) 
 		    WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
 		       OR (b.blocker_id = u.id AND b.blocked_id = $1)
 		  )
+		  AND u.status = 'active'
 		ORDER BY display_name, u.email
 		LIMIT 20`,
 		excludeUserID, "%"+query+"%",
