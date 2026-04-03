@@ -24,18 +24,22 @@ const (
 
 // mockManager is a test double for contacts.Manager.
 type mockManager struct {
-	contact    *contacts.Contact
-	accepted   []contacts.AcceptedContact
-	users      []contacts.UserSummary
-	pending    []contacts.PendingRequest
-	sent       []contacts.SentRequest
-	sendErr    error
-	acceptErr  error
-	deleteErr  error
-	listErr    error
-	pendingErr error
-	sentErr    error
-	searchErr  error
+	contact        *contacts.Contact
+	accepted       []contacts.AcceptedContact
+	users          []contacts.UserSummary
+	pending        []contacts.PendingRequest
+	sent           []contacts.SentRequest
+	blocked        []contacts.BlockedUser
+	sendErr        error
+	acceptErr      error
+	deleteErr      error
+	listErr        error
+	pendingErr     error
+	sentErr        error
+	searchErr      error
+	blockErr       error
+	unblockErr     error
+	listBlockedErr error
 }
 
 func (m *mockManager) SendRequest(_ context.Context, _, _ string) (*contacts.Contact, error) {
@@ -58,6 +62,15 @@ func (m *mockManager) ListSent(_ context.Context, _ string) ([]contacts.SentRequ
 }
 func (m *mockManager) SearchUsers(_ context.Context, _, _ string) ([]contacts.UserSummary, error) {
 	return m.users, m.searchErr
+}
+func (m *mockManager) Block(_ context.Context, _, _ string) error {
+	return m.blockErr
+}
+func (m *mockManager) Unblock(_ context.Context, _, _ string) error {
+	return m.unblockErr
+}
+func (m *mockManager) ListBlocked(_ context.Context, _ string) ([]contacts.BlockedUser, error) {
+	return m.blocked, m.listBlockedErr
 }
 
 // serve wraps the handler with RequireAuth and executes the request.
@@ -617,5 +630,184 @@ func TestDelete_NotifiesRequester_WhenAddresseeDeletes(t *testing.T) {
 	}
 	if notifier.calledWith[0].userID != "u-3" {
 		t.Errorf("Notify userID = %q, want u-3", notifier.calledWith[0].userID)
+	}
+}
+
+// --- Block ---
+
+func TestBlock_Success(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestBlock_Unauthorized(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodPost, "/contacts/u-2/block", nil)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestBlock_Self(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{blockErr: contacts.ErrSelfContact})
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestBlock_AlreadyBlocked(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{blockErr: contacts.ErrAlreadyBlocked})
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+}
+
+func TestBlock_InternalError(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{blockErr: errors.New("db error")})
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestBlock_NoUserIDInContext(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodPost, "/contacts/u-2/block", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- Unblock ---
+
+func TestUnblock_Success(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := authedRequest(httptest.NewRequest(http.MethodDelete, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestUnblock_Unauthorized(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodDelete, "/contacts/u-2/block", nil)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestUnblock_NotFound(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{unblockErr: contacts.ErrNotFound})
+	req := authedRequest(httptest.NewRequest(http.MethodDelete, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestUnblock_InternalError(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{unblockErr: errors.New("db error")})
+	req := authedRequest(httptest.NewRequest(http.MethodDelete, "/contacts/u-2/block", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestUnblock_NoUserIDInContext(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodDelete, "/contacts/u-2/block", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- ListBlocked ---
+
+func TestListBlocked_Success(t *testing.T) {
+	bl := []contacts.BlockedUser{{BlockID: "b-1", UserID: "u-2", Email: "b@example.com"}}
+	h := contacts.NewHandler(&mockManager{blocked: bl})
+	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts/blocked", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var got []contacts.BlockedUser
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 || got[0].BlockID != "b-1" {
+		t.Errorf("got = %v", got)
+	}
+}
+
+func TestListBlocked_Unauthorized(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/contacts/blocked", nil)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestListBlocked_InternalError(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{listBlockedErr: errors.New("db error")})
+	req := authedRequest(httptest.NewRequest(http.MethodGet, "/contacts/blocked", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestListBlocked_NoUserIDInContext(t *testing.T) {
+	h := contacts.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/contacts/blocked", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }

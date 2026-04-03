@@ -17,18 +17,24 @@ interface ProfileHeaderProps {
   profile: PublicProfile
   contactStatus: ContactStatus
   actionLoading: boolean
+  isBlocked: boolean
   onAddContact: () => void
   onAccept: () => void
   onStartDM: () => void
+  onBlock: () => void
+  onUnblock: () => void
 }
 
 export default function ProfileHeader({
   profile,
   contactStatus,
   actionLoading,
+  isBlocked,
   onAddContact,
   onAccept,
   onStartDM,
+  onBlock,
+  onUnblock,
 }: ProfileHeaderProps) {
   return (
     <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
@@ -42,36 +48,64 @@ export default function ProfileHeader({
           )}
         </div>
 
-        {contactStatus === "loading" && <Skeleton className="h-10 w-32 rounded-full" />}
-        {contactStatus === "contact" && (
-          <Button variant="primary" size="md" pill onClick={onStartDM} disabled={actionLoading}>
-            Message
-          </Button>
-        )}
-        {contactStatus === "sent" && (
-          <span className="rounded-full bg-gray-800 px-5 py-2 text-sm text-gray-400 ring-1 ring-gray-700">
-            Request sent
-          </span>
-        )}
-        {contactStatus === "incoming" && (
-          <Button variant="success" size="md" pill onClick={onAccept} disabled={actionLoading}>
-            Accept request
-          </Button>
-        )}
-        {contactStatus === "none" && (
-          <Button
-            variant="primary"
-            size="md"
-            pill
-            onClick={onAddContact}
-            disabled={actionLoading}
-            className="flex items-center gap-2"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-            </svg>
-            Add contact
-          </Button>
+        {isBlocked ? (
+          <div className="flex flex-col items-center gap-2">
+            <span className="rounded-full bg-red-950 px-4 py-1.5 text-xs text-red-400 ring-1 ring-red-900">
+              You have blocked this user
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onUnblock}
+              disabled={actionLoading}
+            >
+              Unblock
+            </Button>
+          </div>
+        ) : (
+          <>
+            {contactStatus === "loading" && <Skeleton className="h-10 w-32 rounded-full" />}
+            {contactStatus === "contact" && (
+              <Button variant="primary" size="md" pill onClick={onStartDM} disabled={actionLoading}>
+                Message
+              </Button>
+            )}
+            {contactStatus === "sent" && (
+              <span className="rounded-full bg-gray-800 px-5 py-2 text-sm text-gray-400 ring-1 ring-gray-700">
+                Request sent
+              </span>
+            )}
+            {contactStatus === "incoming" && (
+              <Button variant="success" size="md" pill onClick={onAccept} disabled={actionLoading}>
+                Accept request
+              </Button>
+            )}
+            {contactStatus === "none" && (
+              <Button
+                variant="primary"
+                size="md"
+                pill
+                onClick={onAddContact}
+                disabled={actionLoading}
+                className="flex items-center gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                </svg>
+                Add contact
+              </Button>
+            )}
+            {contactStatus !== "loading" && (
+              <button
+                type="button"
+                onClick={onBlock}
+                disabled={actionLoading}
+                className="text-xs text-gray-600 hover:text-red-400 disabled:cursor-not-allowed"
+              >
+                Block user
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

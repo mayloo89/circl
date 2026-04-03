@@ -195,6 +195,11 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			ORDER BY created_at DESC
 			LIMIT 1
 		) lm ON true
+		WHERE (r.type <> 'dm' OR NOT EXISTS (
+		    SELECT 1 FROM blocks b
+		    WHERE (b.blocker_id = peer_rm.user_id AND b.blocked_id = $1)
+		       OR (b.blocker_id = $1 AND b.blocked_id = peer_rm.user_id)
+		))
 		ORDER BY COALESCE(lm.created_at, r.created_at) DESC`,
 		userID,
 	)

@@ -363,6 +363,11 @@ WHERE p.user_id <> $1
           JOIN interests i ON i.id = pi.interest_id
           WHERE pi.user_id = p.user_id AND i.name = ANY($4::text[])
       )
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocks b
+      WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
+         OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
   )`
 
 // Browse returns a paginated list of profiles for the browse/explore view.

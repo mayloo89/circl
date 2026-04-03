@@ -143,11 +143,30 @@ func main() {
 
 	chatStore := chat.NewStore(pool, fileStorage.PublicURL)
 	chatSvc := chat.NewService(chatStore)
+
+	isBlockedInRoom := func(ctx context.Context, senderID, roomID string) bool {
+		members, err := chatSvc.ListMembers(ctx, roomID)
+		if err != nil {
+			return false
+		}
+		for _, uid := range members {
+			if uid != senderID {
+				blocked, err := contactSvc.IsBlocked(ctx, senderID, uid)
+				if err == nil && blocked {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
 		hub.Notify(recipientID, notifications.Event{
 			Type:    "new_message",
 			Payload: map[string]string{"room_id": roomID},
 		})
+	}, chat.HandlerConfig{
+		IsBlockedInRoom: isBlockedInRoom,
 	})
 
 	notifyDeleted := func(roomID, messageID string) {
@@ -176,7 +195,8 @@ func main() {
 				}
 			}
 		},
-		ReadFile: fileStorage.GetObject,
+		ReadFile:  fileStorage.GetObject,
+		IsBlocked: contactSvc.IsBlocked,
 	})
 
 	uploadStore := uploads.NewStore(pool)

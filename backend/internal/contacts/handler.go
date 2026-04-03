@@ -21,6 +21,9 @@ type Manager interface {
 	ListPending(ctx context.Context, userID string) ([]PendingRequest, error)
 	ListSent(ctx context.Context, userID string) ([]SentRequest, error)
 	SearchUsers(ctx context.Context, query, userID string) ([]UserSummary, error)
+	Block(ctx context.Context, blockerID, targetID string) error
+	Unblock(ctx context.Context, blockerID, targetID string) error
+	ListBlocked(ctx context.Context, userID string) ([]BlockedUser, error)
 }
 
 // handlerConfig holds optional dependencies for the contacts handler.
@@ -52,8 +55,11 @@ func NewHandler(svc Manager, opts ...HandlerOption) http.Handler {
 	r.Get("/contacts", listAcceptedHandler(svc))
 	r.Get("/contacts/pending", listPendingHandler(svc))
 	r.Get("/contacts/sent", listSentHandler(svc))
+	r.Get("/contacts/blocked", listBlockedHandler(svc))
 	r.Put("/contacts/{id}/accept", acceptHandler(svc, cfg))
 	r.Delete("/contacts/{id}", deleteHandler(svc, cfg))
+	r.Post("/contacts/{id}/block", blockHandler(svc))
+	r.Delete("/contacts/{id}/block", unblockHandler(svc))
 
 	return r
 }
@@ -231,6 +237,67 @@ func deleteHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 			})
 		}
 
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func listBlockedHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			return
+		}
+		blocked, err := svc.ListBlocked(r.Context(), userID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			return
+		}
+		writeJSON(w, http.StatusOK, blocked)
+	}
+}
+
+func blockHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			return
+		}
+		targetID := chi.URLParam(r, "id")
+		err := svc.Block(r.Context(), userID, targetID)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrSelfContact):
+				writeJSON(w, http.StatusBadRequest, errResp("cannot block yourself"))
+			case errors.Is(err, ErrAlreadyBlocked):
+				writeJSON(w, http.StatusConflict, errResp("user already blocked"))
+			default:
+				writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			}
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func unblockHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			return
+		}
+		targetID := chi.URLParam(r, "id")
+		err := svc.Unblock(r.Context(), userID, targetID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errResp("block not found"))
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -36,12 +36,13 @@ var upgrader = websocket.Upgrader{
 
 // Client represents a single WebSocket connection from an authenticated user.
 type Client struct {
-	hub         *Hub
-	conn        *websocket.Conn
-	send        chan []byte
-	userID      string
-	roomID      string
-	displayName string
+	hub             *Hub
+	conn            *websocket.Conn
+	send            chan []byte
+	userID          string
+	roomID          string
+	displayName     string
+	isBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
 }
 
 // typingFrame is the WS frame broadcast to room members when a user is typing.
@@ -97,6 +98,14 @@ type HandlerConfig struct {
 	// handler to stream the file content to the client before deleting it,
 	// eliminating the race between file serving and file deletion.
 	ReadFile func(ctx context.Context, key string) (io.ReadCloser, error)
+	// IsBlocked, if set, is checked before creating a DM room and before
+	// delivering WebSocket messages. Returns true if either user has blocked
+	// the other, suppressing the operation.
+	IsBlocked func(ctx context.Context, userA, userB string) (bool, error)
+	// IsBlockedInRoom, if set, is checked before saving a WebSocket message.
+	// Returns true if the sender is blocked by any room member, suppressing
+	// the message silently.
+	IsBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
 }
 
 // resolveMessageType maps a client-supplied frame type and MIME type to the
@@ -131,7 +140,7 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	}
 
 	r := chi.NewRouter()
-	r.Post("/rooms/dm", getDMHandler(svc))
+	r.Post("/rooms/dm", getDMHandler(svc, c))
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
 	r.Get("/rooms/{id}/messages", listMessagesHandler(svc))
@@ -148,8 +157,13 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 //
 // notifyNewMessage, if non-nil, is called for each non-sender room member
 // after a message is saved, allowing callers to push real-time SSE badges.
-func NewWSHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string)) http.HandlerFunc {
-	return wsHandler(svc, hub, jwtSecret, notifyNewMessage)
+// An optional HandlerConfig may be supplied to wire block-checking callbacks.
+func NewWSHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string), cfg ...HandlerConfig) http.HandlerFunc {
+	var c HandlerConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
+	return wsHandler(svc, hub, jwtSecret, notifyNewMessage, c)
 }
 
 // getDMHandler returns (or creates) the direct-message room between the
@@ -157,7 +171,7 @@ func NewWSHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func
 //
 // POST /chat/rooms/dm
 // Body: {"peer_id": "<uuid>"}
-func getDMHandler(svc Manager) http.HandlerFunc {
+func getDMHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -171,6 +185,18 @@ func getDMHandler(svc Manager) http.HandlerFunc {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PeerID == "" {
 			http.Error(w, `{"error":"peer_id is required"}`, http.StatusBadRequest)
 			return
+		}
+
+		if cfg.IsBlocked != nil {
+			blocked, err := cfg.IsBlocked(r.Context(), userID, body.PeerID)
+			if err != nil {
+				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+				return
+			}
+			if blocked {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
 		}
 
 		room, err := svc.GetOrCreateDM(r.Context(), userID, body.PeerID)
@@ -406,7 +432,7 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 // WebSocket API does not support custom headers.
 //
 // GET /chat/rooms/{id}/ws?token=<jwt>
-func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string)) http.HandlerFunc {
+func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string), cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tok := r.URL.Query().Get("token")
 		if tok == "" {
@@ -436,12 +462,13 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 		displayName, _ := svc.GetDisplayName(r.Context(), userID)
 
 		client := &Client{
-			hub:         hub,
-			conn:        conn,
-			send:        make(chan []byte, 256),
-			userID:      userID,
-			roomID:      roomID,
-			displayName: displayName,
+			hub:             hub,
+			conn:            conn,
+			send:            make(chan []byte, 256),
+			userID:          userID,
+			roomID:          roomID,
+			displayName:     displayName,
+			isBlockedInRoom: cfg.IsBlockedInRoom,
 		}
 
 		hub.register <- client
@@ -522,6 +549,11 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		}
 
 		ctx := context.Background()
+
+		if c.isBlockedInRoom != nil && c.isBlockedInRoom(ctx, c.userID, c.roomID) {
+			continue
+		}
+
 		msg, err := svc.SaveMessage(ctx, params)
 		if err != nil {
 			continue

@@ -445,6 +445,166 @@ func TestListAccepted_EmptyResult(t *testing.T) {
 	}
 }
 
+// --- Block ---
+
+func TestBlock_DBSuccess(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		execFn: func() (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("INSERT 1"), nil
+		},
+	}}
+	if err := s.Block(t.Context(), "u-1", "u-2"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBlock_UniqueViolation(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		execFn: func() (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, &pgconn.PgError{Code: "23505"}
+		},
+	}}
+	if err := s.Block(t.Context(), "u-1", "u-2"); !errors.Is(err, ErrAlreadyBlocked) {
+		t.Errorf("err = %v, want ErrAlreadyBlocked", err)
+	}
+}
+
+func TestBlock_DBError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		execFn: func() (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}}
+	if err := s.Block(t.Context(), "u-1", "u-2"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestUnblock_DBSuccess(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		execFn: func() (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("DELETE 1"), nil
+		},
+	}}
+	if err := s.Unblock(t.Context(), "u-1", "u-2"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestUnblock_NotFound(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		execFn: func() (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("DELETE 0"), nil
+		},
+	}}
+	if err := s.Unblock(t.Context(), "u-1", "u-2"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUnblock_DBError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		execFn: func() (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}}
+	if err := s.Unblock(t.Context(), "u-1", "u-2"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestIsBlocked_True(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowFn: func() pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				*dest[0].(*bool) = true
+				return nil
+			}}
+		},
+	}}
+	got, err := s.IsBlocked(t.Context(), "u-1", "u-2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got {
+		t.Error("expected true, got false")
+	}
+}
+
+func TestIsBlocked_False(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowFn: func() pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				*dest[0].(*bool) = false
+				return nil
+			}}
+		},
+	}}
+	got, err := s.IsBlocked(t.Context(), "u-1", "u-2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got {
+		t.Error("expected false, got true")
+	}
+}
+
+func TestIsBlocked_DBError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowFn: func() pgx.Row {
+			return &mockRow{scanFn: func(_ ...any) error {
+				return errors.New("db error")
+			}}
+		},
+	}}
+	_, err := s.IsBlocked(t.Context(), "u-1", "u-2")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestListBlocked_QueryError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return nil, errors.New("db error")
+		},
+	}}
+	_, err := s.ListBlocked(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestListBlocked_EmptyResult(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{}, nil
+		},
+	}}
+	results, err := s.ListBlocked(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected empty slice, got %d", len(results))
+	}
+}
+
+func TestListBlocked_ScanError(t *testing.T) {
+	s := &pgStore{db: &mockQuerier{
+		rowsFn: func() (pgx.Rows, error) {
+			return &mockRows{
+				data:    [][]any{{"b-1", "u-2", "", "bob@example.com", "Bob", "", ""}},
+				scanErr: errors.New("scan error"),
+			}, nil
+		},
+	}}
+	_, err := s.ListBlocked(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected scan error, got nil")
+	}
+}
+
 // --- integration tests ---
 
 func openTestDB(t *testing.T) *pgxpool.Pool {
@@ -541,5 +701,103 @@ func TestIntegration_ContactsFlow(t *testing.T) {
 	// Second delete must return ErrNotFound.
 	if _, err := store.Delete(ctx, c.ID, u1); !errors.Is(err, ErrNotFound) {
 		t.Errorf("second delete: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestIntegration_BlockFlow(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool)
+	ctx := t.Context()
+
+	var u1, u2 string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, status) VALUES ('ci_b1@example.com', 'x', 'active') ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id`,
+	).Scan(&u1); err != nil {
+		t.Fatalf("create u1: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, status) VALUES ('ci_b2@example.com', 'x', 'active') ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id`,
+	).Scan(&u2); err != nil {
+		t.Fatalf("create u2: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM users WHERE id IN ($1,$2)`, u1, u2) //nolint:errcheck
+	})
+
+	// Not blocked initially.
+	blocked, err := store.IsBlocked(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("IsBlocked: %v", err)
+	}
+	if blocked {
+		t.Error("expected not blocked initially")
+	}
+
+	// Block u2.
+	if err := store.Block(ctx, u1, u2); err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+
+	// Now blocked.
+	blocked, err = store.IsBlocked(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("IsBlocked after block: %v", err)
+	}
+	if !blocked {
+		t.Error("expected blocked after Block()")
+	}
+
+	// Also blocked in reverse direction.
+	blocked, err = store.IsBlocked(ctx, u2, u1)
+	if err != nil {
+		t.Fatalf("IsBlocked reverse: %v", err)
+	}
+	if !blocked {
+		t.Error("expected blocked in reverse direction")
+	}
+
+	// Duplicate block must fail.
+	if err := store.Block(ctx, u1, u2); !errors.Is(err, ErrAlreadyBlocked) {
+		t.Errorf("duplicate block: err = %v, want ErrAlreadyBlocked", err)
+	}
+
+	// List blocked.
+	list, err := store.ListBlocked(ctx, u1)
+	if err != nil {
+		t.Fatalf("ListBlocked: %v", err)
+	}
+	if len(list) == 0 {
+		t.Error("expected blocked user in list, got none")
+	}
+	if list[0].UserID != u2 {
+		t.Errorf("blocked user_id = %q, want %q", list[0].UserID, u2)
+	}
+
+	// Blocked user must not appear in search.
+	results, err := store.SearchUsers(ctx, "ci_b2", u1)
+	if err != nil {
+		t.Fatalf("SearchUsers: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected blocked user to be excluded from search, got %d results", len(results))
+	}
+
+	// Unblock.
+	if err := store.Unblock(ctx, u1, u2); err != nil {
+		t.Fatalf("Unblock: %v", err)
+	}
+
+	// Not blocked anymore.
+	blocked, err = store.IsBlocked(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("IsBlocked after unblock: %v", err)
+	}
+	if blocked {
+		t.Error("expected not blocked after Unblock()")
+	}
+
+	// Double unblock must return ErrNotFound.
+	if err := store.Unblock(ctx, u1, u2); !errors.Is(err, ErrNotFound) {
+		t.Errorf("double unblock: err = %v, want ErrNotFound", err)
 	}
 }
