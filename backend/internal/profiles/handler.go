@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/mayloo89/circl/backend/internal/middleware"
@@ -23,6 +24,7 @@ type ProfileManager interface {
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
+	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) (*BrowsePage, error)
 }
 
 type photoResponse struct {
@@ -91,6 +93,7 @@ func NewHandler(svc ProfileManager) http.Handler {
 	mux.HandleFunc("PUT /profiles/me/preferences", updateMyPreferences(svc))
 	mux.HandleFunc("POST /profiles/me/photos", addPhoto(svc))
 	mux.HandleFunc("DELETE /profiles/me/photos/{photoID}", deletePhoto(svc))
+	mux.HandleFunc("GET /profiles/browse", browseProfiles(svc))
 	mux.HandleFunc("GET /profiles/interests", searchInterests(svc))
 	mux.HandleFunc("GET /profiles/available", checkUsernameAvailable(svc))
 	mux.HandleFunc("GET /profiles/{ref}", getPublicProfileByRef(svc))
@@ -436,6 +439,84 @@ func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {
 		MaxAge:           p.MaxAge,
 		MaxDistanceKm:    p.MaxDistanceKm,
 		GenderPreference: genderPref,
+	}
+}
+
+type browseProfileResponse struct {
+	ID            string   `json:"id"`
+	UserID        string   `json:"user_id"`
+	Username      string   `json:"username"`
+	DisplayName   string   `json:"display_name"`
+	AvatarURL     string   `json:"avatar_url"`
+	Age           *int     `json:"age,omitempty"`
+	Gender        string   `json:"gender"`
+	LocationText  string   `json:"location_text"`
+	DistanceKm    *float64 `json:"distance_km"`
+	FirstPhotoURL string   `json:"first_photo_url"`
+	Interests     []string `json:"interests"`
+}
+
+type browsePageResponse struct {
+	Profiles []browseProfileResponse `json:"profiles"`
+	HasMore  bool                    `json:"has_more"`
+	Page     int                     `json:"page"`
+	Limit    int                     `json:"limit"`
+}
+
+func browseProfiles(svc ProfileManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			return
+		}
+
+		page, limit := 0, 20
+		if v := r.URL.Query().Get("page"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				page = n
+			}
+		}
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50 {
+				limit = n
+			}
+		}
+		sortByDistance := r.URL.Query().Get("sort") == "distance"
+		interests := r.URL.Query()["interests"]
+
+		result, err := svc.Browse(r.Context(), userID, limit, page*limit, sortByDistance, interests)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+
+		resp := make([]browseProfileResponse, len(result.Profiles))
+		for i, p := range result.Profiles {
+			interests := p.Interests
+			if interests == nil {
+				interests = []string{}
+			}
+			resp[i] = browseProfileResponse{
+				ID:            p.ID,
+				UserID:        p.UserID,
+				Username:      p.Username,
+				DisplayName:   p.DisplayName,
+				AvatarURL:     p.AvatarURL,
+				Age:           p.Age,
+				Gender:        p.Gender,
+				LocationText:  p.LocationText,
+				DistanceKm:    p.DistanceKm,
+				FirstPhotoURL: p.FirstPhotoURL,
+				Interests:     interests,
+			}
+		}
+		writeJSON(w, http.StatusOK, browsePageResponse{
+			Profiles: resp,
+			HasMore:  result.HasMore,
+			Page:     page,
+			Limit:    limit,
+		})
 	}
 }
 

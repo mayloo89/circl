@@ -202,6 +202,8 @@ export default function ProfilePage() {
   const [gender, setGender] = useState("")
   const [genderOther, setGenderOther] = useState("")
   const [locationText, setLocationText] = useState("")
+  const [locationLat, setLocationLat] = useState<number | null>(null)
+  const [locationLng, setLocationLng] = useState<number | null>(null)
   const [interests, setInterests] = useState<string[]>([])
   const [locationQuery, setLocationQuery] = useState("")
   const [locationEdited, setLocationEdited] = useState(false)
@@ -276,6 +278,8 @@ export default function ProfilePage() {
         }
         setLocationText(data.location_text ?? "")
         setLocationQuery(data.location_text ?? "")
+        setLocationLat(data.latitude ?? null)
+        setLocationLng(data.longitude ?? null)
         setInterests(data.interests ?? [])
       })
       .catch(() => setLoadError("Failed to load profile."))
@@ -295,6 +299,8 @@ export default function ProfilePage() {
         avatar_url: avatarURL,
         gender: effectiveGender(gender, genderOther),
         location_text: locationText,
+        latitude: locationLat,
+        longitude: locationLng,
         interests,
         date_of_birth: dateOfBirth || undefined,
       }
@@ -572,7 +578,7 @@ export default function ProfilePage() {
                   id="location"
                   type="text"
                   value={locationQuery}
-                  onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value); setLocationEdited(true) }}
+                  onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value); setLocationLat(null); setLocationLng(null); setLocationEdited(true) }}
                   placeholder="e.g. Paris, France"
                   autoComplete="off"
                   className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
@@ -594,6 +600,8 @@ export default function ProfilePage() {
                         onClick={() => {
                           setLocationText(s.label)
                           setLocationQuery(s.label)
+                          setLocationLat(s.lat)
+                          setLocationLng(s.lng)
                           setLocationEdited(false)
                           clearLocationSuggestions()
                         }}

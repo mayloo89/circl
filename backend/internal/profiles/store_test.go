@@ -503,3 +503,95 @@ func TestProfiles_Integration(t *testing.T) {
 		}
 	})
 }
+
+// --- Browse Integration ---
+
+func TestBrowse_Integration(t *testing.T) {
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("TEST_DATABASE_URL not set, skipping integration test")
+	}
+
+	pool, err := pgxpool.New(context.Background(), dbURL)
+	if err != nil {
+		t.Fatalf("connect to db: %v", err)
+	}
+	defer pool.Close()
+
+	insertUser := func(email string) string {
+		var id string
+		if err := pool.QueryRow(t.Context(),
+			`INSERT INTO users (email, password_hash, provider, status)
+			 VALUES ($1, 'hash', 'local', 'active')
+			 ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+			 RETURNING id`, email,
+		).Scan(&id); err != nil {
+			t.Fatalf("insert user %s: %v", email, err)
+		}
+		t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, id) })
+		return id
+	}
+
+	requesterID := insertUser("browse_requester@example.com")
+	targetID := insertUser("browse_target@example.com")
+
+	store := NewStore(pool)
+	dob := time.Date(1995, 6, 15, 0, 0, 0, 0, time.UTC)
+
+	// Seed both profiles with username + DOB (required for browse)
+	if _, err := store.Upsert(t.Context(), requesterID, ProfileInput{Username: "requester_browse", DisplayName: "Req", DateOfBirth: &dob}); err != nil {
+		t.Fatalf("upsert requester: %v", err)
+	}
+	if _, err := store.Upsert(t.Context(), targetID, ProfileInput{Username: "target_browse", DisplayName: "Target", DateOfBirth: &dob}); err != nil {
+		t.Fatalf("upsert target: %v", err)
+	}
+
+	t.Run("returns other users with username and DOB", func(t *testing.T) {
+		results, err := store.Browse(t.Context(), requesterID, 20, 0, false, nil)
+		if err != nil {
+			t.Fatalf("browse: %v", err)
+		}
+		found := false
+		for _, p := range results {
+			if p.UserID == targetID {
+				found = true
+				if p.Username != "target_browse" {
+					t.Errorf("username = %q, want target_browse", p.Username)
+				}
+			}
+		}
+		if !found {
+			t.Error("expected target profile in results")
+		}
+	})
+
+	t.Run("excludes requester from results", func(t *testing.T) {
+		results, err := store.Browse(t.Context(), requesterID, 20, 0, false, nil)
+		if err != nil {
+			t.Fatalf("browse: %v", err)
+		}
+		for _, p := range results {
+			if p.UserID == requesterID {
+				t.Error("requester should not appear in their own browse results")
+			}
+		}
+	})
+
+	t.Run("pagination: limit and offset", func(t *testing.T) {
+		// Fetch page 0 with limit 1, then page 1; should not overlap
+		page0, err := store.Browse(t.Context(), requesterID, 1, 0, false, nil)
+		if err != nil {
+			t.Fatalf("browse page 0: %v", err)
+		}
+		if len(page0) == 0 {
+			t.Skip("no results, skipping pagination test")
+		}
+		page1, err := store.Browse(t.Context(), requesterID, 1, 1, false, nil)
+		if err != nil {
+			t.Fatalf("browse page 1: %v", err)
+		}
+		if len(page1) > 0 && page0[0].ID == page1[0].ID {
+			t.Error("page 0 and page 1 returned the same profile")
+		}
+	})
+}

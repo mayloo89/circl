@@ -38,6 +38,7 @@ export default function NavBar() {
     <nav className="flex items-center bg-gray-900 px-6 py-3 shadow ring-1 ring-gray-800">
       <Link href="/" className="text-lg font-bold text-white hover:text-gray-300">Circl</Link>
       <div className="ml-auto flex items-center gap-6">
+        <Link href="/browse" className="text-sm text-gray-300 hover:text-white">Browse</Link>
         <Link href="/chat" className="relative text-sm text-gray-300 hover:text-white">
           Messages
           {unreadChatCount > 0 && (

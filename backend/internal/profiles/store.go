@@ -293,6 +293,119 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 	return nil
 }
 
+const browseSQLBody = `
+WITH r AS (
+    SELECT latitude AS lat, longitude AS lng
+    FROM profiles WHERE user_id = $1
+    LIMIT 1
+)
+SELECT
+    p.id,
+    p.user_id,
+    COALESCE(p.username, '') AS username,
+    p.display_name,
+    COALESCE(p.avatar_url, '') AS avatar_url,
+    p.date_of_birth,
+    COALESCE(p.gender, '') AS gender,
+    COALESCE(p.location_text, '') AS location_text,
+    CASE
+        WHEN r.lat IS NOT NULL AND r.lng IS NOT NULL
+             AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+        THEN 6371.0 * 2.0 * ASIN(SQRT(
+            POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
+            COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
+            POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
+        ))
+        ELSE NULL
+    END AS distance_km,
+    (SELECT url FROM profile_photos ph
+     WHERE ph.user_id = p.user_id
+     ORDER BY ph.position, ph.created_at
+     LIMIT 1) AS first_photo_url,
+    ARRAY(
+        SELECT i.name FROM profile_interests pi
+        JOIN interests i ON i.id = pi.interest_id
+        WHERE pi.user_id = p.user_id
+        ORDER BY i.name
+    ) AS interests
+FROM profiles p
+LEFT JOIN LATERAL (SELECT lat, lng FROM r LIMIT 1) r ON true
+LEFT JOIN profile_preferences prefs ON prefs.user_id = $1
+WHERE p.user_id <> $1
+  AND p.username IS NOT NULL
+  AND p.date_of_birth IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM contacts c
+      WHERE (c.requester_id = $1 AND c.addressee_id = p.user_id)
+         OR (c.requester_id = p.user_id AND c.addressee_id = $1)
+  )
+  AND (prefs.min_age IS NULL
+       OR DATE_PART('year', AGE(CURRENT_DATE, p.date_of_birth::date)) >= prefs.min_age)
+  AND (prefs.max_age IS NULL
+       OR DATE_PART('year', AGE(CURRENT_DATE, p.date_of_birth::date)) <= prefs.max_age)
+  AND (prefs.gender_preference IS NULL
+       OR array_length(prefs.gender_preference, 1) IS NULL
+       OR COALESCE(p.gender, '') = ANY(prefs.gender_preference))
+  AND (
+      prefs.max_distance_km IS NULL
+      OR r.lat IS NULL OR r.lng IS NULL
+      OR p.latitude IS NULL OR p.longitude IS NULL
+      OR 6371.0 * 2.0 * ASIN(SQRT(
+          POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
+          COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
+          POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
+      )) <= prefs.max_distance_km
+  )
+  AND (
+      cardinality($4::text[]) = 0
+      OR EXISTS (
+          SELECT 1 FROM profile_interests pi
+          JOIN interests i ON i.id = pi.interest_id
+          WHERE pi.user_id = p.user_id AND i.name = ANY($4::text[])
+      )
+  )`
+
+// Browse returns a paginated list of profiles for the browse/explore view.
+func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) ([]BrowseProfile, error) {
+	if interests == nil {
+		interests = []string{}
+	}
+	orderBy := "p.created_at DESC, p.id ASC"
+	if sortByDistance {
+		orderBy = "distance_km ASC NULLS LAST, p.created_at DESC, p.id ASC"
+	}
+	sql := browseSQLBody + "\nORDER BY " + orderBy + "\nLIMIT $2 OFFSET $3"
+	rows, err := s.pool.Query(ctx, sql, userID, limit, offset, interests)
+	if err != nil {
+		return nil, fmt.Errorf("browse profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []BrowseProfile
+	for rows.Next() {
+		var p BrowseProfile
+		var firstPhotoURL *string
+		if err := rows.Scan(
+			&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.AvatarURL,
+			&p.DateOfBirth, &p.Gender, &p.LocationText,
+			&p.DistanceKm, &firstPhotoURL, &p.Interests,
+		); err != nil {
+			return nil, fmt.Errorf("scan browse profile: %w", err)
+		}
+		if firstPhotoURL != nil {
+			p.FirstPhotoURL = *firstPhotoURL
+		}
+		if p.Interests == nil {
+			p.Interests = []string{}
+		}
+		profiles = append(profiles, p)
+	}
+	if profiles == nil {
+		profiles = []BrowseProfile{}
+	}
+	return profiles, rows.Err()
+}
+
 // GetPreferences returns the discovery preferences for the given user.
 // Returns an empty preferences object if none have been set yet.
 func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {

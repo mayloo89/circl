@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-04-02 — Browse/explore
+
+### Added
+- Migration `000014_browse_indexes` — adds B-tree indexes on `profiles(created_at)` and `profiles(latitude, longitude)` to support browse ordering and Haversine distance queries
+- `GET /profiles/browse` — paginated profile discovery endpoint: excludes self and existing contacts; filters by stored preferences (age range, max distance via Haversine, gender); optional `interests` query params filter by tag; optional `sort=distance` orders by km ascending; returns `profiles`, `has_more`, `page`, `limit`
+- `BrowseProfile` and `BrowsePage` types in the profiles service; `Browse` method on `Store` interface and `Service`
+- SQL body `browseSQLBody` with Haversine formula computing `distance_km`; dynamic `ORDER BY` appended at query time to support sort toggle without SQL injection
+- Interest tag filter using `cardinality($4::text[]) = 0 OR EXISTS (...)` — zero-cost pass-through when no interests selected
+- `GET /profiles/available?username=xxx` — username availability check (already shipped in PR #36, now exposed in browse flow)
+- `/browse` frontend page — card grid with avatar, display name, age, gender, distance; "Send request" button per card with idle/loading/sent/error states; infinite scroll via load-more button
+- Filter sidebar — age range inputs, max distance input, gender chips, interest autocomplete (debounced, token-authenticated), sort-by-distance checkbox; Apply/Reset controls
+- `app/browse/loading.tsx` — spinner skeleton shown during navigation
+- `app/browse/error.tsx` — error boundary with reset button
+- Browse link in NavBar
+- Coordinates (`latitude`, `longitude`) now saved from Photon/OSM location suggestions on the profile edit page
+
+### Changed
+- Profile edit page location search now persists `latitude`/`longitude` to backend when a suggestion is selected (previously only saved `location_text`)
+- `DistanceKm` field serialized as explicit `null` (removed `omitempty`) so frontend can distinguish "no coordinates" from "zero distance"
+
 ## [2.3.0] - 2026-03-29 — Expanded profiles
 
 ### Added

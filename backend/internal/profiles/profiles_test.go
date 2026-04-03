@@ -14,6 +14,8 @@ type mockStore struct {
 	photoCount        int
 	prefs             *ProfilePreferences
 	interests         []InterestSuggestion
+	browseProfiles    []BrowseProfile
+	browseErr         error
 	usernameAvailable bool
 	getErr            error
 	upsertErr         error
@@ -103,6 +105,16 @@ func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]Inter
 		return m.interests, nil
 	}
 	return []InterestSuggestion{}, nil
+}
+
+func (m *mockStore) Browse(_ context.Context, _ string, _, _ int, _ bool, _ []string) ([]BrowseProfile, error) {
+	if m.browseErr != nil {
+		return nil, m.browseErr
+	}
+	if m.browseProfiles != nil {
+		return m.browseProfiles, nil
+	}
+	return []BrowseProfile{}, nil
 }
 
 // validDOB returns a DOB 25 years in the past (always valid for 18+ check).
@@ -636,6 +648,142 @@ func TestUpdateMyPreferences_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{upsertPrefsErr: errors.New("db error")})
 
 	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- Browse ---
+
+func TestBrowse_ReturnsProfiles(t *testing.T) {
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", Username: "alice", DisplayName: "Alice", DateOfBirth: &dob},
+			{ID: "p2", UserID: "u2", Username: "bob", DisplayName: "Bob", DateOfBirth: &dob},
+		},
+	})
+
+	page, err := svc.Browse(t.Context(), "requester", 10, 0, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(page.Profiles) != 2 {
+		t.Errorf("len = %d, want 2", len(page.Profiles))
+	}
+	if page.HasMore {
+		t.Error("HasMore should be false")
+	}
+	if page.Profiles[0].Age == nil {
+		t.Error("Age should be computed from DateOfBirth")
+	}
+}
+
+func TestBrowse_HasMore(t *testing.T) {
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Store returns limit+1 rows to signal more pages
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", DateOfBirth: &dob},
+			{ID: "p2", UserID: "u2", DateOfBirth: &dob},
+			{ID: "p3", UserID: "u3", DateOfBirth: &dob},
+		},
+	})
+
+	page, err := svc.Browse(t.Context(), "requester", 2, 0, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(page.Profiles) != 2 {
+		t.Errorf("len = %d, want 2 (extra trimmed)", len(page.Profiles))
+	}
+	if !page.HasMore {
+		t.Error("HasMore should be true")
+	}
+}
+
+func TestBrowse_StoreError(t *testing.T) {
+	svc := NewService(&mockStore{browseErr: errors.New("db error")})
+
+	_, err := svc.Browse(t.Context(), "requester", 20, 0, false, nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestBrowse_NilDOBSkipsAge(t *testing.T) {
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", DateOfBirth: nil},
+		},
+	})
+
+	page, err := svc.Browse(t.Context(), "requester", 10, 0, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page.Profiles[0].Age != nil {
+		t.Error("Age should be nil when DateOfBirth is nil")
+	}
+}
+
+// --- UpdateAvatar ---
+
+func TestUpdateAvatar_Success(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	if err := svc.UpdateAvatar(t.Context(), "user-1", "https://example.com/avatar.jpg"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// --- calcAge edge cases ---
+
+func TestCalcAge_BirthdayNotYetThisYear(t *testing.T) {
+	// If today is January and birthday is in December, age is (year diff - 1).
+	now := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
+	dob := time.Date(2000, time.December, 25, 0, 0, 0, 0, time.UTC)
+	// 2024 - 2000 = 24, but birthday hasn't occurred yet → 23
+	age := calcAge(dob, now)
+	if age != 23 {
+		t.Errorf("calcAge = %d, want 23", age)
+	}
+}
+
+func TestCalcAge_SameDayNotYet(t *testing.T) {
+	// Same month, but today's day is before birthday day.
+	now := time.Date(2024, time.June, 10, 0, 0, 0, 0, time.UTC)
+	dob := time.Date(2000, time.June, 20, 0, 0, 0, 0, time.UTC)
+	// 2024 - 2000 = 24, but day 10 < 20 → 23
+	age := calcAge(dob, now)
+	if age != 23 {
+		t.Errorf("calcAge = %d, want 23", age)
+	}
+}
+
+// --- GetPublicProfile photos error ---
+
+func TestGetPublicProfile_PhotosError(t *testing.T) {
+	svc := NewService(&mockStore{
+		profile:   &Profile{ID: "prof-1", UserID: "user-2", DisplayName: "Bob"},
+		photosErr: errors.New("db error"),
+	})
+
+	_, err := svc.GetPublicProfile(t.Context(), "user-2")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetPublicProfileByUsername photos error ---
+
+func TestGetPublicProfileByUsername_PhotosError(t *testing.T) {
+	svc := NewService(&mockStore{
+		profile:   &Profile{ID: "prof-1", UserID: "user-2", Username: "bob", DisplayName: "Bob"},
+		photosErr: errors.New("db error"),
+	})
+
+	_, err := svc.GetPublicProfileByUsername(t.Context(), "bob")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
