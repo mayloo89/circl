@@ -594,4 +594,59 @@ func TestBrowse_Integration(t *testing.T) {
 			t.Error("page 0 and page 1 returned the same profile")
 		}
 	})
+
+	t.Run("excludes blocked users", func(t *testing.T) {
+		// Block the target user
+		_, err := pool.Exec(t.Context(),
+			`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)
+			 ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+			requesterID, targetID,
+		)
+		if err != nil {
+			t.Fatalf("block user: %v", err)
+		}
+		t.Cleanup(func() {
+			pool.Exec(context.Background(), `DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2`, requesterID, targetID)
+		})
+
+		// Browse should not return blocked user
+		results, err := store.Browse(t.Context(), requesterID, 20, 0, false, nil)
+		if err != nil {
+			t.Fatalf("browse: %v", err)
+		}
+		for _, p := range results {
+			if p.UserID == targetID {
+				t.Error("blocked user should not appear in browse results")
+			}
+		}
+	})
+
+	t.Run("excludes users who blocked requester", func(t *testing.T) {
+		// Clean up any existing blocks first
+		pool.Exec(t.Context(), `DELETE FROM blocks WHERE blocker_id = $1 OR blocked_id = $1`, requesterID)
+
+		// Have target block the requester (reverse direction)
+		_, err := pool.Exec(t.Context(),
+			`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)
+			 ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+			targetID, requesterID,
+		)
+		if err != nil {
+			t.Fatalf("block user: %v", err)
+		}
+		t.Cleanup(func() {
+			pool.Exec(context.Background(), `DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2`, targetID, requesterID)
+		})
+
+		// Browse should not return target (who blocked requester)
+		results, err := store.Browse(t.Context(), requesterID, 20, 0, false, nil)
+		if err != nil {
+			t.Fatalf("browse: %v", err)
+		}
+		for _, p := range results {
+			if p.UserID == targetID {
+				t.Error("user who blocked requester should not appear in browse results")
+			}
+		}
+	})
 }

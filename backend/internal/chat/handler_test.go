@@ -28,28 +28,28 @@ const (
 
 // mockManager is a test double for chat.Manager.
 type mockManager struct {
-	room            *chat.Room
-	rooms           []chat.RoomSummary
-	msg             *chat.Message
-	msgs            []chat.Message
-	isMember        bool
-	roomErr         error
-	roomsErr        error
-	msgErr          error
-	msgsErr         error
-	memberErr       error
-	markErr         error
-	markReadTime    time.Time
-	viewOnceMsg     *chat.Message
-	viewOnceKeys    []string
-	viewOnceErr     error
-	deleteRoomID    string
-	deleteKeys      []string
-	deleteErr       error
-	expiredIDs      []string
-	expiredErr      error
-	displayName     string
-	displayNameErr  error
+	room           *chat.Room
+	rooms          []chat.RoomSummary
+	msg            *chat.Message
+	msgs           []chat.Message
+	isMember       bool
+	roomErr        error
+	roomsErr       error
+	msgErr         error
+	msgsErr        error
+	memberErr      error
+	markErr        error
+	markReadTime   time.Time
+	viewOnceMsg    *chat.Message
+	viewOnceKeys   []string
+	viewOnceErr    error
+	deleteRoomID   string
+	deleteKeys     []string
+	deleteErr      error
+	expiredIDs     []string
+	expiredErr     error
+	displayName    string
+	displayNameErr error
 }
 
 func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error) {
@@ -446,8 +446,8 @@ func TestMarkRead_NotifiesRoomRead(t *testing.T) {
 func TestViewMessage_Success(t *testing.T) {
 	msg := &chat.Message{ID: "m-1", RoomID: "r-1", ViewOnce: true, Content: "secret"}
 	mgr := &mockManager{
-		isMember:    true,
-		viewOnceMsg: msg,
+		isMember:     true,
+		viewOnceMsg:  msg,
 		viewOnceKeys: []string{"uploads/key.jpg"},
 	}
 
@@ -1329,5 +1329,144 @@ func TestWSHandler_ThumbnailURLBroadcast(t *testing.T) {
 	}
 	if got["thumbnail_url"] != "https://example.com/thumb.jpg" {
 		t.Errorf("thumbnail_url = %v, want https://example.com/thumb.jpg", got["thumbnail_url"])
+	}
+}
+
+// --- Block logic tests ---
+
+func TestGetDM_Blocked(t *testing.T) {
+	room := &chat.Room{ID: "r-1", Type: "dm"}
+	cfg := chat.HandlerConfig{
+		IsBlocked: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+	h := chat.NewHandler(&mockManager{room: room}, cfg)
+
+	body, _ := json.Marshal(map[string]string{"peer_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/dm", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestGetDM_IsBlockedError(t *testing.T) {
+	cfg := chat.HandlerConfig{
+		IsBlocked: func(_ context.Context, _, _ string) (bool, error) {
+			return false, errors.New("db error")
+		},
+	}
+	h := chat.NewHandler(&mockManager{}, cfg)
+
+	body, _ := json.Marshal(map[string]string{"peer_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/dm", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestWSHandler_BlockedMessageSilentlyDropped(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+
+	// isBlockedInRoom returns true, simulating that sender is blocked by a room member.
+	cfg := chat.HandlerConfig{
+		IsBlockedInRoom: func(_ context.Context, _, _ string) bool {
+			return true
+		},
+	}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil, cfg))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send a message — should be silently dropped.
+	if err := conn.WriteJSON(map[string]string{"type": "message", "content": "blocked msg"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	// No message should be delivered.
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected no message when blocked, but received one")
+	}
+}
+
+func TestWSHandler_NotBlockedMessageDelivered(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	now := time.Now()
+	savedMsg := &chat.Message{
+		ID:        "m-1",
+		RoomID:    "r-1",
+		SenderID:  testUserID,
+		Type:      "text",
+		Content:   "not blocked",
+		CreatedAt: now,
+	}
+	mgr := &mockManager{isMember: true, msg: savedMsg}
+
+	// isBlockedInRoom returns false — message should be delivered.
+	cfg := chat.HandlerConfig{
+		IsBlockedInRoom: func(_ context.Context, _, _ string) bool {
+			return false
+		},
+	}
+
+	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil, cfg))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]string{"type": "message", "content": "not blocked"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["content"] != "not blocked" {
+		t.Errorf("content = %v, want 'not blocked'", got["content"])
 	}
 }

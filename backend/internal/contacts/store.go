@@ -98,7 +98,8 @@ func (s *pgStore) Delete(ctx context.Context, contactID, userID string) (*Contac
 	return &c, nil
 }
 
-// ListAccepted returns all accepted contacts for the given user.
+// ListAccepted returns all accepted contacts for the given user,
+// excluding any user who has a block relationship (in either direction).
 func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
@@ -112,6 +113,11 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedCo
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE (c.requester_id = $1 OR c.addressee_id = $1)
 		  AND c.status = 'accepted'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks b
+		      WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		         OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY display_name, u.email`,
 		userID,
 	)
@@ -122,7 +128,8 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedCo
 	return scanAcceptedContacts(rows)
 }
 
-// ListPending returns incoming pending contact requests for the given user.
+// ListPending returns incoming pending contact requests for the given user,
+// excluding any requester who has a block relationship (in either direction).
 func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
@@ -132,6 +139,11 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]Pendin
 		JOIN users u ON u.id = c.requester_id
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE c.addressee_id = $1 AND c.status = 'pending'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks b
+		      WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		         OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY c.created_at DESC`,
 		addresseeID,
 	)
@@ -142,7 +154,8 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]Pendin
 	return scanPendingRequests(rows)
 }
 
-// ListSent returns outgoing pending contact requests sent by the given user.
+// ListSent returns outgoing pending contact requests sent by the given user,
+// excluding any addressee who has a block relationship (in either direction).
 func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentRequest, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
@@ -152,6 +165,11 @@ func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentReque
 		JOIN users u ON u.id = c.addressee_id
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE c.requester_id = $1 AND c.status = 'pending'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks b
+		      WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		         OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY c.created_at DESC`,
 		requesterID,
 	)

@@ -27,14 +27,14 @@ type mockRows struct {
 	rowsErr error
 }
 
-func (r *mockRows) Next() bool                        { r.pos++; return r.pos <= len(r.data) }
-func (r *mockRows) Close()                            {}
-func (r *mockRows) Err() error                        { return r.rowsErr }
-func (r *mockRows) CommandTag() pgconn.CommandTag     { return pgconn.CommandTag{} }
+func (r *mockRows) Next() bool                                   { r.pos++; return r.pos <= len(r.data) }
+func (r *mockRows) Close()                                       {}
+func (r *mockRows) Err() error                                   { return r.rowsErr }
+func (r *mockRows) CommandTag() pgconn.CommandTag                { return pgconn.CommandTag{} }
 func (r *mockRows) FieldDescriptions() []pgconn.FieldDescription { return nil }
-func (r *mockRows) Values() ([]any, error)            { return nil, nil }
-func (r *mockRows) RawValues() [][]byte               { return nil }
-func (r *mockRows) Conn() *pgx.Conn                   { return nil }
+func (r *mockRows) Values() ([]any, error)                       { return nil, nil }
+func (r *mockRows) RawValues() [][]byte                          { return nil }
+func (r *mockRows) Conn() *pgx.Conn                              { return nil }
 func (r *mockRows) Scan(dest ...any) error {
 	if r.scanErr != nil {
 		return r.scanErr
@@ -780,6 +780,156 @@ func TestIntegration_BlockFlow(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Errorf("expected blocked user to be excluded from search, got %d results", len(results))
+	}
+
+	// Test contact list exclusion: create an accepted contact, then block.
+	// First unblock to create a fresh contact.
+	if err := store.Unblock(ctx, u1, u2); err != nil {
+		t.Fatalf("Unblock before contact test: %v", err)
+	}
+
+	// Create an accepted contact between u1 and u2.
+	contact, err := store.SendRequest(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if _, err := store.Accept(ctx, contact.ID, u2); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+
+	// Verify u2 appears in u1's accepted contacts.
+	accepted, err := store.ListAccepted(ctx, u1)
+	if err != nil {
+		t.Fatalf("ListAccepted before block: %v", err)
+	}
+	found := false
+	for _, c := range accepted {
+		if c.UserID == u2 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected u2 in u1's accepted contacts before blocking")
+	}
+
+	// Verify u1 appears in u2's accepted contacts.
+	accepted, err = store.ListAccepted(ctx, u2)
+	if err != nil {
+		t.Fatalf("ListAccepted (u2) before block: %v", err)
+	}
+	found = false
+	for _, c := range accepted {
+		if c.UserID == u1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected u1 in u2's accepted contacts before blocking")
+	}
+
+	// Now u1 blocks u2.
+	if err := store.Block(ctx, u1, u2); err != nil {
+		t.Fatalf("Block after contact: %v", err)
+	}
+
+	// u2 should disappear from u1's accepted contacts.
+	accepted, err = store.ListAccepted(ctx, u1)
+	if err != nil {
+		t.Fatalf("ListAccepted after block: %v", err)
+	}
+	for _, c := range accepted {
+		if c.UserID == u2 {
+			t.Error("u2 should not appear in u1's accepted contacts after blocking")
+		}
+	}
+
+	// u1 should also disappear from u2's accepted contacts (bidirectional).
+	accepted, err = store.ListAccepted(ctx, u2)
+	if err != nil {
+		t.Fatalf("ListAccepted (u2) after block: %v", err)
+	}
+	for _, c := range accepted {
+		if c.UserID == u1 {
+			t.Error("u1 should not appear in u2's accepted contacts after being blocked (bidirectional)")
+		}
+	}
+
+	// Test ListPending and ListSent exclusion.
+	// Unblock again.
+	if err := store.Unblock(ctx, u1, u2); err != nil {
+		t.Fatalf("Unblock for pending test: %v", err)
+	}
+
+	// Delete the existing contact.
+	if _, err := pool.Exec(ctx, `DELETE FROM contacts WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)`, u1, u2); err != nil {
+		t.Fatalf("delete contact: %v", err)
+	}
+
+	// u1 sends a new request to u2.
+	contact, err = store.SendRequest(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("SendRequest for pending test: %v", err)
+	}
+
+	// Verify u1 appears in u2's pending requests.
+	pending, err := store.ListPending(ctx, u2)
+	if err != nil {
+		t.Fatalf("ListPending before block: %v", err)
+	}
+	found = false
+	for _, p := range pending {
+		if p.UserID == u1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected u1 in u2's pending requests before blocking")
+	}
+
+	// Verify u2 appears in u1's sent requests.
+	sent, err := store.ListSent(ctx, u1)
+	if err != nil {
+		t.Fatalf("ListSent before block: %v", err)
+	}
+	found = false
+	for _, s := range sent {
+		if s.UserID == u2 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected u2 in u1's sent requests before blocking")
+	}
+
+	// Now u2 blocks u1.
+	if err := store.Block(ctx, u2, u1); err != nil {
+		t.Fatalf("Block for pending test: %v", err)
+	}
+
+	// u1 should disappear from u2's pending requests.
+	pending, err = store.ListPending(ctx, u2)
+	if err != nil {
+		t.Fatalf("ListPending after block: %v", err)
+	}
+	for _, p := range pending {
+		if p.UserID == u1 {
+			t.Error("u1 should not appear in u2's pending requests after blocking")
+		}
+	}
+
+	// u2 should disappear from u1's sent requests (bidirectional).
+	sent, err = store.ListSent(ctx, u1)
+	if err != nil {
+		t.Fatalf("ListSent after block: %v", err)
+	}
+	for _, s := range sent {
+		if s.UserID == u2 {
+			t.Error("u2 should not appear in u1's sent requests after blocking (bidirectional)")
+		}
 	}
 
 	// Unblock.
