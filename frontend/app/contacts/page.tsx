@@ -6,8 +6,10 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { usePresence } from "@/hooks/usePresence"
+import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
+import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import ContactCard from "@/components/contacts/ContactCard"
 import SearchBar from "@/components/contacts/SearchBar"
 
@@ -48,6 +50,15 @@ interface AcceptedContact {
   avatar_url: string
 }
 
+interface BlockedUser {
+  block_id: string
+  user_id: string
+  username: string
+  email: string
+  display_name: string
+  avatar_url: string
+}
+
 export default function ContactsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -55,8 +66,10 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<AcceptedContact[]>([])
   const [pending, setPending] = useState<PendingRequest[]>([])
   const [sent, setSent] = useState<SentRequest[]>([])
+  const [blocked, setBlocked] = useState<BlockedUser[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
+  const [unblockConfirm, setUnblockConfirm] = useState<BlockedUser | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
 
@@ -84,8 +97,9 @@ export default function ContactsPage() {
       fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
       fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
+      fetch(`${API_URL}/contacts/blocked`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
     ])
-      .then(([c, p, s]) => { setContacts(c); setPending(p); setSent(s) })
+      .then(([c, p, s, bl]) => { setContacts(c); setPending(p); setSent(s); setBlocked(bl) })
       .catch(() => setError("Failed to load contacts."))
       .finally(() => setLoading(false))
   }, [status, token])
@@ -190,6 +204,17 @@ export default function ContactsPage() {
     refreshPendingCount()
   }
 
+  async function unblock(userID: string) {
+    setError("")
+    const res = await fetch(`${API_URL}/contacts/${userID}/block`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) { setError("Failed to unblock user."); return }
+    setBlocked((prev) => prev.filter((b) => b.user_id !== userID))
+    setUnblockConfirm(null)
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
@@ -199,6 +224,15 @@ export default function ContactsPage() {
   }
 
   return (
+    <>
+    <ConfirmDialog
+      open={unblockConfirm !== null}
+      title="Unblock user"
+      message={`Unblock ${unblockConfirm?.display_name || "this user"}? They will be able to contact you again.`}
+      confirmLabel="Unblock"
+      onConfirm={() => unblockConfirm && unblock(unblockConfirm.user_id)}
+      onCancel={() => setUnblockConfirm(null)}
+    />
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-lg space-y-8 px-4">
         <div className="flex items-center justify-between">
@@ -284,7 +318,35 @@ export default function ContactsPage() {
             </ul>
           )}
         </div>
+
+        {blocked.length > 0 && (
+          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
+            <h2 className="mb-3 text-lg font-semibold text-white">Blocked Users</h2>
+            <ul className="divide-y divide-gray-700">
+              {blocked.map((b) => (
+                <li key={b.block_id} className="flex items-center justify-between gap-3 py-3">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/profile/${b.username || b.user_id}`)}
+                    className="flex items-center gap-3 hover:opacity-80"
+                  >
+                    <Avatar src={b.avatar_url} name={b.display_name || b.email} size="sm" />
+                    <span className="text-sm font-medium text-gray-300">{b.display_name || b.email}</span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setUnblockConfirm(b)}
+                  >
+                    Unblock
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
+    </>
   )
 }

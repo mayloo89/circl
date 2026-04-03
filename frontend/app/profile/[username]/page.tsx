@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 import Button from "@/components/ui/Button"
+import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import Skeleton from "@/components/ui/Skeleton"
 import PhotoGallery from "@/components/profile/PhotoGallery"
 import ProfileHeader, { type ContactStatus } from "@/components/profile/ProfileHeader"
@@ -33,6 +34,7 @@ interface PublicProfile {
 interface SentRequest  { contact_id: string; user_id: string }
 interface AcceptedContact { contact_id: string; user_id: string }
 interface PendingRequest  { contact_id: string; user_id: string }
+interface BlockedUser  { block_id: string; user_id: string }
 
 function ProfileSkeleton() {
   return (
@@ -79,6 +81,8 @@ export default function PublicProfilePage() {
   const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [contactStatus, setContactStatus] = useState<ContactStatus>("loading")
   const [contactId, setContactId] = useState<string | null>(null)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -95,23 +99,29 @@ export default function PublicProfilePage() {
       fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_URL}/contacts/blocked`, { headers: { Authorization: `Bearer ${token}` } }),
     ])
-      .then(async ([profileRes, contactsRes, sentRes, pendingRes]) => {
+      .then(async ([profileRes, contactsRes, sentRes, pendingRes, blockedRes]) => {
         if (profileRes.status === 404) { setError("Profile not found."); return }
         if (!profileRes.ok) throw new Error("Failed to load profile.")
 
-        const [prof, contacts, sent, pending]: [PublicProfile, AcceptedContact[], SentRequest[], PendingRequest[]] =
+        const [prof, contacts, sent, pending, blocked]: [PublicProfile, AcceptedContact[], SentRequest[], PendingRequest[], BlockedUser[]] =
           await Promise.all([
             profileRes.json(),
             contactsRes.ok ? contactsRes.json() : [],
             sentRes.ok ? sentRes.json() : [],
             pendingRes.ok ? pendingRes.json() : [],
+            blockedRes.ok ? blockedRes.json() : [],
           ])
 
         if (myID && prof.user_id === myID) { router.replace("/profile"); return }
 
         setProfile(prof)
         const targetUserID = prof.user_id
+
+        const blockEntry = blocked.find((b: BlockedUser) => b.user_id === targetUserID)
+        if (blockEntry) { setIsBlocked(true); return }
+
         const accepted = contacts.find((c) => c.user_id === targetUserID)
         if (accepted) { setContactStatus("contact"); setContactId(accepted.contact_id); return }
         const sentEntry = sent.find((s) => s.user_id === targetUserID)
@@ -178,6 +188,40 @@ export default function PublicProfilePage() {
     }
   }
 
+  async function handleBlock() {
+    if (!profile) return
+    setActionLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/contacts/${profile.user_id}/block`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) { setError("Failed to block user."); return }
+      setIsBlocked(true)
+      setBlockConfirmOpen(false)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleUnblock() {
+    if (!profile) return
+    setActionLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/contacts/${profile.user_id}/block`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) { setError("Failed to unblock user."); return }
+      setIsBlocked(false)
+      setContactStatus("none")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
@@ -210,6 +254,16 @@ export default function PublicProfilePage() {
         <Lightbox url={lightbox} type="image" onClose={() => setLightbox(null)} />
       )}
 
+      <ConfirmDialog
+        open={blockConfirmOpen}
+        title="Block user"
+        message={`Block ${profile.display_name}? They will not be able to contact you and will be hidden from your browse and search results.`}
+        confirmLabel="Block"
+        loading={actionLoading}
+        onConfirm={handleBlock}
+        onCancel={() => setBlockConfirmOpen(false)}
+      />
+
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
         <div className="w-full max-w-lg space-y-6 px-4">
 
@@ -226,9 +280,12 @@ export default function PublicProfilePage() {
             profile={profile}
             contactStatus={contactStatus}
             actionLoading={actionLoading}
+            isBlocked={isBlocked}
             onAddContact={handleAddContact}
             onAccept={handleAccept}
             onStartDM={handleStartDM}
+            onBlock={() => setBlockConfirmOpen(true)}
+            onUnblock={handleUnblock}
           />
 
           {/* Extended profile details */}

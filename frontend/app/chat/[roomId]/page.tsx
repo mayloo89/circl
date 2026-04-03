@@ -11,6 +11,7 @@ import { useUpload } from "@/hooks/useUpload"
 import type { AnyMessage, EphemeralMode, HistoryMessage } from "@/types/chat"
 import { sameCalendarDay, formatDaySeparator, isFirstInGroup, isLastInGroup } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
+import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import PresenceDot from "@/components/ui/PresenceDot"
 import Skeleton from "@/components/ui/Skeleton"
 import ChatInput from "@/components/chat/ChatInput"
@@ -75,6 +76,8 @@ export default function ChatRoomPage() {
   const [ephemeral, setEphemeral] = useState<EphemeralMode>("off")
   const [mediaModal, setMediaModal] = useState<{ url: string; type: string } | null>(null)
   const [revealedMessages, setRevealedMessages] = useState<Map<string, { msg: AnyMessage; content: string }>>(new Map())
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
+  const [blockLoading, setBlockLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts } = useChat(roomId, token)
@@ -193,6 +196,21 @@ export default function ChatRoomPage() {
     if (result) sendAttachment(result.upload_id, result.url, file.type, buildOpts())
   }
 
+  async function handleBlock() {
+    if (!room?.peer_id || !token) return
+    setBlockLoading(true)
+    try {
+      await fetch(`${API_URL}/contacts/${room.peer_id}/block`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setBlockConfirmOpen(false)
+      router.push("/chat")
+    } finally {
+      setBlockLoading(false)
+    }
+  }
+
   if (status === "loading") {
     return (
       <div className="flex h-full items-center justify-center bg-gray-950">
@@ -214,6 +232,18 @@ export default function ChatRoomPage() {
         />
       )}
 
+      {room?.type === "dm" && (
+        <ConfirmDialog
+          open={blockConfirmOpen}
+          title="Block user"
+          message={`Block ${room.peer_name}? They will not be able to message you and will be hidden from your results.`}
+          confirmLabel="Block"
+          loading={blockLoading}
+          onConfirm={handleBlock}
+          onCancel={() => setBlockConfirmOpen(false)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
         <button aria-label="Back to messages" onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
@@ -221,24 +251,34 @@ export default function ChatRoomPage() {
         </button>
         {room ? (
           room.type === "dm" ? (
-            <button onClick={() => router.push(`/profile/${room.peer_username || room.peer_id}`)} className="flex items-center gap-3 hover:opacity-80">
-              <Avatar src={room.peer_avatar_url} name={room.peer_name || "?"} size="md" />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-medium text-white">{room.peer_name}</span>
-                {room.peer_id && (
-                  <div className="flex items-center gap-1.5">
-                    <PresenceDot online={presence[room.peer_id]?.online ?? false} size="sm" />
-                    <span className="text-xs text-gray-400">
-                      {presence[room.peer_id]?.online
-                        ? "Online"
-                        : presence[room.peer_id]?.last_seen_at
-                        ? formatLastSeen(presence[room.peer_id].last_seen_at)
-                        : "Offline"}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </button>
+            <>
+              <button onClick={() => router.push(`/profile/${room.peer_username || room.peer_id}`)} className="flex flex-1 items-center gap-3 hover:opacity-80">
+                <Avatar src={room.peer_avatar_url} name={room.peer_name || "?"} size="md" />
+                <div className="flex flex-col text-left">
+                  <span className="text-sm font-medium text-white">{room.peer_name}</span>
+                  {room.peer_id && (
+                    <div className="flex items-center gap-1.5">
+                      <PresenceDot online={presence[room.peer_id]?.online ?? false} size="sm" />
+                      <span className="text-xs text-gray-400">
+                        {presence[room.peer_id]?.online
+                          ? "Online"
+                          : presence[room.peer_id]?.last_seen_at
+                          ? formatLastSeen(presence[room.peer_id].last_seen_at)
+                          : "Offline"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </button>
+              <button
+                type="button"
+                aria-label="Block user"
+                onClick={() => setBlockConfirmOpen(true)}
+                className="shrink-0 text-xs text-gray-600 hover:text-red-400"
+              >
+                Block
+              </button>
+            </>
           ) : (
             <div className="flex flex-col">
               <span className="text-sm font-medium text-white">{room.name}</span>

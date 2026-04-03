@@ -37,6 +37,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Usernames**: unique handles (`[a-z0-9_]`, 3–30 chars), immutable once set, used in all profile URLs (`/profile/[username]`)
 - ✅ **Extended profiles**: date of birth (18+ enforced), gender, location (autocomplete via Photon/OSM), interests tags
 - ✅ **Registration with profile seeding**: username + DOB collected at signup, profile seeded immediately after account creation
+- ✅ **User blocking**: block/unblock users, bidirectional suppression in browse/search/contacts/chat, WebSocket message filtering, performance-optimized batch queries
 
 ## Local setup
 
@@ -161,6 +162,9 @@ All protected routes require `Authorization: Bearer <token>`.
 | `GET` | `/contacts/sent` | ✅ | List outgoing pending requests |
 | `PUT` | `/contacts/{id}/accept` | ✅ | Accept a pending request |
 | `DELETE` | `/contacts/{id}` | ✅ | Remove or decline a contact |
+| `POST` | `/contacts/{id}/block` | ✅ | Block a user (removes contact if exists) |
+| `DELETE` | `/contacts/{id}/block` | ✅ | Unblock a user |
+| `GET` | `/contacts/blocked` | ✅ | List blocked users |
 | `GET` | `/notifications/stream?token=` | — | SSE stream for real-time events |
 | `POST` | `/chat/rooms/dm` | ✅ | Get or create a DM room |
 | `POST` | `/chat/rooms` | ✅ | Create a named group room |

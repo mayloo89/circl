@@ -98,7 +98,8 @@ func (s *pgStore) Delete(ctx context.Context, contactID, userID string) (*Contac
 	return &c, nil
 }
 
-// ListAccepted returns all accepted contacts for the given user.
+// ListAccepted returns all accepted contacts for the given user,
+// excluding any user who has a block relationship (in either direction).
 func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedContact, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
@@ -112,6 +113,11 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedCo
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE (c.requester_id = $1 OR c.addressee_id = $1)
 		  AND c.status = 'accepted'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks b
+		      WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		         OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY display_name, u.email`,
 		userID,
 	)
@@ -122,7 +128,8 @@ func (s *pgStore) ListAccepted(ctx context.Context, userID string) ([]AcceptedCo
 	return scanAcceptedContacts(rows)
 }
 
-// ListPending returns incoming pending contact requests for the given user.
+// ListPending returns incoming pending contact requests for the given user,
+// excluding any requester who has a block relationship (in either direction).
 func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]PendingRequest, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
@@ -132,6 +139,11 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]Pendin
 		JOIN users u ON u.id = c.requester_id
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE c.addressee_id = $1 AND c.status = 'pending'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks b
+		      WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		         OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY c.created_at DESC`,
 		addresseeID,
 	)
@@ -142,7 +154,8 @@ func (s *pgStore) ListPending(ctx context.Context, addresseeID string) ([]Pendin
 	return scanPendingRequests(rows)
 }
 
-// ListSent returns outgoing pending contact requests sent by the given user.
+// ListSent returns outgoing pending contact requests sent by the given user,
+// excluding any addressee who has a block relationship (in either direction).
 func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentRequest, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT c.id, u.id, COALESCE(p.username, ''), u.email,
@@ -152,6 +165,11 @@ func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentReque
 		JOIN users u ON u.id = c.addressee_id
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE c.requester_id = $1 AND c.status = 'pending'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks b
+		      WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		         OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY c.created_at DESC`,
 		requesterID,
 	)
@@ -163,7 +181,8 @@ func (s *pgStore) ListSent(ctx context.Context, requesterID string) ([]SentReque
 }
 
 // SearchUsers finds users by email, display_name, or username prefix, excluding
-// the caller and any user who already has a contact relationship with the caller.
+// the caller, any user who already has a contact relationship with the caller,
+// and any user who has a block relationship (in either direction) with the caller.
 func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) ([]UserSummary, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT u.id, COALESCE(p.username, ''), u.email,
@@ -178,6 +197,11 @@ func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) 
 		    WHERE (c.requester_id = $1 AND c.addressee_id = u.id)
 		       OR (c.requester_id = u.id AND c.addressee_id = $1)
 		  )
+		  AND NOT EXISTS (
+		    SELECT 1 FROM blocks b
+		    WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		       OR (b.blocker_id = u.id AND b.blocked_id = $1)
+		  )
 		ORDER BY display_name, u.email
 		LIMIT 20`,
 		excludeUserID, "%"+query+"%",
@@ -187,6 +211,117 @@ func (s *pgStore) SearchUsers(ctx context.Context, query, excludeUserID string) 
 	}
 	defer rows.Close()
 	return scanUserSummaries(rows)
+}
+
+// Block inserts a block row from blockerID to blockedID.
+func (s *pgStore) Block(ctx context.Context, blockerID, blockedID string) error {
+	_, err := s.db.Exec(ctx, `
+		INSERT INTO blocks (blocker_id, blocked_id)
+		VALUES ($1, $2)`,
+		blockerID, blockedID,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrAlreadyBlocked
+		}
+		return fmt.Errorf("block user: %w", err)
+	}
+	return nil
+}
+
+// Unblock removes the block row from blockerID to blockedID.
+func (s *pgStore) Unblock(ctx context.Context, blockerID, blockedID string) error {
+	tag, err := s.db.Exec(ctx, `
+		DELETE FROM blocks
+		WHERE blocker_id = $1 AND blocked_id = $2`,
+		blockerID, blockedID,
+	)
+	if err != nil {
+		return fmt.Errorf("unblock user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListBlocked returns all users that blockerID has blocked, newest first.
+func (s *pgStore) ListBlocked(ctx context.Context, blockerID string) ([]BlockedUser, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT b.id, u.id, COALESCE(p.username, ''), u.email,
+		       COALESCE(NULLIF(p.display_name, ''), u.email) AS display_name,
+		       COALESCE(p.avatar_url, '') AS avatar_url,
+		       b.created_at
+		FROM blocks b
+		JOIN users u ON u.id = b.blocked_id
+		LEFT JOIN profiles p ON p.user_id = u.id
+		WHERE b.blocker_id = $1
+		ORDER BY b.created_at DESC`,
+		blockerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list blocked: %w", err)
+	}
+	defer rows.Close()
+	return scanBlockedUsers(rows)
+}
+
+// IsBlocked returns true if userA has blocked userB or userB has blocked userA.
+func (s *pgStore) IsBlocked(ctx context.Context, userA, userB string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+		    SELECT 1 FROM blocks
+		    WHERE (blocker_id = $1 AND blocked_id = $2)
+		       OR (blocker_id = $2 AND blocked_id = $1)
+		)`,
+		userA, userB,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("is blocked: %w", err)
+	}
+	return exists, nil
+}
+
+// IsBlockedInRoom returns true if userID is blocked by any user in otherUserIDs.
+// This is optimized for batch checking to avoid N+1 queries in WebSocket message delivery.
+func (s *pgStore) IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error) {
+	if len(otherUserIDs) == 0 {
+		return false, nil
+	}
+
+	var exists bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+		    SELECT 1 FROM blocks
+		    WHERE (blocker_id = $1 AND blocked_id = ANY($2))
+		       OR (blocker_id = ANY($2) AND blocked_id = $1)
+		)`,
+		userID, otherUserIDs,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("is blocked in room: %w", err)
+	}
+	return exists, nil
+}
+
+func scanBlockedUsers(rows pgx.Rows) ([]BlockedUser, error) {
+	var results []BlockedUser
+	for rows.Next() {
+		var u BlockedUser
+		if err := rows.Scan(&u.BlockID, &u.UserID, &u.Username, &u.Email, &u.DisplayName, &u.AvatarURL, &u.BlockedAt); err != nil {
+			return nil, fmt.Errorf("scan blocked user: %w", err)
+		}
+		results = append(results, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	if results == nil {
+		results = []BlockedUser{}
+	}
+	return results, nil
 }
 
 func scanAcceptedContacts(rows pgx.Rows) ([]AcceptedContact, error) {

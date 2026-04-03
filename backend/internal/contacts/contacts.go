@@ -15,10 +15,11 @@ const (
 
 // Sentinel errors returned by the service and store layers.
 var (
-	ErrNotFound      = errors.New("contact not found")
-	ErrAlreadyExists = errors.New("contact request already exists")
-	ErrSelfContact   = errors.New("cannot add yourself as a contact")
-	ErrForbidden     = errors.New("forbidden")
+	ErrNotFound       = errors.New("contact not found")
+	ErrAlreadyExists  = errors.New("contact request already exists")
+	ErrSelfContact    = errors.New("cannot add yourself as a contact")
+	ErrForbidden      = errors.New("forbidden")
+	ErrAlreadyBlocked = errors.New("user already blocked")
 )
 
 // Contact represents a directed relationship between two users.
@@ -74,6 +75,17 @@ type SentRequest struct {
 	AvatarURL   string `json:"avatar_url"`
 }
 
+// BlockedUser represents a user that the caller has blocked.
+type BlockedUser struct {
+	BlockID     string    `json:"block_id"`
+	UserID      string    `json:"user_id"`
+	Username    string    `json:"username"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   string    `json:"avatar_url"`
+	BlockedAt   time.Time `json:"blocked_at"`
+}
+
 // Store is the persistence interface required by the service.
 type Store interface {
 	// SendRequest creates a pending contact request from requesterID to addresseeID.
@@ -91,8 +103,20 @@ type Store interface {
 	// ListSent returns outgoing pending requests sent by the given user.
 	ListSent(ctx context.Context, requesterID string) ([]SentRequest, error)
 	// SearchUsers returns users whose email or display_name matches the query,
-	// excluding the requesting user.
+	// excluding the requesting user and any user who has a block relationship with them.
 	SearchUsers(ctx context.Context, query, excludeUserID string) ([]UserSummary, error)
+	// Block records that blockerID blocks blockedID.
+	// Returns ErrAlreadyBlocked if the block already exists.
+	Block(ctx context.Context, blockerID, blockedID string) error
+	// Unblock removes the block from blockerID to blockedID.
+	// Returns ErrNotFound if no such block exists.
+	Unblock(ctx context.Context, blockerID, blockedID string) error
+	// ListBlocked returns all users that blockerID has blocked.
+	ListBlocked(ctx context.Context, blockerID string) ([]BlockedUser, error)
+	// IsBlocked returns true if userA has blocked userB or userB has blocked userA.
+	IsBlocked(ctx context.Context, userA, userB string) (bool, error)
+	// IsBlockedInRoom returns true if userID is blocked by any user in the given list.
+	IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error)
 }
 
 // Service implements the contacts business logic.
@@ -109,6 +133,13 @@ func NewService(store Store) *Service {
 func (s *Service) SendRequest(ctx context.Context, requesterID, addresseeID string) (*Contact, error) {
 	if requesterID == addresseeID {
 		return nil, ErrSelfContact
+	}
+	blocked, err := s.store.IsBlocked(ctx, requesterID, addresseeID)
+	if err != nil {
+		return nil, err
+	}
+	if blocked {
+		return nil, ErrForbidden
 	}
 	return s.store.SendRequest(ctx, requesterID, addresseeID)
 }
@@ -144,4 +175,32 @@ func (s *Service) SearchUsers(ctx context.Context, query, userID string) ([]User
 		return []UserSummary{}, nil
 	}
 	return s.store.SearchUsers(ctx, query, userID)
+}
+
+// Block records that blockerID blocks blockedID and removes any existing contact row.
+func (s *Service) Block(ctx context.Context, blockerID, blockedID string) error {
+	if blockerID == blockedID {
+		return ErrSelfContact
+	}
+	return s.store.Block(ctx, blockerID, blockedID)
+}
+
+// Unblock removes the block that blockerID placed on blockedID.
+func (s *Service) Unblock(ctx context.Context, blockerID, blockedID string) error {
+	return s.store.Unblock(ctx, blockerID, blockedID)
+}
+
+// ListBlocked returns users blocked by the given user.
+func (s *Service) ListBlocked(ctx context.Context, userID string) ([]BlockedUser, error) {
+	return s.store.ListBlocked(ctx, userID)
+}
+
+// IsBlocked returns true if userA has blocked userB or userB has blocked userA.
+func (s *Service) IsBlocked(ctx context.Context, userA, userB string) (bool, error) {
+	return s.store.IsBlocked(ctx, userA, userB)
+}
+
+// IsBlockedInRoom returns true if userID is blocked by any user in the otherUserIDs list.
+func (s *Service) IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error) {
+	return s.store.IsBlockedInRoom(ctx, userID, otherUserIDs)
 }
