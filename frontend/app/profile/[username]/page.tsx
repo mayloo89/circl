@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
+import ReportDialog from "@/components/ui/ReportDialog"
 import Skeleton from "@/components/ui/Skeleton"
 import PhotoGallery from "@/components/profile/PhotoGallery"
 import ProfileHeader, { type ContactStatus } from "@/components/profile/ProfileHeader"
@@ -83,6 +84,9 @@ export default function PublicProfilePage() {
   const [contactId, setContactId] = useState<string | null>(null)
   const [isBlocked, setIsBlocked] = useState(false)
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
+  const [reportConfirmOpen, setReportConfirmOpen] = useState(false)
+  const [reportError, setReportError] = useState("")
+  const [reportSuccess, setReportSuccess] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -222,6 +226,28 @@ export default function PublicProfilePage() {
     }
   }
 
+  async function handleReport(reason: string, description: string) {
+    if (!profile) return
+    setActionLoading(true)
+    setReportError("")
+    try {
+      const res = await fetch(`${API_URL}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reported_user_id: profile.user_id, reason, description }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setReportError(data.error || "Failed to submit report.")
+        return
+      }
+      setReportConfirmOpen(false)
+      setReportSuccess(true)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
@@ -264,6 +290,14 @@ export default function PublicProfilePage() {
         onCancel={() => setBlockConfirmOpen(false)}
       />
 
+      <ReportDialog
+        open={reportConfirmOpen}
+        loading={actionLoading}
+        error={reportError}
+        onSubmit={handleReport}
+        onCancel={() => setReportConfirmOpen(false)}
+      />
+
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
         <div className="w-full max-w-lg space-y-6 px-4">
 
@@ -274,6 +308,9 @@ export default function PublicProfilePage() {
 
           {error && (
             <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
+          )}
+          {reportSuccess && (
+            <p className="rounded-md bg-green-950 p-3 text-sm text-green-400 ring-1 ring-green-900">Report submitted. Thank you.</p>
           )}
 
           <ProfileHeader
@@ -286,6 +323,7 @@ export default function PublicProfilePage() {
             onStartDM={handleStartDM}
             onBlock={() => setBlockConfirmOpen(true)}
             onUnblock={handleUnblock}
+            onReport={() => setReportConfirmOpen(true)}
           />
 
           {/* Extended profile details */}
