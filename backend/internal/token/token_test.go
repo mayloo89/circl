@@ -11,7 +11,7 @@ import (
 const testSecret = "supersecretfortesting-mustbe32chars!!"
 
 func TestGenerate_and_Validate(t *testing.T) {
-	tok, err := token.Generate("user-123", testSecret, time.Hour)
+	tok, err := token.Generate("user-123", false, testSecret, time.Hour)
 	if err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestGenerate_and_Validate(t *testing.T) {
 }
 
 func TestValidate_WrongSecret(t *testing.T) {
-	tok, _ := token.Generate("user-123", testSecret, time.Hour)
+	tok, _ := token.Generate("user-123", false, testSecret, time.Hour)
 
 	_, err := token.Validate(tok, "wrong-secret")
 	if err == nil {
@@ -38,7 +38,7 @@ func TestValidate_WrongSecret(t *testing.T) {
 }
 
 func TestValidate_ExpiredToken(t *testing.T) {
-	tok, _ := token.Generate("user-123", testSecret, -time.Second)
+	tok, _ := token.Generate("user-123", false, testSecret, -time.Second)
 
 	_, err := token.Validate(tok, testSecret)
 	if err == nil {
@@ -71,7 +71,7 @@ func TestValidate_UnexpectedSigningMethod(t *testing.T) {
 func TestGenerate_EmptySecret(t *testing.T) {
 	// Empty secret still generates a token (JWT allows it),
 	// but Validate with the correct empty secret should succeed.
-	tok, err := token.Generate("user-123", "", time.Hour)
+	tok, err := token.Generate("user-123", false, "", time.Hour)
 	if err != nil {
 		t.Fatalf("Generate() with empty secret error: %v", err)
 	}

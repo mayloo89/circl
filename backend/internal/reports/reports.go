@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+// AdminModerator applies moderation actions to users.
+type AdminModerator interface {
+	SuspendUser(ctx context.Context, userID, reason string, durationDays int, adminID string) error
+	BanUser(ctx context.Context, userID, reason, adminID string) error
+}
+
+// RateLimiter enforces call-rate limits keyed by an arbitrary string.
+type RateLimiter interface {
+	// Allow returns true if the action is within the allowed rate.
+	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
+}
+
 // Valid report reasons.
 const (
 	ReasonHarassment           = "harassment"

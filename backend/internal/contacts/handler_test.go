@@ -80,7 +80,7 @@ func serve(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 
 // authedRequest adds a valid Bearer token for testUserID to the request.
 func authedRequest(r *http.Request) *http.Request {
-	tok, _ := token.Generate(testUserID, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }

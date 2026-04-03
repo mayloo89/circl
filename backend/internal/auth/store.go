@@ -42,7 +42,7 @@ func NewStore(pool *pgxpool.Pool) Store {
 // for password verification. Returns an error if not found.
 func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, status
+		`SELECT id, email, password_hash, status, is_admin
 		   FROM users
 		  WHERE email = $1
 		  LIMIT 1`,
@@ -50,7 +50,7 @@ func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord
 	)
 
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -66,12 +66,12 @@ func (s *pgStore) CreateUser(ctx context.Context, email, passwordHash string) (*
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, provider, status)
 		 VALUES ($1, $2, 'local', 'active')
-		 RETURNING id, email, password_hash, status`,
+		 RETURNING id, email, password_hash, status, is_admin`,
 		email, passwordHash,
 	)
 
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrEmailTaken

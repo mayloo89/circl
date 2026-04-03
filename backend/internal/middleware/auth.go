@@ -10,12 +10,23 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const (
+	userIDKey  contextKey = "userID"
+	isAdminKey contextKey = "isAdmin"
+)
+
+// UserStatusChecker allows the auth middleware to verify that the authenticated
+// user is still active in the database (e.g. not suspended or banned).
+type UserStatusChecker interface {
+	IsActiveUser(ctx context.Context, userID string) (bool, error)
+}
 
 // RequireAuth validates the Bearer JWT in the Authorization header.
-// On success it injects the user ID into the request context.
+// On success it injects the user ID and admin flag into the request context.
 // On failure it responds with 401 and stops the chain.
-func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
+// An optional UserStatusChecker can be passed; when provided, it is called after
+// JWT validation and the request is rejected with 401 if the user is not active.
+func RequireAuth(jwtSecret string, checker ...UserStatusChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -36,7 +47,16 @@ func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
 				return
 			}
 
+			if len(checker) > 0 && checker[0] != nil {
+				active, err := checker[0].IsActiveUser(r.Context(), claims.Subject)
+				if err != nil || !active {
+					writeUnauthorized(w)
+					return
+				}
+			}
+
 			ctx := context.WithValue(r.Context(), userIDKey, claims.Subject)
+			ctx = context.WithValue(ctx, isAdminKey, claims.IsAdmin)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -46,6 +66,12 @@ func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
 func UserIDFromContext(ctx context.Context) (string, bool) {
 	id, ok := ctx.Value(userIDKey).(string)
 	return id, ok
+}
+
+// IsAdminFromContext retrieves the admin flag from the context.
+func IsAdminFromContext(ctx context.Context) bool {
+	v, _ := ctx.Value(isAdminKey).(bool)
+	return v
 }
 
 // ContextWithUserID returns a new context with the given user ID.

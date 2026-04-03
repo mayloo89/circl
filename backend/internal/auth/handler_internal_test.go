@@ -30,7 +30,7 @@ func (m *mockAuthInternal) Register(_ context.Context, _, _ string) (*User, erro
 func TestLoginHandler_TokenGenerateError(t *testing.T) {
 	orig := generateTokenFn
 	t.Cleanup(func() { generateTokenFn = orig })
-	generateTokenFn = func(_, _ string, _ time.Duration) (string, error) {
+	generateTokenFn = func(_ string, _ bool, _ string, _ time.Duration) (string, error) {
 		return "", errors.New("sign error")
 	}
 
@@ -48,7 +48,7 @@ func TestLoginHandler_TokenGenerateError(t *testing.T) {
 func TestRegisterHandler_TokenGenerateError(t *testing.T) {
 	orig := generateTokenFn
 	t.Cleanup(func() { generateTokenFn = orig })
-	generateTokenFn = func(_, _ string, _ time.Duration) (string, error) {
+	generateTokenFn = func(_ string, _ bool, _ string, _ time.Duration) (string, error) {
 		return "", errors.New("sign error")
 	}
 

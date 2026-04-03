@@ -29,8 +29,9 @@ var (
 
 // User holds the data returned after a successful login or registration.
 type User struct {
-	ID    string
-	Email string
+	ID      string
+	Email   string
+	IsAdmin bool
 }
 
 // Store is the data-access interface required by the auth service.
@@ -46,6 +47,7 @@ type userRecord struct {
 	Email        string
 	PasswordHash string
 	Status       string
+	IsAdmin      bool
 }
 
 // Service handles authentication business logic.
@@ -82,7 +84,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*User, err
 		return nil, ErrInvalidCredentials
 	}
 
-	return &User{ID: record.ID, Email: record.Email}, nil
+	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
 }
 
 // Register creates a new local user account and returns the created user.
@@ -104,7 +106,7 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 		return nil, err
 	}
 
-	return &User{ID: record.ID, Email: record.Email}, nil
+	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
 }
 
 // validateEmail checks that the given string is a valid email address.

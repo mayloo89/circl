@@ -368,6 +368,9 @@ WHERE p.user_id <> $1
       SELECT 1 FROM blocks b
       WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
          OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
+  )
+  AND EXISTS (
+      SELECT 1 FROM users u WHERE u.id = p.user_id AND u.status = 'active'
   )`
 
 // Browse returns a paginated list of profiles for the browse/explore view.

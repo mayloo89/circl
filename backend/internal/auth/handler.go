@@ -34,7 +34,7 @@ type errorResponse struct {
 }
 
 // generateTokenFn is a variable so tests can inject a failing implementation.
-var generateTokenFn = token.Generate
+var generateTokenFn func(string, bool, string, time.Duration) (string, error) = token.Generate
 
 // NewHandler returns an http.Handler with all auth routes registered.
 // jwtSecret and tokenExpiry are used to issue a signed JWT on login/register.
@@ -73,7 +73,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			return
 		}
 
-		tok, err := generateTokenFn(user.ID, jwtSecret, tokenExpiry)
+		tok, err := generateTokenFn(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			return
@@ -109,7 +109,7 @@ func registerHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Dura
 			return
 		}
 
-		tok, err := generateTokenFn(user.ID, jwtSecret, tokenExpiry)
+		tok, err := generateTokenFn(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			return
