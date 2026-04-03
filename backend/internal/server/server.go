@@ -27,9 +27,10 @@ type DBPinger interface {
 // chatWSHandler is the WebSocket endpoint (chat.NewWSHandler); handles its own auth via ?token=.
 // presenceHandler is the presence sub-router (presence.NewHandler); must run behind requireAuth.
 // uploadHandler is the uploads sub-router (uploads.NewHandler); must run behind requireAuth.
+// reportsHandler is the reports sub-router (reports.NewManager); must run behind requireAuth.
 // localStorageHandler serves uploaded files in dev mode; nil in production.
 // requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -60,6 +61,7 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 		g.Mount("/chat", chatHandler)
 		g.Mount("/presence", presenceHandler)
 		g.Mount("/uploads", uploadHandler)
+		g.Mount("/reports", reportsHandler)
 	})
 
 	// Local file serving — only mounted when localStorageHandler is not nil

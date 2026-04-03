@@ -23,6 +23,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
 	"github.com/mayloo89/circl/backend/internal/profiles"
+	"github.com/mayloo89/circl/backend/internal/reports"
 	"github.com/mayloo89/circl/backend/internal/server"
 	"github.com/mayloo89/circl/backend/internal/storage"
 	"github.com/mayloo89/circl/backend/internal/uploads"
@@ -84,6 +85,11 @@ func main() {
 	contactStore := contacts.NewStore(pool)
 	contactSvc := contacts.NewService(contactStore)
 	contactsHandler := contacts.NewHandler(contactSvc, contacts.WithNotifier(hub))
+
+	reportStore := reports.NewStore(pool)
+	reportSvc := reports.NewService(reportStore)
+	reportMgr := reports.NewManager(reportSvc)
+	reportsHandler := reports.NewHandler(reportMgr)
 
 	redisOpt, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -242,7 +248,7 @@ func main() {
 
 	requireAuth := middleware.RequireAuth(jwtSecret)
 
-	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, localStorageHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, localStorageHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {

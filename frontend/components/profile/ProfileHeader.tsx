@@ -23,6 +23,7 @@ interface ProfileHeaderProps {
   onStartDM: () => void
   onBlock: () => void
   onUnblock: () => void
+  onReport?: () => void
 }
 
 export default function ProfileHeader({
@@ -35,6 +36,7 @@ export default function ProfileHeader({
   onStartDM,
   onBlock,
   onUnblock,
+  onReport,
 }: ProfileHeaderProps) {
   return (
     <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
@@ -96,14 +98,26 @@ export default function ProfileHeader({
               </Button>
             )}
             {contactStatus !== "loading" && (
-              <button
-                type="button"
-                onClick={onBlock}
-                disabled={actionLoading}
-                className="text-xs text-gray-600 hover:text-red-400 disabled:cursor-not-allowed"
-              >
-                Block user
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onBlock}
+                  disabled={actionLoading}
+                  className="text-xs text-gray-600 hover:text-red-400 disabled:cursor-not-allowed"
+                >
+                  Block user
+                </button>
+                {onReport && (
+                  <button
+                    type="button"
+                    onClick={onReport}
+                    disabled={actionLoading}
+                    className="text-xs text-gray-600 hover:text-orange-400 disabled:cursor-not-allowed"
+                  >
+                    Report
+                  </button>
+                )}
+              </div>
             )}
           </>
         )}
