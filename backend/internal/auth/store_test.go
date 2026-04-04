@@ -167,7 +167,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register duplicate email returns ErrEmailTaken", func(t *testing.T) {
-		_, err := svc.Register(t.Context(), email, "otherpass")
+		_, err := svc.Register(t.Context(), email, "Other1pass")
 		if !errors.Is(err, ErrEmailTaken) {
 			t.Errorf("got %v, want ErrEmailTaken", err)
 		}
