@@ -197,13 +197,13 @@ export default function GroupMembersPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* Group name / rename */}
+        {/* Name display / rename (groups only) */}
         <div>
-          {renaming ? (
+          {roomType === "group" && renaming ? (
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <Input
-                  label={roomType === "channel" ? "Channel name" : "Group name"}
+                  label="Group name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   autoFocus
@@ -224,8 +224,10 @@ export default function GroupMembersPanel({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-white">{roomName}</p>
-              {isAdmin && (
+              <p className="text-sm font-semibold text-white">
+                {roomType === "channel" ? "# " : ""}{roomName}
+              </p>
+              {roomType === "group" && isAdmin && (
                 <button
                   type="button"
                   onClick={() => { setNewName(roomName); setRenaming(true) }}
@@ -256,8 +258,8 @@ export default function GroupMembersPanel({
                     <p className="text-xs text-indigo-400">Admin</p>
                   )}
                 </div>
-                {/* Admin removes non-admin others (groups and channels) */}
-                {isAdmin && m.user_id !== currentUserId && !m.is_admin && (
+                {/* Groups only: admin removes non-admin others */}
+                {roomType === "group" && isAdmin && m.user_id !== currentUserId && !m.is_admin && (
                   <button
                     type="button"
                     onClick={() => setRemoveConfirm(m)}
@@ -266,7 +268,7 @@ export default function GroupMembersPanel({
                     Remove
                   </button>
                 )}
-                {/* Self-leave: channels allow anyone to leave; groups only allow non-admins */}
+                {/* Self-leave: channels allow anyone; groups only allow non-admins */}
                 {m.user_id === currentUserId && (roomType === "channel" || !m.is_admin) && (
                   <button
                     type="button"
@@ -281,8 +283,8 @@ export default function GroupMembersPanel({
           </ul>
         )}
 
-        {/* Add member (admin only) */}
-        {isAdmin && (
+        {/* Add member (groups only, admin only) */}
+        {roomType === "group" && isAdmin && (
           <div>
             {addingMember ? (
               <div className="space-y-2">
