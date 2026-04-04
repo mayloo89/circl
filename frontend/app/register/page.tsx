@@ -65,6 +65,7 @@ export default function RegisterPage() {
       })
 
       if (res.status === 409) { setError("An account with this email already exists"); return }
+      if (res.status === 429) { setError("Too many registrations from this network. Please try again later."); return }
       if (res.status === 400) { const body = await res.json(); setError(body.error ?? "Invalid input"); return }
       if (!res.ok) { setError("Registration failed. Please try again."); return }
 
@@ -223,7 +224,7 @@ export default function RegisterPage() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                Password <span className="font-normal text-gray-500">(min. 8 characters)</span>
+                Password
               </label>
               <input
                 id="password"
@@ -234,6 +235,9 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Min. 8 characters · uppercase · lowercase · digit
+              </p>
             </div>
 
             <div>

@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	testSecret  = "supersecretfortesting-mustbe32chars!!"
-	testExpiry  = time.Hour
+	testSecret = "supersecretfortesting-mustbe32chars!!"
+	testExpiry = time.Hour
 )
 
 // mockAuth is a test double for Authenticator.
@@ -34,8 +34,41 @@ func (m *mockAuth) Register(_ context.Context, _, _ string) (*auth.User, error) 
 	return m.user, m.registerErr
 }
 
-func newHandler(mock *mockAuth) http.Handler {
-	return auth.NewHandler(mock, testSecret, testExpiry)
+// mockLocker is a test double for LoginLocker.
+type mockLocker struct {
+	isLockedVal    bool
+	isLockedErr    error
+	recordLocked   bool
+	recordErr      error
+	resetErr       error
+	resetCalled    bool
+}
+
+func (m *mockLocker) IsLocked(_ context.Context, _ string, _ int) (bool, error) {
+	return m.isLockedVal, m.isLockedErr
+}
+
+func (m *mockLocker) RecordFailure(_ context.Context, _ string, _ int, _ time.Duration) (bool, error) {
+	return m.recordLocked, m.recordErr
+}
+
+func (m *mockLocker) Reset(_ context.Context, _ string) error {
+	m.resetCalled = true
+	return m.resetErr
+}
+
+// mockLimiter is a test double for RequestLimiter.
+type mockLimiter struct {
+	allowed bool
+	err     error
+}
+
+func (m *mockLimiter) Allow(_ context.Context, _ string, _ int, _ time.Duration) (bool, error) {
+	return m.allowed, m.err
+}
+
+func newHandler(mock *mockAuth, opts ...auth.HandlerOption) http.Handler {
+	return auth.NewHandler(mock, testSecret, testExpiry, opts...)
 }
 
 // --- Login handler ---
@@ -216,6 +249,119 @@ func TestRegisterHandler_MissingFields(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("body %s: status = %d, want %d", body, rec.Code, http.StatusBadRequest)
 		}
+	}
+}
+
+// --- Login lockout ---
+
+func TestLoginHandler_AlreadyLocked(t *testing.T) {
+	locker := &mockLocker{isLockedVal: true}
+	h := newHandler(&mockAuth{}, auth.WithLocker(locker))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestLoginHandler_LockoutOnFailingAttempt(t *testing.T) {
+	locker := &mockLocker{recordLocked: true}
+	h := newHandler(&mockAuth{loginErr: auth.ErrInvalidCredentials}, auth.WithLocker(locker))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"wrong"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestLoginHandler_FailureBeforeLockout(t *testing.T) {
+	locker := &mockLocker{recordLocked: false}
+	h := newHandler(&mockAuth{loginErr: auth.ErrInvalidCredentials}, auth.WithLocker(locker))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"wrong"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestLoginHandler_SuccessResetsLockout(t *testing.T) {
+	locker := &mockLocker{}
+	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}}, auth.WithLocker(locker))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !locker.resetCalled {
+		t.Error("expected locker.Reset to be called on successful login")
+	}
+}
+
+func TestLoginHandler_LockerIsLockedError(t *testing.T) {
+	// When IsLocked returns an error, the handler logs and continues (does not block).
+	locker := &mockLocker{isLockedErr: errors.New("redis down"), isLockedVal: false}
+	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}}, auth.WithLocker(locker))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d (locker error must not block login)", rec.Code, http.StatusOK)
+	}
+}
+
+// --- IP rate limiting ---
+
+func TestLoginHandler_IPRateLimitExceeded(t *testing.T) {
+	limiter := &mockLimiter{allowed: false}
+	h := newHandler(&mockAuth{}, auth.WithLimiter(limiter))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestRegisterHandler_IPRateLimitExceeded(t *testing.T) {
+	limiter := &mockLimiter{allowed: false}
+	h := newHandler(&mockAuth{}, auth.WithLimiter(limiter))
+
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"u@u.com","password":"Secure1pass"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestLoginHandler_LimiterError(t *testing.T) {
+	// When the limiter returns an error, the handler logs and continues (fail open).
+	limiter := &mockLimiter{allowed: false, err: errors.New("redis down")}
+	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}}, auth.WithLimiter(limiter))
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d (limiter error must not block login)", rec.Code, http.StatusOK)
 	}
 }
 

@@ -147,7 +147,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register new user", func(t *testing.T) {
-		user, err := svc.Register(t.Context(), email, "securepass")
+		user, err := svc.Register(t.Context(), email, "Secure1pass")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -157,7 +157,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("login with registered user", func(t *testing.T) {
-		user, err := svc.Login(t.Context(), email, "securepass")
+		user, err := svc.Login(t.Context(), email, "Secure1pass")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -167,7 +167,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register duplicate email returns ErrEmailTaken", func(t *testing.T) {
-		_, err := svc.Register(t.Context(), email, "otherpass")
+		_, err := svc.Register(t.Context(), email, "Other1pass")
 		if !errors.Is(err, ErrEmailTaken) {
 			t.Errorf("got %v, want ErrEmailTaken", err)
 		}

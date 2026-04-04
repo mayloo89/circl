@@ -14,6 +14,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/mayloo89/circl/backend/internal/admin"
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
 	"github.com/mayloo89/circl/backend/internal/profiles"
+	"github.com/mayloo89/circl/backend/internal/ratelimit"
 	"github.com/mayloo89/circl/backend/internal/reports"
 	"github.com/mayloo89/circl/backend/internal/server"
 	"github.com/mayloo89/circl/backend/internal/storage"
@@ -73,7 +75,6 @@ func main() {
 
 	authStore := auth.NewStore(pool)
 	authSvc := auth.NewService(authStore)
-	authHandler := auth.NewHandler(authSvc, jwtSecret, tokenExpiry)
 
 	profileStore := profiles.NewStore(pool)
 	profileSvc := profiles.NewService(profileStore)
@@ -88,8 +89,6 @@ func main() {
 
 	reportStore := reports.NewStore(pool)
 	reportSvc := reports.NewService(reportStore)
-	reportMgr := reports.NewManager(reportSvc)
-	reportsHandler := reports.NewHandler(reportMgr)
 
 	redisOpt, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -103,6 +102,26 @@ func main() {
 		log.Fatalf("Redis connection failed: %v", err)
 	}
 	log.Println("Redis connection established")
+
+	limiter := ratelimit.NewRedisLimiter(rdb)
+
+	adminStore := admin.NewStore(pool)
+	adminSvc := admin.NewService(adminStore)
+
+	loginIPLimit := config.EnvIntOrDefault("LOGIN_IP_LIMIT", 20)
+	registerIPLimit := config.EnvIntOrDefault("REGISTER_IP_LIMIT", 10)
+	authHandler := auth.NewHandler(authSvc, jwtSecret, tokenExpiry,
+		auth.WithLocker(limiter),
+		auth.WithLimiter(limiter),
+		auth.WithLoginIPLimit(loginIPLimit, 15*time.Minute),
+		auth.WithRegisterIPLimit(registerIPLimit, time.Hour),
+	)
+
+	reportMgr := reports.NewManager(reportSvc,
+		reports.WithModerator(adminSvc),
+		reports.WithLimiter(limiter),
+	)
+	reportsHandler := reports.NewHandler(reportMgr)
 
 	chatHub := chat.NewHub(rdb)
 	go chatHub.Run(appCtx)
@@ -246,7 +265,7 @@ func main() {
 
 	uploadHandler := uploads.NewHandler(uploadSvc)
 
-	requireAuth := middleware.RequireAuth(jwtSecret)
+	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
 	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, localStorageHandler, requireAuth)
 

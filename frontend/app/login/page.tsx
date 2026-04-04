@@ -29,8 +29,10 @@ export default function LoginPage() {
       redirect: false,
     })
 
-    if (result?.error) {
-      setError("Invalid credentials")
+    if (result?.error === "AccountLocked") {
+      setError("Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.")
+    } else if (result?.error) {
+      setError("Invalid email or password.")
     } else {
       router.push("/")
     }

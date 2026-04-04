@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest"
 import { loginSchema, registerSchema } from "@/lib/validation"
 
+// Format a Date as YYYY-MM-DD using local time components to avoid UTC-vs-local
+// mismatches in timezone-sensitive age calculations.
+function localDateString(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 describe("loginSchema", () => {
   it("accepts valid credentials", () => {
     const result = loginSchema.safeParse({ email: "user@example.com", password: "secret" })
@@ -35,8 +42,8 @@ describe("loginSchema", () => {
 
 const validBase = {
   email: "new@example.com",
-  password: "strongpass",
-  confirm: "strongpass",
+  password: "Strongpass1",
+  confirm: "Strongpass1",
   username: "testuser",
   date_of_birth: "1990-06-15",
 }
@@ -64,10 +71,34 @@ describe("registerSchema", () => {
   })
 
   it("rejects mismatched passwords", () => {
-    const result = registerSchema.safeParse({ ...validBase, confirm: "different" })
+    const result = registerSchema.safeParse({ ...validBase, confirm: "Different1" })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("Passwords do not match")
+    }
+  })
+
+  it("rejects a password without an uppercase letter", () => {
+    const result = registerSchema.safeParse({ ...validBase, password: "strongpass1", confirm: "strongpass1" })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain("uppercase")
+    }
+  })
+
+  it("rejects a password without a lowercase letter", () => {
+    const result = registerSchema.safeParse({ ...validBase, password: "STRONGPASS1", confirm: "STRONGPASS1" })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain("lowercase")
+    }
+  })
+
+  it("rejects a password without a digit", () => {
+    const result = registerSchema.safeParse({ ...validBase, password: "StrongPass!", confirm: "StrongPass!" })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain("digit")
     }
   })
 
@@ -87,7 +118,7 @@ describe("registerSchema", () => {
   it("rejects a user under 18", () => {
     const dob = new Date()
     dob.setFullYear(dob.getFullYear() - 17)
-    const result = registerSchema.safeParse({ ...validBase, date_of_birth: dob.toISOString().slice(0, 10) })
+    const result = registerSchema.safeParse({ ...validBase, date_of_birth: localDateString(dob) })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("You must be at least 18 years old")
@@ -97,7 +128,7 @@ describe("registerSchema", () => {
   it("accepts a user exactly 18", () => {
     const dob = new Date()
     dob.setFullYear(dob.getFullYear() - 18)
-    const result = registerSchema.safeParse({ ...validBase, date_of_birth: dob.toISOString().slice(0, 10) })
+    const result = registerSchema.safeParse({ ...validBase, date_of_birth: localDateString(dob) })
     expect(result.success).toBe(true)
   })
 })
