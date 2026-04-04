@@ -8,6 +8,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Web Push Notifications: `POST /push/subscribe`, `DELETE /push/unsubscribe`, `GET /push/vapid-public-key`, migration `000018_push_subscriptions` for browser push subscriptions
+- `backend/internal/push` package: `Service` (Send, Subscribe, Unsubscribe), `Store` interface (Postgres implementation), `Handler` for HTTP endpoints
+- Push notification UI in NavBar: bell icon toggles subscription state (granted/tachada), persists across sessions
+- `usePush` hook: `Notification.requestPermission()`, service worker registration at `/sw.js`, automatic re-subscription on page load if already granted
+- Service Worker (`public/sw.js`): `push` event listener displays native notifications, `notificationclick` handler navigates to URL
+- Push notification delivery on new chat messages and contact events (contact_request, contact_accepted, contact_removed) — wired in `main.go` via `notifyUser` callback
+- VAPID key configuration via `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` environment variables; service disabled if keys are empty
+- `.vscode/launch.json`: debug configs for Backend (Go) and Frontend (Next.js), compound launch for full app
+- `PushPrompt` component: inline banner prompting users to enable notifications (shown only when permission is "default")
+- `hub.IsConnected(userID)` method: checks if user has active SSE connection; used to decide whether push is needed (currently always sent, service worker handles deduplication)
+
+### Changed
+- `hub.Notify` now called alongside `push.Send` in `notifyUser` callback for both chat and contact events (previously only SSE for chat)
+- Contact handler now uses `contactNotifier` wrapper to enrich SSE events with push notifications
+
+## [2.6.0] - 2026-04-04 — Account safety & moderation
+
+### Added
+- Migration `000017_admin_moderation`: adds `role VARCHAR(20)` column on `users` ('user' | 'admin'), `reports` table (`id`, `reporter_id`, `reported_id`, `reason TEXT`, `status VARCHAR(20)` pending/resolved/dismissed, `created_at`, `resolved_at`, `resolved_by`)
+- Admin role: `PUT /users/{id}/role` endpoint restricted to admin users (via `middleware.RequireAdmin`)
+- User moderation: `PUT /users/{id}/suspend` (sets status to 'suspended'), `PUT /users/{id}/activate` (sets status to 'active'), suspended users cannot login
+- User reporting: `POST /users/{id}/report` with `reason` body; rate limited to 10 reports per hour per user
+- Report consequences: when a user receives 3+ unresolved reports within 7 days, auto-suspend via background job; resolved/dismissed reports reset the count
+- Admin report management: `GET /admin/reports` lists pending reports with reporter/reported details; `PUT /admin/reports/{id}/resolve` or `PUT /admin/reports/{id}/dismiss` with optional `notes`
+- Password complexity: minimum 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char; enforced at registration and password change
+- Login lockout: after 5 failed login attempts within 15 minutes, account locked for 15 minutes; failed attempt tracking via Redis
+- Rate limiting: `LOGIN_IP_LIMIT` and `REGISTER_IP_LIMIT` environment variables; 20 login attempts / 10 registrations per IP per hour
+
+### Changed
+- `auth.NewHandler` now accepts `WithLocker`, `WithLimiter`, `WithLoginIPLimit`, `WithRegisterIPLimit` functional options
+- `reports.NewManager` now accepts `WithModerator` and `WithLimiter` options
+- Login handler returns 429 when rate limited, includes `Retry-After` header
+
 ## [2.5.0] - 2026-04-03 — User blocking
 
 ### Added

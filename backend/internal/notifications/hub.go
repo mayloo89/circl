@@ -54,6 +54,14 @@ func (h *Hub) Subscribe(userID string) (<-chan Event, func()) {
 	}
 }
 
+// IsConnected reports whether the user has at least one active SSE connection.
+// Used to decide whether a web push notification is needed.
+func (h *Hub) IsConnected(userID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.subscribers[userID]) > 0
+}
+
 // Notify sends an event to all active connections for the given user.
 // If a subscriber's channel is full the event is dropped for that subscriber
 // rather than blocking the caller.

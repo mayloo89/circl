@@ -38,6 +38,9 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Extended profiles**: date of birth (18+ enforced), gender, location (autocomplete via Photon/OSM), interests tags
 - ✅ **Registration with profile seeding**: username + DOB collected at signup, profile seeded immediately after account creation
 - ✅ **User blocking**: block/unblock users, bidirectional suppression in browse/search/contacts/chat, WebSocket message filtering, performance-optimized batch queries
+- ✅ **User reporting**: report users with reason, rate limited (10/hour), auto-suspend after 3+ reports in 7 days
+- ✅ **Admin moderation**: admin role, user suspension/activation, report management (resolve/dismiss with notes)
+- ✅ **Account safety**: login lockout (5 failed attempts = 15 min lockout), password complexity (8+ chars, upper/lower/number/special), rate limiting (configurable per IP)
 
 ## Local setup
 
@@ -177,6 +180,9 @@ All protected routes require `Authorization: Bearer <token>`.
 | `GET` | `/presence?ids=` | ✅ | Batch presence query (online + last seen) |
 | `POST` | `/uploads/request` | ✅ | Request an upload URL (validates type/size) |
 | `POST` | `/uploads/{id}/confirm` | ✅ | Confirm upload completed |
+| `POST` | `/push/subscribe` | ✅ | Subscribe to web push notifications |
+| `DELETE` | `/push/unsubscribe` | ✅ | Unsubscribe from push notifications |
+| `GET` | `/push/vapid-public-key` | ✅ | Get VAPID public key for subscription |
 
 ## Repository structure
 
