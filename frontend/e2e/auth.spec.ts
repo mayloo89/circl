@@ -39,7 +39,7 @@ test.describe("auth", () => {
     await page.locator("#password").fill("WrongPassword99!")
     await page.getByRole("button", { name: "Sign in" }).click()
 
-    await expect(page.getByText("Invalid credentials")).toBeVisible()
+    await expect(page.getByText("Invalid email or password.")).toBeVisible()
   })
 
   test("shows error when registering a duplicate email", async ({ page, request }) => {
