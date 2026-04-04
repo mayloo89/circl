@@ -108,9 +108,13 @@ func main() {
 	adminStore := admin.NewStore(pool)
 	adminSvc := admin.NewService(adminStore)
 
+	loginIPLimit := config.EnvIntOrDefault("LOGIN_IP_LIMIT", 20)
+	registerIPLimit := config.EnvIntOrDefault("REGISTER_IP_LIMIT", 10)
 	authHandler := auth.NewHandler(authSvc, jwtSecret, tokenExpiry,
 		auth.WithLocker(limiter),
 		auth.WithLimiter(limiter),
+		auth.WithLoginIPLimit(loginIPLimit, 15*time.Minute),
+		auth.WithRegisterIPLimit(registerIPLimit, time.Hour),
 	)
 
 	reportMgr := reports.NewManager(reportSvc,

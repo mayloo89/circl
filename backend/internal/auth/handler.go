@@ -19,14 +19,12 @@ const (
 	loginMaxFailures = 10
 	// loginLockWindow is how long the lockout lasts after the threshold is reached.
 	loginLockWindow = 15 * time.Minute
-	// loginIPLimit is the max login attempts allowed per IP within loginIPWindow.
-	loginIPLimit = 20
-	// loginIPWindow is the sliding window for per-IP login rate limiting.
-	loginIPWindow = 15 * time.Minute
-	// registerIPLimit is the max registrations allowed per IP within registerIPWindow.
-	registerIPLimit = 10
-	// registerIPWindow is the sliding window for per-IP registration rate limiting.
-	registerIPWindow = time.Hour
+
+	// Default per-IP rate limit values. Override via WithLoginIPLimit / WithRegisterIPLimit.
+	defaultLoginIPLimit     = 20
+	defaultLoginIPWindow    = 15 * time.Minute
+	defaultRegisterIPLimit  = 10
+	defaultRegisterIPWindow = time.Hour
 )
 
 // LoginLocker tracks consecutive login failures per account and enforces lockouts.
@@ -50,8 +48,12 @@ type RequestLimiter interface {
 type HandlerOption func(*handlerConfig)
 
 type handlerConfig struct {
-	locker  LoginLocker
-	limiter RequestLimiter
+	locker           LoginLocker
+	limiter          RequestLimiter
+	loginIPLimit     int
+	loginIPWindow    time.Duration
+	registerIPLimit  int
+	registerIPWindow time.Duration
 }
 
 // WithLocker injects a LoginLocker for account lockout enforcement.
@@ -59,6 +61,16 @@ func WithLocker(l LoginLocker) HandlerOption { return func(c *handlerConfig) { c
 
 // WithLimiter injects a RequestLimiter for per-IP rate limiting.
 func WithLimiter(l RequestLimiter) HandlerOption { return func(c *handlerConfig) { c.limiter = l } }
+
+// WithLoginIPLimit overrides the default per-IP rate limit for the login endpoint.
+func WithLoginIPLimit(limit int, window time.Duration) HandlerOption {
+	return func(c *handlerConfig) { c.loginIPLimit = limit; c.loginIPWindow = window }
+}
+
+// WithRegisterIPLimit overrides the default per-IP rate limit for the register endpoint.
+func WithRegisterIPLimit(limit int, window time.Duration) HandlerOption {
+	return func(c *handlerConfig) { c.registerIPLimit = limit; c.registerIPWindow = window }
+}
 
 // Authenticator is the interface the handler depends on.
 // *Service satisfies this interface.
@@ -88,7 +100,12 @@ var generateTokenFn func(string, bool, string, time.Duration) (string, error) = 
 // NewHandler returns an http.Handler with all auth routes registered.
 // jwtSecret and tokenExpiry are used to issue a signed JWT on login/register.
 func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration, opts ...HandlerOption) http.Handler {
-	cfg := &handlerConfig{}
+	cfg := &handlerConfig{
+		loginIPLimit:     defaultLoginIPLimit,
+		loginIPWindow:    defaultLoginIPWindow,
+		registerIPLimit:  defaultRegisterIPLimit,
+		registerIPWindow: defaultRegisterIPWindow,
+	}
 	for _, o := range opts {
 		o(cfg)
 	}
@@ -103,7 +120,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 		// Per-IP rate limit — checked before decoding to fail fast on floods.
 		if cfg.limiter != nil {
 			ip := clientIP(r)
-			allowed, err := cfg.limiter.Allow(r.Context(), "login:ip:"+ip, loginIPLimit, loginIPWindow)
+			allowed, err := cfg.limiter.Allow(r.Context(), "login:ip:"+ip, cfg.loginIPLimit, cfg.loginIPWindow)
 			if err != nil {
 				log.Printf("auth: ip rate limiter error: %v", err)
 			} else if !allowed {
@@ -181,7 +198,7 @@ func registerHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Dura
 		// Per-IP rate limit on registration to slow down mass account creation.
 		if cfg.limiter != nil {
 			ip := clientIP(r)
-			allowed, err := cfg.limiter.Allow(r.Context(), "register:ip:"+ip, registerIPLimit, registerIPWindow)
+			allowed, err := cfg.limiter.Allow(r.Context(), "register:ip:"+ip, cfg.registerIPLimit, cfg.registerIPWindow)
 			if err != nil {
 				log.Printf("auth: ip rate limiter error: %v", err)
 			} else if !allowed {
