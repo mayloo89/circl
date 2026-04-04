@@ -83,6 +83,7 @@ export default function ChatRoomPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
@@ -139,6 +140,15 @@ export default function ChatRoomPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [history, liveMessages])
+
+  // Focus input when entering the chat room
+  useEffect(() => {
+    if (!historyLoading) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+      })
+    }
+  }, [historyLoading])
 
   // IntersectionObserver: load older messages when the top sentinel enters view
   useEffect(() => {
@@ -415,6 +425,7 @@ export default function ChatRoomPage() {
         onSend={(content) => send(content, buildOpts())}
         onAttach={handleAttach}
         onTyping={sendTyping}
+        inputRef={inputRef}
       />
     </div>
   )
