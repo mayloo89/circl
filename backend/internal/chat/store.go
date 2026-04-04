@@ -144,14 +144,24 @@ func (s *pgStore) ListMembers(ctx context.Context, roomID string) ([]string, err
 }
 
 // IsMember reports whether userID is a member of roomID.
+// Channel rooms are open to every authenticated user — always returns true for them.
 func (s *pgStore) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
+	var roomType string
 	var exists bool
 	err := s.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2)`,
+		`SELECT r.type,
+		        EXISTS(SELECT 1 FROM room_members rm WHERE rm.room_id = r.id AND rm.user_id = $2)
+		 FROM rooms r WHERE r.id = $1`,
 		roomID, userID,
-	).Scan(&exists)
+	).Scan(&roomType, &exists)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrNotFound
+	}
 	if err != nil {
 		return false, fmt.Errorf("is member: %w", err)
+	}
+	if roomType == RoomTypeChannel {
+		return true, nil
 	}
 	return exists, nil
 }
@@ -542,6 +552,23 @@ func (s *pgStore) GetDisplayName(ctx context.Context, userID string) (string, er
 	return name, nil
 }
 
+// GetAvatarURL returns the avatar_url for the given user from their profile.
+// Returns an empty string when no profile row exists.
+func (s *pgStore) GetAvatarURL(ctx context.Context, userID string) (string, error) {
+	var url string
+	err := s.db.QueryRow(ctx,
+		`SELECT COALESCE(avatar_url, '') FROM profiles WHERE user_id = $1`,
+		userID,
+	).Scan(&url)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get avatar url: %w", err)
+	}
+	return url, nil
+}
+
 // ListExpiredMessages returns the IDs of messages whose TTL has elapsed.
 func (s *pgStore) ListExpiredMessages(ctx context.Context) ([]string, error) {
 	rows, err := s.db.Query(ctx,
@@ -705,55 +732,29 @@ func (s *pgStore) UpdateGroupName(ctx context.Context, roomID, actorID, name str
 }
 
 // CreateChannel creates a public channel room and auto-joins the creator.
+// CreateChannel creates a public channel room. No room_members row is inserted —
+// channel membership is ephemeral, driven by active WebSocket connections.
 func (s *pgStore) CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error) {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create channel: begin: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
 	var room Room
-	if err = tx.QueryRow(ctx, `
+	if err := s.db.QueryRow(ctx, `
 		INSERT INTO rooms (type, name, description, creator_id) VALUES ('channel', $1, $2, $3)
 		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
 		          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`,
 		name, description, creatorID,
 	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt); err != nil {
-		return nil, fmt.Errorf("create channel: insert room: %w", err)
-	}
-
-	if _, err = tx.Exec(ctx,
-		`INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		room.ID, creatorID,
-	); err != nil {
-		return nil, fmt.Errorf("create channel: add creator: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("create channel: commit: %w", err)
+		return nil, fmt.Errorf("create channel: %w", err)
 	}
 	return &room, nil
 }
 
-// ListChannels returns all public channel rooms ordered by creation date,
-// with member counts and membership status for userID.
-func (s *pgStore) ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error) {
+// ListChannels returns all public channel rooms ordered by creation date.
+// ActiveCount is not populated here — it is filled by the handler from the Hub.
+func (s *pgStore) ListChannels(ctx context.Context) ([]ChannelSummary, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT r.id,
-		       r.name,
-		       COALESCE(r.description, ''),
-		       COALESCE(r.creator_id::text, ''),
-		       COUNT(rm.user_id)::int                                        AS member_count,
-		       EXISTS(
-		           SELECT 1 FROM room_members
-		           WHERE room_id = r.id AND user_id = $1
-		       )                                                              AS is_member,
-		       r.created_at
-		FROM rooms r
-		LEFT JOIN room_members rm ON rm.room_id = r.id
-		WHERE r.type = 'channel'
-		GROUP BY r.id
-		ORDER BY r.created_at DESC`, userID)
+		SELECT id, name, COALESCE(description, ''), COALESCE(creator_id::text, ''), created_at
+		FROM rooms
+		WHERE type = 'channel'
+		ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)
 	}
@@ -762,10 +763,7 @@ func (s *pgStore) ListChannels(ctx context.Context, userID string) ([]ChannelSum
 	var channels []ChannelSummary
 	for rows.Next() {
 		var c ChannelSummary
-		if err := rows.Scan(
-			&c.ID, &c.Name, &c.Description, &c.CreatorID,
-			&c.MemberCount, &c.IsMember, &c.CreatedAt,
-		); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatorID, &c.CreatedAt); err != nil {
 			return nil, fmt.Errorf("list channels: scan: %w", err)
 		}
 		channels = append(channels, c)
@@ -777,54 +775,6 @@ func (s *pgStore) ListChannels(ctx context.Context, userID string) ([]ChannelSum
 		channels = []ChannelSummary{}
 	}
 	return channels, nil
-}
-
-// JoinChannel adds userID to a channel room. Idempotent — joining again is a no-op.
-func (s *pgStore) JoinChannel(ctx context.Context, roomID, userID string) error {
-	var roomType string
-	err := s.db.QueryRow(ctx, `SELECT type FROM rooms WHERE id = $1`, roomID).Scan(&roomType)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("join channel: get room: %w", err)
-	}
-	if roomType != RoomTypeChannel {
-		return ErrForbidden
-	}
-	if _, err = s.db.Exec(ctx,
-		`INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		roomID, userID,
-	); err != nil {
-		return fmt.Errorf("join channel: insert: %w", err)
-	}
-	return nil
-}
-
-// LeaveChannel removes userID from a channel room. Anyone may leave, including the creator.
-func (s *pgStore) LeaveChannel(ctx context.Context, roomID, userID string) error {
-	var roomType string
-	err := s.db.QueryRow(ctx, `SELECT type FROM rooms WHERE id = $1`, roomID).Scan(&roomType)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("leave channel: get room: %w", err)
-	}
-	if roomType != RoomTypeChannel {
-		return ErrForbidden
-	}
-	tag, err := s.db.Exec(ctx,
-		`DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
-		roomID, userID,
-	)
-	if err != nil {
-		return fmt.Errorf("leave channel: delete: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 // txQuerier is the subset of pgx.Tx used by collectUploadKeys.

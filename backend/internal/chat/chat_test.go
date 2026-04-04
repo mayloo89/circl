@@ -21,8 +21,7 @@ type mockStore struct {
 	isMember         bool
 	roomErr          error
 	roomsErr         error
-	channelsErr      error
-	channelActionErr error
+	channelsErr error
 	msgErr           error
 	msgsErr          error
 	memberErr        error
@@ -47,6 +46,9 @@ type mockStore struct {
 func (m *mockStore) GetDisplayName(_ context.Context, _ string) (string, error) {
 	return m.displayName, m.displayNameErr
 }
+func (m *mockStore) GetAvatarURL(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
 func (m *mockStore) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
@@ -59,14 +61,8 @@ func (m *mockStore) GetRoom(_ context.Context, _ string) (*chat.Room, error) {
 func (m *mockStore) CreateChannel(_ context.Context, _, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
-func (m *mockStore) ListChannels(_ context.Context, _ string) ([]chat.ChannelSummary, error) {
+func (m *mockStore) ListChannels(_ context.Context) ([]chat.ChannelSummary, error) {
 	return m.channels, m.channelsErr
-}
-func (m *mockStore) JoinChannel(_ context.Context, _, _ string) error {
-	return m.channelActionErr
-}
-func (m *mockStore) LeaveChannel(_ context.Context, _, _ string) error {
-	return m.channelActionErr
 }
 func (m *mockStore) IsMember(_ context.Context, _, _ string) (bool, error) {
 	return m.isMember, m.memberErr
@@ -551,55 +547,24 @@ func TestService_CreateChannel_Error(t *testing.T) {
 
 func TestService_ListChannels_Success(t *testing.T) {
 	want := []chat.ChannelSummary{
-		{ID: "c-1", Name: "general", MemberCount: 5, IsMember: true},
-		{ID: "c-2", Name: "random", MemberCount: 3},
+		{ID: "c-1", Name: "general"},
+		{ID: "c-2", Name: "random"},
 	}
 	svc := chat.NewService(&mockStore{channels: want})
 
-	got, err := svc.ListChannels(t.Context(), "u-1")
+	got, err := svc.ListChannels(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(got) != 2 {
 		t.Errorf("len = %d, want 2", len(got))
 	}
-	if !got[0].IsMember {
-		t.Error("first channel should have IsMember=true")
-	}
 }
 
 func TestService_ListChannels_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{channelsErr: errors.New("db fail")})
-	_, err := svc.ListChannels(t.Context(), "u-1")
+	_, err := svc.ListChannels(t.Context())
 	if err == nil {
 		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestService_JoinChannel_Success(t *testing.T) {
-	svc := chat.NewService(&mockStore{})
-	if err := svc.JoinChannel(t.Context(), "c-1", "u-1"); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestService_JoinChannel_Error(t *testing.T) {
-	svc := chat.NewService(&mockStore{channelActionErr: errors.New("db fail")})
-	if err := svc.JoinChannel(t.Context(), "c-1", "u-1"); err == nil {
-		t.Error("expected error, got nil")
-	}
-}
-
-func TestService_LeaveChannel_Success(t *testing.T) {
-	svc := chat.NewService(&mockStore{})
-	if err := svc.LeaveChannel(t.Context(), "c-1", "u-1"); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestService_LeaveChannel_Error(t *testing.T) {
-	svc := chat.NewService(&mockStore{channelActionErr: errors.New("db fail")})
-	if err := svc.LeaveChannel(t.Context(), "c-1", "u-1"); err == nil {
-		t.Error("expected error, got nil")
 	}
 }

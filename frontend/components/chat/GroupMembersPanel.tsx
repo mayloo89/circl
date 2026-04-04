@@ -139,13 +139,21 @@ export default function GroupMembersPanel({
 
   async function handleRemove() {
     if (!removeConfirm) return
-    setRemoveLoading(true)
     const isSelf = removeConfirm.user_id === currentUserId
-    const url = roomType === "channel" && isSelf
-      ? `${API_URL}/chat/channels/${roomId}/leave`
-      : `${API_URL}/chat/rooms/${roomId}/members/${removeConfirm.user_id}`
+
+    // Channels are ephemeral — leaving is just navigating away (WS disconnects automatically).
+    if (roomType === "channel" && isSelf) {
+      setRemoveConfirm(null)
+      onLeft()
+      return
+    }
+
+    setRemoveLoading(true)
     try {
-      const res = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(
+        `${API_URL}/chat/rooms/${roomId}/members/${removeConfirm.user_id}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+      )
       if (res.ok) {
         setRemoveConfirm(null)
         if (isSelf) {

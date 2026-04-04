@@ -42,6 +42,7 @@ interface MemberProfile {
   display_name: string
   avatar_url: string
   is_admin: boolean
+  joined_at?: string
 }
 
 // ─── Skeletons ────────────────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ export default function ChatRoomPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts } = useChat(roomId, token)
+  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
@@ -111,6 +112,22 @@ export default function ChatRoomPage() {
   const presence = usePresence(peerIDs, token, subscribe)
 
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
+
+  // Update the members sidebar in real-time from participant_join / participant_leave events.
+  useEffect(() => {
+    if (participantEvents.length === 0 || room?.type !== "channel") return
+    for (const ev of participantEvents) {
+      if (ev.type === "join") {
+        setMembers((prev) => {
+          if (prev.some((m) => m.user_id === ev.userId)) return prev
+          return [...prev, { user_id: ev.userId, username: "", display_name: ev.displayName, avatar_url: ev.avatarURL, is_admin: false }]
+        })
+      } else {
+        setMembers((prev) => prev.filter((m) => m.user_id !== ev.userId))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participantEvents])
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId || !room) return

@@ -62,13 +62,15 @@ type Room struct {
 }
 
 // ChannelSummary is returned by ListChannels for the public channel directory.
+// ActiveCount is populated by the handler from the Hub (not stored in the DB)
+// because channel membership is ephemeral — a user is "in" a channel only while
+// their WebSocket connection is open.
 type ChannelSummary struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatorID   string    `json:"creator_id,omitempty"`
-	MemberCount int       `json:"member_count"`
-	IsMember    bool      `json:"is_member"`
+	ActiveCount int       `json:"active_count"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -151,14 +153,10 @@ type SaveMessageParams struct {
 type Store interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
-	// CreateChannel creates a public channel room and auto-joins the creator.
+	// CreateChannel creates a public channel room.
 	CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error)
-	// ListChannels returns all public channels with member counts and membership status for userID.
-	ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error)
-	// JoinChannel adds userID to a channel room.
-	JoinChannel(ctx context.Context, roomID, userID string) error
-	// LeaveChannel removes userID from a channel room. Anyone may leave, including the creator.
-	LeaveChannel(ctx context.Context, roomID, userID string) error
+	// ListChannels returns all public channels ordered by creation date.
+	ListChannels(ctx context.Context) ([]ChannelSummary, error)
 	// GetRoom returns the room record for the given ID.
 	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
@@ -196,6 +194,9 @@ type Store interface {
 	// GetDisplayName returns the display_name for the given user from their profile.
 	// Returns an empty string when no profile row exists.
 	GetDisplayName(ctx context.Context, userID string) (string, error)
+	// GetAvatarURL returns the avatar_url for the given user from their profile.
+	// Returns an empty string when no profile row exists.
+	GetAvatarURL(ctx context.Context, userID string) (string, error)
 }
 
 // Manager is the interface used by HTTP and WebSocket handlers.
@@ -203,9 +204,7 @@ type Manager interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
 	CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error)
-	ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error)
-	JoinChannel(ctx context.Context, roomID, userID string) error
-	LeaveChannel(ctx context.Context, roomID, userID string) error
+	ListChannels(ctx context.Context) ([]ChannelSummary, error)
 	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
 	ListMembers(ctx context.Context, roomID string) ([]string, error)
@@ -226,6 +225,9 @@ type Manager interface {
 	// GetDisplayName returns the display_name for the given user from their profile.
 	// Returns an empty string when no profile row exists.
 	GetDisplayName(ctx context.Context, userID string) (string, error)
+	// GetAvatarURL returns the avatar_url for the given user from their profile.
+	// Returns an empty string when no profile row exists.
+	GetAvatarURL(ctx context.Context, userID string) (string, error)
 }
 
 // Service is the application-layer implementation of Manager.
@@ -251,16 +253,8 @@ func (s *Service) CreateChannel(ctx context.Context, creatorID, name, descriptio
 	return s.store.CreateChannel(ctx, creatorID, name, description)
 }
 
-func (s *Service) ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error) {
-	return s.store.ListChannels(ctx, userID)
-}
-
-func (s *Service) JoinChannel(ctx context.Context, roomID, userID string) error {
-	return s.store.JoinChannel(ctx, roomID, userID)
-}
-
-func (s *Service) LeaveChannel(ctx context.Context, roomID, userID string) error {
-	return s.store.LeaveChannel(ctx, roomID, userID)
+func (s *Service) ListChannels(ctx context.Context) ([]ChannelSummary, error) {
+	return s.store.ListChannels(ctx)
 }
 
 func (s *Service) GetRoom(ctx context.Context, roomID string) (*Room, error) {
@@ -325,4 +319,8 @@ func (s *Service) ListExpiredMessages(ctx context.Context) ([]string, error) {
 
 func (s *Service) GetDisplayName(ctx context.Context, userID string) (string, error) {
 	return s.store.GetDisplayName(ctx, userID)
+}
+
+func (s *Service) GetAvatarURL(ctx context.Context, userID string) (string, error) {
+	return s.store.GetAvatarURL(ctx, userID)
 }

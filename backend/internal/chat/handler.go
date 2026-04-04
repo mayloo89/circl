@@ -42,6 +42,8 @@ type Client struct {
 	userID          string
 	roomID          string
 	displayName     string
+	avatarURL       string
+	isChannel       bool
 	isBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
 }
 
@@ -83,8 +85,10 @@ type clientMessage struct {
 	TTL      string `json:"ttl,omitempty"` // "1h" | "24h" | "7d"
 }
 
-// HandlerConfig holds optional callbacks for the REST chat handler.
+// HandlerConfig holds optional callbacks and dependencies for the REST chat handler.
 type HandlerConfig struct {
+	// Hub, if set, is used to query active WebSocket participants for channel rooms.
+	Hub *Hub
 	// NotifyMessageDeleted is called after a message is physically deleted
 	// so the hub can broadcast a message_deleted event to all room members.
 	NotifyMessageDeleted func(roomID, messageID string)
@@ -144,7 +148,7 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
 	r.Put("/rooms/{id}", updateGroupHandler(svc))
-	r.Get("/rooms/{id}/members", listGroupMembersHandler(svc))
+	r.Get("/rooms/{id}/members", listGroupMembersHandler(svc, c))
 	r.Post("/rooms/{id}/members", addGroupMemberHandler(svc))
 	r.Delete("/rooms/{id}/members/{userID}", removeGroupMemberHandler(svc))
 	r.Get("/rooms/{id}/messages", listMessagesHandler(svc))
@@ -152,10 +156,8 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/rooms/{id}/messages/{msgID}/view", viewMessageHandler(svc, c))
 
 	// Public channel routes
-	r.Get("/channels", listChannelsHandler(svc))
+	r.Get("/channels", listChannelsHandler(svc, c))
 	r.Post("/channels", createChannelHandler(svc))
-	r.Post("/channels/{id}/join", joinChannelHandler(svc))
-	r.Delete("/channels/{id}/leave", leaveChannelHandler(svc))
 
 	return r
 }
@@ -473,29 +475,55 @@ func updateGroupHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
-// listGroupMembersHandler returns the member profiles for a room.
-// Requires the caller to be a member of the room.
+// listGroupMembersHandler returns the member profiles for a group room, or the
+// active WebSocket participants for a channel room (ephemeral membership).
 //
 // GET /chat/rooms/{id}/members
-func listGroupMembersHandler(svc Manager) http.HandlerFunc {
+func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		roomID := chi.URLParam(r, "id")
+		room, err := svc.GetRoom(r.Context(), roomID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if room.Type == RoomTypeChannel {
+			// For channels, return currently connected participants from the hub.
+			var participants []ClientInfo
+			if cfg.Hub != nil {
+				participants = cfg.Hub.RoomParticipants(r.Context(), roomID)
+			}
+			if participants == nil {
+				participants = []ClientInfo{}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(participants) //nolint:errcheck
+			return
+		}
+
+		// For group/DM rooms, require the caller to be a member.
+		userID, _ := middleware.UserIDFromContext(r.Context())
 		member, err := svc.IsMember(r.Context(), roomID, userID)
 		if err != nil || !member {
 			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 			return
 		}
+
 		profiles, err := svc.ListMemberProfiles(r.Context(), roomID)
 		if err != nil {
 			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(profiles) //nolint:errcheck
 	}
 }
@@ -567,20 +595,26 @@ func removeGroupMemberHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
-// listChannelsHandler returns all public channel rooms with member counts.
+// listChannelsHandler returns all public channel rooms.
+// ActiveCount is populated from the Hub when available.
 //
 // GET /chat/channels
-func listChannelsHandler(svc Manager) http.HandlerFunc {
+func listChannelsHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		channels, err := svc.ListChannels(r.Context(), userID)
+		channels, err := svc.ListChannels(r.Context())
 		if err != nil {
 			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
 			return
+		}
+		if cfg.Hub != nil {
+			for i := range channels {
+				channels[i].ActiveCount = len(cfg.Hub.RoomParticipants(r.Context(), channels[i].ID))
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(channels) //nolint:errcheck
@@ -617,63 +651,6 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
-// joinChannelHandler joins the authenticated user to a public channel room.
-//
-// POST /chat/channels/{id}/join
-func joinChannelHandler(svc Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
-		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		roomID := chi.URLParam(r, "id")
-		err := svc.JoinChannel(r.Context(), roomID, userID)
-		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, ErrForbidden) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-			return
-		}
-		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-// leaveChannelHandler removes the authenticated user from a channel room.
-// The creator may also leave; there is no ownership lock on channels.
-//
-// DELETE /chat/channels/{id}/leave
-func leaveChannelHandler(svc Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
-		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		roomID := chi.URLParam(r, "id")
-		err := svc.LeaveChannel(r.Context(), roomID, userID)
-		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, ErrForbidden) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-			return
-		}
-		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
 // wsHandler upgrades the connection to WebSocket and starts the client pumps.
 // Auth is performed via a ?token= query parameter because the browser
 // WebSocket API does not support custom headers.
@@ -695,10 +672,23 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 
 		roomID := chi.URLParam(r, "id")
 
-		member, err := svc.IsMember(r.Context(), roomID, userID)
-		if err != nil || !member {
-			http.Error(w, "forbidden", http.StatusForbidden)
+		room, err := svc.GetRoom(r.Context(), roomID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
 			return
+		}
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		isChannel := room.Type == RoomTypeChannel
+
+		if !isChannel {
+			member, err := svc.IsMember(r.Context(), roomID, userID)
+			if err != nil || !member {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 		}
 
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -707,6 +697,7 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 		}
 
 		displayName, _ := svc.GetDisplayName(r.Context(), userID)
+		avatarURL, _ := svc.GetAvatarURL(r.Context(), userID)
 
 		client := &Client{
 			hub:             hub,
@@ -715,6 +706,8 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 			userID:          userID,
 			roomID:          roomID,
 			displayName:     displayName,
+			avatarURL:       avatarURL,
+			isChannel:       isChannel,
 			isBlockedInRoom: cfg.IsBlockedInRoom,
 		}
 

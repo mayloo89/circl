@@ -17,8 +17,7 @@ interface ChannelSummary {
   name: string
   description: string
   creator_id: string
-  member_count: number
-  is_member: boolean
+  active_count: number
   created_at: string
 }
 
@@ -61,7 +60,7 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
       if (!res.ok) { setError("Failed to create channel."); return }
       const room = await res.json()
       setName(""); setDescription("")
-      onCreated({ ...room, member_count: 1, is_member: true } as ChannelSummary)
+      onCreated({ ...room } as ChannelSummary)
     } catch {
       setError("Failed to create channel.")
     } finally {
@@ -107,7 +106,6 @@ export default function ChannelsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
-  const [joining, setJoining] = useState<string | null>(null)
   const [query, setQuery] = useState("")
 
   const token = session?.accessToken
@@ -128,25 +126,6 @@ export default function ChannelsPage() {
     loadChannels()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, token])
-
-  async function handleJoin(channel: ChannelSummary) {
-    if (!token) return
-    setJoining(channel.id)
-    try {
-      const res = await fetch(`${API_URL}/chat/channels/${channel.id}/join`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setChannels((prev) =>
-          prev.map((c) => c.id === channel.id ? { ...c, is_member: true, member_count: c.member_count + 1 } : c)
-        )
-        router.push(`/chat/${channel.id}`)
-      }
-    } finally {
-      setJoining(null)
-    }
-  }
 
   const filtered = channels.filter(
     (c) => !query || c.name.toLowerCase().includes(query.toLowerCase()) || c.description.toLowerCase().includes(query.toLowerCase())
@@ -227,26 +206,17 @@ export default function ChannelsPage() {
                     {ch.description && (
                       <p className="mt-0.5 truncate text-xs text-gray-400">{ch.description}</p>
                     )}
-                    <p className="mt-0.5 text-xs text-gray-600">{ch.member_count} member{ch.member_count !== 1 ? "s" : ""}</p>
+                    {ch.active_count > 0 && (
+                      <p className="mt-0.5 text-xs text-gray-600">{ch.active_count} online now</p>
+                    )}
                   </div>
-                  {ch.is_member ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => router.push(`/chat/${ch.id}`)}
-                    >
-                      Open
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      loading={joining === ch.id}
-                      onClick={() => handleJoin(ch)}
-                    >
-                      Join
-                    </Button>
-                  )}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => router.push(`/chat/${ch.id}`)}
+                  >
+                    Enter
+                  </Button>
                 </li>
               ))}
             </ul>

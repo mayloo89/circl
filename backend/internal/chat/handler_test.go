@@ -37,8 +37,7 @@ type mockManager struct {
 	isMember         bool
 	roomErr          error
 	roomsErr         error
-	channelsErr      error
-	channelActionErr error
+	channelsErr error
 	msgErr           error
 	msgsErr          error
 	memberErr        error
@@ -62,26 +61,30 @@ type mockManager struct {
 func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error) {
 	return m.displayName, m.displayNameErr
 }
+func (m *mockManager) GetAvatarURL(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
 func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
 func (m *mockManager) CreateGroup(_ context.Context, _, _ string, _ []string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
-func (m *mockManager) GetRoom(_ context.Context, _ string) (*chat.Room, error) {
-	return m.room, m.roomErr
+func (m *mockManager) GetRoom(_ context.Context, id string) (*chat.Room, error) {
+	if m.roomErr != nil {
+		return nil, m.roomErr
+	}
+	if m.room != nil {
+		return m.room, nil
+	}
+	// default: return a group room so wsHandler doesn't panic when no room is configured
+	return &chat.Room{ID: id, Type: "group"}, nil
 }
 func (m *mockManager) CreateChannel(_ context.Context, _, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
-func (m *mockManager) ListChannels(_ context.Context, _ string) ([]chat.ChannelSummary, error) {
+func (m *mockManager) ListChannels(_ context.Context) ([]chat.ChannelSummary, error) {
 	return m.channels, m.channelsErr
-}
-func (m *mockManager) JoinChannel(_ context.Context, _, _ string) error {
-	return m.channelActionErr
-}
-func (m *mockManager) LeaveChannel(_ context.Context, _, _ string) error {
-	return m.channelActionErr
 }
 func (m *mockManager) IsMember(_ context.Context, _, _ string) (bool, error) {
 	return m.isMember, m.memberErr
@@ -620,7 +623,8 @@ func TestWSHandler_InvalidToken(t *testing.T) {
 }
 
 func TestWSHandler_NotMember(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{isMember: false}, nil, testSecret, nil)
+	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
+	h := chat.NewWSHandler(&mockManager{room: groupRoom, isMember: false}, nil, testSecret, nil)
 	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
@@ -631,7 +635,8 @@ func TestWSHandler_NotMember(t *testing.T) {
 }
 
 func TestWSHandler_MemberCheckError(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{memberErr: errors.New("db fail")}, nil, testSecret, nil)
+	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
+	h := chat.NewWSHandler(&mockManager{room: groupRoom, memberErr: errors.New("db fail")}, nil, testSecret, nil)
 	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
@@ -1831,96 +1836,3 @@ func TestCreateChannel_ServiceError(t *testing.T) {
 	}
 }
 
-// --- Join channel ---
-
-func TestJoinChannel_Success(t *testing.T) {
-	h := chat.NewHandler(&mockManager{})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels/c-1/join", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want 204", rec.Code)
-	}
-}
-
-func TestJoinChannel_NoUserInContext(t *testing.T) {
-	h := chat.NewHandler(&mockManager{})
-	req := httptest.NewRequest(http.MethodPost, "/channels/c-1/join", nil)
-	rec := httptest.NewRecorder()
-	serveNoAuth(h, req, rec)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
-	}
-}
-
-func TestJoinChannel_NotFound(t *testing.T) {
-	h := chat.NewHandler(&mockManager{channelActionErr: chat.ErrNotFound})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels/c-1/join", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", rec.Code)
-	}
-}
-
-func TestJoinChannel_Forbidden(t *testing.T) {
-	h := chat.NewHandler(&mockManager{channelActionErr: chat.ErrForbidden})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels/c-1/join", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status = %d, want 403", rec.Code)
-	}
-}
-
-func TestJoinChannel_ServiceError(t *testing.T) {
-	h := chat.NewHandler(&mockManager{channelActionErr: errors.New("db fail")})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels/c-1/join", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want 500", rec.Code)
-	}
-}
-
-// --- Leave channel ---
-
-func TestLeaveChannel_Success(t *testing.T) {
-	h := chat.NewHandler(&mockManager{})
-	req := authedReq(httptest.NewRequest(http.MethodDelete, "/channels/c-1/leave", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want 204", rec.Code)
-	}
-}
-
-func TestLeaveChannel_NoUserInContext(t *testing.T) {
-	h := chat.NewHandler(&mockManager{})
-	req := httptest.NewRequest(http.MethodDelete, "/channels/c-1/leave", nil)
-	rec := httptest.NewRecorder()
-	serveNoAuth(h, req, rec)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
-	}
-}
-
-func TestLeaveChannel_NotFound(t *testing.T) {
-	h := chat.NewHandler(&mockManager{channelActionErr: chat.ErrNotFound})
-	req := authedReq(httptest.NewRequest(http.MethodDelete, "/channels/c-1/leave", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", rec.Code)
-	}
-}
-
-func TestLeaveChannel_ServiceError(t *testing.T) {
-	h := chat.NewHandler(&mockManager{channelActionErr: errors.New("db fail")})
-	req := authedReq(httptest.NewRequest(http.MethodDelete, "/channels/c-1/leave", nil))
-	rec := httptest.NewRecorder()
-	serveWithAuth(h, req, rec)
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want 500", rec.Code)
-	}
-}

@@ -1,0 +1,1 @@
+-- Ephemeral membership cannot be restored; no-op.

@@ -237,6 +237,7 @@ func main() {
 		chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
 	}
 	chatHandler := chat.NewHandler(chatSvc, chat.HandlerConfig{
+		Hub:                  chatHub,
 		NotifyMessageDeleted: notifyDeleted,
 		NotifyRoomRead: func(roomID, userID string, readAt time.Time) {
 			data, _ := json.Marshal(map[string]any{
