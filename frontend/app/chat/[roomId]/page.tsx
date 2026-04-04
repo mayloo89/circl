@@ -72,6 +72,8 @@ export default function ChatRoomPage() {
 
   const [history, setHistory] = useState<HistoryMessage[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyBefore, setHistoryBefore] = useState<string | null>(null)
+  const [loadingOlderHistory, setLoadingOlderHistory] = useState(false)
   const [room, setRoom] = useState<RoomSummary | null>(null)
   const [ephemeral, setEphemeral] = useState<EphemeralMode>("off")
   const [mediaModal, setMediaModal] = useState<{ url: string; type: string } | null>(null)
@@ -79,6 +81,8 @@ export default function ChatRoomPage() {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [blockLoading, setBlockLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const topSentinelRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
@@ -101,7 +105,14 @@ export default function ChatRoomPage() {
     if (status !== "authenticated" || !token || !roomId) return
     fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((data: HistoryMessage[]) => setHistory([...data].reverse()))
+      .then((data: HistoryMessage[]) => {
+        const reversed = [...data].reverse()
+        setHistory(reversed)
+        // data is newest-first; the last item in `data` is the oldest message
+        if (data.length === 50) {
+          setHistoryBefore(data[data.length - 1].created_at)
+        }
+      })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [status, token, roomId])
@@ -128,6 +139,52 @@ export default function ChatRoomPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [history, liveMessages])
+
+  // IntersectionObserver: load older messages when the top sentinel enters view
+  useEffect(() => {
+    if (!token || !roomId || !historyBefore) return
+    const el = topSentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      async (entries) => {
+        if (!entries[0].isIntersecting || loadingOlderHistory) return
+
+        setLoadingOlderHistory(true)
+        const container = scrollContainerRef.current
+        const prevScrollHeight = container?.scrollHeight ?? 0
+
+        try {
+          const res = await fetch(
+            `${API_URL}/chat/rooms/${roomId}/messages?before=${encodeURIComponent(historyBefore)}&limit=50`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          if (!res.ok) return
+          const data: HistoryMessage[] = await res.json()
+          if (data.length === 0) {
+            setHistoryBefore(null)
+            return
+          }
+          const reversed = [...data].reverse()
+          setHistory((prev) => [...reversed, ...prev])
+          // oldest message in the batch becomes the next cursor
+          setHistoryBefore(data.length === 50 ? data[data.length - 1].created_at : null)
+
+          // Restore scroll position so content doesn't jump
+          requestAnimationFrame(() => {
+            if (container) {
+              container.scrollTop += container.scrollHeight - prevScrollHeight
+            }
+          })
+        } finally {
+          setLoadingOlderHistory(false)
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [token, roomId, historyBefore, loadingOlderHistory])
 
   const [now, setNow] = useState(0)
   useEffect(() => {
@@ -293,7 +350,7 @@ export default function ChatRoomPage() {
       </div>
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-4">
         {historyLoading ? (
           <MessageSkeletons />
         ) : allMessages.length === 0 ? (
@@ -308,6 +365,13 @@ export default function ChatRoomPage() {
           </div>
         ) : (
           <div className="px-4">
+            {/* Top sentinel: triggers loading of older messages */}
+            <div ref={topSentinelRef} className="h-px" />
+            {loadingOlderHistory && (
+              <div className="flex justify-center py-2">
+                <span className="text-xs text-gray-500">Loading older messages…</span>
+              </div>
+            )}
             {allMessages.map((msg, i) => {
               const isOwn = msg.sender_id === userID
               const revealedText = revealedMessages.get(msg.id)?.content

@@ -107,7 +107,7 @@ func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]Inter
 	return []InterestSuggestion{}, nil
 }
 
-func (m *mockStore) Browse(_ context.Context, _ string, _, _ int, _ bool, _ []string) ([]BrowseProfile, error) {
+func (m *mockStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) ([]BrowseProfile, error) {
 	if m.browseErr != nil {
 		return nil, m.browseErr
 	}
@@ -664,15 +664,15 @@ func TestBrowse_ReturnsProfiles(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 10, 0, false, nil)
+	page, err := svc.Browse(t.Context(), "requester", 10, "", false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(page.Profiles) != 2 {
 		t.Errorf("len = %d, want 2", len(page.Profiles))
 	}
-	if page.HasMore {
-		t.Error("HasMore should be false")
+	if page.NextCursor != "" {
+		t.Error("NextCursor should be empty when no more pages")
 	}
 	if page.Profiles[0].Age == nil {
 		t.Error("Age should be computed from DateOfBirth")
@@ -690,22 +690,22 @@ func TestBrowse_HasMore(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 2, 0, false, nil)
+	page, err := svc.Browse(t.Context(), "requester", 2, "", false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(page.Profiles) != 2 {
 		t.Errorf("len = %d, want 2 (extra trimmed)", len(page.Profiles))
 	}
-	if !page.HasMore {
-		t.Error("HasMore should be true")
+	if page.NextCursor == "" {
+		t.Error("NextCursor should be set when there are more pages")
 	}
 }
 
 func TestBrowse_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{browseErr: errors.New("db error")})
 
-	_, err := svc.Browse(t.Context(), "requester", 20, 0, false, nil)
+	_, err := svc.Browse(t.Context(), "requester", 20, "", false, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -718,7 +718,7 @@ func TestBrowse_NilDOBSkipsAge(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 10, 0, false, nil)
+	page, err := svc.Browse(t.Context(), "requester", 10, "", false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

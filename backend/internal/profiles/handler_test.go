@@ -99,14 +99,14 @@ func (m *mockProfileManager) SearchInterests(_ context.Context, _ string) ([]pro
 	return []profiles.InterestSuggestion{}, nil
 }
 
-func (m *mockProfileManager) Browse(_ context.Context, _ string, _, _ int, _ bool, _ []string) (*profiles.BrowsePage, error) {
+func (m *mockProfileManager) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) (*profiles.BrowsePage, error) {
 	if m.browseErr != nil {
 		return nil, m.browseErr
 	}
 	if m.browsePage != nil {
 		return m.browsePage, nil
 	}
-	return &profiles.BrowsePage{Profiles: []profiles.BrowseProfile{}, HasMore: false}, nil
+	return &profiles.BrowsePage{Profiles: []profiles.BrowseProfile{}}, nil
 }
 
 // serve wraps the handler with auth middleware and serves the request.
@@ -803,7 +803,6 @@ func TestBrowseProfiles_OK(t *testing.T) {
 			Profiles: []profiles.BrowseProfile{
 				{ID: "p1", UserID: "u1", Username: "alice", DisplayName: "Alice", Age: &age, Interests: []string{"hiking"}},
 			},
-			HasMore: false,
 		},
 	})
 
@@ -820,7 +819,7 @@ func TestBrowseProfiles_OK(t *testing.T) {
 			Username string `json:"username"`
 			Age      *int   `json:"age"`
 		} `json:"profiles"`
-		HasMore bool `json:"has_more"`
+		NextCursor string `json:"next_cursor"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -834,15 +833,19 @@ func TestBrowseProfiles_OK(t *testing.T) {
 	if body.Profiles[0].Age == nil || *body.Profiles[0].Age != 28 {
 		t.Errorf("age = %v, want 28", body.Profiles[0].Age)
 	}
-	if body.HasMore {
-		t.Error("has_more should be false")
+	if body.NextCursor != "" {
+		t.Error("next_cursor should be empty when no more pages")
 	}
 }
 
-func TestBrowseProfiles_PageAndLimit(t *testing.T) {
-	h := profiles.NewHandler(&mockProfileManager{})
+func TestBrowseProfiles_NextCursorAndLimit(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{
+		browsePage: &profiles.BrowsePage{
+			NextCursor: "opaque-cursor-token",
+		},
+	})
 
-	req := authedReq(t, http.MethodGet, "/profiles/browse?page=2&limit=5", "")
+	req := authedReq(t, http.MethodGet, "/profiles/browse?limit=5", "")
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)
 
@@ -850,14 +853,14 @@ func TestBrowseProfiles_PageAndLimit(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	var body struct {
-		Page  int `json:"page"`
-		Limit int `json:"limit"`
+		NextCursor string `json:"next_cursor"`
+		Limit      int    `json:"limit"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if body.Page != 2 {
-		t.Errorf("page = %d, want 2", body.Page)
+	if body.NextCursor != "opaque-cursor-token" {
+		t.Errorf("next_cursor = %q, want opaque-cursor-token", body.NextCursor)
 	}
 	if body.Limit != 5 {
 		t.Errorf("limit = %d, want 5", body.Limit)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -293,97 +294,161 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 	return nil
 }
 
-const browseSQLBody = `
+// browseCTEBase is the first part of the browse query, a CTE that materialises
+// all candidate profiles with their computed distance. It uses two fixed params:
+//   $1 = userID (the requester)
+//   $2 = interests filter (text[])
+//
+// Callers append an optional WHERE (cursor), ORDER BY, and LIMIT clause.
+const browseCTEBase = `
 WITH r AS (
     SELECT latitude AS lat, longitude AS lng
     FROM profiles WHERE user_id = $1
     LIMIT 1
-)
-SELECT
-    p.id,
-    p.user_id,
-    COALESCE(p.username, '') AS username,
-    p.display_name,
-    COALESCE(p.avatar_url, '') AS avatar_url,
-    p.date_of_birth,
-    COALESCE(p.gender, '') AS gender,
-    COALESCE(p.location_text, '') AS location_text,
-    CASE
-        WHEN r.lat IS NOT NULL AND r.lng IS NOT NULL
-             AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-        THEN 6371.0 * 2.0 * ASIN(SQRT(
-            POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
-            COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
-            POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
-        ))
-        ELSE NULL
-    END AS distance_km,
-    (SELECT url FROM profile_photos ph
-     WHERE ph.user_id = p.user_id
-     ORDER BY ph.position, ph.created_at
-     LIMIT 1) AS first_photo_url,
-    ARRAY(
-        SELECT i.name FROM profile_interests pi
-        JOIN interests i ON i.id = pi.interest_id
-        WHERE pi.user_id = p.user_id
-        ORDER BY i.name
-    ) AS interests
-FROM profiles p
-LEFT JOIN LATERAL (SELECT lat, lng FROM r LIMIT 1) r ON true
-LEFT JOIN profile_preferences prefs ON prefs.user_id = $1
-WHERE p.user_id <> $1
-  AND p.username IS NOT NULL
-  AND p.date_of_birth IS NOT NULL
-  AND NOT EXISTS (
-      SELECT 1 FROM contacts c
-      WHERE (c.requester_id = $1 AND c.addressee_id = p.user_id)
-         OR (c.requester_id = p.user_id AND c.addressee_id = $1)
-  )
-  AND (prefs.min_age IS NULL
-       OR DATE_PART('year', AGE(CURRENT_DATE, p.date_of_birth::date)) >= prefs.min_age)
-  AND (prefs.max_age IS NULL
-       OR DATE_PART('year', AGE(CURRENT_DATE, p.date_of_birth::date)) <= prefs.max_age)
-  AND (prefs.gender_preference IS NULL
-       OR array_length(prefs.gender_preference, 1) IS NULL
-       OR COALESCE(p.gender, '') = ANY(prefs.gender_preference))
-  AND (
-      prefs.max_distance_km IS NULL
-      OR r.lat IS NULL OR r.lng IS NULL
-      OR p.latitude IS NULL OR p.longitude IS NULL
-      OR 6371.0 * 2.0 * ASIN(SQRT(
-          POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
-          COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
-          POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
-      )) <= prefs.max_distance_km
-  )
-  AND (
-      cardinality($4::text[]) = 0
-      OR EXISTS (
-          SELECT 1 FROM profile_interests pi
-          JOIN interests i ON i.id = pi.interest_id
-          WHERE pi.user_id = p.user_id AND i.name = ANY($4::text[])
+),
+candidates AS (
+    SELECT
+        p.id,
+        p.user_id,
+        COALESCE(p.username, '') AS username,
+        p.display_name,
+        COALESCE(p.avatar_url, '') AS avatar_url,
+        p.date_of_birth,
+        COALESCE(p.gender, '') AS gender,
+        COALESCE(p.location_text, '') AS location_text,
+        p.created_at,
+        CASE
+            WHEN r.lat IS NOT NULL AND r.lng IS NOT NULL
+                 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+            THEN 6371.0 * 2.0 * ASIN(SQRT(
+                POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
+                COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
+                POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
+            ))
+            ELSE NULL
+        END AS distance_km,
+        (SELECT url FROM profile_photos ph
+         WHERE ph.user_id = p.user_id
+         ORDER BY ph.position, ph.created_at
+         LIMIT 1) AS first_photo_url,
+        ARRAY(
+            SELECT i.name FROM profile_interests pi
+            JOIN interests i ON i.id = pi.interest_id
+            WHERE pi.user_id = p.user_id
+            ORDER BY i.name
+        ) AS interests
+    FROM profiles p
+    LEFT JOIN LATERAL (SELECT lat, lng FROM r LIMIT 1) r ON true
+    LEFT JOIN profile_preferences prefs ON prefs.user_id = $1
+    WHERE p.user_id <> $1
+      AND p.username IS NOT NULL
+      AND p.date_of_birth IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM contacts c
+          WHERE (c.requester_id = $1 AND c.addressee_id = p.user_id)
+             OR (c.requester_id = p.user_id AND c.addressee_id = $1)
       )
-  )
-  AND NOT EXISTS (
-      SELECT 1 FROM blocks b
-      WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
-         OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
-  )
-  AND EXISTS (
-      SELECT 1 FROM users u WHERE u.id = p.user_id AND u.status = 'active'
-  )`
+      AND (prefs.min_age IS NULL
+           OR DATE_PART('year', AGE(CURRENT_DATE, p.date_of_birth::date)) >= prefs.min_age)
+      AND (prefs.max_age IS NULL
+           OR DATE_PART('year', AGE(CURRENT_DATE, p.date_of_birth::date)) <= prefs.max_age)
+      AND (prefs.gender_preference IS NULL
+           OR array_length(prefs.gender_preference, 1) IS NULL
+           OR COALESCE(p.gender, '') = ANY(prefs.gender_preference))
+      AND (
+          prefs.max_distance_km IS NULL
+          OR r.lat IS NULL OR r.lng IS NULL
+          OR p.latitude IS NULL OR p.longitude IS NULL
+          OR 6371.0 * 2.0 * ASIN(SQRT(
+              POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
+              COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
+              POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
+          )) <= prefs.max_distance_km
+      )
+      AND (
+          cardinality($2::text[]) = 0
+          OR EXISTS (
+              SELECT 1 FROM profile_interests pi
+              JOIN interests i ON i.id = pi.interest_id
+              WHERE pi.user_id = p.user_id AND i.name = ANY($2::text[])
+          )
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM blocks b
+          WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
+             OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
+      )
+      AND EXISTS (
+          SELECT 1 FROM users u WHERE u.id = p.user_id AND u.status = 'active'
+      )
+)
+SELECT id, user_id, username, display_name, avatar_url, date_of_birth,
+       gender, location_text, created_at, distance_km, first_photo_url, interests
+FROM candidates`
 
-// Browse returns a paginated list of profiles for the browse/explore view.
-func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) ([]BrowseProfile, error) {
+// Browse returns a cursor-paginated list of profiles for the browse/explore view.
+// cursor is an opaque token returned by a previous call ("" for the first page).
+// limit should be limit+1 (the caller trims and encodes the next cursor).
+func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) ([]BrowseProfile, error) {
 	if interests == nil {
 		interests = []string{}
 	}
-	orderBy := "p.created_at DESC, p.id ASC"
-	if sortByDistance {
-		orderBy = "distance_km ASC NULLS LAST, p.created_at DESC, p.id ASC"
+
+	args := []any{userID, interests} // $1, $2
+	nextArg := 3
+
+	var cursorClause string
+	if cursor != "" {
+		cur, err := DecodeBrowseCursor(cursor)
+		if err != nil {
+			return nil, fmt.Errorf("browse profiles: invalid cursor: %w", err)
+		}
+		if sortByDistance {
+			// ORDER BY distance_km ASC NULLS LAST, created_at DESC, id ASC
+			if cur.DistanceKm != nil {
+				// Rows after (dk, ca, id): dk greater, OR dk equal + (ca smaller, OR ca equal + id greater), OR dk IS NULL (NULLS LAST)
+				args = append(args, *cur.DistanceKm, cur.CreatedAt, cur.ID)
+				p := [3]int{nextArg, nextArg + 1, nextArg + 2}
+				cursorClause = "\nWHERE distance_km > $" + strconv.Itoa(p[0]) +
+					" OR distance_km IS NULL" +
+					" OR (distance_km = $" + strconv.Itoa(p[0]) +
+					" AND (created_at < $" + strconv.Itoa(p[1]) +
+					" OR (created_at = $" + strconv.Itoa(p[1]) +
+					" AND id > $" + strconv.Itoa(p[2]) + ")))"
+				nextArg += 3
+			} else {
+				// cursor's dk is NULL → among NULLS-LAST tail; continue by (ca DESC, id ASC)
+				args = append(args, cur.CreatedAt, cur.ID)
+				p := [2]int{nextArg, nextArg + 1}
+				cursorClause = "\nWHERE distance_km IS NULL AND (created_at < $" + strconv.Itoa(p[0]) +
+					" OR (created_at = $" + strconv.Itoa(p[0]) +
+					" AND id > $" + strconv.Itoa(p[1]) + "))"
+				nextArg += 2
+			}
+		} else {
+			// ORDER BY created_at DESC, id ASC
+			args = append(args, cur.CreatedAt, cur.ID)
+			p := [2]int{nextArg, nextArg + 1}
+			cursorClause = "\nWHERE created_at < $" + strconv.Itoa(p[0]) +
+				" OR (created_at = $" + strconv.Itoa(p[0]) +
+				" AND id > $" + strconv.Itoa(p[1]) + ")"
+			nextArg += 2
+		}
 	}
-	sql := browseSQLBody + "\nORDER BY " + orderBy + "\nLIMIT $2 OFFSET $3"
-	rows, err := s.pool.Query(ctx, sql, userID, limit, offset, interests)
+
+	var orderBy string
+	if sortByDistance {
+		orderBy = "distance_km ASC NULLS LAST, created_at DESC, id ASC"
+	} else {
+		orderBy = "created_at DESC, id ASC"
+	}
+
+	args = append(args, limit)
+	limitClause := "\nORDER BY " + orderBy + "\nLIMIT $" + strconv.Itoa(nextArg)
+
+	sql := browseCTEBase + cursorClause + limitClause
+
+	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("browse profiles: %w", err)
 	}
@@ -396,7 +461,7 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit, offset int, 
 		if err := rows.Scan(
 			&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.AvatarURL,
 			&p.DateOfBirth, &p.Gender, &p.LocationText,
-			&p.DistanceKm, &firstPhotoURL, &p.Interests,
+			&p.CreatedAt, &p.DistanceKm, &firstPhotoURL, &p.Interests,
 		); err != nil {
 			return nil, fmt.Errorf("scan browse profile: %w", err)
 		}

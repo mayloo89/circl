@@ -28,7 +28,7 @@ interface BrowseProfile {
 
 interface BrowsePage {
   profiles: BrowseProfile[]
-  has_more: boolean
+  next_cursor: string
 }
 
 interface Preferences {
@@ -364,8 +364,7 @@ export default function BrowsePage() {
   const token = session?.accessToken
 
   const [profiles, setProfiles] = useState<BrowseProfile[]>([])
-  const [hasMore, setHasMore] = useState(false)
-  const [page, setPage] = useState(0)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [initialLoading, setInitialLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState("")
@@ -381,26 +380,28 @@ export default function BrowsePage() {
   const [filterInterests, setFilterInterests] = useState<string[]>([])
 
   const fetchInFlight = useRef(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   const loadProfiles = useCallback(
-    async (pageNum: number, append: boolean, sortDist: boolean, interests: string[]) => {
+    async (cursor: string | null, append: boolean, sortDist: boolean, interests: string[]) => {
       if (!token || fetchInFlight.current) return
       fetchInFlight.current = true
-      if (pageNum === 0) setInitialLoading(true)
+      if (!append) setInitialLoading(true)
       else setLoadingMore(true)
       setError("")
 
       try {
+        const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
         const sortParam = sortDist ? "&sort=distance" : ""
         const interestParams = interests.map((i) => `&interests=${encodeURIComponent(i)}`).join("")
         const res = await fetch(
-          `${API_URL}/profiles/browse?page=${pageNum}&limit=${PAGE_SIZE}${sortParam}${interestParams}`,
+          `${API_URL}/profiles/browse?limit=${PAGE_SIZE}${cursorParam}${sortParam}${interestParams}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         if (!res.ok) throw new Error("Failed to load profiles.")
         const data: BrowsePage = await res.json()
         setProfiles((prev) => (append ? [...prev, ...data.profiles] : data.profiles))
-        setHasMore(data.has_more)
+        setNextCursor(data.next_cursor || null)
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Something went wrong.")
       } finally {
@@ -425,8 +426,24 @@ export default function BrowsePage() {
       })
       .catch(() => {})
 
-    loadProfiles(0, false, false, [])
+    loadProfiles(null, false, false, [])
   }, [status, token, loadProfiles])
+
+  // IntersectionObserver: auto-load next page when sentinel enters viewport
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && nextCursor && !fetchInFlight.current) {
+          loadProfiles(nextCursor, true, sortByDistance, filterInterests)
+        }
+      },
+      { rootMargin: "200px" }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [nextCursor, sortByDistance, filterInterests, loadProfiles])
 
   async function handleApplyFilters(updated: Preferences, newSortByDistance: boolean, newInterests: string[]) {
     if (!token) return
@@ -446,14 +463,7 @@ export default function BrowsePage() {
     }
     setSortByDistance(newSortByDistance)
     setFilterInterests(newInterests)
-    setPage(0)
-    loadProfiles(0, false, newSortByDistance, newInterests)
-  }
-
-  function handleLoadMore() {
-    const next = page + 1
-    setPage(next)
-    loadProfiles(next, true, sortByDistance, filterInterests)
+    loadProfiles(null, false, newSortByDistance, newInterests)
   }
 
   if (status === "loading" || initialLoading) {
@@ -527,13 +537,8 @@ export default function BrowsePage() {
                   ))}
               </div>
 
-              {hasMore && !loadingMore && (
-                <div className="mt-10 flex justify-center">
-                  <Button variant="secondary" onClick={handleLoadMore}>
-                    Load more
-                  </Button>
-                </div>
-              )}
+              {/* Sentinel: triggers next page load via IntersectionObserver */}
+              <div ref={sentinelRef} className="h-px" />
             </>
           )}
         </div>
