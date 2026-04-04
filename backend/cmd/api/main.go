@@ -24,6 +24,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
 	"github.com/mayloo89/circl/backend/internal/profiles"
+	"github.com/mayloo89/circl/backend/internal/push"
 	"github.com/mayloo89/circl/backend/internal/ratelimit"
 	"github.com/mayloo89/circl/backend/internal/reports"
 	"github.com/mayloo89/circl/backend/internal/server"
@@ -85,7 +86,6 @@ func main() {
 
 	contactStore := contacts.NewStore(pool)
 	contactSvc := contacts.NewService(contactStore)
-	contactsHandler := contacts.NewHandler(contactSvc, contacts.WithNotifier(hub))
 
 	reportStore := reports.NewStore(pool)
 	reportSvc := reports.NewService(reportStore)
@@ -122,6 +122,32 @@ func main() {
 		reports.WithLimiter(limiter),
 	)
 	reportsHandler := reports.NewHandler(reportMgr)
+
+	pushStore := push.NewStore(pool)
+	pushSvc := push.NewService(pushStore,
+		config.EnvOrDefault("VAPID_PUBLIC_KEY", ""),
+		config.EnvOrDefault("VAPID_PRIVATE_KEY", ""),
+		config.EnvOrDefault("VAPID_SUBJECT", "mailto:admin@circl.app"),
+	)
+	pushHandler := push.NewHandler(pushSvc)
+	if pushSvc.Enabled() {
+		log.Println("Web push notifications enabled")
+	}
+
+	// notifyUser sends an SSE event and a web push notification (if enabled).
+	// Push is always attempted so users receive notifications regardless of
+	// whether the app is currently open — the service worker handles dedup.
+	notifyUser := func(userID string, e notifications.Event, n push.Notification) {
+		hub.Notify(userID, e)
+		if pushSvc.Enabled() {
+			go pushSvc.Send(appCtx, userID, n)
+		}
+	}
+
+	// contactPushNotifier implements notifications.Notifier and enriches contact
+	// events with web push notifications for offline users.
+	contactPushNotifier := &contactNotifier{notifyFn: notifyUser}
+	contactsHandler := contacts.NewHandler(contactSvc, contacts.WithNotifier(contactPushNotifier))
 
 	chatHub := chat.NewHub(rdb)
 	go chatHub.Run(appCtx)
@@ -190,9 +216,13 @@ func main() {
 	}
 
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
-		hub.Notify(recipientID, notifications.Event{
+		notifyUser(recipientID, notifications.Event{
 			Type:    "new_message",
 			Payload: map[string]string{"room_id": roomID},
+		}, push.Notification{
+			Title: "New message",
+			Body:  "You have a new message",
+			URL:   "/chat/" + roomID,
 		})
 	}, chat.HandlerConfig{
 		IsBlockedInRoom: isBlockedInRoom,
@@ -267,10 +297,29 @@ func main() {
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
-	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, localStorageHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+// contactNotifier implements notifications.Notifier and enriches contact events
+// with web push notifications for offline users.
+type contactNotifier struct {
+	notifyFn func(userID string, e notifications.Event, n push.Notification)
+}
+
+func (c *contactNotifier) Notify(userID string, e notifications.Event) {
+	var n push.Notification
+	switch e.Type {
+	case "contact_request":
+		n = push.Notification{Title: "New contact request", URL: "/contacts"}
+	case "contact_accepted":
+		n = push.Notification{Title: "Contact request accepted", URL: "/contacts"}
+	case "contact_removed":
+		n = push.Notification{Title: "Contact removed", URL: "/contacts"}
+	}
+	c.notifyFn(userID, e, n)
 }

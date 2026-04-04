@@ -123,3 +123,31 @@ func TestHub_Unsubscribe_CleansUpMap(t *testing.T) {
 	// After all subscribers removed, notifying must not panic.
 	hub.Notify("user-1", notifications.Event{Type: "ping"})
 }
+
+func TestHub_IsConnected_WithSubscriber(t *testing.T) {
+	hub := notifications.NewHub()
+	_, unsub := hub.Subscribe("user-1")
+	defer unsub()
+
+	if !hub.IsConnected("user-1") {
+		t.Error("expected IsConnected=true for a subscribed user")
+	}
+}
+
+func TestHub_IsConnected_WithoutSubscriber(t *testing.T) {
+	hub := notifications.NewHub()
+
+	if hub.IsConnected("user-no-one") {
+		t.Error("expected IsConnected=false for a user with no subscribers")
+	}
+}
+
+func TestHub_IsConnected_AfterUnsubscribe(t *testing.T) {
+	hub := notifications.NewHub()
+	_, unsub := hub.Subscribe("user-1")
+	unsub()
+
+	if hub.IsConnected("user-1") {
+		t.Error("expected IsConnected=false after unsubscribe")
+	}
+}
