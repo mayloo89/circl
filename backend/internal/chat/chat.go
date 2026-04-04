@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	RoomTypeDM    = "dm"
-	RoomTypeGroup = "group"
+	RoomTypeDM      = "dm"
+	RoomTypeGroup   = "group"
+	RoomTypeChannel = "channel"
 
 	MessageTypeText  = "text"
 	MessageTypeImage = "image"
@@ -50,13 +51,25 @@ func ParseTTL(ttl string) (time.Duration, error) {
 }
 
 type Room struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	Name      string    `json:"name"`
-	DMKey     string    `json:"dm_key,omitempty"`
-	CreatorID string    `json:"creator_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Type        string    `json:"type"`
+	Name        string    `json:"name"`
+	DMKey       string    `json:"dm_key,omitempty"`
+	CreatorID   string    `json:"creator_id,omitempty"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// ChannelSummary is returned by ListChannels for the public channel directory.
+type ChannelSummary struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatorID   string    `json:"creator_id,omitempty"`
+	MemberCount int       `json:"member_count"`
+	IsMember    bool      `json:"is_member"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // MemberProfile is a lightweight view of a room member returned by ListMemberProfiles.
@@ -84,6 +97,7 @@ type RoomSummary struct {
 	ID            string          `json:"id"`
 	Type          string          `json:"type"`
 	Name          string          `json:"name"`
+	Description   string          `json:"description,omitempty"`
 	CreatorID     string          `json:"creator_id,omitempty"`
 	PeerID        string          `json:"peer_id,omitempty"`
 	PeerUsername  string          `json:"peer_username,omitempty"`
@@ -137,6 +151,14 @@ type SaveMessageParams struct {
 type Store interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
+	// CreateChannel creates a public channel room and auto-joins the creator.
+	CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error)
+	// ListChannels returns all public channels with member counts and membership status for userID.
+	ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error)
+	// JoinChannel adds userID to a channel room.
+	JoinChannel(ctx context.Context, roomID, userID string) error
+	// LeaveChannel removes userID from a channel room. Anyone may leave, including the creator.
+	LeaveChannel(ctx context.Context, roomID, userID string) error
 	// GetRoom returns the room record for the given ID.
 	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
@@ -180,6 +202,10 @@ type Store interface {
 type Manager interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
+	CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error)
+	ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error)
+	JoinChannel(ctx context.Context, roomID, userID string) error
+	LeaveChannel(ctx context.Context, roomID, userID string) error
 	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
 	ListMembers(ctx context.Context, roomID string) ([]string, error)
@@ -219,6 +245,22 @@ func (s *Service) GetOrCreateDM(ctx context.Context, userID, peerID string) (*Ro
 
 func (s *Service) CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error) {
 	return s.store.CreateGroup(ctx, creatorID, name, memberIDs)
+}
+
+func (s *Service) CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error) {
+	return s.store.CreateChannel(ctx, creatorID, name, description)
+}
+
+func (s *Service) ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error) {
+	return s.store.ListChannels(ctx, userID)
+}
+
+func (s *Service) JoinChannel(ctx context.Context, roomID, userID string) error {
+	return s.store.JoinChannel(ctx, roomID, userID)
+}
+
+func (s *Service) LeaveChannel(ctx context.Context, roomID, userID string) error {
+	return s.store.LeaveChannel(ctx, roomID, userID)
 }
 
 func (s *Service) GetRoom(ctx context.Context, roomID string) (*Room, error) {

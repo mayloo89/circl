@@ -25,8 +25,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 interface RoomSummary {
   id: string
-  type: "dm" | "group"
+  type: "dm" | "group" | "channel"
   name: string
+  description?: string
   creator_id?: string
   peer_id: string
   peer_username: string
@@ -104,7 +105,7 @@ export default function ChatRoomPage() {
       .then((r) => r.json())
       .then((rooms: RoomSummary[]) => {
         const found = rooms.find((r) => r.id === roomId)
-        if (found) { setRoom(found); if (found.type === "group") setGroupName(found.name) }
+        if (found) { setRoom(found); if (found.type === "group" || found.type === "channel") setGroupName(found.name) }
       })
       .catch(() => {})
   }, [status, token, roomId])
@@ -295,12 +296,13 @@ export default function ChatRoomPage() {
 
   return (
     <div className="flex h-full flex-col bg-gray-950">
-      {/* Group members side panel */}
-      {groupPanelOpen && room?.type === "group" && token && userID && roomId && (
+      {/* Group / channel members side panel */}
+      {groupPanelOpen && (room?.type === "group" || room?.type === "channel") && token && userID && roomId && (
         <div className="absolute inset-0 z-30 bg-gray-950">
           <GroupMembersPanel
             roomId={roomId}
             roomName={groupName || room.name}
+            roomType={room.type}
             currentUserId={userID}
             token={token}
             onClose={() => setGroupPanelOpen(false)}
@@ -308,7 +310,7 @@ export default function ChatRoomPage() {
               setGroupName(name)
               setRoom((prev) => prev ? { ...prev, name } : prev)
             }}
-            onLeft={() => router.push("/chat")}
+            onLeft={() => router.push(room.type === "channel" ? "/chat/channels" : "/chat")}
           />
         </div>
       )}
@@ -377,12 +379,18 @@ export default function ChatRoomPage() {
                 type="button"
                 onClick={() => setGroupPanelOpen(true)}
                 className="flex flex-1 items-center gap-3 hover:opacity-80 text-left"
-                aria-label="Group settings"
+                aria-label={room.type === "channel" ? "Channel settings" : "Group settings"}
               >
                 <Avatar name={groupName || room.name || "G"} size="md" color="indigo" />
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-white">{groupName || room.name}</span>
-                  <span className="text-xs text-gray-500">Tap to manage members</span>
+                  <span className="text-sm font-medium text-white">
+                    {room.type === "channel" ? "# " : ""}{groupName || room.name}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {room.type === "channel"
+                      ? (room.description || "Public channel · tap to view members")
+                      : "Tap to manage members"}
+                  </span>
                 </div>
               </button>
             </>

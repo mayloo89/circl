@@ -79,6 +79,7 @@ export default function NavBar() {
             <Badge count={unreadChatCount} max={9} variant="dot" className="absolute -right-4 -top-2" />
           )}
         </Link>
+        <Link href="/chat/channels" className="text-sm text-gray-300 hover:text-white">Channels</Link>
         <Link href="/contacts" className="relative text-sm text-gray-300 hover:text-white">
           Contacts
           {pendingCount > 0 && (

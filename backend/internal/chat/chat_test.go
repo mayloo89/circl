@@ -13,6 +13,7 @@ import (
 type mockStore struct {
 	room             *chat.Room
 	rooms            []chat.RoomSummary
+	channels         []chat.ChannelSummary
 	msg              *chat.Message
 	msgs             []chat.Message
 	members          []string
@@ -20,6 +21,8 @@ type mockStore struct {
 	isMember         bool
 	roomErr          error
 	roomsErr         error
+	channelsErr      error
+	channelActionErr error
 	msgErr           error
 	msgsErr          error
 	memberErr        error
@@ -52,6 +55,18 @@ func (m *mockStore) CreateGroup(_ context.Context, _, _ string, _ []string) (*ch
 }
 func (m *mockStore) GetRoom(_ context.Context, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
+}
+func (m *mockStore) CreateChannel(_ context.Context, _, _, _ string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
+func (m *mockStore) ListChannels(_ context.Context, _ string) ([]chat.ChannelSummary, error) {
+	return m.channels, m.channelsErr
+}
+func (m *mockStore) JoinChannel(_ context.Context, _, _ string) error {
+	return m.channelActionErr
+}
+func (m *mockStore) LeaveChannel(_ context.Context, _, _ string) error {
+	return m.channelActionErr
 }
 func (m *mockStore) IsMember(_ context.Context, _, _ string) (bool, error) {
 	return m.isMember, m.memberErr
@@ -506,6 +521,85 @@ func TestService_UpdateGroupName_Success(t *testing.T) {
 func TestService_UpdateGroupName_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{updateGroupErr: errors.New("db fail")})
 	if err := svc.UpdateGroupName(t.Context(), "r-1", "u-1", "new name"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestService_CreateChannel_Success(t *testing.T) {
+	want := &chat.Room{ID: "c-1", Type: chat.RoomTypeChannel, Name: "general", Description: "a place to chat"}
+	svc := chat.NewService(&mockStore{room: want})
+
+	got, err := svc.CreateChannel(t.Context(), "u-1", "general", "a place to chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != chat.RoomTypeChannel {
+		t.Errorf("type = %q, want channel", got.Type)
+	}
+	if got.Description != "a place to chat" {
+		t.Errorf("description = %q, want 'a place to chat'", got.Description)
+	}
+}
+
+func TestService_CreateChannel_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{roomErr: errors.New("db fail")})
+	_, err := svc.CreateChannel(t.Context(), "u-1", "general", "")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ListChannels_Success(t *testing.T) {
+	want := []chat.ChannelSummary{
+		{ID: "c-1", Name: "general", MemberCount: 5, IsMember: true},
+		{ID: "c-2", Name: "random", MemberCount: 3},
+	}
+	svc := chat.NewService(&mockStore{channels: want})
+
+	got, err := svc.ListChannels(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+	if !got[0].IsMember {
+		t.Error("first channel should have IsMember=true")
+	}
+}
+
+func TestService_ListChannels_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{channelsErr: errors.New("db fail")})
+	_, err := svc.ListChannels(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_JoinChannel_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{})
+	if err := svc.JoinChannel(t.Context(), "c-1", "u-1"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestService_JoinChannel_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{channelActionErr: errors.New("db fail")})
+	if err := svc.JoinChannel(t.Context(), "c-1", "u-1"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestService_LeaveChannel_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{})
+	if err := svc.LeaveChannel(t.Context(), "c-1", "u-1"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestService_LeaveChannel_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{channelActionErr: errors.New("db fail")})
+	if err := svc.LeaveChannel(t.Context(), "c-1", "u-1"); err == nil {
 		t.Error("expected error, got nil")
 	}
 }

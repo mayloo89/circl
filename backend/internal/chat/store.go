@@ -46,9 +46,9 @@ func (s *pgStore) GetOrCreateDM(ctx context.Context, userID, peerID string) (*Ro
 	var room Room
 	err = tx.QueryRow(ctx, `
 		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		       COALESCE(creator_id::text, ''), created_at, updated_at
+		       COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at
 		FROM rooms WHERE dm_key = $1`, key,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt)
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Room does not exist yet — create it.  DO UPDATE is a no-op that forces
@@ -58,8 +58,8 @@ func (s *pgStore) GetOrCreateDM(ctx context.Context, userID, peerID string) (*Ro
 			ON CONFLICT (dm_key) WHERE dm_key IS NOT NULL
 			DO UPDATE SET dm_key = EXCLUDED.dm_key
 			RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-			          COALESCE(creator_id::text, ''), created_at, updated_at`, key,
-		).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt)
+			          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`, key,
+		).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("get or create dm: upsert room: %w", err)
 		}
@@ -92,8 +92,8 @@ func (s *pgStore) CreateGroup(ctx context.Context, creatorID, name string, membe
 	if err = tx.QueryRow(ctx, `
 		INSERT INTO rooms (type, name, creator_id) VALUES ('group', $1, $2)
 		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		          COALESCE(creator_id::text, ''), created_at, updated_at`, name, creatorID,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`, name, creatorID,
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("create group: insert room: %w", err)
 	}
 
@@ -166,6 +166,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			r.type,
 			COALESCE(r.name, '')                             AS name,
 			COALESCE(r.creator_id::text, '')                 AS creator_id,
+			COALESCE(r.description, '')                      AS description,
 			r.created_at,
 			COALESCE(peer.id::text, '')                      AS peer_id,
 			COALESCE(pp.username, '')                        AS peer_username,
@@ -222,7 +223,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 		var lastAt *time.Time
 
 		if err := rows.Scan(
-			&s.ID, &s.Type, &s.Name, &s.CreatorID, &s.CreatedAt,
+			&s.ID, &s.Type, &s.Name, &s.CreatorID, &s.Description, &s.CreatedAt,
 			&s.PeerID, &s.PeerUsername, &s.PeerName, &s.PeerAvatarURL,
 			&lastContent, &lastSenderID, &lastType, &lastAt,
 			&s.UnreadCount, &s.PeerLastReadAt,
@@ -566,9 +567,9 @@ func (s *pgStore) GetRoom(ctx context.Context, roomID string) (*Room, error) {
 	var room Room
 	err := s.db.QueryRow(ctx, `
 		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		       COALESCE(creator_id::text, ''), created_at, updated_at
+		       COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at
 		FROM rooms WHERE id = $1`, roomID,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt)
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -681,11 +682,11 @@ func (s *pgStore) RemoveGroupMember(ctx context.Context, roomID, actorID, target
 	return nil
 }
 
-// UpdateGroupName renames a group room. actorID must be the creator.
+// UpdateGroupName renames a group or channel room. actorID must be the creator.
 func (s *pgStore) UpdateGroupName(ctx context.Context, roomID, actorID, name string) error {
 	tag, err := s.db.Exec(ctx, `
 		UPDATE rooms SET name = $1, updated_at = NOW()
-		WHERE id = $2 AND type = 'group' AND creator_id = $3`,
+		WHERE id = $2 AND type IN ('group', 'channel') AND creator_id = $3`,
 		name, roomID, actorID,
 	)
 	if err != nil {
@@ -699,6 +700,129 @@ func (s *pgStore) UpdateGroupName(ctx context.Context, roomID, actorID, name str
 			return ErrNotFound
 		}
 		return ErrForbidden
+	}
+	return nil
+}
+
+// CreateChannel creates a public channel room and auto-joins the creator.
+func (s *pgStore) CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create channel: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var room Room
+	if err = tx.QueryRow(ctx, `
+		INSERT INTO rooms (type, name, description, creator_id) VALUES ('channel', $1, $2, $3)
+		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+		          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`,
+		name, description, creatorID,
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		return nil, fmt.Errorf("create channel: insert room: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		room.ID, creatorID,
+	); err != nil {
+		return nil, fmt.Errorf("create channel: add creator: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("create channel: commit: %w", err)
+	}
+	return &room, nil
+}
+
+// ListChannels returns all public channel rooms ordered by creation date,
+// with member counts and membership status for userID.
+func (s *pgStore) ListChannels(ctx context.Context, userID string) ([]ChannelSummary, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT r.id,
+		       r.name,
+		       COALESCE(r.description, ''),
+		       COALESCE(r.creator_id::text, ''),
+		       COUNT(rm.user_id)::int                                        AS member_count,
+		       EXISTS(
+		           SELECT 1 FROM room_members
+		           WHERE room_id = r.id AND user_id = $1
+		       )                                                              AS is_member,
+		       r.created_at
+		FROM rooms r
+		LEFT JOIN room_members rm ON rm.room_id = r.id
+		WHERE r.type = 'channel'
+		GROUP BY r.id
+		ORDER BY r.created_at DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list channels: %w", err)
+	}
+	defer rows.Close()
+
+	var channels []ChannelSummary
+	for rows.Next() {
+		var c ChannelSummary
+		if err := rows.Scan(
+			&c.ID, &c.Name, &c.Description, &c.CreatorID,
+			&c.MemberCount, &c.IsMember, &c.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("list channels: scan: %w", err)
+		}
+		channels = append(channels, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list channels: rows: %w", err)
+	}
+	if channels == nil {
+		channels = []ChannelSummary{}
+	}
+	return channels, nil
+}
+
+// JoinChannel adds userID to a channel room. Idempotent — joining again is a no-op.
+func (s *pgStore) JoinChannel(ctx context.Context, roomID, userID string) error {
+	var roomType string
+	err := s.db.QueryRow(ctx, `SELECT type FROM rooms WHERE id = $1`, roomID).Scan(&roomType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("join channel: get room: %w", err)
+	}
+	if roomType != RoomTypeChannel {
+		return ErrForbidden
+	}
+	if _, err = s.db.Exec(ctx,
+		`INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		roomID, userID,
+	); err != nil {
+		return fmt.Errorf("join channel: insert: %w", err)
+	}
+	return nil
+}
+
+// LeaveChannel removes userID from a channel room. Anyone may leave, including the creator.
+func (s *pgStore) LeaveChannel(ctx context.Context, roomID, userID string) error {
+	var roomType string
+	err := s.db.QueryRow(ctx, `SELECT type FROM rooms WHERE id = $1`, roomID).Scan(&roomType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("leave channel: get room: %w", err)
+	}
+	if roomType != RoomTypeChannel {
+		return ErrForbidden
+	}
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
+		roomID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("leave channel: delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
 	}
 	return nil
 }

@@ -151,6 +151,12 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Put("/rooms/{id}/read", markReadHandler(svc, c))
 	r.Post("/rooms/{id}/messages/{msgID}/view", viewMessageHandler(svc, c))
 
+	// Public channel routes
+	r.Get("/channels", listChannelsHandler(svc))
+	r.Post("/channels", createChannelHandler(svc))
+	r.Post("/channels/{id}/join", joinChannelHandler(svc))
+	r.Delete("/channels/{id}/leave", leaveChannelHandler(svc))
+
 	return r
 }
 
@@ -545,6 +551,113 @@ func removeGroupMemberHandler(svc Manager) http.HandlerFunc {
 		roomID := chi.URLParam(r, "id")
 		targetID := chi.URLParam(r, "userID")
 		err := svc.RemoveGroupMember(r.Context(), roomID, actorID, targetID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrForbidden) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// listChannelsHandler returns all public channel rooms with member counts.
+//
+// GET /chat/channels
+func listChannelsHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		channels, err := svc.ListChannels(r.Context(), userID)
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(channels) //nolint:errcheck
+	}
+}
+
+// createChannelHandler creates a public channel room.
+//
+// POST /chat/channels
+// Body: {"name": "...", "description": "..."}
+func createChannelHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		var body struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+			return
+		}
+		room, err := svc.CreateChannel(r.Context(), userID, body.Name, body.Description)
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(room) //nolint:errcheck
+	}
+}
+
+// joinChannelHandler joins the authenticated user to a public channel room.
+//
+// POST /chat/channels/{id}/join
+func joinChannelHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		err := svc.JoinChannel(r.Context(), roomID, userID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrForbidden) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// leaveChannelHandler removes the authenticated user from a channel room.
+// The creator may also leave; there is no ownership lock on channels.
+//
+// DELETE /chat/channels/{id}/leave
+func leaveChannelHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		err := svc.LeaveChannel(r.Context(), roomID, userID)
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
