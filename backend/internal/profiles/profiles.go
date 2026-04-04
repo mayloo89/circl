@@ -2,6 +2,8 @@ package profiles
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -88,12 +90,43 @@ type BrowseProfile struct {
 	DistanceKm    *float64
 	FirstPhotoURL string
 	Interests     []string
+	// CreatedAt is used internally to encode the next-page cursor; not serialised to the API.
+	CreatedAt time.Time
 }
 
 // BrowsePage is a paginated set of browse results.
+// NextCursor is an opaque token to pass as ?cursor= on the next request.
+// An empty NextCursor means there are no more pages.
 type BrowsePage struct {
-	Profiles []BrowseProfile
-	HasMore  bool
+	Profiles   []BrowseProfile
+	NextCursor string
+}
+
+// browseCursor holds the keyset values needed to continue a Browse query.
+type browseCursor struct {
+	CreatedAt  time.Time `json:"ca"`
+	ID         string    `json:"id"`
+	DistanceKm *float64  `json:"dk,omitempty"`
+}
+
+// EncodeBrowseCursor encodes the last profile of a page into an opaque cursor string.
+func EncodeBrowseCursor(p BrowseProfile, sortByDistance bool) string {
+	c := browseCursor{CreatedAt: p.CreatedAt, ID: p.ID}
+	if sortByDistance {
+		c.DistanceKm = p.DistanceKm
+	}
+	b, _ := json.Marshal(c)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// DecodeBrowseCursor decodes an opaque cursor string produced by EncodeBrowseCursor.
+func DecodeBrowseCursor(s string) (browseCursor, error) {
+	b, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return browseCursor{}, err
+	}
+	var c browseCursor
+	return c, json.Unmarshal(b, &c)
 }
 
 // Store is the data-access interface required by the profiles service.
@@ -111,7 +144,7 @@ type Store interface {
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
-	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) ([]BrowseProfile, error)
+	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) ([]BrowseProfile, error)
 }
 
 // Service handles profile business logic.
@@ -274,16 +307,18 @@ func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs 
 	return s.store.UpsertPreferences(ctx, userID, prefs)
 }
 
-// Browse returns a paginated list of profiles visible to the given user,
-// filtered by their stored discovery preferences.
-func (s *Service) Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) (*BrowsePage, error) {
-	profiles, err := s.store.Browse(ctx, userID, limit+1, offset, sortByDistance, interests)
+// Browse returns a cursor-paginated list of profiles visible to the given user,
+// filtered by their stored discovery preferences. cursor is an opaque token
+// returned by a previous call; pass "" to start from the first page.
+func (s *Service) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) (*BrowsePage, error) {
+	profiles, err := s.store.Browse(ctx, userID, limit+1, cursor, sortByDistance, interests)
 	if err != nil {
 		return nil, err
 	}
-	hasMore := len(profiles) > limit
-	if hasMore {
+	var nextCursor string
+	if len(profiles) > limit {
 		profiles = profiles[:limit]
+		nextCursor = EncodeBrowseCursor(profiles[limit-1], sortByDistance)
 	}
 	now := time.Now()
 	for i := range profiles {
@@ -292,7 +327,7 @@ func (s *Service) Browse(ctx context.Context, userID string, limit, offset int, 
 			profiles[i].Age = &a
 		}
 	}
-	return &BrowsePage{Profiles: profiles, HasMore: hasMore}, nil
+	return &BrowsePage{Profiles: profiles, NextCursor: nextCursor}, nil
 }
 
 // isAtLeast18 returns true if the given birth date is at least 18 years in the past.

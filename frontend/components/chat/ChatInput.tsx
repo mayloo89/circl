@@ -13,6 +13,7 @@ interface ChatInputProps {
   onSend: (content: string) => void
   onAttach: (file: File) => void
   onTyping: () => void
+  inputRef?: React.RefObject<HTMLInputElement | null>
 }
 
 export default function ChatInput({
@@ -23,11 +24,14 @@ export default function ChatInput({
   onSend,
   onAttach,
   onTyping,
+  inputRef,
 }: ChatInputProps) {
   const [input, setInput] = useState("")
   const [showEphemeralMenu, setShowEphemeralMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const internalInputRef = useRef<HTMLInputElement>(null)
+  const effectiveRef = inputRef || internalInputRef
 
   function handleSend() {
     const content = input.trim()
@@ -140,6 +144,7 @@ export default function ChatInput({
 
         <label htmlFor="message-input" className="sr-only">Message</label>
         <input
+          ref={effectiveRef}
           id="message-input"
           type="text"
           placeholder="Message…"

@@ -24,7 +24,7 @@ type ProfileManager interface {
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
-	Browse(ctx context.Context, userID string, limit, offset int, sortByDistance bool, interests []string) (*BrowsePage, error)
+	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) (*BrowsePage, error)
 }
 
 type photoResponse struct {
@@ -457,10 +457,9 @@ type browseProfileResponse struct {
 }
 
 type browsePageResponse struct {
-	Profiles []browseProfileResponse `json:"profiles"`
-	HasMore  bool                    `json:"has_more"`
-	Page     int                     `json:"page"`
-	Limit    int                     `json:"limit"`
+	Profiles   []browseProfileResponse `json:"profiles"`
+	NextCursor string                  `json:"next_cursor"`
+	Limit      int                     `json:"limit"`
 }
 
 func browseProfiles(svc ProfileManager) http.HandlerFunc {
@@ -471,21 +470,17 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 			return
 		}
 
-		page, limit := 0, 20
-		if v := r.URL.Query().Get("page"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-				page = n
-			}
-		}
+		limit := 20
 		if v := r.URL.Query().Get("limit"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50 {
 				limit = n
 			}
 		}
+		cursor := r.URL.Query().Get("cursor")
 		sortByDistance := r.URL.Query().Get("sort") == "distance"
 		interests := r.URL.Query()["interests"]
 
-		result, err := svc.Browse(r.Context(), userID, limit, page*limit, sortByDistance, interests)
+		result, err := svc.Browse(r.Context(), userID, limit, cursor, sortByDistance, interests)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			return
@@ -493,9 +488,9 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 
 		resp := make([]browseProfileResponse, len(result.Profiles))
 		for i, p := range result.Profiles {
-			interests := p.Interests
-			if interests == nil {
-				interests = []string{}
+			pInterests := p.Interests
+			if pInterests == nil {
+				pInterests = []string{}
 			}
 			resp[i] = browseProfileResponse{
 				ID:            p.ID,
@@ -508,14 +503,13 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 				LocationText:  p.LocationText,
 				DistanceKm:    p.DistanceKm,
 				FirstPhotoURL: p.FirstPhotoURL,
-				Interests:     interests,
+				Interests:     pInterests,
 			}
 		}
 		writeJSON(w, http.StatusOK, browsePageResponse{
-			Profiles: resp,
-			HasMore:  result.HasMore,
-			Page:     page,
-			Limit:    limit,
+			Profiles:   resp,
+			NextCursor: result.NextCursor,
+			Limit:      limit,
 		})
 	}
 }
