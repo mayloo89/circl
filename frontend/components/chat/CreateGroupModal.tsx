@@ -1,0 +1,187 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import Avatar from "@/components/ui/Avatar"
+import Button from "@/components/ui/Button"
+import Input from "@/components/ui/Input"
+import Modal from "@/components/ui/Modal"
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+
+interface Contact {
+  user_id: string
+  username: string
+  display_name: string
+  avatar_url: string
+}
+
+interface AcceptedContact {
+  contact_id: string
+  user_id: string
+  username: string
+  email: string
+  display_name: string
+  avatar_url: string
+}
+
+interface Props {
+  open: boolean
+  token: string
+  onClose: () => void
+  onCreated: (roomId: string) => void
+}
+
+export default function CreateGroupModal({ open, token, onClose, onCreated }: Props) {
+  const [name, setName] = useState("")
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
+  const [loadingContacts, setLoadingContacts] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!open || !token) return
+    setLoadingContacts(true)
+    setError("")
+    fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data: AcceptedContact[]) =>
+        setContacts(
+          data.map((c) => ({
+            user_id: c.user_id,
+            username: c.username,
+            display_name: c.display_name || c.email || c.username,
+            avatar_url: c.avatar_url,
+          }))
+        )
+      )
+      .catch(() => setError("Failed to load contacts."))
+      .finally(() => setLoadingContacts(false))
+  }, [open, token])
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function handleCreate() {
+    if (!name.trim()) { setError("Group name is required."); return }
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/chat/rooms`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), member_ids: [...selected] }),
+      })
+      if (!res.ok) { setError("Failed to create group."); return }
+      const room = await res.json()
+      setName("")
+      setSelected(new Set())
+      onCreated(room.id as string)
+    } catch {
+      setError("Failed to create group.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleClose() {
+    setName("")
+    setSelected(new Set())
+    setError("")
+    onClose()
+  }
+
+  return (
+    <Modal open={open} onClose={handleClose}>
+      <div
+        className="w-full max-w-md rounded-xl bg-gray-900 shadow-2xl ring-1 ring-gray-700"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
+          <h2 className="text-base font-semibold text-white">New group</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={handleClose}
+            className="text-gray-500 hover:text-gray-300"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <Input
+            label="Group name"
+            placeholder="e.g. Weekend crew"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-400">
+              Add contacts{selected.size > 0 ? ` (${selected.size} selected)` : ""}
+            </p>
+            {loadingContacts ? (
+              <p className="text-xs text-gray-500">Loading contacts…</p>
+            ) : contacts.length === 0 ? (
+              <p className="text-xs text-gray-500">No contacts yet.</p>
+            ) : (
+              <ul className="max-h-60 overflow-y-auto divide-y divide-gray-800 rounded-lg ring-1 ring-gray-800">
+                {contacts.map((c) => {
+                  const checked = selected.has(c.user_id)
+                  return (
+                    <li key={c.user_id}>
+                      <button
+                        type="button"
+                        onClick={() => toggle(c.user_id)}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-800/60 ${checked ? "bg-indigo-950/40" : ""}`}
+                      >
+                        <Avatar src={c.avatar_url} name={c.display_name || "?"} size="sm" />
+                        <span className="flex-1 truncate text-sm text-white">
+                          {c.display_name || c.username}
+                        </span>
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
+                            checked
+                              ? "border-indigo-500 bg-indigo-600 text-white"
+                              : "border-gray-600 text-transparent"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-gray-800 px-5 py-4">
+          <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleCreate}
+            loading={loading}
+            disabled={!name.trim()}
+          >
+            Create group
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}

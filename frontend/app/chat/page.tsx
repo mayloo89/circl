@@ -10,6 +10,7 @@ import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
+import CreateGroupModal from "@/components/chat/CreateGroupModal"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -97,6 +98,7 @@ export default function ChatPage() {
   const [rooms, setRooms] = useState<RoomSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [now, setNow] = useState(0)
   useEffect(() => {
     const initial = setTimeout(() => setNow(Date.now()), 0)
@@ -130,10 +132,32 @@ export default function ChatPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
+      {token && (
+        <CreateGroupModal
+          open={createGroupOpen}
+          token={token}
+          onClose={() => setCreateGroupOpen(false)}
+          onCreated={(roomId) => {
+            setCreateGroupOpen(false)
+            loadRooms()
+            router.push(`/chat/${roomId}`)
+          }}
+        />
+      )}
       <div className="w-full max-w-lg space-y-6 px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Messages</h1>
-          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCreateGroupOpen(true)}
+              aria-label="Create group"
+            >
+              New group
+            </Button>
+            <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
+          </div>
         </div>
 
         {error && (

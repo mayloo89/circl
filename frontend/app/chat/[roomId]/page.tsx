@@ -16,6 +16,7 @@ import PresenceDot from "@/components/ui/PresenceDot"
 import Skeleton from "@/components/ui/Skeleton"
 import ChatInput from "@/components/chat/ChatInput"
 import DateSeparator from "@/components/chat/DateSeparator"
+import GroupMembersPanel from "@/components/chat/GroupMembersPanel"
 import Lightbox from "@/components/chat/Lightbox"
 import MessageBubble from "@/components/chat/MessageBubble"
 import TypingIndicator from "@/components/chat/TypingIndicator"
@@ -26,6 +27,7 @@ interface RoomSummary {
   id: string
   type: "dm" | "group"
   name: string
+  creator_id?: string
   peer_id: string
   peer_username: string
   peer_name: string
@@ -80,6 +82,8 @@ export default function ChatRoomPage() {
   const [revealedMessages, setRevealedMessages] = useState<Map<string, { msg: AnyMessage; content: string }>>(new Map())
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [blockLoading, setBlockLoading] = useState(false)
+  const [groupPanelOpen, setGroupPanelOpen] = useState(false)
+  const [groupName, setGroupName] = useState("")
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -98,7 +102,10 @@ export default function ChatRoomPage() {
     if (status !== "authenticated" || !token || !roomId) return
     fetch(`${API_URL}/chat/rooms`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((rooms: RoomSummary[]) => { const found = rooms.find((r) => r.id === roomId); if (found) setRoom(found) })
+      .then((rooms: RoomSummary[]) => {
+        const found = rooms.find((r) => r.id === roomId)
+        if (found) { setRoom(found); if (found.type === "group") setGroupName(found.name) }
+      })
       .catch(() => {})
   }, [status, token, roomId])
 
@@ -288,6 +295,24 @@ export default function ChatRoomPage() {
 
   return (
     <div className="flex h-full flex-col bg-gray-950">
+      {/* Group members side panel */}
+      {groupPanelOpen && room?.type === "group" && token && userID && roomId && (
+        <div className="absolute inset-0 z-30 bg-gray-950">
+          <GroupMembersPanel
+            roomId={roomId}
+            roomName={groupName || room.name}
+            currentUserId={userID}
+            token={token}
+            onClose={() => setGroupPanelOpen(false)}
+            onNameUpdated={(name) => {
+              setGroupName(name)
+              setRoom((prev) => prev ? { ...prev, name } : prev)
+            }}
+            onLeft={() => router.push("/chat")}
+          />
+        </div>
+      )}
+
       {mediaModal && (
         <Lightbox
           url={mediaModal.url}
@@ -347,9 +372,20 @@ export default function ChatRoomPage() {
               </button>
             </>
           ) : (
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-white">{room.name}</span>
-            </div>
+            <>
+              <button
+                type="button"
+                onClick={() => setGroupPanelOpen(true)}
+                className="flex flex-1 items-center gap-3 hover:opacity-80 text-left"
+                aria-label="Group settings"
+              >
+                <Avatar name={groupName || room.name || "G"} size="md" color="indigo" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-white">{groupName || room.name}</span>
+                  <span className="text-xs text-gray-500">Tap to manage members</span>
+                </div>
+              </button>
+            </>
           )
         ) : (
           <div className="flex items-center gap-2">

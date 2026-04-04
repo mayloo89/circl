@@ -143,6 +143,10 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/rooms/dm", getDMHandler(svc, c))
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
+	r.Put("/rooms/{id}", updateGroupHandler(svc))
+	r.Get("/rooms/{id}/members", listGroupMembersHandler(svc))
+	r.Post("/rooms/{id}/members", addGroupMemberHandler(svc))
+	r.Delete("/rooms/{id}/members/{userID}", removeGroupMemberHandler(svc))
 	r.Get("/rooms/{id}/messages", listMessagesHandler(svc))
 	r.Put("/rooms/{id}/read", markReadHandler(svc, c))
 	r.Post("/rooms/{id}/messages/{msgID}/view", viewMessageHandler(svc, c))
@@ -424,6 +428,136 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 				cfg.NotifyMessageDeleted(roomID, msgID)
 			}
 		}
+	}
+}
+
+// updateGroupHandler renames a group room. Only the creator (admin) may rename.
+//
+// PUT /chat/rooms/{id}
+// Body: {"name": "..."}
+func updateGroupHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		var body struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+			return
+		}
+		err := svc.UpdateGroupName(r.Context(), roomID, userID, body.Name)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrForbidden) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// listGroupMembersHandler returns the member profiles for a room.
+// Requires the caller to be a member of the room.
+//
+// GET /chat/rooms/{id}/members
+func listGroupMembersHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		member, err := svc.IsMember(r.Context(), roomID, userID)
+		if err != nil || !member {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		profiles, err := svc.ListMemberProfiles(r.Context(), roomID)
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(profiles) //nolint:errcheck
+	}
+}
+
+// addGroupMemberHandler adds a user to a group room. Only the creator may add.
+//
+// POST /chat/rooms/{id}/members
+// Body: {"user_id": "<uuid>"}
+func addGroupMemberHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		var body struct {
+			UserID string `json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UserID == "" {
+			http.Error(w, `{"error":"user_id is required"}`, http.StatusBadRequest)
+			return
+		}
+		err := svc.AddGroupMember(r.Context(), roomID, userID, body.UserID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrForbidden) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// removeGroupMemberHandler removes a member from a group room.
+// The creator (admin) may remove any member; any member may remove themselves (leave).
+// The creator cannot be removed.
+//
+// DELETE /chat/rooms/{id}/members/{userID}
+func removeGroupMemberHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actorID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		targetID := chi.URLParam(r, "userID")
+		err := svc.RemoveGroupMember(r.Context(), roomID, actorID, targetID)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrForbidden) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

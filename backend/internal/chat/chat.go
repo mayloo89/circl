@@ -54,8 +54,19 @@ type Room struct {
 	Type      string    `json:"type"`
 	Name      string    `json:"name"`
 	DMKey     string    `json:"dm_key,omitempty"`
+	CreatorID string    `json:"creator_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// MemberProfile is a lightweight view of a room member returned by ListMemberProfiles.
+type MemberProfile struct {
+	UserID      string    `json:"user_id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   string    `json:"avatar_url"`
+	IsAdmin     bool      `json:"is_admin"`
+	JoinedAt    time.Time `json:"joined_at"`
 }
 
 // MessageSummary is a lightweight view of the most recent message in a room,
@@ -70,13 +81,14 @@ type MessageSummary struct {
 // RoomSummary is returned by ListRooms and contains everything the UI needs
 // to render a conversation list entry without extra round-trips.
 type RoomSummary struct {
-	ID             string          `json:"id"`
-	Type           string          `json:"type"`
-	Name           string          `json:"name"`
-	PeerID         string          `json:"peer_id,omitempty"`
-	PeerUsername   string          `json:"peer_username,omitempty"`
-	PeerName       string          `json:"peer_name,omitempty"`
-	PeerAvatarURL  string          `json:"peer_avatar_url,omitempty"`
+	ID            string          `json:"id"`
+	Type          string          `json:"type"`
+	Name          string          `json:"name"`
+	CreatorID     string          `json:"creator_id,omitempty"`
+	PeerID        string          `json:"peer_id,omitempty"`
+	PeerUsername  string          `json:"peer_username,omitempty"`
+	PeerName      string          `json:"peer_name,omitempty"`
+	PeerAvatarURL string          `json:"peer_avatar_url,omitempty"`
 	// PeerLastReadAt is the peer's last_read_at timestamp for DM rooms.
 	// Used to seed the initial read-receipt state without a round-trip.
 	PeerLastReadAt *time.Time      `json:"peer_last_read_at,omitempty"`
@@ -125,8 +137,20 @@ type SaveMessageParams struct {
 type Store interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
+	// GetRoom returns the room record for the given ID.
+	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
 	ListMembers(ctx context.Context, roomID string) ([]string, error)
+	// ListMemberProfiles returns full profile data for every member of the room.
+	ListMemberProfiles(ctx context.Context, roomID string) ([]MemberProfile, error)
+	// AddGroupMember adds targetID to a group room. actorID must be the creator.
+	AddGroupMember(ctx context.Context, roomID, actorID, targetID string) error
+	// RemoveGroupMember removes targetID from a group room. actorID must be the
+	// creator (to remove others) or the same as targetID (self-leave).
+	// The creator cannot be removed.
+	RemoveGroupMember(ctx context.Context, roomID, actorID, targetID string) error
+	// UpdateGroupName renames a group room. actorID must be the creator.
+	UpdateGroupName(ctx context.Context, roomID, actorID, name string) error
 	ListRooms(ctx context.Context, userID string) ([]RoomSummary, error)
 	SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error)
 	ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error)
@@ -156,8 +180,13 @@ type Store interface {
 type Manager interface {
 	GetOrCreateDM(ctx context.Context, userID, peerID string) (*Room, error)
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
+	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
 	ListMembers(ctx context.Context, roomID string) ([]string, error)
+	ListMemberProfiles(ctx context.Context, roomID string) ([]MemberProfile, error)
+	AddGroupMember(ctx context.Context, roomID, actorID, targetID string) error
+	RemoveGroupMember(ctx context.Context, roomID, actorID, targetID string) error
+	UpdateGroupName(ctx context.Context, roomID, actorID, name string) error
 	ListRooms(ctx context.Context, userID string) ([]RoomSummary, error)
 	SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error)
 	ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error)
@@ -192,12 +221,32 @@ func (s *Service) CreateGroup(ctx context.Context, creatorID, name string, membe
 	return s.store.CreateGroup(ctx, creatorID, name, memberIDs)
 }
 
+func (s *Service) GetRoom(ctx context.Context, roomID string) (*Room, error) {
+	return s.store.GetRoom(ctx, roomID)
+}
+
 func (s *Service) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
 	return s.store.IsMember(ctx, roomID, userID)
 }
 
 func (s *Service) ListMembers(ctx context.Context, roomID string) ([]string, error) {
 	return s.store.ListMembers(ctx, roomID)
+}
+
+func (s *Service) ListMemberProfiles(ctx context.Context, roomID string) ([]MemberProfile, error) {
+	return s.store.ListMemberProfiles(ctx, roomID)
+}
+
+func (s *Service) AddGroupMember(ctx context.Context, roomID, actorID, targetID string) error {
+	return s.store.AddGroupMember(ctx, roomID, actorID, targetID)
+}
+
+func (s *Service) RemoveGroupMember(ctx context.Context, roomID, actorID, targetID string) error {
+	return s.store.RemoveGroupMember(ctx, roomID, actorID, targetID)
+}
+
+func (s *Service) UpdateGroupName(ctx context.Context, roomID, actorID, name string) error {
+	return s.store.UpdateGroupName(ctx, roomID, actorID, name)
 }
 
 func (s *Service) ListRooms(ctx context.Context, userID string) ([]RoomSummary, error) {
