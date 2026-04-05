@@ -3,7 +3,7 @@
 import { signOut, useSession } from "next-auth/react"
 import { useState } from "react"
 
-import { usePush } from "@/hooks/usePush"
+import { usePushContext } from "@/contexts/PushContext"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
@@ -14,8 +14,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 // Notifications section
 // ---------------------------------------------------------------------------
 
-function NotificationsSection({ token }: { token: string | undefined }) {
-  const { permission, supported, enable, disable } = usePush(token)
+function NotificationsSection() {
+  const { permission, supported, enable, disable } = usePushContext()
 
   if (!supported) return null
 
@@ -312,7 +312,7 @@ export default function SettingsPage() {
         <h1 className="mb-8 text-2xl font-bold text-white">Settings</h1>
 
         <div className="flex flex-col gap-10">
-          <NotificationsSection token={token} />
+          <NotificationsSection />
           <PasswordSection token={token} />
           <DeleteAccountSection token={token} />
         </div>

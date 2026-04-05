@@ -1,11 +1,9 @@
 "use client"
 
-import { useSession } from "next-auth/react"
-import { usePush } from "@/hooks/usePush"
+import { usePushContext } from "@/contexts/PushContext"
 
 export default function PushPrompt() {
-  const { data: session } = useSession()
-  const { permission, supported, enable } = usePush(session?.accessToken)
+  const { permission, supported, enable } = usePushContext()
 
   if (!supported || permission !== "default") return null
 

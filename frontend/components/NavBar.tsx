@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react"
 import { useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
-import { usePush } from "@/hooks/usePush"
+import { usePushContext } from "@/contexts/PushContext"
 import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
 
@@ -50,7 +50,7 @@ export default function NavBar() {
   const [displayName, setDisplayName] = useState("")
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { permission, supported, enable, disable } = usePush(session?.accessToken)
+  const { permission, supported, enable, disable } = usePushContext()
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.accessToken) return
