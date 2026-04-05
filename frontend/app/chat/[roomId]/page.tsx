@@ -96,6 +96,7 @@ export default function ChatRoomPage() {
   const [groupName, setGroupName] = useState("")
   const [members, setMembers] = useState<MemberProfile[]>([])
   const [memberSidebarOpen, setMemberSidebarOpen] = useState(false)
+  const [memberQuery, setMemberQuery] = useState("")
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -151,13 +152,14 @@ export default function ChatRoomPage() {
         if (found) {
           setRoom(found)
           if (found.type === "group" || found.type === "channel") setGroupName(found.name)
+          if (found.type === "channel") setMemberSidebarOpen(true)
           return
         }
         // Not in list — likely a channel. Fetch it directly.
         return fetch(`${API_URL}/chat/rooms/${roomId}`, { headers: { Authorization: `Bearer ${token}` } })
           .then((r) => r.ok ? r.json() : null)
           .then((data: RoomSummary | null) => {
-            if (data) { setRoom(data); if (data.type === "channel") setGroupName(data.name) }
+            if (data) { setRoom(data); if (data.type === "channel") { setGroupName(data.name); setMemberSidebarOpen(true) } }
           })
       })
       .catch(() => {})
@@ -547,12 +549,28 @@ export default function ChatRoomPage() {
 
         {/* Members sidebar — only for group / channel */}
         {isMultiRoom && memberSidebarOpen && (
-          <aside className="hidden sm:flex w-52 shrink-0 flex-col border-l border-gray-800 bg-gray-900 overflow-y-auto">
-            <p className="px-3 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-              Members — {members.length}
-            </p>
-            <ul>
+          <aside className="hidden sm:flex w-52 shrink-0 flex-col border-l border-gray-800 bg-gray-900">
+            <div className="px-3 pt-3 pb-2 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Members — {members.length}
+              </p>
+              {room?.type === "channel" && (
+                <input
+                  type="text"
+                  value={memberQuery}
+                  onChange={(e) => setMemberQuery(e.target.value)}
+                  placeholder="Filter members…"
+                  className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              )}
+            </div>
+            <ul className="overflow-y-auto">
               {[...members]
+                .filter((m) => {
+                  if (!memberQuery) return true
+                  const name = (m.display_name || m.username).toLowerCase()
+                  return name.startsWith(memberQuery.toLowerCase())
+                })
                 .sort((a, b) => {
                   const aOnline = presence[a.user_id]?.online ?? false
                   const bOnline = presence[b.user_id]?.online ?? false
