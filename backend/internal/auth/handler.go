@@ -271,14 +271,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // NewAccountHandler returns an http.Handler for user account management routes.
-// Routes are expected to run behind the RequireAuth middleware.
+// Routes are expected to be mounted at /users/me and run behind RequireAuth.
 //
-//	PUT  /me/password  — change password
-//	DELETE /me         — delete (soft) account
+//	PUT  /password  — change password
+//	DELETE /        — delete (soft) account
 func NewAccountHandler(svc AccountManager) http.Handler {
 	r := chi.NewRouter()
-	r.Put("/me/password", changePasswordHandler(svc))
-	r.Delete("/me", deleteAccountHandler(svc))
+	r.Put("/password", changePasswordHandler(svc))
+	r.Delete("/", deleteAccountHandler(svc))
 	return r
 }
 

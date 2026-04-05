@@ -399,7 +399,7 @@ func newAccountHandler(mock *mockAccountManager) http.Handler {
 // TestChangePassword_Success tests successful password change.
 func TestChangePassword_Success(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{})
-	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"OldPass1","new_password":"NewPass2"}`)
+	req := authedReq(http.MethodPut, "/password", `{"current_password":"OldPass1","new_password":"NewPass2"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -415,7 +415,7 @@ func TestChangePassword_MissingFields(t *testing.T) {
 		`{"current_password":"","new_password":"NewPass2"}`,
 		`{"current_password":"OldPass1","new_password":""}`,
 	} {
-		req := authedReq(http.MethodPut, "/me/password", body)
+		req := authedReq(http.MethodPut, "/password", body)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 
@@ -427,7 +427,7 @@ func TestChangePassword_MissingFields(t *testing.T) {
 
 func TestChangePassword_WrongCurrentPassword(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{changePasswordErr: auth.ErrInvalidCredentials})
-	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"wrong","new_password":"NewPass2"}`)
+	req := authedReq(http.MethodPut, "/password", `{"current_password":"wrong","new_password":"NewPass2"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -438,7 +438,7 @@ func TestChangePassword_WrongCurrentPassword(t *testing.T) {
 
 func TestChangePassword_WeakNewPassword(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{changePasswordErr: auth.ErrInvalidInput})
-	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"OldPass1","new_password":"weak"}`)
+	req := authedReq(http.MethodPut, "/password", `{"current_password":"OldPass1","new_password":"weak"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -449,7 +449,7 @@ func TestChangePassword_WeakNewPassword(t *testing.T) {
 
 func TestChangePassword_NoAuth(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{})
-	req := httptest.NewRequest(http.MethodPut, "/me/password", strings.NewReader(`{"current_password":"OldPass1","new_password":"NewPass2"}`))
+	req := httptest.NewRequest(http.MethodPut, "/password", strings.NewReader(`{"current_password":"OldPass1","new_password":"NewPass2"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -460,7 +460,7 @@ func TestChangePassword_NoAuth(t *testing.T) {
 
 func TestChangePassword_MalformedJSON(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{})
-	req := authedReq(http.MethodPut, "/me/password", "{not json")
+	req := authedReq(http.MethodPut, "/password", "{not json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -471,7 +471,7 @@ func TestChangePassword_MalformedJSON(t *testing.T) {
 
 func TestChangePassword_ServiceError(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{changePasswordErr: errors.New("unexpected db error")})
-	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"OldPass1","new_password":"NewPass2"}`)
+	req := authedReq(http.MethodPut, "/password", `{"current_password":"OldPass1","new_password":"NewPass2"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -482,7 +482,7 @@ func TestChangePassword_ServiceError(t *testing.T) {
 
 func TestDeleteAccount_Success(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{})
-	req := authedReq(http.MethodDelete, "/me", `{"password":"MyPass1"}`)
+	req := authedReq(http.MethodDelete, "/", `{"password":"MyPass1"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -493,7 +493,7 @@ func TestDeleteAccount_Success(t *testing.T) {
 
 func TestDeleteAccount_MissingPassword(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{})
-	req := authedReq(http.MethodDelete, "/me", `{"password":""}`)
+	req := authedReq(http.MethodDelete, "/", `{"password":""}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -504,7 +504,7 @@ func TestDeleteAccount_MissingPassword(t *testing.T) {
 
 func TestDeleteAccount_WrongPassword(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{deleteAccountErr: auth.ErrInvalidCredentials})
-	req := authedReq(http.MethodDelete, "/me", `{"password":"wrong"}`)
+	req := authedReq(http.MethodDelete, "/", `{"password":"wrong"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -515,7 +515,7 @@ func TestDeleteAccount_WrongPassword(t *testing.T) {
 
 func TestDeleteAccount_NoAuth(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{})
-	req := httptest.NewRequest(http.MethodDelete, "/me", strings.NewReader(`{"password":"MyPass1"}`))
+	req := httptest.NewRequest(http.MethodDelete, "/", strings.NewReader(`{"password":"MyPass1"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -526,7 +526,7 @@ func TestDeleteAccount_NoAuth(t *testing.T) {
 
 func TestDeleteAccount_ServiceError(t *testing.T) {
 	h := newAccountHandler(&mockAccountManager{deleteAccountErr: errors.New("unexpected db error")})
-	req := authedReq(http.MethodDelete, "/me", `{"password":"MyPass1"}`)
+	req := authedReq(http.MethodDelete, "/", `{"password":"MyPass1"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
