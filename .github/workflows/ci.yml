@@ -140,9 +140,8 @@ jobs:
         run: cd frontend && npm ci
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install --with-deps chromium
-      - name: Build and start backend
-        run: |
-          cd backend && go build -o ../api-server ./cmd/api
+      - name: Build backend
+        run: cd backend && go build -o /tmp/api-server ./cmd/api
       - name: Run backend and E2E tests
         run: |
           DATABASE_URL="postgres://circl_user:circl_password@localhost:5432/circl_db?sslmode=disable" \
@@ -153,7 +152,7 @@ jobs:
           CORS_ALLOWED_ORIGINS="http://localhost:3000" \
           LOGIN_IP_LIMIT=1000 \
           REGISTER_IP_LIMIT=1000 \
-          ./api-server &
+          bash -c 'cd backend && exec /tmp/api-server' &
           timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
           cd frontend && npm run test:e2e
         env:
