@@ -147,6 +147,7 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/rooms/dm", getDMHandler(svc, c))
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
+	r.Get("/rooms/{id}", getRoomHandler(svc))
 	r.Put("/rooms/{id}", updateGroupHandler(svc))
 	r.Get("/rooms/{id}/members", listGroupMembersHandler(svc, c))
 	r.Post("/rooms/{id}/members", addGroupMemberHandler(svc))
@@ -257,6 +258,36 @@ func createGroupHandler(svc Manager) http.HandlerFunc {
 
 // listRoomsHandler returns all rooms the authenticated user belongs to.
 //
+// getRoomHandler returns the room record for a given ID.
+// Channels are accessible to any authenticated user; DM and group rooms
+// require the caller to be a member.
+//
+// GET /chat/rooms/{id}
+func getRoomHandler(svc Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		roomID := chi.URLParam(r, "id")
+		room, err := svc.GetRoom(r.Context(), roomID)
+		if err != nil {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if room.Type != RoomTypeChannel {
+			member, err := svc.IsMember(r.Context(), roomID, userID)
+			if err != nil || !member {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(room) //nolint:errcheck
+	}
+}
+
 // GET /chat/rooms
 func listRoomsHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

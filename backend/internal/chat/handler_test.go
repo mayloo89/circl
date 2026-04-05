@@ -306,6 +306,57 @@ func TestListRooms_ServiceError(t *testing.T) {
 	}
 }
 
+// --- Get room ---
+
+func TestGetRoom_Channel_NoMembershipRequired(t *testing.T) {
+	channelRoom := &chat.Room{ID: "c-1", Type: "channel", Name: "general"}
+	h := chat.NewHandler(&mockManager{room: channelRoom})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/c-1", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got chat.Room
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Type != "channel" {
+		t.Errorf("type = %q, want channel", got.Type)
+	}
+}
+
+func TestGetRoom_Group_RequiresMembership(t *testing.T) {
+	groupRoom := &chat.Room{ID: "r-1", Type: "group", Name: "team"}
+	h := chat.NewHandler(&mockManager{room: groupRoom, isMember: false})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestGetRoom_NotFound(t *testing.T) {
+	h := chat.NewHandler(&mockManager{roomErr: errors.New("not found")})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-99", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestGetRoom_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1", nil)
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
 // --- List messages ---
 
 func TestListMessages_NoUserInContext(t *testing.T) {

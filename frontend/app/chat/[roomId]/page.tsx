@@ -29,10 +29,10 @@ interface RoomSummary {
   name: string
   description?: string
   creator_id?: string
-  peer_id: string
-  peer_username: string
-  peer_name: string
-  peer_avatar_url: string
+  peer_id?: string
+  peer_username?: string
+  peer_name?: string
+  peer_avatar_url?: string
   peer_last_read_at?: string
 }
 
@@ -141,11 +141,24 @@ export default function ChatRoomPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId) return
+    // Fetch the full rooms list first (includes peer info for DMs).
+    // If the room is not found there (e.g. a channel, which has no room_members row),
+    // fall back to GET /chat/rooms/{id} which works for any room type.
     fetch(`${API_URL}/chat/rooms`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((rooms: RoomSummary[]) => {
         const found = rooms.find((r) => r.id === roomId)
-        if (found) { setRoom(found); if (found.type === "group" || found.type === "channel") setGroupName(found.name) }
+        if (found) {
+          setRoom(found)
+          if (found.type === "group" || found.type === "channel") setGroupName(found.name)
+          return
+        }
+        // Not in list — likely a channel. Fetch it directly.
+        return fetch(`${API_URL}/chat/rooms/${roomId}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data: RoomSummary | null) => {
+            if (data) { setRoom(data); if (data.type === "channel") setGroupName(data.name) }
+          })
       })
       .catch(() => {})
   }, [status, token, roomId])
