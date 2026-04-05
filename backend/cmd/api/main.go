@@ -201,7 +201,7 @@ func main() {
 			return false
 		}
 		// Filter out the sender from the members list
-		otherMembers := make([]string, 0, len(members)-1)
+		otherMembers := make([]string, 0, max(0, len(members)-1))
 		for _, uid := range members {
 			if uid != senderID {
 				otherMembers = append(otherMembers, uid)
