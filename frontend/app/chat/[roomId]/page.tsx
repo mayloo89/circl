@@ -94,11 +94,10 @@ export default function ChatRoomPage() {
   const [blockLoading, setBlockLoading] = useState(false)
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
   const [pendingNav, setPendingNav] = useState<(() => void) | null>(null)
-  const navConfirmedRef = useRef(false)
 
   function requestLeave(url: string) {
     if (room?.type === "channel") {
-      setPendingNav(() => () => { navConfirmedRef.current = true; router.push(url) })
+      setPendingNav(() => () => router.push(url))
       setLeaveConfirmOpen(true)
     } else {
       router.push(url)
@@ -143,26 +142,29 @@ export default function ChatRoomPage() {
     }
     window.addEventListener("beforeunload", handleBeforeUnload)
 
-    // Next.js client-side navigation: <Link> components, router.push from NavBar, etc.
-    const origPushState = window.history.pushState.bind(window.history)
-    window.history.pushState = (...args: Parameters<typeof window.history.pushState>) => {
-      if (navConfirmedRef.current) {
-        navConfirmedRef.current = false
-        origPushState(...args)
-        return
-      }
-      // Defer setState calls out of Next.js's insertion phase.
-      setTimeout(() => {
-        setPendingNav(() => () => { navConfirmedRef.current = true; origPushState(...args) })
-        setLeaveConfirmOpen(true)
-      }, 0)
+    // In-app navigation: intercept <a> clicks in capture phase before Next.js handles them.
+    // Skips new-tab links and external URLs so only same-app navigation is blocked.
+    const handleClick = (e: MouseEvent) => {
+      const anchor = (e.target as Element).closest("a[href]")
+      if (!anchor) return
+      if (anchor.getAttribute("target") === "_blank") return
+      const href = anchor.getAttribute("href") ?? ""
+      if (!href || href.startsWith("#")) return
+      if (href.startsWith("http") && !href.startsWith(window.location.origin)) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      setPendingNav(() => () => router.push(href))
+      setLeaveConfirmOpen(true)
     }
+
+    document.addEventListener("click", handleClick, true)
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload)
-      window.history.pushState = origPushState
+      document.removeEventListener("click", handleClick, true)
     }
-  }, [room?.type])
+  }, [room?.type, router])
 
   // Update the members sidebar in real-time from participant_join / participant_leave events.
   useEffect(() => {
