@@ -20,6 +20,7 @@ type DBPinger interface {
 
 // New returns a configured chi router with all application routes registered.
 // authHandler is the auth sub-router (auth.NewHandler).
+// accountHandler is the user account sub-router (auth.NewAccountHandler); must run behind requireAuth.
 // profileHandler is the profiles sub-router (profiles.NewHandler).
 // contactsHandler is the contacts sub-router (contacts.NewHandler).
 // notificationsHandler is the SSE handler (notifications.NewHandler).
@@ -30,7 +31,7 @@ type DBPinger interface {
 // reportsHandler is the reports sub-router (reports.NewManager); must run behind requireAuth.
 // localStorageHandler serves uploaded files in dev mode; nil in production.
 // requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -56,6 +57,7 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 	// Protected routes — requireAuth validates the Bearer JWT before forwarding.
 	r.Group(func(g chi.Router) {
 		g.Use(requireAuth)
+		g.Mount("/users", accountHandler)
 		g.Mount("/profiles", profileHandler)
 		g.Mount("/", contactsHandler)
 		g.Mount("/chat", chatHandler)

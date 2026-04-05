@@ -12,7 +12,10 @@ import (
 	"time"
 
 	"github.com/mayloo89/circl/backend/internal/auth"
+	"github.com/mayloo89/circl/backend/internal/middleware"
 )
+
+const testUserID = "test-user-uuid"
 
 const (
 	testSecret = "supersecretfortesting-mustbe32chars!!"
@@ -362,6 +365,173 @@ func TestLoginHandler_LimiterError(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d (limiter error must not block login)", rec.Code, http.StatusOK)
+	}
+}
+
+// --- Account handler ---
+
+// mockAccountManager is a test double for AccountManager.
+type mockAccountManager struct {
+	changePasswordErr error
+	deleteAccountErr  error
+}
+
+func (m *mockAccountManager) ChangePassword(_ context.Context, _, _, _ string) error {
+	return m.changePasswordErr
+}
+
+func (m *mockAccountManager) DeleteAccount(_ context.Context, _, _ string) error {
+	return m.deleteAccountErr
+}
+
+// authedReq creates a test request with the test user ID injected into context
+// via middleware.ContextWithUserID (simulating a request that has passed RequireAuth).
+func authedReq(method, path, body string) *http.Request {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	ctx := middleware.ContextWithUserID(req.Context(), testUserID)
+	return req.WithContext(ctx)
+}
+
+func newAccountHandler(mock *mockAccountManager) http.Handler {
+	return auth.NewAccountHandler(mock)
+}
+
+// TestChangePassword_Success tests successful password change.
+func TestChangePassword_Success(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"OldPass1","new_password":"NewPass2"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestChangePassword_MissingFields(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+
+	for _, body := range []string{
+		`{"current_password":"","new_password":"NewPass2"}`,
+		`{"current_password":"OldPass1","new_password":""}`,
+	} {
+		req := authedReq(http.MethodPut, "/me/password", body)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("body %s: status = %d, want %d", body, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestChangePassword_WrongCurrentPassword(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{changePasswordErr: auth.ErrInvalidCredentials})
+	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"wrong","new_password":"NewPass2"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestChangePassword_WeakNewPassword(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{changePasswordErr: auth.ErrInvalidInput})
+	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"OldPass1","new_password":"weak"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestChangePassword_NoAuth(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+	req := httptest.NewRequest(http.MethodPut, "/me/password", strings.NewReader(`{"current_password":"OldPass1","new_password":"NewPass2"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestChangePassword_MalformedJSON(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+	req := authedReq(http.MethodPut, "/me/password", "{not json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestChangePassword_ServiceError(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{changePasswordErr: errors.New("unexpected db error")})
+	req := authedReq(http.MethodPut, "/me/password", `{"current_password":"OldPass1","new_password":"NewPass2"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestDeleteAccount_Success(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+	req := authedReq(http.MethodDelete, "/me", `{"password":"MyPass1"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestDeleteAccount_MissingPassword(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+	req := authedReq(http.MethodDelete, "/me", `{"password":""}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestDeleteAccount_WrongPassword(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{deleteAccountErr: auth.ErrInvalidCredentials})
+	req := authedReq(http.MethodDelete, "/me", `{"password":"wrong"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestDeleteAccount_NoAuth(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{})
+	req := httptest.NewRequest(http.MethodDelete, "/me", strings.NewReader(`{"password":"MyPass1"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestDeleteAccount_ServiceError(t *testing.T) {
+	h := newAccountHandler(&mockAccountManager{deleteAccountErr: errors.New("unexpected db error")})
+	req := authedReq(http.MethodDelete, "/me", `{"password":"MyPass1"}`)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
 

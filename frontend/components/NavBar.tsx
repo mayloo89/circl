@@ -106,6 +106,9 @@ export default function NavBar() {
             <BellIcon />
           </button>
         )}
+        <Link href="/settings" className="text-sm text-gray-300 hover:text-white">
+          Settings
+        </Link>
         <Link href="/profile" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
           <Avatar src={avatarURL} name={displayName || "?"} size="xs" />
           Profile

@@ -43,6 +43,16 @@ type User struct {
 type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (*userRecord, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (*userRecord, error)
+	GetUserByID(ctx context.Context, userID string) (*userRecord, error)
+	UpdatePassword(ctx context.Context, userID, newHash string) error
+	DeleteUser(ctx context.Context, userID string) error
+}
+
+// AccountManager handles authenticated account mutations.
+// *Service satisfies this interface.
+type AccountManager interface {
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
+	DeleteAccount(ctx context.Context, userID, password string) error
 }
 
 // userRecord is the internal DB representation of an authenticated user.
@@ -112,6 +122,45 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 	}
 
 	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
+}
+
+// ChangePassword verifies currentPassword against the stored hash and replaces
+// it with a freshly-hashed newPassword.
+func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	record, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return ErrInvalidCredentials
+	}
+	if len(currentPassword) > maxPasswordLen {
+		return ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+	if err := validatePassword(newPassword); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return s.store.UpdatePassword(ctx, userID, string(hash))
+}
+
+// DeleteAccount verifies password and soft-deletes the account by setting
+// status = 'deleted', which blocks future logins.
+func (s *Service) DeleteAccount(ctx context.Context, userID, password string) error {
+	record, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return ErrInvalidCredentials
+	}
+	if len(password) > maxPasswordLen {
+		return ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
+		return ErrInvalidCredentials
+	}
+	return s.store.DeleteUser(ctx, userID)
 }
 
 // validateEmail checks that the given string is a valid email address.

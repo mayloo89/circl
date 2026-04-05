@@ -13,6 +13,8 @@ type mockStore struct {
 	record    *userRecord
 	getErr    error
 	createErr error
+	updateErr error
+	deleteErr error
 }
 
 func (m *mockStore) GetUserByEmail(_ context.Context, _ string) (*userRecord, error) {
@@ -24,6 +26,18 @@ func (m *mockStore) CreateUser(_ context.Context, email, _ string) (*userRecord,
 		return nil, m.createErr
 	}
 	return &userRecord{ID: "new-uuid", Email: email, Status: "active"}, nil
+}
+
+func (m *mockStore) GetUserByID(_ context.Context, _ string) (*userRecord, error) {
+	return m.record, m.getErr
+}
+
+func (m *mockStore) UpdatePassword(_ context.Context, _, _ string) error {
+	return m.updateErr
+}
+
+func (m *mockStore) DeleteUser(_ context.Context, _ string) error {
+	return m.deleteErr
 }
 
 func hashPassword(t *testing.T, password string) string {
@@ -149,6 +163,118 @@ func TestService_Register_EmailTaken(t *testing.T) {
 	_, err := svc.Register(t.Context(), "taken@example.com", "Secure1pass")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("got %v, want ErrEmailTaken", err)
+	}
+}
+
+// --- ChangePassword ---
+
+func TestService_ChangePassword_Success(t *testing.T) {
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:           "abc-123",
+			Email:        "user@example.com",
+			PasswordHash: hashPassword(t, "OldPass1"),
+			Status:       "active",
+		},
+	})
+
+	if err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "NewPass2"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_ChangePassword_WrongCurrentPassword(t *testing.T) {
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:           "abc-123",
+			PasswordHash: hashPassword(t, "OldPass1"),
+			Status:       "active",
+		},
+	})
+
+	err := svc.ChangePassword(t.Context(), "abc-123", "WrongPass1", "NewPass2")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("got %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestService_ChangePassword_NewPasswordTooWeak(t *testing.T) {
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:           "abc-123",
+			PasswordHash: hashPassword(t, "OldPass1"),
+			Status:       "active",
+		},
+	})
+
+	err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "weak")
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestService_ChangePassword_UserNotFound(t *testing.T) {
+	svc := NewService(&mockStore{getErr: errors.New("user not found")})
+
+	err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "NewPass2")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("got %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestService_ChangePassword_UpdateError(t *testing.T) {
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:           "abc-123",
+			PasswordHash: hashPassword(t, "OldPass1"),
+			Status:       "active",
+		},
+		updateErr: errors.New("db error"),
+	})
+
+	err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "NewPass2")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- DeleteAccount ---
+
+func TestService_DeleteAccount_Success(t *testing.T) {
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:           "abc-123",
+			PasswordHash: hashPassword(t, "MyPass1"),
+			Status:       "active",
+		},
+	})
+
+	if err := svc.DeleteAccount(t.Context(), "abc-123", "MyPass1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_DeleteAccount_WrongPassword(t *testing.T) {
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:           "abc-123",
+			PasswordHash: hashPassword(t, "MyPass1"),
+			Status:       "active",
+		},
+	})
+
+	err := svc.DeleteAccount(t.Context(), "abc-123", "WrongPass1")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("got %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestService_DeleteAccount_UserNotFound(t *testing.T) {
+	svc := NewService(&mockStore{getErr: errors.New("user not found")})
+
+	err := svc.DeleteAccount(t.Context(), "abc-123", "MyPass1")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("got %v, want ErrInvalidCredentials", err)
 	}
 }
 
