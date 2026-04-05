@@ -135,6 +135,12 @@ func authedReq(r *http.Request) *http.Request {
 	return r
 }
 
+func adminReq(r *http.Request) *http.Request {
+	tok, _ := token.Generate(testUserID, true, testSecret, time.Hour)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	return r
+}
+
 func serveWithAuth(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 	middleware.RequireAuth(testSecret)(h).ServeHTTP(rec, r)
 }
@@ -1796,7 +1802,7 @@ func TestCreateChannel_Success(t *testing.T) {
 	room := &chat.Room{ID: "c-1", Type: "channel", Name: "general"}
 	h := chat.NewHandler(&mockManager{room: room})
 	body, _ := json.Marshal(map[string]string{"name": "general", "description": "chat here"})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
 	rec := httptest.NewRecorder()
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusCreated {
@@ -1804,9 +1810,20 @@ func TestCreateChannel_Success(t *testing.T) {
 	}
 }
 
+func TestCreateChannel_NotAdmin(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"name": "general"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
 func TestCreateChannel_MissingName(t *testing.T) {
 	h := chat.NewHandler(&mockManager{})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(`{}`)))
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(`{}`)))
 	rec := httptest.NewRecorder()
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusBadRequest {
@@ -1828,7 +1845,7 @@ func TestCreateChannel_NoUserInContext(t *testing.T) {
 func TestCreateChannel_ServiceError(t *testing.T) {
 	h := chat.NewHandler(&mockManager{roomErr: errors.New("db fail")})
 	body, _ := json.Marshal(map[string]string{"name": "general"})
-	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
 	rec := httptest.NewRecorder()
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusInternalServerError {

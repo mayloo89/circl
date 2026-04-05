@@ -109,6 +109,7 @@ export default function ChannelsPage() {
   const [query, setQuery] = useState("")
 
   const token = session?.accessToken
+  const isAdmin = session?.isAdmin === true
 
   function loadChannels() {
     if (!token) return
@@ -153,9 +154,11 @@ export default function ChannelsPage() {
             <p className="mt-1 text-sm text-gray-500">Public rooms anyone can join and chat in.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-              + New channel
-            </Button>
+            {isAdmin && (
+              <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+                + New channel
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => router.push("/chat")}>← Messages</Button>
           </div>
         </div>
@@ -190,7 +193,7 @@ export default function ChannelsPage() {
               <p className="text-sm font-medium text-gray-300">
                 {query ? "No channels match your search." : "No channels yet."}
               </p>
-              {!query && (
+              {!query && isAdmin && (
                 <Button variant="primary" size="sm" pill onClick={() => setCreateOpen(true)} className="mt-1">
                   Create the first one
                 </Button>

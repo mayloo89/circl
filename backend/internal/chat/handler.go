@@ -632,6 +632,10 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
+		if !middleware.IsAdminFromContext(r.Context()) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
 		var body struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
