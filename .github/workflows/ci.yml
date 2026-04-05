@@ -143,6 +143,8 @@ jobs:
       - name: Build and start backend
         run: |
           cd backend && go build -o ../api-server ./cmd/api
+      - name: Run backend and E2E tests
+        run: |
           DATABASE_URL="postgres://circl_user:circl_password@localhost:5432/circl_db?sslmode=disable" \
           REDIS_URL="redis://localhost:6379/0" \
           ASYNQ_REDIS_URL="redis://localhost:6379/1" \
@@ -153,8 +155,7 @@ jobs:
           REGISTER_IP_LIMIT=1000 \
           ../api-server &
           timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
-      - name: Run E2E tests
-        run: cd frontend && npm run test:e2e
+          cd frontend && npm run test:e2e
         env:
           CI: 'true'
           NEXTAUTH_URL: 'http://localhost:3000'
