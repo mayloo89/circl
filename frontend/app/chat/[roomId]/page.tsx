@@ -151,8 +151,11 @@ export default function ChatRoomPage() {
         origPushState(...args)
         return
       }
-      setPendingNav(() => () => { navConfirmedRef.current = true; origPushState(...args) })
-      setLeaveConfirmOpen(true)
+      // Defer setState calls out of Next.js's insertion phase.
+      setTimeout(() => {
+        setPendingNav(() => () => { navConfirmedRef.current = true; origPushState(...args) })
+        setLeaveConfirmOpen(true)
+      }, 0)
     }
 
     return () => {
