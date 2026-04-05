@@ -258,7 +258,7 @@ export default function ContactsPage() {
           onChange={search}
           results={searchResults}
           onAdd={sendRequest}
-          onNavigate={(usernameOrId) => router.push(`/profile/@${usernameOrId}`)}
+          onNavigate={(usernameOrId) => router.push(`/profile/${usernameOrId}`)}
         />
 
         {pending.length > 0 && (
