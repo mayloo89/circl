@@ -544,6 +544,7 @@ export default function ChatRoomPage() {
             onAttach={handleAttach}
             onTyping={sendTyping}
             inputRef={inputRef}
+            disableAttach={room?.type === "channel"}
           />
         </div>
 
@@ -589,9 +590,14 @@ export default function ChatRoomPage() {
                         />
                       </div>
                       <div className="min-w-0">
-                        <p className={`truncate text-xs font-medium ${online ? "text-white" : "text-gray-400"}`}>
+                        <a
+                          href={`/profile/${m.username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`block truncate text-xs font-medium hover:underline ${online ? "text-white" : "text-gray-400"}`}
+                        >
                           {m.display_name || m.username}
-                        </p>
+                        </a>
                         {m.is_admin && (
                           <p className="text-[10px] text-indigo-400">Admin</p>
                         )}
