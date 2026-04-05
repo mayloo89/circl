@@ -64,6 +64,9 @@ func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error
 func (m *mockManager) GetAvatarURL(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
+func (m *mockManager) GetUsername(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
 func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }

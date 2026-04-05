@@ -15,6 +15,7 @@ interface ChatInputProps {
   onTyping: () => void
   inputRef?: React.RefObject<HTMLInputElement | null>
   disableAttach?: boolean
+  disableEphemeral?: boolean
 }
 
 export default function ChatInput({
@@ -27,6 +28,7 @@ export default function ChatInput({
   onTyping,
   inputRef,
   disableAttach = false,
+  disableEphemeral = false,
 }: ChatInputProps) {
   const [input, setInput] = useState("")
   const [showEphemeralMenu, setShowEphemeralMenu] = useState(false)
@@ -102,7 +104,7 @@ export default function ChatInput({
         )}
 
         {/* Ephemeral mode button */}
-        <div className="relative flex-none">
+        {!disableEphemeral && <div className="relative flex-none">
           <button
             onClick={() => setShowEphemeralMenu((v) => !v)}
             disabled={!connected}
@@ -144,7 +146,7 @@ export default function ChatInput({
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         <label htmlFor="message-input" className="sr-only">Message</label>
         <input

@@ -197,6 +197,9 @@ type Store interface {
 	// GetAvatarURL returns the avatar_url for the given user from their profile.
 	// Returns an empty string when no profile row exists.
 	GetAvatarURL(ctx context.Context, userID string) (string, error)
+	// GetUsername returns the username for the given user.
+	// Returns an empty string when the user does not exist.
+	GetUsername(ctx context.Context, userID string) (string, error)
 }
 
 // Manager is the interface used by HTTP and WebSocket handlers.
@@ -228,6 +231,9 @@ type Manager interface {
 	// GetAvatarURL returns the avatar_url for the given user from their profile.
 	// Returns an empty string when no profile row exists.
 	GetAvatarURL(ctx context.Context, userID string) (string, error)
+	// GetUsername returns the username for the given user.
+	// Returns an empty string when the user does not exist.
+	GetUsername(ctx context.Context, userID string) (string, error)
 }
 
 // Service is the application-layer implementation of Manager.
@@ -323,4 +329,8 @@ func (s *Service) GetDisplayName(ctx context.Context, userID string) (string, er
 
 func (s *Service) GetAvatarURL(ctx context.Context, userID string) (string, error) {
 	return s.store.GetAvatarURL(ctx, userID)
+}
+
+func (s *Service) GetUsername(ctx context.Context, userID string) (string, error) {
+	return s.store.GetUsername(ctx, userID)
 }

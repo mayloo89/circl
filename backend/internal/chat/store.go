@@ -569,6 +569,23 @@ func (s *pgStore) GetAvatarURL(ctx context.Context, userID string) (string, erro
 	return url, nil
 }
 
+// GetUsername returns the username for the given user.
+// Returns an empty string when the user does not exist.
+func (s *pgStore) GetUsername(ctx context.Context, userID string) (string, error) {
+	var username string
+	err := s.db.QueryRow(ctx,
+		`SELECT username FROM users WHERE id = $1`,
+		userID,
+	).Scan(&username)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get username: %w", err)
+	}
+	return username, nil
+}
+
 // ListExpiredMessages returns the IDs of messages whose TTL has elapsed.
 func (s *pgStore) ListExpiredMessages(ctx context.Context) ([]string, error) {
 	rows, err := s.db.Query(ctx,

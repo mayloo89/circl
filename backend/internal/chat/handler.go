@@ -41,6 +41,7 @@ type Client struct {
 	send            chan []byte
 	userID          string
 	roomID          string
+	username        string
 	displayName     string
 	avatarURL       string
 	isChannel       bool
@@ -744,6 +745,7 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 
 		displayName, _ := svc.GetDisplayName(r.Context(), userID)
 		avatarURL, _ := svc.GetAvatarURL(r.Context(), userID)
+		username, _ := svc.GetUsername(r.Context(), userID)
 
 		client := &Client{
 			hub:             hub,
@@ -751,6 +753,7 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 			send:            make(chan []byte, 256),
 			userID:          userID,
 			roomID:          roomID,
+			username:        username,
 			displayName:     displayName,
 			avatarURL:       avatarURL,
 			isChannel:       isChannel,

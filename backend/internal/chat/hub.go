@@ -12,6 +12,7 @@ const redisChannelPrefix = "chat:room:"
 // ClientInfo holds the participant details exposed via RoomParticipants.
 type ClientInfo struct {
 	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
 }
@@ -91,6 +92,7 @@ func (h *Hub) Run(ctx context.Context) {
 				seen[c.userID] = struct{}{}
 				infos = append(infos, ClientInfo{
 					UserID:      c.userID,
+					Username:    c.username,
 					DisplayName: c.displayName,
 					AvatarURL:   c.avatarURL,
 				})
@@ -149,6 +151,7 @@ func (h *Hub) addClient(ctx context.Context, client *Client) {
 		data, _ := json.Marshal(map[string]any{
 			"event":        "participant_join",
 			"user_id":      client.userID,
+			"username":     client.username,
 			"display_name": client.displayName,
 			"avatar_url":   client.avatarURL,
 		})

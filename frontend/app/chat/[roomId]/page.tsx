@@ -121,7 +121,7 @@ export default function ChatRoomPage() {
       if (ev.type === "join") {
         setMembers((prev) => {
           if (prev.some((m) => m.user_id === ev.userId)) return prev
-          return [...prev, { user_id: ev.userId, username: "", display_name: ev.displayName, avatar_url: ev.avatarURL, is_admin: false }]
+          return [...prev, { user_id: ev.userId, username: ev.username, display_name: ev.displayName, avatar_url: ev.avatarURL, is_admin: false }]
         })
       } else {
         setMembers((prev) => prev.filter((m) => m.user_id !== ev.userId))
@@ -545,6 +545,7 @@ export default function ChatRoomPage() {
             onTyping={sendTyping}
             inputRef={inputRef}
             disableAttach={room?.type === "channel"}
+            disableEphemeral={room?.type === "channel"}
           />
         </div>
 
@@ -568,6 +569,7 @@ export default function ChatRoomPage() {
             <ul className="overflow-y-auto">
               {[...members]
                 .filter((m) => {
+                  if (m.user_id === userID) return false
                   if (!memberQuery) return true
                   const name = (m.display_name || m.username).toLowerCase()
                   return name.startsWith(memberQuery.toLowerCase())
@@ -590,14 +592,20 @@ export default function ChatRoomPage() {
                         />
                       </div>
                       <div className="min-w-0">
-                        <a
-                          href={`/profile/${m.username}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`block truncate text-xs font-medium hover:underline ${online ? "text-white" : "text-gray-400"}`}
-                        >
-                          {m.display_name || m.username}
-                        </a>
+                        {m.username ? (
+                          <a
+                            href={`/profile/${m.username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`block truncate text-xs font-medium hover:underline ${online ? "text-white" : "text-gray-400"}`}
+                          >
+                            {m.display_name || m.username}
+                          </a>
+                        ) : (
+                          <p className={`truncate text-xs font-medium ${online ? "text-white" : "text-gray-400"}`}>
+                            {m.display_name || m.user_id}
+                          </p>
+                        )}
                         {m.is_admin && (
                           <p className="text-[10px] text-indigo-400">Admin</p>
                         )}

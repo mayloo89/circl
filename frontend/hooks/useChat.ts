@@ -48,6 +48,7 @@ const chatMessageTypes = new Set(["text", "image", "video", "file"])
 export interface ParticipantEvent {
   type: "join" | "leave"
   userId: string
+  username: string
   displayName: string
   avatarURL: string
 }
@@ -151,6 +152,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
             setParticipantEvents((prev) => [...prev, {
               type: "join",
               userId: frame.user_id as string,
+              username: (frame.username as string) || "",
               displayName: (frame.display_name as string) || "",
               avatarURL: (frame.avatar_url as string) || "",
             }])
@@ -158,6 +160,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
             setParticipantEvents((prev) => [...prev, {
               type: "leave",
               userId: frame.user_id as string,
+              username: "",
               displayName: "",
               avatarURL: "",
             }])
