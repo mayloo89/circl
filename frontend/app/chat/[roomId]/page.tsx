@@ -92,6 +92,22 @@ export default function ChatRoomPage() {
   const [revealedMessages, setRevealedMessages] = useState<Map<string, { msg: AnyMessage; content: string }>>(new Map())
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [blockLoading, setBlockLoading] = useState(false)
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
+  const [pendingLeaveUrl, setPendingLeaveUrl] = useState<string | null>(null)
+
+  function requestLeave(url: string) {
+    if (room?.type === "channel") {
+      setPendingLeaveUrl(url)
+      setLeaveConfirmOpen(true)
+    } else {
+      router.push(url)
+    }
+  }
+
+  function confirmLeave() {
+    setLeaveConfirmOpen(false)
+    if (pendingLeaveUrl) router.push(pendingLeaveUrl)
+  }
   const [groupPanelOpen, setGroupPanelOpen] = useState(false)
   const [groupName, setGroupName] = useState("")
   const [members, setMembers] = useState<MemberProfile[]>([])
@@ -370,7 +386,7 @@ export default function ChatRoomPage() {
               setGroupName(name)
               setRoom((prev) => prev ? { ...prev, name } : prev)
             }}
-            onLeft={() => router.push(room.type === "channel" ? "/chat/channels" : "/chat")}
+            onLeft={() => requestLeave(room.type === "channel" ? "/chat/channels" : "/chat")}
           />
         </div>
       )}
@@ -386,6 +402,15 @@ export default function ChatRoomPage() {
         />
       )}
 
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        title="Leave channel"
+        message="You will stop receiving messages and your name will be removed from the participant list."
+        confirmLabel="Leave"
+        onConfirm={confirmLeave}
+        onCancel={() => setLeaveConfirmOpen(false)}
+      />
+
       {room?.type === "dm" && (
         <ConfirmDialog
           open={blockConfirmOpen}
@@ -400,7 +425,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button aria-label="Back to messages" onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
+        <button aria-label="Back to messages" onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="text-gray-400 hover:text-gray-200">
           ←
         </button>
         {room ? (
