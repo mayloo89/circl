@@ -11,30 +11,34 @@ import (
 
 // mockStore implements chat.Store for service-layer tests.
 type mockStore struct {
-	room            *chat.Room
-	rooms           []chat.RoomSummary
-	msg             *chat.Message
-	msgs            []chat.Message
-	members         []string
-	isMember        bool
-	roomErr         error
-	roomsErr        error
-	msgErr          error
-	msgsErr         error
-	memberErr       error
-	membersErr      error
-	markReadTime    time.Time
-	markReadErr     error
-	viewOnceMsg     *chat.Message
-	viewOnceKeys    []string
-	viewOnceErr     error
-	deleteRoomID    string
-	deleteKeys      []string
-	deleteErr       error
-	expiredIDs      []string
-	expiredErr      error
-	displayName     string
-	displayNameErr  error
+	room             *chat.Room
+	rooms            []chat.RoomSummary
+	msg              *chat.Message
+	msgs             []chat.Message
+	members          []string
+	memberProfiles   []chat.MemberProfile
+	isMember         bool
+	roomErr          error
+	roomsErr         error
+	msgErr           error
+	msgsErr          error
+	memberErr        error
+	membersErr       error
+	memberProfileErr error
+	groupMemberErr   error
+	updateGroupErr   error
+	markReadTime     time.Time
+	markReadErr      error
+	viewOnceMsg      *chat.Message
+	viewOnceKeys     []string
+	viewOnceErr      error
+	deleteRoomID     string
+	deleteKeys       []string
+	deleteErr        error
+	expiredIDs       []string
+	expiredErr       error
+	displayName      string
+	displayNameErr   error
 }
 
 func (m *mockStore) GetDisplayName(_ context.Context, _ string) (string, error) {
@@ -46,11 +50,26 @@ func (m *mockStore) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, e
 func (m *mockStore) CreateGroup(_ context.Context, _, _ string, _ []string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
+func (m *mockStore) GetRoom(_ context.Context, _ string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
 func (m *mockStore) IsMember(_ context.Context, _, _ string) (bool, error) {
 	return m.isMember, m.memberErr
 }
 func (m *mockStore) ListMembers(_ context.Context, _ string) ([]string, error) {
 	return m.members, m.membersErr
+}
+func (m *mockStore) ListMemberProfiles(_ context.Context, _ string) ([]chat.MemberProfile, error) {
+	return m.memberProfiles, m.memberProfileErr
+}
+func (m *mockStore) AddGroupMember(_ context.Context, _, _, _ string) error {
+	return m.groupMemberErr
+}
+func (m *mockStore) RemoveGroupMember(_ context.Context, _, _, _ string) error {
+	return m.groupMemberErr
+}
+func (m *mockStore) UpdateGroupName(_ context.Context, _, _, _ string) error {
+	return m.updateGroupErr
 }
 func (m *mockStore) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary, error) {
 	return m.rooms, m.roomsErr
@@ -397,6 +416,96 @@ func TestService_GetDisplayName_Error(t *testing.T) {
 	svc := chat.NewService(&mockStore{displayNameErr: errors.New("db fail")})
 	_, err := svc.GetDisplayName(t.Context(), "u-1")
 	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestService_GetRoom_Success(t *testing.T) {
+	want := &chat.Room{ID: "r-1", Type: chat.RoomTypeGroup, Name: "squad"}
+	svc := chat.NewService(&mockStore{room: want})
+
+	got, err := svc.GetRoom(t.Context(), "r-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != "r-1" {
+		t.Errorf("ID = %q, want r-1", got.ID)
+	}
+}
+
+func TestService_GetRoom_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{roomErr: errors.New("db fail")})
+	_, err := svc.GetRoom(t.Context(), "r-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_ListMemberProfiles_Success(t *testing.T) {
+	want := []chat.MemberProfile{
+		{UserID: "u-1", DisplayName: "Alice", IsAdmin: true},
+		{UserID: "u-2", DisplayName: "Bob"},
+	}
+	svc := chat.NewService(&mockStore{memberProfiles: want})
+
+	got, err := svc.ListMemberProfiles(t.Context(), "r-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+	if !got[0].IsAdmin {
+		t.Error("first member should be admin")
+	}
+}
+
+func TestService_ListMemberProfiles_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{memberProfileErr: errors.New("db fail")})
+	_, err := svc.ListMemberProfiles(t.Context(), "r-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_AddGroupMember_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{})
+	if err := svc.AddGroupMember(t.Context(), "r-1", "u-1", "u-2"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestService_AddGroupMember_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{groupMemberErr: errors.New("db fail")})
+	if err := svc.AddGroupMember(t.Context(), "r-1", "u-1", "u-2"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestService_RemoveGroupMember_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{})
+	if err := svc.RemoveGroupMember(t.Context(), "r-1", "u-1", "u-2"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestService_RemoveGroupMember_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{groupMemberErr: errors.New("db fail")})
+	if err := svc.RemoveGroupMember(t.Context(), "r-1", "u-1", "u-2"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestService_UpdateGroupName_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{})
+	if err := svc.UpdateGroupName(t.Context(), "r-1", "u-1", "new name"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestService_UpdateGroupName_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{updateGroupErr: errors.New("db fail")})
+	if err := svc.UpdateGroupName(t.Context(), "r-1", "u-1", "new name"); err == nil {
 		t.Error("expected error, got nil")
 	}
 }

@@ -45,9 +45,10 @@ func (s *pgStore) GetOrCreateDM(ctx context.Context, userID, peerID string) (*Ro
 
 	var room Room
 	err = tx.QueryRow(ctx, `
-		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''), created_at, updated_at
+		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+		       COALESCE(creator_id::text, ''), created_at, updated_at
 		FROM rooms WHERE dm_key = $1`, key,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatedAt, &room.UpdatedAt)
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Room does not exist yet — create it.  DO UPDATE is a no-op that forces
@@ -56,8 +57,9 @@ func (s *pgStore) GetOrCreateDM(ctx context.Context, userID, peerID string) (*Ro
 			INSERT INTO rooms (type, dm_key) VALUES ('dm', $1)
 			ON CONFLICT (dm_key) WHERE dm_key IS NOT NULL
 			DO UPDATE SET dm_key = EXCLUDED.dm_key
-			RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''), created_at, updated_at`, key,
-		).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatedAt, &room.UpdatedAt)
+			RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+			          COALESCE(creator_id::text, ''), created_at, updated_at`, key,
+		).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("get or create dm: upsert room: %w", err)
 		}
@@ -88,9 +90,10 @@ func (s *pgStore) CreateGroup(ctx context.Context, creatorID, name string, membe
 
 	var room Room
 	if err = tx.QueryRow(ctx, `
-		INSERT INTO rooms (type, name) VALUES ('group', $1)
-		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''), created_at, updated_at`, name,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		INSERT INTO rooms (type, name, creator_id) VALUES ('group', $1, $2)
+		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+		          COALESCE(creator_id::text, ''), created_at, updated_at`, name, creatorID,
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("create group: insert room: %w", err)
 	}
 
@@ -162,6 +165,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 			r.id,
 			r.type,
 			COALESCE(r.name, '')                             AS name,
+			COALESCE(r.creator_id::text, '')                 AS creator_id,
 			r.created_at,
 			COALESCE(peer.id::text, '')                      AS peer_id,
 			COALESCE(pp.username, '')                        AS peer_username,
@@ -218,7 +222,7 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 		var lastAt *time.Time
 
 		if err := rows.Scan(
-			&s.ID, &s.Type, &s.Name, &s.CreatedAt,
+			&s.ID, &s.Type, &s.Name, &s.CreatorID, &s.CreatedAt,
 			&s.PeerID, &s.PeerUsername, &s.PeerName, &s.PeerAvatarURL,
 			&lastContent, &lastSenderID, &lastType, &lastAt,
 			&s.UnreadCount, &s.PeerLastReadAt,
@@ -555,6 +559,148 @@ func (s *pgStore) ListExpiredMessages(ctx context.Context) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// GetRoom returns the room record for the given ID.
+func (s *pgStore) GetRoom(ctx context.Context, roomID string) (*Room, error) {
+	var room Room
+	err := s.db.QueryRow(ctx, `
+		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+		       COALESCE(creator_id::text, ''), created_at, updated_at
+		FROM rooms WHERE id = $1`, roomID,
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.CreatedAt, &room.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	return &room, nil
+}
+
+// ListMemberProfiles returns full profile data for every member of the room,
+// ordered by join time ascending. The creator is flagged with IsAdmin = true.
+func (s *pgStore) ListMemberProfiles(ctx context.Context, roomID string) ([]MemberProfile, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT rm.user_id::text,
+		       COALESCE(p.username, ''),
+		       COALESCE(NULLIF(p.display_name, ''), u.email),
+		       COALESCE(p.avatar_url, ''),
+		       COALESCE(r.creator_id = rm.user_id, false) AS is_admin,
+		       rm.joined_at
+		FROM room_members rm
+		JOIN rooms r ON r.id = rm.room_id
+		JOIN users u ON u.id = rm.user_id
+		LEFT JOIN profiles p ON p.user_id = rm.user_id
+		WHERE rm.room_id = $1
+		ORDER BY rm.joined_at ASC`, roomID)
+	if err != nil {
+		return nil, fmt.Errorf("list member profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []MemberProfile
+	for rows.Next() {
+		var mp MemberProfile
+		if err := rows.Scan(
+			&mp.UserID, &mp.Username, &mp.DisplayName, &mp.AvatarURL,
+			&mp.IsAdmin, &mp.JoinedAt,
+		); err != nil {
+			return nil, fmt.Errorf("list member profiles: scan: %w", err)
+		}
+		profiles = append(profiles, mp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list member profiles: rows: %w", err)
+	}
+	if profiles == nil {
+		profiles = []MemberProfile{}
+	}
+	return profiles, nil
+}
+
+// AddGroupMember adds targetID to a group room. actorID must be the creator.
+func (s *pgStore) AddGroupMember(ctx context.Context, roomID, actorID, targetID string) error {
+	var roomType, creatorID string
+	err := s.db.QueryRow(ctx,
+		`SELECT type, COALESCE(creator_id::text, '') FROM rooms WHERE id = $1`, roomID,
+	).Scan(&roomType, &creatorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("add group member: get room: %w", err)
+	}
+	if roomType != RoomTypeGroup || creatorID != actorID {
+		return ErrForbidden
+	}
+	if _, err = s.db.Exec(ctx,
+		`INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		roomID, targetID,
+	); err != nil {
+		return fmt.Errorf("add group member: insert: %w", err)
+	}
+	return nil
+}
+
+// RemoveGroupMember removes targetID from a group room.
+// actorID must be the creator (to remove others) or the same as targetID (self-leave).
+// The creator cannot be removed.
+func (s *pgStore) RemoveGroupMember(ctx context.Context, roomID, actorID, targetID string) error {
+	var roomType, creatorID string
+	err := s.db.QueryRow(ctx,
+		`SELECT type, COALESCE(creator_id::text, '') FROM rooms WHERE id = $1`, roomID,
+	).Scan(&roomType, &creatorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("remove group member: get room: %w", err)
+	}
+	if roomType != RoomTypeGroup {
+		return ErrForbidden
+	}
+	// Only the admin or the target themselves may remove a member.
+	if actorID != creatorID && actorID != targetID {
+		return ErrForbidden
+	}
+	// The creator cannot be removed from the group.
+	if targetID == creatorID {
+		return ErrForbidden
+	}
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
+		roomID, targetID,
+	)
+	if err != nil {
+		return fmt.Errorf("remove group member: delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateGroupName renames a group room. actorID must be the creator.
+func (s *pgStore) UpdateGroupName(ctx context.Context, roomID, actorID, name string) error {
+	tag, err := s.db.Exec(ctx, `
+		UPDATE rooms SET name = $1, updated_at = NOW()
+		WHERE id = $2 AND type = 'group' AND creator_id = $3`,
+		name, roomID, actorID,
+	)
+	if err != nil {
+		return fmt.Errorf("update group name: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		var exists bool
+		if checkErr := s.db.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM rooms WHERE id = $1)`, roomID,
+		).Scan(&exists); checkErr != nil || !exists {
+			return ErrNotFound
+		}
+		return ErrForbidden
+	}
+	return nil
 }
 
 // txQuerier is the subset of pgx.Tx used by collectUploadKeys.

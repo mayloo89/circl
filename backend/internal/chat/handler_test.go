@@ -28,28 +28,32 @@ const (
 
 // mockManager is a test double for chat.Manager.
 type mockManager struct {
-	room           *chat.Room
-	rooms          []chat.RoomSummary
-	msg            *chat.Message
-	msgs           []chat.Message
-	isMember       bool
-	roomErr        error
-	roomsErr       error
-	msgErr         error
-	msgsErr        error
-	memberErr      error
-	markErr        error
-	markReadTime   time.Time
-	viewOnceMsg    *chat.Message
-	viewOnceKeys   []string
-	viewOnceErr    error
-	deleteRoomID   string
-	deleteKeys     []string
-	deleteErr      error
-	expiredIDs     []string
-	expiredErr     error
-	displayName    string
-	displayNameErr error
+	room             *chat.Room
+	rooms            []chat.RoomSummary
+	msg              *chat.Message
+	msgs             []chat.Message
+	memberProfiles   []chat.MemberProfile
+	isMember         bool
+	roomErr          error
+	roomsErr         error
+	msgErr           error
+	msgsErr          error
+	memberErr        error
+	memberProfileErr error
+	groupMemberErr   error
+	updateGroupErr   error
+	markErr          error
+	markReadTime     time.Time
+	viewOnceMsg      *chat.Message
+	viewOnceKeys     []string
+	viewOnceErr      error
+	deleteRoomID     string
+	deleteKeys       []string
+	deleteErr        error
+	expiredIDs       []string
+	expiredErr       error
+	displayName      string
+	displayNameErr   error
 }
 
 func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error) {
@@ -59,6 +63,9 @@ func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room,
 	return m.room, m.roomErr
 }
 func (m *mockManager) CreateGroup(_ context.Context, _, _ string, _ []string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
+func (m *mockManager) GetRoom(_ context.Context, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
 func (m *mockManager) IsMember(_ context.Context, _, _ string) (bool, error) {
@@ -75,6 +82,18 @@ func (m *mockManager) ListMessages(_ context.Context, _ string, _ *time.Time, _ 
 }
 func (m *mockManager) ListMembers(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
+}
+func (m *mockManager) ListMemberProfiles(_ context.Context, _ string) ([]chat.MemberProfile, error) {
+	return m.memberProfiles, m.memberProfileErr
+}
+func (m *mockManager) AddGroupMember(_ context.Context, _, _, _ string) error {
+	return m.groupMemberErr
+}
+func (m *mockManager) RemoveGroupMember(_ context.Context, _, _, _ string) error {
+	return m.groupMemberErr
+}
+func (m *mockManager) UpdateGroupName(_ context.Context, _, _, _ string) error {
+	return m.updateGroupErr
 }
 func (m *mockManager) MarkRead(_ context.Context, _, _ string) (time.Time, error) {
 	return m.markReadTime, m.markErr
@@ -1470,3 +1489,243 @@ func TestWSHandler_NotBlockedMessageDelivered(t *testing.T) {
 		t.Errorf("content = %v, want 'not blocked'", got["content"])
 	}
 }
+
+// --- Update group name ---
+
+func TestUpdateGroup_Success(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"name": "new name"})
+	req := authedReq(httptest.NewRequest(http.MethodPut, "/rooms/r-1", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestUpdateGroup_MissingName(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := authedReq(httptest.NewRequest(http.MethodPut, "/rooms/r-1", strings.NewReader(`{}`)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestUpdateGroup_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"name": "x"})
+	req := httptest.NewRequest(http.MethodPut, "/rooms/r-1", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestUpdateGroup_NotFound(t *testing.T) {
+	h := chat.NewHandler(&mockManager{updateGroupErr: chat.ErrNotFound})
+	body, _ := json.Marshal(map[string]string{"name": "x"})
+	req := authedReq(httptest.NewRequest(http.MethodPut, "/rooms/r-1", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestUpdateGroup_Forbidden(t *testing.T) {
+	h := chat.NewHandler(&mockManager{updateGroupErr: chat.ErrForbidden})
+	body, _ := json.Marshal(map[string]string{"name": "x"})
+	req := authedReq(httptest.NewRequest(http.MethodPut, "/rooms/r-1", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestUpdateGroup_ServiceError(t *testing.T) {
+	h := chat.NewHandler(&mockManager{updateGroupErr: errors.New("db fail")})
+	body, _ := json.Marshal(map[string]string{"name": "x"})
+	req := authedReq(httptest.NewRequest(http.MethodPut, "/rooms/r-1", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- List group members ---
+
+func TestListGroupMembers_Success(t *testing.T) {
+	profiles := []chat.MemberProfile{
+		{UserID: "u-1", DisplayName: "Alice", IsAdmin: true},
+		{UserID: "u-2", DisplayName: "Bob"},
+	}
+	h := chat.NewHandler(&mockManager{isMember: true, memberProfiles: profiles})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1/members", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got []chat.MemberProfile
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+}
+
+func TestListGroupMembers_NotMember(t *testing.T) {
+	h := chat.NewHandler(&mockManager{isMember: false})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1/members", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestListGroupMembers_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/members", nil)
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestListGroupMembers_ServiceError(t *testing.T) {
+	h := chat.NewHandler(&mockManager{isMember: true, memberProfileErr: errors.New("db fail")})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1/members", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- Add group member ---
+
+func TestAddGroupMember_Success(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"user_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/members", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestAddGroupMember_MissingUserID(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/members", strings.NewReader(`{}`)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestAddGroupMember_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"user_id": "u-2"})
+	req := httptest.NewRequest(http.MethodPost, "/rooms/r-1/members", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAddGroupMember_Forbidden(t *testing.T) {
+	h := chat.NewHandler(&mockManager{groupMemberErr: chat.ErrForbidden})
+	body, _ := json.Marshal(map[string]string{"user_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/members", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAddGroupMember_NotFound(t *testing.T) {
+	h := chat.NewHandler(&mockManager{groupMemberErr: chat.ErrNotFound})
+	body, _ := json.Marshal(map[string]string{"user_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/members", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestAddGroupMember_ServiceError(t *testing.T) {
+	h := chat.NewHandler(&mockManager{groupMemberErr: errors.New("db fail")})
+	body, _ := json.Marshal(map[string]string{"user_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/members", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- Remove group member ---
+
+func TestRemoveGroupMember_Success(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := authedReq(httptest.NewRequest(http.MethodDelete, "/rooms/r-1/members/u-2", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestRemoveGroupMember_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodDelete, "/rooms/r-1/members/u-2", nil)
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestRemoveGroupMember_Forbidden(t *testing.T) {
+	h := chat.NewHandler(&mockManager{groupMemberErr: chat.ErrForbidden})
+	req := authedReq(httptest.NewRequest(http.MethodDelete, "/rooms/r-1/members/u-2", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestRemoveGroupMember_NotFound(t *testing.T) {
+	h := chat.NewHandler(&mockManager{groupMemberErr: chat.ErrNotFound})
+	req := authedReq(httptest.NewRequest(http.MethodDelete, "/rooms/r-1/members/u-2", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestRemoveGroupMember_ServiceError(t *testing.T) {
+	h := chat.NewHandler(&mockManager{groupMemberErr: errors.New("db fail")})
+	req := authedReq(httptest.NewRequest(http.MethodDelete, "/rooms/r-1/members/u-2", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
