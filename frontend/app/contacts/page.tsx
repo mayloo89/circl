@@ -69,6 +69,7 @@ export default function ContactsPage() {
   const [blocked, setBlocked] = useState<BlockedUser[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
+  const [removeConfirm, setRemoveConfirm] = useState<AcceptedContact | null>(null)
   const [unblockConfirm, setUnblockConfirm] = useState<BlockedUser | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -226,6 +227,14 @@ export default function ContactsPage() {
   return (
     <>
     <ConfirmDialog
+      open={removeConfirm !== null}
+      title="Remove contact"
+      message={`Remove ${removeConfirm?.display_name || "this contact"}? You can add them again later.`}
+      confirmLabel="Remove"
+      onConfirm={() => { if (removeConfirm) { remove(removeConfirm.contact_id); setRemoveConfirm(null) } }}
+      onCancel={() => setRemoveConfirm(null)}
+    />
+    <ConfirmDialog
       open={unblockConfirm !== null}
       title="Unblock user"
       message={`Unblock ${unblockConfirm?.display_name || "this user"}? They will be able to contact you again.`}
@@ -249,6 +258,7 @@ export default function ContactsPage() {
           onChange={search}
           results={searchResults}
           onAdd={sendRequest}
+          onNavigate={(usernameOrId) => router.push(`/profile/@${usernameOrId}`)}
         />
 
         {pending.length > 0 && (
@@ -312,7 +322,7 @@ export default function ContactsPage() {
                   online={presence[c.user_id]?.online ?? false}
                   onNavigate={() => router.push(`/profile/${c.username || c.user_id}`)}
                   onPrimary={() => startDM(c.user_id)}
-                  onSecondary={() => remove(c.contact_id)}
+                  onSecondary={() => setRemoveConfirm(c)}
                 />
               ))}
             </ul>
