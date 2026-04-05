@@ -395,6 +395,25 @@ func TestListMessages_MemberCheckError(t *testing.T) {
 	}
 }
 
+func TestListMessages_Channel_ReturnsEmpty(t *testing.T) {
+	channelRoom := &chat.Room{ID: "c-1", Type: "channel"}
+	msgs := []chat.Message{{ID: "m-1", Content: "old message"}}
+	h := chat.NewHandler(&mockManager{isMember: true, room: channelRoom, msgs: msgs})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/c-1/messages", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got []chat.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("len = %d, want 0 (channel history is not served)", len(got))
+	}
+}
+
 func TestListMessages_MasksViewOnceForNonSender(t *testing.T) {
 	// A view_once message from another user should have its content masked.
 	msgs := []chat.Message{

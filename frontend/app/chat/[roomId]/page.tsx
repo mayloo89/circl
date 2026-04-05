@@ -151,7 +151,11 @@ export default function ChatRoomPage() {
   }, [status, token, roomId])
 
   useEffect(() => {
-    if (status !== "authenticated" || !token || !roomId) return
+    if (status !== "authenticated" || !token || !roomId || !room) return
+    if (room.type === "channel") {
+      setHistoryLoading(false)
+      return
+    }
     fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((data: HistoryMessage[]) => {
@@ -164,7 +168,8 @@ export default function ChatRoomPage() {
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
-  }, [status, token, roomId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, token, roomId, room?.type])
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId) return

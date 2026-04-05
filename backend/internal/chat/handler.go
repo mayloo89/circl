@@ -297,6 +297,17 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 			return
 		}
 
+		room, err := svc.GetRoom(r.Context(), roomID)
+		if err != nil {
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+		if room.Type == RoomTypeChannel {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]")) //nolint:errcheck
+			return
+		}
+
 		var before *time.Time
 		if raw := r.URL.Query().Get("before"); raw != "" {
 			t, err := time.Parse(time.RFC3339, raw)
