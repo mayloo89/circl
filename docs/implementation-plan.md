@@ -107,12 +107,12 @@
 - [x] **Cursor-based pagination** (PR #44): cursor-based pagination for browse and chat history; "Load more" button for infinite scroll
 - [x] **Group chat** (PR #45): create groups, rename (admin only), add/remove members, member panel UI; migration 000019 adds creator_id to rooms
 - [x] **Public chat channels** (PR #46): IRC-style open rooms; ephemeral membership (WS connection = presence, no room_members rows); no message history per session; live participant sidebar with username links and filter; admin-only creation; leave confirmation guard; migrations 000020–000021
+- [x] **Settings page** (PR #47): `/settings` page with push notifications toggle, change password with live validation, delete account; PushContext shared between NavBar and settings; avatar dropdown menu; PushPrompt dismiss button
 
-- [ ] **Phase 5 — Settings & UI**: settings page (notification prefs, privacy controls, change password, delete account)
-- [ ] **Phase 7 — Observability**: zerolog; OpenTelemetry; Prometheus metrics; Sentry.
-- [ ] **Phase 8 — Security hardening**: CSP/HSTS headers; CSRF; token rotation; input validation; security audit.
-- [ ] **Phase 9 — Deployment**: production hosting (Fly.io + Vercel + Neon + Upstash); CI/CD pipeline.
-- [ ] **Phase 10 — Polish & launch**: accessibility audit; onboarding flow; landing page; final docs.
+- [ ] **Phase 6 — Observability**: zerolog; OpenTelemetry; Prometheus metrics; Sentry.
+- [ ] **Phase 7 — Security hardening**: CSP/HSTS headers; CSRF; token rotation; input validation; security audit.
+- [ ] **Phase 8 — Deployment**: production hosting (Fly.io + Vercel + Neon + Upstash); CI/CD pipeline.
+- [ ] **Phase 9 — Polish & launch**: accessibility audit; onboarding flow; landing page; final docs.
 
 ## 9. Testing strategy
 - Unit: handlers and services (auth, chat, profiles, contacts).

@@ -110,6 +110,8 @@ func main() {
 
 	loginIPLimit := config.EnvIntOrDefault("LOGIN_IP_LIMIT", 20)
 	registerIPLimit := config.EnvIntOrDefault("REGISTER_IP_LIMIT", 10)
+	accountHandler := auth.NewAccountHandler(authSvc)
+
 	authHandler := auth.NewHandler(authSvc, jwtSecret, tokenExpiry,
 		auth.WithLocker(limiter),
 		auth.WithLimiter(limiter),
@@ -298,7 +300,7 @@ func main() {
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
-	h := server.New(pool, env, corsOrigins, authHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {

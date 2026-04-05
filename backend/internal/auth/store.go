@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+
+
 // rowScanner is implemented by pgx.Row and allows mocking in tests.
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -19,6 +21,7 @@ type rowScanner interface {
 // Keeping it narrow makes it easy to satisfy with a mock in tests.
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) rowScanner
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
 // pgxQuerier adapts *pgxpool.Pool to the querier interface.
@@ -28,6 +31,10 @@ type pgxQuerier struct{ pool *pgxpool.Pool }
 
 func (q *pgxQuerier) QueryRow(ctx context.Context, sql string, args ...any) rowScanner {
 	return q.pool.QueryRow(ctx, sql, args...)
+}
+
+func (q *pgxQuerier) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return q.pool.Exec(ctx, sql, args...)
 }
 
 // pgStore implements Store using a querier (backed by pgx in production).
@@ -58,6 +65,52 @@ func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord
 	}
 
 	return &u, nil
+}
+
+// GetUserByID looks up a user by their UUID. Returns an error if not found.
+func (s *pgStore) GetUserByID(ctx context.Context, userID string) (*userRecord, error) {
+	row := s.db.QueryRow(ctx,
+		`SELECT id, email, password_hash, status, is_admin
+		   FROM users
+		  WHERE id = $1
+		  LIMIT 1`,
+		userID,
+	)
+
+	var u userRecord
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("query user by id: %w", err)
+	}
+
+	return &u, nil
+}
+
+// UpdatePassword replaces the password hash for the given user.
+func (s *pgStore) UpdatePassword(ctx context.Context, userID, newHash string) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE users SET password_hash = $1 WHERE id = $2`,
+		newHash, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	return nil
+}
+
+// DeleteUser soft-deletes the account by setting status = 'deleted'.
+// This prevents future logins while preserving referential integrity.
+func (s *pgStore) DeleteUser(ctx context.Context, userID string) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE users SET status = 'deleted' WHERE id = $1`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
 }
 
 // CreateUser inserts a new local user and returns the created record.

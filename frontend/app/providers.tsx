@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react"
 
 import { NotificationsProvider } from "@/contexts/NotificationsContext"
+import { PushProvider } from "@/contexts/PushContext"
 import NavBar from "@/components/NavBar"
 import PushPrompt from "@/components/PushPrompt"
 import { ToastProvider } from "@/components/ui/Toast"
@@ -11,6 +12,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <NotificationsProvider>
+        <PushProvider>
         <ToastProvider>
           <div className="flex h-screen flex-col overflow-hidden">
             <NavBar />
@@ -20,6 +22,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </ToastProvider>
+        </PushProvider>
       </NotificationsProvider>
     </SessionProvider>
   )

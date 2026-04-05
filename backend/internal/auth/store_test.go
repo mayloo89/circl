@@ -12,10 +12,17 @@ import (
 )
 
 // mockQuerier is a test double for the querier interface.
-type mockQuerier struct{ row rowScanner }
+type mockQuerier struct {
+	row     rowScanner
+	execErr error
+}
 
 func (m *mockQuerier) QueryRow(_ context.Context, _ string, _ ...any) rowScanner {
 	return m.row
+}
+
+func (m *mockQuerier) Exec(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, m.execErr
 }
 
 // mockRow is a test double for rowScanner.
@@ -111,6 +118,79 @@ func TestPgStore_CreateUser_QueryError(t *testing.T) {
 
 	_, err := store.CreateUser(t.Context(), "user@example.com", "hash")
 	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetUserByID ---
+
+func TestPgStore_GetUserByID_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(dest ...any) error {
+			*dest[0].(*string) = "uuid-1"
+			*dest[1].(*string) = "user@example.com"
+			*dest[2].(*string) = "$2a$10$hash"
+			*dest[3].(*string) = "active"
+			return nil
+		}},
+	}}
+
+	record, err := store.GetUserByID(t.Context(), "uuid-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if record.ID != "uuid-1" {
+		t.Errorf("ID = %q, want %q", record.ID, "uuid-1")
+	}
+}
+
+func TestPgStore_GetUserByID_NotFound(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error { return pgx.ErrNoRows }},
+	}}
+
+	_, err := store.GetUserByID(t.Context(), "missing-uuid")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- UpdatePassword ---
+
+func TestPgStore_UpdatePassword_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error { return nil }},
+	}}
+
+	if err := store.UpdatePassword(t.Context(), "uuid-1", "$2a$10$newhash"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_UpdatePassword_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+
+	if err := store.UpdatePassword(t.Context(), "uuid-1", "hash"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- DeleteUser ---
+
+func TestPgStore_DeleteUser_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error { return nil }},
+	}}
+
+	if err := store.DeleteUser(t.Context(), "uuid-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_DeleteUser_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+
+	if err := store.DeleteUser(t.Context(), "uuid-1"); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }

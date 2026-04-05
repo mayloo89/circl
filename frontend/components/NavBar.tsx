@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useSession } from "next-auth/react"
-import { useEffect, useState } from "react"
+import { signOut, useSession } from "next-auth/react"
+import { useEffect, useRef, useState } from "react"
 
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
-import { usePush } from "@/hooks/usePush"
+import { usePushContext } from "@/contexts/PushContext"
 import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
 
@@ -48,7 +48,9 @@ export default function NavBar() {
   const { pendingCount, unreadChatCount } = useNotificationsContext()
   const [avatarURL, setAvatarURL] = useState("")
   const [displayName, setDisplayName] = useState("")
-  const { permission, supported, enable, disable } = usePush(session?.accessToken)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const { permission, supported, enable, disable } = usePushContext()
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.accessToken) return
@@ -65,6 +67,32 @@ export default function NavBar() {
       })
       .catch(() => {})
   }, [status, session])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [menuOpen])
+
+  async function handleSignOut() {
+    const token = session?.accessToken
+    if (token) {
+      try {
+        await fetch(`${API_URL}/presence/heartbeat`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } catch {
+        // non-critical
+      }
+    }
+    await signOut()
+  }
 
   if (status !== "authenticated") return null
 
@@ -106,10 +134,51 @@ export default function NavBar() {
             <BellIcon />
           </button>
         )}
-        <Link href="/profile" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
-          <Avatar src={avatarURL} name={displayName || "?"} size="xs" />
-          Profile
-        </Link>
+
+        {/* Avatar + dropdown */}
+        <div ref={menuRef} className="relative">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            aria-label="Open user menu"
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+          >
+            <Avatar src={avatarURL} name={displayName || "?"} size="xs" />
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-2 w-44 rounded-lg bg-gray-800 py-1 shadow-lg ring-1 ring-gray-700"
+            >
+              <Link
+                href="/profile"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white"
+              >
+                Profile
+              </Link>
+              <Link
+                href="/settings"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white"
+              >
+                Settings
+              </Link>
+              <div className="my-1 border-t border-gray-700" />
+              <button
+                role="menuitem"
+                onClick={handleSignOut}
+                className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-700 hover:text-red-300"
+              >
+                Log out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   )

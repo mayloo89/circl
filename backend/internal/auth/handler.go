@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
 
@@ -267,4 +268,86 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// NewAccountHandler returns an http.Handler for user account management routes.
+// Routes are expected to be mounted at /users/me and run behind RequireAuth.
+//
+//	PUT  /password  — change password
+//	DELETE /        — delete (soft) account
+func NewAccountHandler(svc AccountManager) http.Handler {
+	r := chi.NewRouter()
+	r.Put("/password", changePasswordHandler(svc))
+	r.Delete("/", deleteAccountHandler(svc))
+	return r
+}
+
+func changePasswordHandler(svc AccountManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			return
+		}
+
+		var req struct {
+			CurrentPassword string `json:"current_password"`
+			NewPassword     string `json:"new_password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			return
+		}
+		if req.CurrentPassword == "" || req.NewPassword == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"current_password and new_password are required"})
+			return
+		}
+
+		if err := svc.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+			switch {
+			case errors.Is(err, ErrInvalidCredentials):
+				writeJSON(w, http.StatusUnauthorized, errorResponse{"current password is incorrect"})
+			case errors.Is(err, ErrInvalidInput):
+				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+			default:
+				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+	}
+}
+
+func deleteAccountHandler(svc AccountManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			return
+		}
+
+		var req struct {
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			return
+		}
+		if req.Password == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"password is required"})
+			return
+		}
+
+		if err := svc.DeleteAccount(r.Context(), userID, req.Password); err != nil {
+			if errors.Is(err, ErrInvalidCredentials) {
+				writeJSON(w, http.StatusUnauthorized, errorResponse{"invalid password"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
