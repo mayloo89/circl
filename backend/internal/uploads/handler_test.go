@@ -482,8 +482,8 @@ func TestConfirmUpload_NonImageDoesNotEnqueue(t *testing.T) {
 	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
 		UserID:      "user-1",
 		Category:    "chat-attachment",
-		Filename:    "doc.pdf",
-		ContentType: "application/pdf",
+		Filename:    "clip.mp4",
+		ContentType: "video/mp4",
 		SizeBytes:   1024,
 	})
 

@@ -161,7 +161,7 @@ func TestProcess_JPEG_StripsEXIFAndGeneratesThumbnail(t *testing.T) {
 
 	st := newFakeStorage(key, string(imgData))
 	store := &fakeStore{}
-	proc := NewImageProcessor(st, store)
+	proc := NewImageProcessor(st, store, 0)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID:    "upload-1",
@@ -200,7 +200,7 @@ func TestProcess_PNG_StripsEXIFAndGeneratesThumbnail(t *testing.T) {
 
 	st := newFakeStorage(key, string(imgData))
 	store := &fakeStore{}
-	proc := NewImageProcessor(st, store)
+	proc := NewImageProcessor(st, store, 0)
 
 	if err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "upload-2", StorageKey: key, ContentType: "image/png",
@@ -234,7 +234,7 @@ func TestProcess_GIF_ThumbnailOnly(t *testing.T) {
 
 	st := newFakeStorage(key, string(gifData))
 	store := &fakeStore{}
-	proc := NewImageProcessor(st, store)
+	proc := NewImageProcessor(st, store, 0)
 
 	if err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "upload-3", StorageKey: key, ContentType: "image/gif",
@@ -258,7 +258,7 @@ func TestProcess_GIF_ThumbnailOnly(t *testing.T) {
 
 func TestProcess_GetObjectError(t *testing.T) {
 	st := &fakeStorage{getErr: errors.New("not found"), objects: map[string]string{}}
-	proc := NewImageProcessor(st, &fakeStore{})
+	proc := NewImageProcessor(st, &fakeStore{}, 0)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "u", StorageKey: "k", ContentType: "image/jpeg",
@@ -273,7 +273,7 @@ func TestProcess_PutObjectError_OnStrip(t *testing.T) {
 	imgData := makeJPEG(t, 10, 10)
 	st := newFakeStorage(key, string(imgData))
 	st.putErr = errors.New("put failed")
-	proc := NewImageProcessor(st, &fakeStore{})
+	proc := NewImageProcessor(st, &fakeStore{}, 0)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "u", StorageKey: key, ContentType: "image/jpeg",
@@ -288,7 +288,7 @@ func TestProcess_SetThumbnailKeyError(t *testing.T) {
 	imgData := makeJPEG(t, 10, 10)
 	st := newFakeStorage(key, string(imgData))
 	store := &fakeStore{err: errors.New("db error")}
-	proc := NewImageProcessor(st, store)
+	proc := NewImageProcessor(st, store, 0)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "u", StorageKey: key, ContentType: "image/jpeg",
@@ -304,7 +304,7 @@ func TestHandle_ValidPayload(t *testing.T) {
 	key := "chat-attachment/user/photo.jpg"
 	imgData := makeJPEG(t, 10, 10)
 	st := newFakeStorage(key, string(imgData))
-	proc := NewImageProcessor(st, &fakeStore{})
+	proc := NewImageProcessor(st, &fakeStore{}, 0)
 
 	payload, _ := json.Marshal(ImageProcessPayload{
 		UploadID: "u1", StorageKey: key, ContentType: "image/jpeg",
@@ -316,7 +316,7 @@ func TestHandle_ValidPayload(t *testing.T) {
 }
 
 func TestHandle_InvalidJSON(t *testing.T) {
-	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{})
+	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{}, 0)
 	task := asynq.NewTask(TaskProcessImage, []byte("not-json"))
 	if err := proc.Handle(t.Context(), task); err == nil {
 		t.Fatal("expected error for invalid JSON payload")
@@ -326,7 +326,7 @@ func TestHandle_InvalidJSON(t *testing.T) {
 func TestHandle_ProcessError(t *testing.T) {
 	// Storage returns an error → Handle must return the error.
 	st := &fakeStorage{getErr: errors.New("not found"), objects: map[string]string{}}
-	proc := NewImageProcessor(st, &fakeStore{})
+	proc := NewImageProcessor(st, &fakeStore{}, 0)
 
 	payload, _ := json.Marshal(ImageProcessPayload{
 		UploadID: "u1", StorageKey: "missing/key.jpg", ContentType: "image/jpeg",
@@ -357,7 +357,7 @@ func TestEnqueueProcessImage(t *testing.T) {
 func TestServer_StartAndShutdown(t *testing.T) {
 	mr := miniredis.RunT(t)
 	srv := NewServer(asynq.RedisClientOpt{Addr: mr.Addr()}, 2)
-	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{})
+	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{}, 0)
 	if err := srv.Start(proc); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestResizeToFit_ExtremeTall(t *testing.T) {
 
 func TestProcess_ReadError(t *testing.T) {
 	st := &brokenReadStorage{}
-	proc := NewImageProcessor(st, &fakeStore{})
+	proc := NewImageProcessor(st, &fakeStore{}, 0)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "u", StorageKey: "k.jpg", ContentType: "image/jpeg",
@@ -469,7 +469,7 @@ func TestProcess_PutObjectError_OnThumbnail(t *testing.T) {
 
 	// We need a storage that fails on the second call. Use a wrapper.
 	wrapped := &countingPutStorage{inner: st, failAfter: 1}
-	proc := NewImageProcessor(wrapped, &fakeStore{})
+	proc := NewImageProcessor(wrapped, &fakeStore{}, 0)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
 		UploadID: "u", StorageKey: key, ContentType: "image/png",
@@ -497,4 +497,78 @@ func (c *countingPutStorage) PutObject(ctx context.Context, key, contentType str
 		return errors.New("put failed")
 	}
 	return c.inner.PutObject(ctx, key, contentType, r, size)
+}
+
+// --- Original resize ---
+
+func TestProcess_ResizesOversizedJPEG(t *testing.T) {
+	key := "chat-attachment/user/big.jpg"
+	// Create a JPEG that exceeds imageMaxPx in both dimensions.
+	imgData := makeJPEG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+
+	// Set imageMaxPx to 50 so our 200×200 image gets resized.
+	proc := NewImageProcessor(st, &fakeStore{}, 50)
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: key, ContentType: "image/jpeg",
+	}); err != nil {
+		t.Fatalf("process() error: %v", err)
+	}
+
+	// The stored original should now be ≤50px on its longest edge.
+	storedData := []byte(st.objects[key])
+	img, err := jpeg.Decode(bytes.NewReader(storedData))
+	if err != nil {
+		t.Fatalf("decode stored JPEG: %v", err)
+	}
+	b := img.Bounds()
+	if b.Dx() > 50 || b.Dy() > 50 {
+		t.Errorf("stored image dimensions %dx%d exceed imageMaxPx=50", b.Dx(), b.Dy())
+	}
+}
+
+func TestProcess_DoesNotResizeWithinLimitJPEG(t *testing.T) {
+	key := "chat-attachment/user/small.jpg"
+	imgData := makeJPEG(t, 20, 20)
+	st := newFakeStorage(key, string(imgData))
+
+	proc := NewImageProcessor(st, &fakeStore{}, 100)
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: key, ContentType: "image/jpeg",
+	}); err != nil {
+		t.Fatalf("process() error: %v", err)
+	}
+
+	storedData := []byte(st.objects[key])
+	img, err := jpeg.Decode(bytes.NewReader(storedData))
+	if err != nil {
+		t.Fatalf("decode stored JPEG: %v", err)
+	}
+	b := img.Bounds()
+	if b.Dx() != 20 || b.Dy() != 20 {
+		t.Errorf("stored image dimensions %dx%d, want 20x20", b.Dx(), b.Dy())
+	}
+}
+
+func TestProcess_ResizesOversizedPNG(t *testing.T) {
+	key := "chat-attachment/user/big.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+
+	proc := NewImageProcessor(st, &fakeStore{}, 50)
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u", StorageKey: key, ContentType: "image/png",
+	}); err != nil {
+		t.Fatalf("process() error: %v", err)
+	}
+
+	storedData := []byte(st.objects[key])
+	img, err := png.Decode(bytes.NewReader(storedData))
+	if err != nil {
+		t.Fatalf("decode stored PNG: %v", err)
+	}
+	b := img.Bounds()
+	if b.Dx() > 50 || b.Dy() > 50 {
+		t.Errorf("stored PNG dimensions %dx%d exceed imageMaxPx=50", b.Dx(), b.Dy())
+	}
 }

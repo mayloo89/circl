@@ -78,7 +78,7 @@ export default function ChatInput({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip"
+              accept="image/*,video/*"
               className="hidden"
               onChange={handleFileChange}
             />

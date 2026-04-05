@@ -22,7 +22,10 @@ import (
 // TaskProcessImage is the task type name for background image processing.
 const TaskProcessImage = "image:process"
 
-const thumbnailMaxPx = 480
+const (
+	thumbnailMaxPx     = 480
+	defaultImageMaxPx  = 1024
+)
 
 // ImageProcessPayload carries the data needed to process an uploaded image.
 type ImageProcessPayload struct {
@@ -46,13 +49,18 @@ type ThumbnailStore interface {
 
 // ImageProcessor handles the image:process task.
 type ImageProcessor struct {
-	storage ProcessingStorage
-	store   ThumbnailStore
+	storage    ProcessingStorage
+	store      ThumbnailStore
+	imageMaxPx int
 }
 
-// NewImageProcessor creates an ImageProcessor.
-func NewImageProcessor(st ProcessingStorage, store ThumbnailStore) *ImageProcessor {
-	return &ImageProcessor{storage: st, store: store}
+// NewImageProcessor creates an ImageProcessor. imageMaxPx caps the longest
+// edge of JPEG and PNG originals; use 0 to apply the default (1024 px).
+func NewImageProcessor(st ProcessingStorage, store ThumbnailStore, imageMaxPx int) *ImageProcessor {
+	if imageMaxPx <= 0 {
+		imageMaxPx = defaultImageMaxPx
+	}
+	return &ImageProcessor{storage: st, store: store, imageMaxPx: imageMaxPx}
 }
 
 // EnqueueProcessImage enqueues a process-image task using the given client.
@@ -95,10 +103,12 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 		return fmt.Errorf("decode image: %w", err)
 	}
 
-	// EXIF stripping: re-encoding JPEG and PNG via Go's standard library drops
-	// all metadata (EXIF, XMP, ICC profiles) because image.Image carries only
-	// pixel data.
+	// For JPEG and PNG: resize if oversized, then re-encode to strip all
+	// metadata (EXIF, XMP, ICC profiles) — Go's image codec only carries pixel
+	// data. WebP and GIF originals are left untouched (no encoder available
+	// in the standard library); their thumbnails are still capped below.
 	if payload.ContentType == "image/jpeg" || payload.ContentType == "image/png" {
+		img = resizeToFit(img, p.imageMaxPx)
 		stripped, err := encodeOriginal(img, payload.ContentType)
 		if err != nil {
 			return fmt.Errorf("encode stripped original: %w", err)

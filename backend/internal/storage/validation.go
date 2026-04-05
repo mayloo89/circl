@@ -38,7 +38,6 @@ var allowedTypes = map[Category][]string{
 		"image/gif",
 		"video/mp4",
 		"video/quicktime",
-		"application/pdf",
 	},
 	CategoryGallery: {
 		"image/jpeg",

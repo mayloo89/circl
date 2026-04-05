@@ -279,7 +279,7 @@ func main() {
 		})
 	})
 
-	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore)
+	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore, config.EnvIntOrDefault("IMAGE_MAX_PX", 0))
 	workerServer := worker.NewServer(redisConnOpt, 4)
 	if err := workerServer.Start(imageProcessor); err != nil {
 		log.Fatalf("Worker server failed to start: %v", err)
