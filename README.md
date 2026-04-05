@@ -46,6 +46,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Group chat** ([PR #45](https://github.com/mayloo89/circl/pull/45)): create groups, rename (admin), add/remove members, member panel UI
 - ✅ **Public chat channels** ([PR #46](https://github.com/mayloo89/circl/pull/46)): IRC-style open rooms — browse, enter, chat; ephemeral membership (WS connection = presence); no message history; live participant sidebar with filter; admin-only channel creation; leave confirmation guard
 - ✅ **Settings page** ([PR #47](https://github.com/mayloo89/circl/pull/47)): push notifications toggle, change password with live validation, delete account, avatar dropdown menu
+- ✅ **UX improvements** ([PR #48](https://github.com/mayloo89/circl/pull/48)): contact removal confirmation dialog, clickable profile from search results, registration inline validation with live password checklist
 
 ## Local setup
 

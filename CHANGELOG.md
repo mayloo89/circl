@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **UX improvements** ([PR #48](https://github.com/mayloo89/circl/pull/48)):
+  - Contact removal now requires confirmation via dialog — prevents accidental deletions
+  - Search results: clicking a user's name or avatar navigates to their public profile
+  - Registration form: per-field inline validation on blur, live password requirements checklist (8+ chars, uppercase, lowercase, number), submit button disabled until all rules are met
+  - `PasswordRequirements` component extracted to `components/ui/PasswordRequirements.tsx` and shared between registration and settings pages
+
 - **Settings page** ([PR #47](https://github.com/mayloo89/circl/pull/47)): `/settings` page with account management
   - Push notifications toggle (enable/disable)
   - Change password with live validation (8+ chars, uppercase, lowercase, number, special char)
