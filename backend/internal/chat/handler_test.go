@@ -37,7 +37,7 @@ type mockManager struct {
 	isMember         bool
 	roomErr          error
 	roomsErr         error
-	channelsErr error
+	channelsErr      error
 	msgErr           error
 	msgsErr          error
 	memberErr        error
@@ -1828,7 +1828,6 @@ func TestRemoveGroupMember_ServiceError(t *testing.T) {
 	}
 }
 
-
 // --- List channels ---
 
 func TestListChannels_Success(t *testing.T) {
@@ -1907,11 +1906,11 @@ func TestCreateChannel_MissingName(t *testing.T) {
 func TestCreateChannel_NoUserInContext(t *testing.T) {
 	h := chat.NewHandler(&mockManager{})
 	body, _ := json.Marshal(map[string]string{"name": "general"})
-	req := httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body))
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
 	rec := httptest.NewRecorder()
-	serveNoAuth(h, req, rec)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (RequireAdmin rejects non-admin)", rec.Code)
 	}
 }
 
@@ -1925,4 +1924,3 @@ func TestCreateChannel_ServiceError(t *testing.T) {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
 }
-

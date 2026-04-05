@@ -157,9 +157,11 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Put("/rooms/{id}/read", markReadHandler(svc, c))
 	r.Post("/rooms/{id}/messages/{msgID}/view", viewMessageHandler(svc, c))
 
-	// Public channel routes
+	// Public channel routes (admin only)
 	r.Get("/channels", listChannelsHandler(svc, c))
-	r.Post("/channels", createChannelHandler(svc))
+	r.Post("/channels", func(w http.ResponseWriter, r *http.Request) {
+		middleware.RequireAdmin(createChannelHandler(svc)).ServeHTTP(w, r)
+	})
 
 	return r
 }
@@ -673,10 +675,6 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		if !middleware.IsAdminFromContext(r.Context()) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 			return
 		}
 		var body struct {
