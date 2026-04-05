@@ -104,8 +104,10 @@
 - [x] **Account safety** (PR #42): login lockout (5 failed attempts = 15 min lockout); password complexity validation (8+ chars, upper/lower/number/special); rate limiting via Redis (LOGIN_IP_LIMIT, REGISTER_IP_LIMIT per hour per IP)
 - [x] **Admin & moderation** (PR #41): admin role (PUT /users/{id}/role); user suspension/activation; reports table; report rate limiting (10/hour); auto-suspend on 3+ reports in 7 days; admin report management (resolve/dismiss)
 - [x] **Web Push notifications** (PR #43): push subscription endpoint (/push/subscribe, /push/unsubscribe); VAPID key flow; service worker (sw.js); usePush hook; push delivery on chat messages and contact events
+- [x] **Group chat** (PR #45): create groups, rename (admin only), add/remove members, member panel UI; migration 000019 adds creator_id to rooms
+- [x] **Public chat channels** (PR #46): IRC-style open rooms; ephemeral membership (WS connection = presence, no room_members rows); no message history per session; live participant sidebar with username links and filter; admin-only creation; leave confirmation guard; migrations 000020–000021
 
-- [ ] **Phase 5 — Enhanced real-time & UI**: infinite scroll; message deletion; group chat UI.
+- [ ] **Phase 5 — Settings & UI**: infinite scroll for chat rooms; message deletion; settings page (notification prefs, privacy controls, change password, delete account)
 - [ ] **Phase 6 — Settings**: notification prefs, privacy controls, change password, delete account.
 - [ ] **Phase 7 — Observability**: zerolog; OpenTelemetry; Prometheus metrics; Sentry.
 - [ ] **Phase 8 — Security hardening**: CSP/HSTS headers; CSRF; token rotation; input validation; security audit.
