@@ -25,14 +25,24 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 interface RoomSummary {
   id: string
-  type: "dm" | "group"
+  type: "dm" | "group" | "channel"
   name: string
+  description?: string
   creator_id?: string
-  peer_id: string
-  peer_username: string
-  peer_name: string
-  peer_avatar_url: string
+  peer_id?: string
+  peer_username?: string
+  peer_name?: string
+  peer_avatar_url?: string
   peer_last_read_at?: string
+}
+
+interface MemberProfile {
+  user_id: string
+  username: string
+  display_name: string
+  avatar_url: string
+  is_admin: boolean
+  joined_at?: string
 }
 
 // ─── Skeletons ────────────────────────────────────────────────────────────────
@@ -82,35 +92,137 @@ export default function ChatRoomPage() {
   const [revealedMessages, setRevealedMessages] = useState<Map<string, { msg: AnyMessage; content: string }>>(new Map())
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [blockLoading, setBlockLoading] = useState(false)
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null)
+
+  function requestLeave(url: string) {
+    if (room?.type === "channel") {
+      setPendingNav(() => () => router.push(url))
+      setLeaveConfirmOpen(true)
+    } else {
+      router.push(url)
+    }
+  }
+
+  function confirmLeave() {
+    setLeaveConfirmOpen(false)
+    pendingNav?.()
+    setPendingNav(null)
+  }
   const [groupPanelOpen, setGroupPanelOpen] = useState(false)
   const [groupName, setGroupName] = useState("")
+  const [members, setMembers] = useState<MemberProfile[]>([])
+  const [memberSidebarOpen, setMemberSidebarOpen] = useState(false)
+  const [memberQuery, setMemberQuery] = useState("")
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts } = useChat(roomId, token)
+  const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
-  const peerIDs = room?.peer_id ? [room.peer_id] : []
+  const isMultiRoom = room?.type === "group" || room?.type === "channel"
+  const peerIDs = isMultiRoom
+    ? members.map((m) => m.user_id).filter((id) => id !== userID)
+    : room?.peer_id ? [room.peer_id] : []
   const presence = usePresence(peerIDs, token, subscribe)
 
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
 
+  // Intercept all navigation while inside a channel to show a leave confirmation.
+  useEffect(() => {
+    if (room?.type !== "channel") return
+
+    // Browser-level: refresh, tab close, address-bar navigation.
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // In-app navigation: intercept <a> clicks in capture phase before Next.js handles them.
+    // Skips new-tab links and external URLs so only same-app navigation is blocked.
+    const handleClick = (e: MouseEvent) => {
+      const anchor = (e.target as Element).closest("a[href]")
+      if (!anchor) return
+      if (anchor.getAttribute("target") === "_blank") return
+      const href = anchor.getAttribute("href") ?? ""
+      if (!href || href.startsWith("#")) return
+      if (href.startsWith("http") && !href.startsWith(window.location.origin)) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      setPendingNav(() => () => router.push(href))
+      setLeaveConfirmOpen(true)
+    }
+
+    document.addEventListener("click", handleClick, true)
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+      document.removeEventListener("click", handleClick, true)
+    }
+  }, [room?.type, router])
+
+  // Update the members sidebar in real-time from participant_join / participant_leave events.
+  useEffect(() => {
+    if (participantEvents.length === 0 || room?.type !== "channel") return
+    for (const ev of participantEvents) {
+      if (ev.type === "join") {
+        setMembers((prev) => {
+          if (prev.some((m) => m.user_id === ev.userId)) return prev
+          return [...prev, { user_id: ev.userId, username: ev.username, display_name: ev.displayName, avatar_url: ev.avatarURL, is_admin: false }]
+        })
+      } else {
+        setMembers((prev) => prev.filter((m) => m.user_id !== ev.userId))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participantEvents])
+
+  useEffect(() => {
+    if (status !== "authenticated" || !token || !roomId || !room) return
+    if (room.type !== "group" && room.type !== "channel") return
+    fetch(`${API_URL}/chat/rooms/${roomId}/members`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: MemberProfile[]) => setMembers(data))
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, token, roomId, room?.type])
+
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId) return
+    // Fetch the full rooms list first (includes peer info for DMs).
+    // If the room is not found there (e.g. a channel, which has no room_members row),
+    // fall back to GET /chat/rooms/{id} which works for any room type.
     fetch(`${API_URL}/chat/rooms`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((rooms: RoomSummary[]) => {
         const found = rooms.find((r) => r.id === roomId)
-        if (found) { setRoom(found); if (found.type === "group") setGroupName(found.name) }
+        if (found) {
+          setRoom(found)
+          if (found.type === "group" || found.type === "channel") setGroupName(found.name)
+          if (found.type === "channel") setMemberSidebarOpen(true)
+          return
+        }
+        // Not in list — likely a channel. Fetch it directly.
+        return fetch(`${API_URL}/chat/rooms/${roomId}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data: RoomSummary | null) => {
+            if (data) { setRoom(data); if (data.type === "channel") { setGroupName(data.name); setMemberSidebarOpen(true) } }
+          })
       })
       .catch(() => {})
   }, [status, token, roomId])
 
   useEffect(() => {
-    if (status !== "authenticated" || !token || !roomId) return
+    if (status !== "authenticated" || !token || !roomId || !room) return
+    if (room.type === "channel") {
+      setHistoryLoading(false)
+      return
+    }
     fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((data: HistoryMessage[]) => {
@@ -123,7 +235,8 @@ export default function ChatRoomPage() {
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
-  }, [status, token, roomId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, token, roomId, room?.type])
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId) return
@@ -295,12 +408,13 @@ export default function ChatRoomPage() {
 
   return (
     <div className="flex h-full flex-col bg-gray-950">
-      {/* Group members side panel */}
-      {groupPanelOpen && room?.type === "group" && token && userID && roomId && (
+      {/* Group / channel members side panel */}
+      {groupPanelOpen && (room?.type === "group" || room?.type === "channel") && token && userID && roomId && (
         <div className="absolute inset-0 z-30 bg-gray-950">
           <GroupMembersPanel
             roomId={roomId}
             roomName={groupName || room.name}
+            roomType={room.type}
             currentUserId={userID}
             token={token}
             onClose={() => setGroupPanelOpen(false)}
@@ -308,7 +422,7 @@ export default function ChatRoomPage() {
               setGroupName(name)
               setRoom((prev) => prev ? { ...prev, name } : prev)
             }}
-            onLeft={() => router.push("/chat")}
+            onLeft={() => requestLeave(room.type === "channel" ? "/chat/channels" : "/chat")}
           />
         </div>
       )}
@@ -324,6 +438,15 @@ export default function ChatRoomPage() {
         />
       )}
 
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        title="Leave channel"
+        message="You will stop receiving messages and your name will be removed from the participant list."
+        confirmLabel="Leave"
+        onConfirm={confirmLeave}
+        onCancel={() => setLeaveConfirmOpen(false)}
+      />
+
       {room?.type === "dm" && (
         <ConfirmDialog
           open={blockConfirmOpen}
@@ -338,7 +461,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button aria-label="Back to messages" onClick={() => router.push("/chat")} className="text-gray-400 hover:text-gray-200">
+        <button aria-label="Back to messages" onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="text-gray-400 hover:text-gray-200">
           ←
         </button>
         {room ? (
@@ -377,13 +500,29 @@ export default function ChatRoomPage() {
                 type="button"
                 onClick={() => setGroupPanelOpen(true)}
                 className="flex flex-1 items-center gap-3 hover:opacity-80 text-left"
-                aria-label="Group settings"
+                aria-label={room.type === "channel" ? "Channel settings" : "Group settings"}
               >
                 <Avatar name={groupName || room.name || "G"} size="md" color="indigo" />
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-white">{groupName || room.name}</span>
-                  <span className="text-xs text-gray-500">Tap to manage members</span>
+                  <span className="text-sm font-medium text-white">
+                    {room.type === "channel" ? "# " : ""}{groupName || room.name}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {members.length > 0
+                      ? `${members.length} member${members.length !== 1 ? "s" : ""}`
+                      : room.type === "channel" ? "Public channel" : "Group"}
+                  </span>
                 </div>
+              </button>
+              <button
+                type="button"
+                aria-label={memberSidebarOpen ? "Hide members" : "Show members"}
+                onClick={() => setMemberSidebarOpen((v) => !v)}
+                className={`shrink-0 rounded p-1.5 text-sm transition-colors ${memberSidebarOpen ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                </svg>
               </button>
             </>
           )
@@ -395,74 +534,150 @@ export default function ChatRoomPage() {
         )}
       </div>
 
-      {/* Message list */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-4">
-        {historyLoading ? (
-          <MessageSkeletons />
-        ) : allMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800">
-              <svg className="h-7 w-7 text-gray-600" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
-              </svg>
-            </span>
-            <p className="text-sm font-medium text-gray-400">No messages yet</p>
-            <p className="text-xs text-gray-600">Say hello to start the conversation.</p>
-          </div>
-        ) : (
-          <div className="px-4">
-            {/* Top sentinel: triggers loading of older messages */}
-            <div ref={topSentinelRef} className="h-px" />
-            {loadingOlderHistory && (
-              <div className="flex justify-center py-2">
-                <span className="text-xs text-gray-500">Loading older messages…</span>
+      {/* Body: message area + optional members sidebar */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Message column */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Message list */}
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-4">
+            {historyLoading ? (
+              <MessageSkeletons />
+            ) : allMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800">
+                  <svg className="h-7 w-7 text-gray-600" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+                  </svg>
+                </span>
+                <p className="text-sm font-medium text-gray-400">No messages yet</p>
+                <p className="text-xs text-gray-600">Say hello to start the conversation.</p>
+              </div>
+            ) : (
+              <div className="px-4">
+                {/* Top sentinel: triggers loading of older messages */}
+                <div ref={topSentinelRef} className="h-px" />
+                {loadingOlderHistory && (
+                  <div className="flex justify-center py-2">
+                    <span className="text-xs text-gray-500">Loading older messages…</span>
+                  </div>
+                )}
+                {allMessages.map((msg, i) => {
+                  const isOwn = msg.sender_id === userID
+                  const revealedText = revealedMessages.get(msg.id)?.content
+                  const isTombstone = (msg.tombstone || deletedIds.has(msg.id) || expiredIds.has(msg.id)) && !revealedMessages.has(msg.id)
+                  const firstInGroup = isFirstInGroup(allMessages, i)
+                  const lastInGroup = isLastInGroup(allMessages, i)
+                  const isLive = liveMessages.some((m) => m.id === msg.id) && !historyIdSet.has(msg.id)
+                  const showDateSep = i === 0 || !sameCalendarDay(allMessages[i - 1].created_at, msg.created_at)
+
+                  return (
+                    <div key={msg.id}>
+                      {showDateSep && <DateSeparator label={formatDaySeparator(msg.created_at, now)} />}
+                      <MessageBubble
+                        msg={msg}
+                        isOwn={isOwn}
+                        firstInGroup={firstInGroup}
+                        lastInGroup={lastInGroup}
+                        isLive={isLive}
+                        isTombstone={isTombstone}
+                        revealedText={revealedText}
+                        isLastSeenOwn={msg.id === lastSeenOwnMsgId}
+                        now={now}
+                        onViewOnce={handleViewOnce}
+                        onOpenMedia={(url, type) => setMediaModal({ url, type })}
+                      />
+                    </div>
+                  )
+                })}
+                <div ref={bottomRef} />
               </div>
             )}
-            {allMessages.map((msg, i) => {
-              const isOwn = msg.sender_id === userID
-              const revealedText = revealedMessages.get(msg.id)?.content
-              const isTombstone = (msg.tombstone || deletedIds.has(msg.id) || expiredIds.has(msg.id)) && !revealedMessages.has(msg.id)
-              const firstInGroup = isFirstInGroup(allMessages, i)
-              const lastInGroup = isLastInGroup(allMessages, i)
-              const isLive = liveMessages.some((m) => m.id === msg.id) && !historyIdSet.has(msg.id)
-              const showDateSep = i === 0 || !sameCalendarDay(allMessages[i - 1].created_at, msg.created_at)
-
-              return (
-                <div key={msg.id}>
-                  {showDateSep && <DateSeparator label={formatDaySeparator(msg.created_at, now)} />}
-                  <MessageBubble
-                    msg={msg}
-                    isOwn={isOwn}
-                    firstInGroup={firstInGroup}
-                    lastInGroup={lastInGroup}
-                    isLive={isLive}
-                    isTombstone={isTombstone}
-                    revealedText={revealedText}
-                    isLastSeenOwn={msg.id === lastSeenOwnMsgId}
-                    now={now}
-                    onViewOnce={handleViewOnce}
-                    onOpenMedia={(url, type) => setMediaModal({ url, type })}
-                  />
-                </div>
-              )
-            })}
-            <div ref={bottomRef} />
           </div>
+
+          <TypingIndicator typers={typers} />
+
+          <ChatInput
+            connected={connected}
+            uploading={uploading}
+            ephemeral={ephemeral}
+            onEphemeralChange={setEphemeral}
+            onSend={(content) => send(content, buildOpts())}
+            onAttach={handleAttach}
+            onTyping={sendTyping}
+            inputRef={inputRef}
+            disableAttach={room?.type === "channel"}
+            disableEphemeral={room?.type === "channel"}
+          />
+        </div>
+
+        {/* Members sidebar — only for group / channel */}
+        {isMultiRoom && memberSidebarOpen && (
+          <aside className="hidden sm:flex w-52 shrink-0 flex-col border-l border-gray-800 bg-gray-900">
+            <div className="px-3 pt-3 pb-2 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Members — {members.length}
+              </p>
+              {room?.type === "channel" && (
+                <input
+                  type="text"
+                  value={memberQuery}
+                  onChange={(e) => setMemberQuery(e.target.value)}
+                  placeholder="Filter members…"
+                  className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              )}
+            </div>
+            <ul className="overflow-y-auto">
+              {[...members]
+                .filter((m) => {
+                  if (m.user_id === userID) return false
+                  if (!memberQuery) return true
+                  const name = (m.display_name || m.username).toLowerCase()
+                  return name.startsWith(memberQuery.toLowerCase())
+                })
+                .sort((a, b) => {
+                  const aOnline = presence[a.user_id]?.online ?? false
+                  const bOnline = presence[b.user_id]?.online ?? false
+                  if (aOnline !== bOnline) return aOnline ? -1 : 1
+                  return (a.display_name || a.username).localeCompare(b.display_name || b.username)
+                })
+                .map((m) => {
+                  const online = presence[m.user_id]?.online ?? false
+                  return (
+                    <li key={m.user_id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800/50">
+                      <div className="relative shrink-0">
+                        <Avatar src={m.avatar_url} name={m.display_name || m.username || "?"} size="xs" />
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-gray-900 ${online ? "bg-green-400" : "bg-gray-600"}`}
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        {m.username ? (
+                          <a
+                            href={`/profile/${m.username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`block truncate text-xs font-medium hover:underline ${online ? "text-white" : "text-gray-400"}`}
+                          >
+                            {m.display_name || m.username}
+                          </a>
+                        ) : (
+                          <p className={`truncate text-xs font-medium ${online ? "text-white" : "text-gray-400"}`}>
+                            {m.display_name || m.user_id}
+                          </p>
+                        )}
+                        {m.is_admin && (
+                          <p className="text-[10px] text-indigo-400">Admin</p>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
+            </ul>
+          </aside>
         )}
       </div>
-
-      <TypingIndicator typers={typers} />
-
-      <ChatInput
-        connected={connected}
-        uploading={uploading}
-        ephemeral={ephemeral}
-        onEphemeralChange={setEphemeral}
-        onSend={(content) => send(content, buildOpts())}
-        onAttach={handleAttach}
-        onTyping={sendTyping}
-        inputRef={inputRef}
-      />
     </div>
   )
 }

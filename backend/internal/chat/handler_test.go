@@ -30,12 +30,14 @@ const (
 type mockManager struct {
 	room             *chat.Room
 	rooms            []chat.RoomSummary
+	channels         []chat.ChannelSummary
 	msg              *chat.Message
 	msgs             []chat.Message
 	memberProfiles   []chat.MemberProfile
 	isMember         bool
 	roomErr          error
 	roomsErr         error
+	channelsErr      error
 	msgErr           error
 	msgsErr          error
 	memberErr        error
@@ -59,14 +61,33 @@ type mockManager struct {
 func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error) {
 	return m.displayName, m.displayNameErr
 }
+func (m *mockManager) GetAvatarURL(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+func (m *mockManager) GetUsername(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
 func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
 func (m *mockManager) CreateGroup(_ context.Context, _, _ string, _ []string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
-func (m *mockManager) GetRoom(_ context.Context, _ string) (*chat.Room, error) {
+func (m *mockManager) GetRoom(_ context.Context, id string) (*chat.Room, error) {
+	if m.roomErr != nil {
+		return nil, m.roomErr
+	}
+	if m.room != nil {
+		return m.room, nil
+	}
+	// default: return a group room so wsHandler doesn't panic when no room is configured
+	return &chat.Room{ID: id, Type: "group"}, nil
+}
+func (m *mockManager) CreateChannel(_ context.Context, _, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
+}
+func (m *mockManager) ListChannels(_ context.Context) ([]chat.ChannelSummary, error) {
+	return m.channels, m.channelsErr
 }
 func (m *mockManager) IsMember(_ context.Context, _, _ string) (bool, error) {
 	return m.isMember, m.memberErr
@@ -113,6 +134,12 @@ func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
 
 func authedReq(r *http.Request) *http.Request {
 	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	return r
+}
+
+func adminReq(r *http.Request) *http.Request {
+	tok, _ := token.Generate(testUserID, true, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }
@@ -282,6 +309,57 @@ func TestListRooms_ServiceError(t *testing.T) {
 	}
 }
 
+// --- Get room ---
+
+func TestGetRoom_Channel_NoMembershipRequired(t *testing.T) {
+	channelRoom := &chat.Room{ID: "c-1", Type: "channel", Name: "general"}
+	h := chat.NewHandler(&mockManager{room: channelRoom})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/c-1", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got chat.Room
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Type != "channel" {
+		t.Errorf("type = %q, want channel", got.Type)
+	}
+}
+
+func TestGetRoom_Group_RequiresMembership(t *testing.T) {
+	groupRoom := &chat.Room{ID: "r-1", Type: "group", Name: "team"}
+	h := chat.NewHandler(&mockManager{room: groupRoom, isMember: false})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestGetRoom_NotFound(t *testing.T) {
+	h := chat.NewHandler(&mockManager{roomErr: errors.New("not found")})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-99", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestGetRoom_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1", nil)
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
 // --- List messages ---
 
 func TestListMessages_NoUserInContext(t *testing.T) {
@@ -368,6 +446,25 @@ func TestListMessages_MemberCheckError(t *testing.T) {
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestListMessages_Channel_ReturnsEmpty(t *testing.T) {
+	channelRoom := &chat.Room{ID: "c-1", Type: "channel"}
+	msgs := []chat.Message{{ID: "m-1", Content: "old message"}}
+	h := chat.NewHandler(&mockManager{isMember: true, room: channelRoom, msgs: msgs})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/c-1/messages", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got []chat.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("len = %d, want 0 (channel history is not served)", len(got))
 	}
 }
 
@@ -605,7 +702,8 @@ func TestWSHandler_InvalidToken(t *testing.T) {
 }
 
 func TestWSHandler_NotMember(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{isMember: false}, nil, testSecret, nil)
+	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
+	h := chat.NewWSHandler(&mockManager{room: groupRoom, isMember: false}, nil, testSecret, nil)
 	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
@@ -616,7 +714,8 @@ func TestWSHandler_NotMember(t *testing.T) {
 }
 
 func TestWSHandler_MemberCheckError(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{memberErr: errors.New("db fail")}, nil, testSecret, nil)
+	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
+	h := chat.NewWSHandler(&mockManager{room: groupRoom, memberErr: errors.New("db fail")}, nil, testSecret, nil)
 	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
@@ -1729,3 +1828,99 @@ func TestRemoveGroupMember_ServiceError(t *testing.T) {
 	}
 }
 
+// --- List channels ---
+
+func TestListChannels_Success(t *testing.T) {
+	channels := []chat.ChannelSummary{{ID: "c-1", Name: "general"}, {ID: "c-2", Name: "random"}}
+	h := chat.NewHandler(&mockManager{channels: channels})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/channels", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	var got []chat.ChannelSummary
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+}
+
+func TestListChannels_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := httptest.NewRequest(http.MethodGet, "/channels", nil)
+	rec := httptest.NewRecorder()
+	serveNoAuth(h, req, rec)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestListChannels_ServiceError(t *testing.T) {
+	h := chat.NewHandler(&mockManager{channelsErr: errors.New("db fail")})
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/channels", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- Create channel ---
+
+func TestCreateChannel_Success(t *testing.T) {
+	room := &chat.Room{ID: "c-1", Type: "channel", Name: "general"}
+	h := chat.NewHandler(&mockManager{room: room})
+	body, _ := json.Marshal(map[string]string{"name": "general", "description": "chat here"})
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201", rec.Code)
+	}
+}
+
+func TestCreateChannel_NotAdmin(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"name": "general"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestCreateChannel_MissingName(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(`{}`)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCreateChannel_NoUserInContext(t *testing.T) {
+	h := chat.NewHandler(&mockManager{})
+	body, _ := json.Marshal(map[string]string{"name": "general"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (RequireAdmin rejects non-admin)", rec.Code)
+	}
+}
+
+func TestCreateChannel_ServiceError(t *testing.T) {
+	h := chat.NewHandler(&mockManager{roomErr: errors.New("db fail")})
+	body, _ := json.Marshal(map[string]string{"name": "general"})
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/channels", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}

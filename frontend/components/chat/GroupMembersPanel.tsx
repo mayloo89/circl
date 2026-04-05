@@ -28,6 +28,7 @@ interface Contact {
 interface Props {
   roomId: string
   roomName: string
+  roomType?: "group" | "channel"
   currentUserId: string
   token: string
   onClose: () => void
@@ -38,6 +39,7 @@ interface Props {
 export default function GroupMembersPanel({
   roomId,
   roomName,
+  roomType = "group",
   currentUserId,
   token,
   onClose,
@@ -137,6 +139,15 @@ export default function GroupMembersPanel({
 
   async function handleRemove() {
     if (!removeConfirm) return
+    const isSelf = removeConfirm.user_id === currentUserId
+
+    // Channels are ephemeral — leaving is just navigating away (WS disconnects automatically).
+    if (roomType === "channel" && isSelf) {
+      setRemoveConfirm(null)
+      onLeft()
+      return
+    }
+
     setRemoveLoading(true)
     try {
       const res = await fetch(
@@ -145,7 +156,7 @@ export default function GroupMembersPanel({
       )
       if (res.ok) {
         setRemoveConfirm(null)
-        if (removeConfirm.user_id === currentUserId) {
+        if (isSelf) {
           onLeft()
         } else {
           loadMembers()
@@ -166,11 +177,11 @@ export default function GroupMembersPanel({
     <div className="flex h-full flex-col bg-gray-900">
       <ConfirmDialog
         open={!!removeConfirm}
-        title={isSelfLeave ? "Leave group" : "Remove member"}
+        title={isSelfLeave ? (roomType === "channel" ? "Leave channel" : "Leave group") : "Remove member"}
         message={
           isSelfLeave
-            ? "Leave this group? You will no longer receive messages."
-            : `Remove ${removeConfirm?.display_name || removeConfirm?.username} from the group?`
+            ? `Leave this ${roomType === "channel" ? "channel" : "group"}? You will no longer receive messages.`
+            : `Remove ${removeConfirm?.display_name || removeConfirm?.username} from the ${roomType === "channel" ? "channel" : "group"}?`
         }
         confirmLabel={isSelfLeave ? "Leave" : "Remove"}
         loading={removeLoading}
@@ -188,13 +199,15 @@ export default function GroupMembersPanel({
         >
           ←
         </button>
-        <h2 className="flex-1 text-sm font-semibold text-white">Group members</h2>
+        <h2 className="flex-1 text-sm font-semibold text-white">
+          {roomType === "channel" ? "Channel members" : "Group members"}
+        </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* Group name / rename */}
+        {/* Name display / rename (groups only) */}
         <div>
-          {renaming ? (
+          {roomType === "group" && renaming ? (
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <Input
@@ -219,8 +232,10 @@ export default function GroupMembersPanel({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-white">{roomName}</p>
-              {isAdmin && (
+              <p className="text-sm font-semibold text-white">
+                {roomType === "channel" ? "# " : ""}{roomName}
+              </p>
+              {roomType === "group" && isAdmin && (
                 <button
                   type="button"
                   onClick={() => { setNewName(roomName); setRenaming(true) }}
@@ -251,8 +266,8 @@ export default function GroupMembersPanel({
                     <p className="text-xs text-indigo-400">Admin</p>
                   )}
                 </div>
-                {/* Admin removes non-admin others */}
-                {isAdmin && m.user_id !== currentUserId && !m.is_admin && (
+                {/* Groups only: admin removes non-admin others */}
+                {roomType === "group" && isAdmin && m.user_id !== currentUserId && !m.is_admin && (
                   <button
                     type="button"
                     onClick={() => setRemoveConfirm(m)}
@@ -261,8 +276,8 @@ export default function GroupMembersPanel({
                     Remove
                   </button>
                 )}
-                {/* Non-admin self-leave (creator cannot leave) */}
-                {m.user_id === currentUserId && !m.is_admin && (
+                {/* Self-leave: channels allow anyone; groups only allow non-admins */}
+                {m.user_id === currentUserId && (roomType === "channel" || !m.is_admin) && (
                   <button
                     type="button"
                     onClick={() => setRemoveConfirm(m)}
@@ -276,8 +291,8 @@ export default function GroupMembersPanel({
           </ul>
         )}
 
-        {/* Add member (admin only) */}
-        {isAdmin && (
+        {/* Add member (groups only, admin only) */}
+        {roomType === "group" && isAdmin && (
           <div>
             {addingMember ? (
               <div className="space-y-2">

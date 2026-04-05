@@ -2,11 +2,26 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/redis/go-redis/v9"
 )
 
 const redisChannelPrefix = "chat:room:"
+
+// ClientInfo holds the participant details exposed via RoomParticipants.
+type ClientInfo struct {
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+}
+
+// participantsReq is a synchronous query sent on Hub.participantsQ.
+type participantsReq struct {
+	roomID string
+	reply  chan []ClientInfo
+}
 
 // broadcastMsg carries a message payload destined for all local clients of
 // a given room.  Sent to Hub.broadcast by the Redis listener goroutines so
@@ -25,11 +40,13 @@ type broadcastMsg struct {
 // This design avoids mutexes on the hot path and mirrors the well-known
 // gorilla/websocket chat example pattern.
 type Hub struct {
-	rdb *redis.Client
+	rdb   *redis.Client
+	bgCtx context.Context // background context used for fire-and-forget publishes
 
-	register   chan *Client
-	unregister chan *Client
-	broadcast  chan broadcastMsg
+	register      chan *Client
+	unregister    chan *Client
+	broadcast     chan broadcastMsg
+	participantsQ chan participantsReq
 
 	// These fields are only accessed from the Run goroutine.
 	rooms   map[string]map[*Client]struct{}
@@ -39,16 +56,18 @@ type Hub struct {
 // NewHub creates a Hub backed by the given Redis client.
 func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
-		rdb:        rdb,
-		register:   make(chan *Client, 16),
-		unregister: make(chan *Client, 16),
-		broadcast:  make(chan broadcastMsg, 256),
-		rooms:      make(map[string]map[*Client]struct{}),
-		pubsubs:    make(map[string]*redis.PubSub),
+		rdb:           rdb,
+		bgCtx:         context.Background(),
+		register:      make(chan *Client, 16),
+		unregister:    make(chan *Client, 16),
+		broadcast:     make(chan broadcastMsg, 256),
+		participantsQ: make(chan participantsReq, 4),
+		rooms:         make(map[string]map[*Client]struct{}),
+		pubsubs:       make(map[string]*redis.PubSub),
 	}
 }
 
-// Run processes register, unregister, and broadcast events.
+// Run processes register, unregister, broadcast, and participants-query events.
 // It must be started in a goroutine and runs until ctx is cancelled.
 func (h *Hub) Run(ctx context.Context) {
 	for {
@@ -61,6 +80,24 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case msg := <-h.broadcast:
 			h.deliver(msg.roomID, msg.data)
+
+		case req := <-h.participantsQ:
+			clients := h.rooms[req.roomID]
+			seen := make(map[string]struct{}, len(clients))
+			infos := make([]ClientInfo, 0, len(clients))
+			for c := range clients {
+				if _, ok := seen[c.userID]; ok {
+					continue
+				}
+				seen[c.userID] = struct{}{}
+				infos = append(infos, ClientInfo{
+					UserID:      c.userID,
+					Username:    c.username,
+					DisplayName: c.displayName,
+					AvatarURL:   c.avatarURL,
+				})
+			}
+			req.reply <- infos
 
 		case <-ctx.Done():
 			for _, clients := range h.rooms {
@@ -82,6 +119,23 @@ func (h *Hub) Publish(ctx context.Context, roomID string, data []byte) error {
 	return h.rdb.Publish(ctx, redisChannelPrefix+roomID, data).Err()
 }
 
+// RoomParticipants returns the ClientInfo for every locally connected client in
+// roomID. The call blocks until the Run goroutine responds or ctx is cancelled.
+func (h *Hub) RoomParticipants(ctx context.Context, roomID string) []ClientInfo {
+	reply := make(chan []ClientInfo, 1)
+	select {
+	case h.participantsQ <- participantsReq{roomID: roomID, reply: reply}:
+	case <-ctx.Done():
+		return nil
+	}
+	select {
+	case infos := <-reply:
+		return infos
+	case <-ctx.Done():
+		return nil
+	}
+}
+
 // addClient registers a client and subscribes to its room's Redis channel if
 // this is the first local client for that room.
 func (h *Hub) addClient(ctx context.Context, client *Client) {
@@ -92,6 +146,17 @@ func (h *Hub) addClient(ctx context.Context, client *Client) {
 		go h.listenRedis(ctx, client.roomID, ps)
 	}
 	h.rooms[client.roomID][client] = struct{}{}
+
+	if client.isChannel {
+		data, _ := json.Marshal(map[string]any{
+			"event":        "participant_join",
+			"user_id":      client.userID,
+			"username":     client.username,
+			"display_name": client.displayName,
+			"avatar_url":   client.avatarURL,
+		})
+		go h.rdb.Publish(h.bgCtx, redisChannelPrefix+client.roomID, data) //nolint:errcheck
+	}
 }
 
 // removeClient unregisters a client and tears down the Redis subscription
@@ -106,6 +171,14 @@ func (h *Hub) removeClient(client *Client) {
 	}
 	delete(clients, client)
 	close(client.send)
+
+	if client.isChannel {
+		data, _ := json.Marshal(map[string]any{
+			"event":   "participant_leave",
+			"user_id": client.userID,
+		})
+		go h.rdb.Publish(h.bgCtx, redisChannelPrefix+client.roomID, data) //nolint:errcheck
+	}
 
 	if len(clients) == 0 {
 		if ps, ok := h.pubsubs[client.roomID]; ok {
@@ -154,4 +227,3 @@ func (h *Hub) listenRedis(ctx context.Context, roomID string, ps *redis.PubSub) 
 		}
 	}
 }
-

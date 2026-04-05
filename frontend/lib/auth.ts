@@ -28,7 +28,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!res.ok) return null
 
           const user = await res.json()
-          return { id: user.id, email: user.email, name: user.email, accessToken: user.token }
+          let isAdmin = false
+          try {
+            const payload = JSON.parse(atob(user.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
+            isAdmin = payload.is_admin === true
+          } catch { /* ignore malformed token */ }
+          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin }
         } catch {
           // Backend unavailable — fail closed (do not grant access)
           return null
@@ -44,6 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id
         token.accessToken = user.accessToken
+        token.isAdmin = user.isAdmin
       }
       return token
     },
@@ -52,6 +58,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string
       }
       session.accessToken = token.accessToken
+      session.isAdmin = token.isAdmin as boolean | undefined
       return session
     },
   },

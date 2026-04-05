@@ -45,12 +45,21 @@ const chatMessageTypes = new Set(["text", "image", "video", "file"])
  *   a set of IDs for messages deleted via message_deleted events,
  *   the current typing users, and a sendTyping function.
  */
+export interface ParticipantEvent {
+  type: "join" | "leave"
+  userId: string
+  username: string
+  displayName: string
+  avatarURL: string
+}
+
 export function useChat(roomId: string | null, token: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
   const [typingUsers, setTypingUsers] = useState<Map<string, { displayName: string; at: number }>>(new Map())
   const [readReceipts, setReadReceipts] = useState<ReadReceipts>(new Map())
+  const [participantEvents, setParticipantEvents] = useState<ParticipantEvent[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
@@ -139,6 +148,22 @@ export function useChat(roomId: string | null, token: string | undefined) {
               })
               return next
             })
+          } else if (frame.event === "participant_join" && frame.user_id) {
+            setParticipantEvents((prev) => [...prev, {
+              type: "join",
+              userId: frame.user_id as string,
+              username: (frame.username as string) || "",
+              displayName: (frame.display_name as string) || "",
+              avatarURL: (frame.avatar_url as string) || "",
+            }])
+          } else if (frame.event === "participant_leave" && frame.user_id) {
+            setParticipantEvents((prev) => [...prev, {
+              type: "leave",
+              userId: frame.user_id as string,
+              username: "",
+              displayName: "",
+              avatarURL: "",
+            }])
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])
           }
@@ -158,6 +183,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
       setDeletedIds(new Set())
       setTypingUsers(new Map())
       setReadReceipts(new Map())
+      setParticipantEvents([])
     }
   }, [roomId, token])
 
@@ -177,5 +203,5 @@ export function useChat(roomId: string | null, token: string | undefined) {
     return () => clearInterval(id)
   }, [roomId, token])
 
-  return { messages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts }
+  return { messages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents }
 }

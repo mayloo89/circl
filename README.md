@@ -17,30 +17,34 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - [Production readiness checklist](docs/production-readiness.md)
 
 ## Project status
-- ✅ **Foundation**: repo structure, linters, CI/CD
-- ✅ **Auth**: registration, login, JWT tokens, NextAuth.js session
-- ✅ **Private profiles**: display name, bio — `GET /profiles/me`, `PUT /profiles/me`
-- ✅ **Contacts**: search, send/accept/decline/remove requests — full contacts lifecycle
-- ✅ **Real-time notifications**: SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
-- ✅ **Chat and rooms**: WebSocket DMs and group rooms, Redis Pub/Sub fan-out, message history, unread counts
-- ✅ **Presence**: online/offline dot on contacts list, "Online" / "Last seen X ago" in DM chat header, instant updates via SSE
-- ✅ **Storage infrastructure**: Storage interface abstraction, LocalStorage (dev), uploads API (request → confirm lifecycle)
-- ✅ **Profile avatars**: upload from profile page, displayed in navbar, contacts list, chat list, chat room header, and message bubbles
-- ✅ **Chat attachments**: images, videos, and files in chat; ephemeral (view-once + TTL) messages
-- ✅ **S3-compatible storage**: MinIO backend with pre-signed PUT URLs; Docker Compose dev and prod setup
-- ✅ **Image processing**: asynq background worker — EXIF strip and 480px thumbnail generation for JPEG/PNG uploads
-- ✅ **Typing indicators**: real-time "X is typing…" via WebSocket with 2s server-side debounce
-- ✅ **Read receipts**: ✓ / ✓✓ on sent messages; updates in real time via WebSocket
-- ✅ **Image thumbnails in chat**: thumbnails served from storage instead of full-res URLs in message list
-- ✅ **Chat UI**: message grouping, date separators, skeleton loaders, new-message animation, relative timestamps, attachment type previews
-- ✅ **Public profiles + gallery**: public profile view, photo gallery (up to 6 photos), profile navigation from contacts and chat header
-- ✅ **Usernames**: unique handles (`[a-z0-9_]`, 3–30 chars), immutable once set, used in all profile URLs (`/profile/[username]`)
-- ✅ **Extended profiles**: date of birth (18+ enforced), gender, location (autocomplete via Photon/OSM), interests tags
-- ✅ **Registration with profile seeding**: username + DOB collected at signup, profile seeded immediately after account creation
-- ✅ **User blocking**: block/unblock users, bidirectional suppression in browse/search/contacts/chat, WebSocket message filtering, performance-optimized batch queries
-- ✅ **User reporting**: report users with reason, rate limited (10/hour), auto-suspend after 3+ reports in 7 days
-- ✅ **Admin moderation**: admin role, user suspension/activation, report management (resolve/dismiss with notes)
-- ✅ **Account safety**: login lockout (5 failed attempts = 15 min lockout), password complexity (8+ chars, upper/lower/number/special), rate limiting (configurable per IP)
+- ✅ **Foundation** ([PR #1](https://github.com/mayloo89/circl/pull/1)): repo structure, linters, CI/CD
+- ✅ **Auth** ([PR #2](https://github.com/mayloo89/circl/pull/2)): registration, login, JWT tokens, NextAuth.js session
+- ✅ **Private profiles** ([PR #2](https://github.com/mayloo89/circl/pull/2)): display name, bio — `GET /profiles/me`, `PUT /profiles/me`
+- ✅ **Contacts** ([PR #9](https://github.com/mayloo89/circl/pull/9), [PR #10](https://github.com/mayloo89/circl/pull/10)): search, send/accept/decline/remove requests — full contacts lifecycle
+- ✅ **Real-time notifications** ([PR #14](https://github.com/mayloo89/circl/pull/14)): SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
+- ✅ **Chat and rooms** ([PR #14](https://github.com/mayloo89/circl/pull/14)): WebSocket DMs and group rooms, Redis Pub/Sub fan-out, message history, unread counts
+- ✅ **Presence** ([PR #15](https://github.com/mayloo89/circl/pull/15)): online/offline dot on contacts list, "Online" / "Last seen X ago" in DM chat header, instant updates via SSE
+- ✅ **Storage infrastructure** ([PR #16](https://github.com/mayloo89/circl/pull/16)): Storage interface abstraction, LocalStorage (dev), uploads API (request → confirm lifecycle)
+- ✅ **Profile avatars** ([PR #17](https://github.com/mayloo89/circl/pull/17)): upload from profile page, displayed in navbar, contacts list, chat list, chat room header, and message bubbles
+- ✅ **Chat attachments** ([PR #18](https://github.com/mayloo89/circl/pull/18)): images, videos, and files in chat; ephemeral (view-once + TTL) messages
+- ✅ **S3-compatible storage** ([PR #19](https://github.com/mayloo89/circl/pull/19)): MinIO backend with pre-signed PUT URLs; Docker Compose dev and prod setup
+- ✅ **Image processing** ([PR #20](https://github.com/mayloo89/circl/pull/20)): asynq background worker — EXIF strip and 480px thumbnail generation for JPEG/PNG uploads
+- ✅ **Typing indicators** ([PR #22](https://github.com/mayloo89/circl/pull/22)): real-time "X is typing…" via WebSocket with 2s server-side debounce
+- ✅ **Read receipts** ([PR #23](https://github.com/mayloo89/circl/pull/23)): ✓ / ✓✓ on sent messages; updates in real time via WebSocket
+- ✅ **Image thumbnails in chat** ([PR #24](https://github.com/mayloo89/circl/pull/24)): thumbnails served from storage instead of full-res URLs in message list
+- ✅ **Chat UI** ([PR #25](https://github.com/mayloo89/circl/pull/25), [PR #26](https://github.com/mayloo89/circl/pull/26)): message grouping, date separators, skeleton loaders, new-message animation, relative timestamps, attachment type previews
+- ✅ **Public profiles + gallery** ([PR #27](https://github.com/mayloo89/circl/pull/27)): public profile view, photo gallery (up to 6 photos), profile navigation from contacts and chat header
+- ✅ **Usernames** ([PR #36](https://github.com/mayloo89/circl/pull/36)): unique handles (`[a-z0-9_]`, 3–30 chars), immutable once set, used in all profile URLs (`/profile/[username]`)
+- ✅ **Extended profiles** ([PR #35](https://github.com/mayloo89/circl/pull/35)): date of birth (18+ enforced), gender, location (autocomplete via Photon/OSM), interests tags
+- ✅ **Registration with profile seeding** ([PR #36](https://github.com/mayloo89/circl/pull/36)): username + DOB collected at signup, profile seeded immediately after account creation
+- ✅ **User blocking** ([PR #39](https://github.com/mayloo89/circl/pull/39)): block/unblock users, bidirectional suppression in browse/search/contacts/chat, WebSocket message filtering, performance-optimized batch queries
+- ✅ **User reporting** ([PR #40](https://github.com/mayloo89/circl/pull/40)): report users with reason, rate limited (10/hour), auto-suspend after 3+ reports in 7 days
+- ✅ **Admin moderation** ([PR #41](https://github.com/mayloo89/circl/pull/41)): admin role, user suspension/activation, report management (resolve/dismiss with notes)
+- ✅ **Account safety** ([PR #42](https://github.com/mayloo89/circl/pull/42)): login lockout (5 failed attempts = 15 min lockout), password complexity (8+ chars, upper/lower/number/special), rate limiting (configurable per IP)
+- ✅ **Web Push Notifications** ([PR #43](https://github.com/mayloo89/circl/pull/43)): subscribe/unsubscribe, service worker, push delivery on chat/contact events
+- ✅ **Cursor-based pagination** ([PR #44](https://github.com/mayloo89/circl/pull/44)): cursor-based for browse and chat history, infinite scroll in chat room
+- ✅ **Group chat** ([PR #45](https://github.com/mayloo89/circl/pull/45)): create groups, rename (admin), add/remove members, member panel UI
+- ✅ **Public chat channels** ([PR #46](https://github.com/mayloo89/circl/pull/46)): IRC-style open rooms — browse, enter, chat; ephemeral membership (WS connection = presence); no message history; live participant sidebar with filter; admin-only channel creation; leave confirmation guard
 
 ## Local setup
 
