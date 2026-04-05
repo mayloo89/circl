@@ -33,6 +33,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Chat list page: "New group" button opens group creation modal
   - Room page: group header opens members panel; group name updates reactively on rename
 
+- **Cursor-based pagination** ([PR #44](https://github.com/mayloo89/circl/pull/44)):
+  - `GET /profiles/browse` now uses cursor-based pagination (`before` param with timestamp)
+  - Chat history (`GET /chat/rooms/{id}/messages`) uses cursor-based pagination
+  - Infinite scroll on browse page: load more button fetches next page
+  - Chat room: "Load more" at top of message list for older messages
+
 - **Web Push Notifications** ([PR #43](https://github.com/mayloo89/circl/pull/43)): `POST /push/subscribe`, `DELETE /push/unsubscribe`, `GET /push/vapid-public-key`, migration `000018_push_subscriptions` for browser push subscriptions
   - `backend/internal/push` package: `Service` (Send, Subscribe, Unsubscribe), `Store` interface (Postgres implementation), `Handler` for HTTP endpoints
   - Push notification UI in NavBar: bell icon toggles subscription state (granted/tachada), persists across sessions
