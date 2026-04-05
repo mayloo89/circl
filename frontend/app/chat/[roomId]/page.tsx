@@ -93,11 +93,12 @@ export default function ChatRoomPage() {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [blockLoading, setBlockLoading] = useState(false)
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
-  const [pendingLeaveUrl, setPendingLeaveUrl] = useState<string | null>(null)
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null)
+  const navConfirmedRef = useRef(false)
 
   function requestLeave(url: string) {
     if (room?.type === "channel") {
-      setPendingLeaveUrl(url)
+      setPendingNav(() => () => { navConfirmedRef.current = true; router.push(url) })
       setLeaveConfirmOpen(true)
     } else {
       router.push(url)
@@ -106,7 +107,8 @@ export default function ChatRoomPage() {
 
   function confirmLeave() {
     setLeaveConfirmOpen(false)
-    if (pendingLeaveUrl) router.push(pendingLeaveUrl)
+    pendingNav?.()
+    setPendingNav(null)
   }
   const [groupPanelOpen, setGroupPanelOpen] = useState(false)
   const [groupName, setGroupName] = useState("")
@@ -129,6 +131,35 @@ export default function ChatRoomPage() {
   const presence = usePresence(peerIDs, token, subscribe)
 
   useEffect(() => { clearChatBadge() }, [clearChatBadge])
+
+  // Intercept all navigation while inside a channel to show a leave confirmation.
+  useEffect(() => {
+    if (room?.type !== "channel") return
+
+    // Browser-level: refresh, tab close, address-bar navigation.
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // Next.js client-side navigation: <Link> components, router.push from NavBar, etc.
+    const origPushState = window.history.pushState.bind(window.history)
+    window.history.pushState = (...args: Parameters<typeof window.history.pushState>) => {
+      if (navConfirmedRef.current) {
+        navConfirmedRef.current = false
+        origPushState(...args)
+        return
+      }
+      setPendingNav(() => () => { navConfirmedRef.current = true; origPushState(...args) })
+      setLeaveConfirmOpen(true)
+    }
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+      window.history.pushState = origPushState
+    }
+  }, [room?.type])
 
   // Update the members sidebar in real-time from participant_join / participant_leave events.
   useEffect(() => {
