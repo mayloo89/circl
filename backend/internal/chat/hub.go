@@ -82,8 +82,13 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case req := <-h.participantsQ:
 			clients := h.rooms[req.roomID]
+			seen := make(map[string]struct{}, len(clients))
 			infos := make([]ClientInfo, 0, len(clients))
 			for c := range clients {
+				if _, ok := seen[c.userID]; ok {
+					continue
+				}
+				seen[c.userID] = struct{}{}
 				infos = append(infos, ClientInfo{
 					UserID:      c.userID,
 					DisplayName: c.displayName,
