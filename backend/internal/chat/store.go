@@ -574,7 +574,7 @@ func (s *pgStore) GetAvatarURL(ctx context.Context, userID string) (string, erro
 func (s *pgStore) GetUsername(ctx context.Context, userID string) (string, error) {
 	var username string
 	err := s.db.QueryRow(ctx,
-		`SELECT username FROM users WHERE id = $1`,
+		`SELECT COALESCE(username, '') FROM profiles WHERE user_id = $1`,
 		userID,
 	).Scan(&username)
 	if errors.Is(err, pgx.ErrNoRows) {
