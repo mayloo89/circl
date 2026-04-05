@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Settings page** ([PR #47](https://github.com/mayloo89/circl/pull/47)): `/settings` page with account management
+  - Push notifications toggle (enable/disable)
+  - Change password with live validation (8+ chars, uppercase, lowercase, number, special char)
+  - Delete account with confirmation
+  - `PushContext` shared between NavBar bell and settings page for sync state
+  - Avatar dropdown menu replaces profile/settings links in NavBar
+  - `PushPrompt` dismiss button
+
 - **Public chat channels** ([PR #46](https://github.com/mayloo89/circl/pull/46)): IRC-style open rooms — any authenticated user can enter, chat, and leave freely
   - Migration `000020`: extends `rooms.type` CHECK to include `'channel'`; adds `rooms.description` column
   - Migration `000021`: removes existing `room_members` rows for channels (ephemeral model)
