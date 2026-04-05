@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Chat upload restrictions + image resizing** ([PR #49](https://github.com/mayloo89/circl/pull/49)):
+  - Chat attachments restricted to images and videos only — PDF, documents, and archives are now rejected by both backend and frontend
+  - JPEG and PNG originals are resized to a maximum of 1024px on their longest edge before storage (configurable via `IMAGE_MAX_PX` env var)
+  - Thumbnails continue to be generated at 480px
+  - `ChatInput` file picker `accept` attribute updated to `image/*,video/*`
+
 - **UX improvements** ([PR #48](https://github.com/mayloo89/circl/pull/48)):
   - Contact removal now requires confirmation via dialog — prevents accidental deletions
   - Search results: clicking a user's name or avatar navigates to their public profile
