@@ -25,6 +25,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           })
 
           if (res.status === 429) throw new Error("AccountLocked")
+          if (res.status === 403) throw new Error("EmailNotVerified")
           if (!res.ok) return null
 
           const user = await res.json()

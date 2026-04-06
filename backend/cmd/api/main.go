@@ -16,6 +16,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/admin"
 	"github.com/mayloo89/circl/backend/internal/auth"
+	"github.com/mayloo89/circl/backend/internal/email"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/contacts"
@@ -74,8 +75,27 @@ func main() {
 	defer pool.Close()
 	log.Println("Database connection established")
 
+	frontendURL := config.EnvOrDefault("FRONTEND_URL", "http://localhost:3000")
+
+	var mailer email.Sender
+	switch config.EnvOrDefault("EMAIL_PROVIDER", "console") {
+	case "smtp":
+		smtpPort := config.EnvIntOrDefault("SMTP_PORT", 1025)
+		mailer = email.NewSMTPSender(email.SMTPConfig{
+			Host:     config.EnvOrDefault("SMTP_HOST", "localhost"),
+			Port:     smtpPort,
+			Username: config.EnvOrDefault("SMTP_USER", ""),
+			Password: config.EnvOrDefault("SMTP_PASS", ""),
+			From:     config.EnvOrDefault("SMTP_FROM", "noreply@circl.app"),
+		})
+		log.Printf("Email provider: SMTP (%s:%d)", config.EnvOrDefault("SMTP_HOST", "localhost"), smtpPort)
+	default:
+		mailer = email.NewConsoleSender()
+		log.Println("Email provider: console (stdout)")
+	}
+
 	authStore := auth.NewStore(pool)
-	authSvc := auth.NewService(authStore)
+	authSvc := auth.NewService(authStore, mailer)
 
 	profileStore := profiles.NewStore(pool)
 	profileSvc := profiles.NewService(profileStore)
@@ -117,6 +137,7 @@ func main() {
 		auth.WithLimiter(limiter),
 		auth.WithLoginIPLimit(loginIPLimit, 15*time.Minute),
 		auth.WithRegisterIPLimit(registerIPLimit, time.Hour),
+		auth.WithEmailFlow(authSvc, frontendURL),
 	)
 
 	reportMgr := reports.NewManager(reportSvc,

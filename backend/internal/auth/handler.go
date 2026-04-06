@@ -16,12 +16,9 @@ import (
 )
 
 const (
-	// loginMaxFailures is the number of consecutive failures before an account is locked.
 	loginMaxFailures = 10
-	// loginLockWindow is how long the lockout lasts after the threshold is reached.
-	loginLockWindow = 15 * time.Minute
+	loginLockWindow  = 15 * time.Minute
 
-	// Default per-IP rate limit values. Override via WithLoginIPLimit / WithRegisterIPLimit.
 	defaultLoginIPLimit     = 20
 	defaultLoginIPWindow    = 15 * time.Minute
 	defaultRegisterIPLimit  = 10
@@ -30,13 +27,8 @@ const (
 
 // LoginLocker tracks consecutive login failures per account and enforces lockouts.
 type LoginLocker interface {
-	// IsLocked returns true if the account key has reached the failure limit.
-	// It does not modify the counter.
 	IsLocked(ctx context.Context, key string, limit int) (bool, error)
-	// RecordFailure increments the failure counter for key and returns true if
-	// the account is now locked. The window TTL is anchored to the first failure.
 	RecordFailure(ctx context.Context, key string, limit int, window time.Duration) (locked bool, err error)
-	// Reset clears the failure counter after a successful login.
 	Reset(ctx context.Context, key string) error
 }
 
@@ -55,29 +47,27 @@ type handlerConfig struct {
 	loginIPWindow    time.Duration
 	registerIPLimit  int
 	registerIPWindow time.Duration
+	emailFlow        EmailFlowService
+	frontendURL      string
 }
 
-// WithLocker injects a LoginLocker for account lockout enforcement.
 func WithLocker(l LoginLocker) HandlerOption { return func(c *handlerConfig) { c.locker = l } }
+func WithLimiter(l RequestLimiter) HandlerOption {
+	return func(c *handlerConfig) { c.limiter = l }
+}
 
-// WithLimiter injects a RequestLimiter for per-IP rate limiting.
-func WithLimiter(l RequestLimiter) HandlerOption { return func(c *handlerConfig) { c.limiter = l } }
-
-// WithLoginIPLimit overrides the default per-IP rate limit for the login endpoint.
 func WithLoginIPLimit(limit int, window time.Duration) HandlerOption {
 	return func(c *handlerConfig) { c.loginIPLimit = limit; c.loginIPWindow = window }
 }
 
-// WithRegisterIPLimit overrides the default per-IP rate limit for the register endpoint.
 func WithRegisterIPLimit(limit int, window time.Duration) HandlerOption {
 	return func(c *handlerConfig) { c.registerIPLimit = limit; c.registerIPWindow = window }
 }
 
-// Authenticator is the interface the handler depends on.
-// *Service satisfies this interface.
-type Authenticator interface {
-	Login(ctx context.Context, email, password string) (*User, error)
-	Register(ctx context.Context, email, password string) (*User, error)
+// WithEmailFlow enables the email-based auth routes (forgot-password, reset-password,
+// verify-email, resend-verification) and wires up verification on registration.
+func WithEmailFlow(svc EmailFlowService, frontendURL string) HandlerOption {
+	return func(c *handlerConfig) { c.emailFlow = svc; c.frontendURL = frontendURL }
 }
 
 type loginRequest struct {
@@ -99,7 +89,6 @@ type errorResponse struct {
 var generateTokenFn func(string, bool, string, time.Duration) (string, error) = token.Generate
 
 // NewHandler returns an http.Handler with all auth routes registered.
-// jwtSecret and tokenExpiry are used to issue a signed JWT on login/register.
 func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration, opts ...HandlerOption) http.Handler {
 	cfg := &handlerConfig{
 		loginIPLimit:     defaultLoginIPLimit,
@@ -112,13 +101,18 @@ func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration,
 	}
 	r := chi.NewRouter()
 	r.Post("/login", loginHandler(auth, jwtSecret, tokenExpiry, cfg))
-	r.Post("/register", registerHandler(auth, jwtSecret, tokenExpiry, cfg))
+	r.Post("/register", registerHandler(auth, cfg))
+	if cfg.emailFlow != nil {
+		r.Post("/forgot-password", forgotPasswordHandler(cfg.emailFlow, cfg.frontendURL))
+		r.Post("/reset-password", resetPasswordHandler(cfg.emailFlow))
+		r.Post("/verify-email", verifyEmailHandler(cfg.emailFlow))
+		r.Post("/resend-verification", resendVerificationHandler(cfg.emailFlow, cfg.frontendURL))
+	}
 	return r
 }
 
 func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Per-IP rate limit — checked before decoding to fail fast on floods.
 		if cfg.limiter != nil {
 			ip := clientIP(r)
 			allowed, err := cfg.limiter.Allow(r.Context(), "login:ip:"+ip, cfg.loginIPLimit, cfg.loginIPWindow)
@@ -135,18 +129,15 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
 			return
 		}
-
 		if req.Email == "" || req.Password == "" {
 			writeJSON(w, http.StatusBadRequest, errorResponse{"email and password are required"})
 			return
 		}
-
 		if len(req.Password) > maxPasswordLen {
 			writeJSON(w, http.StatusBadRequest, errorResponse{"password too long"})
 			return
 		}
 
-		// Account lockout check — before running bcrypt to avoid wasted CPU.
 		lockKey := "lockout:" + strings.ToLower(strings.TrimSpace(req.Email))
 		if cfg.locker != nil {
 			locked, err := cfg.locker.IsLocked(r.Context(), lockKey, loginMaxFailures)
@@ -160,6 +151,10 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 
 		user, err := auth.Login(r.Context(), req.Email, req.Password)
 		if err != nil {
+			if errors.Is(err, ErrEmailNotVerified) {
+				writeJSON(w, http.StatusForbidden, errorResponse{"email_not_verified"})
+				return
+			}
 			if errors.Is(err, ErrInvalidCredentials) {
 				if cfg.locker != nil {
 					locked, lerr := cfg.locker.RecordFailure(r.Context(), lockKey, loginMaxFailures, loginLockWindow)
@@ -177,7 +172,6 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			return
 		}
 
-		// Successful login — reset the failure counter.
 		if cfg.locker != nil {
 			if err := cfg.locker.Reset(r.Context(), lockKey); err != nil {
 				log.Printf("auth: locker Reset error: %v", err)
@@ -194,9 +188,8 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 	}
 }
 
-func registerHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration, cfg *handlerConfig) http.HandlerFunc {
+func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Per-IP rate limit on registration to slow down mass account creation.
 		if cfg.limiter != nil {
 			ip := clientIP(r)
 			allowed, err := cfg.limiter.Allow(r.Context(), "register:ip:"+ip, cfg.registerIPLimit, cfg.registerIPWindow)
@@ -213,7 +206,6 @@ func registerHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Dura
 			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
 			return
 		}
-
 		if req.Email == "" || req.Password == "" {
 			writeJSON(w, http.StatusBadRequest, errorResponse{"email and password are required"})
 			return
@@ -232,21 +224,104 @@ func registerHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Dura
 			return
 		}
 
-		tok, err := generateTokenFn(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
-			return
+		// Send verification email asynchronously; ignore send errors — the user
+		// can request a resend from the login page.
+		if cfg.emailFlow != nil {
+			go func() {
+				if err := cfg.emailFlow.SendVerificationEmail(r.Context(), user.ID, user.Email, cfg.frontendURL); err != nil {
+					log.Printf("auth: send verification email: %v", err)
+				}
+			}()
 		}
 
-		writeJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, Token: tok})
+		writeJSON(w, http.StatusCreated, map[string]string{
+			"message": "account created — check your email to verify your address before logging in",
+		})
 	}
 }
 
-// clientIP extracts the originating client IP from the request.
-// It honours X-Forwarded-For (leftmost entry) and X-Real-IP headers set by
-// trusted reverse proxies, falling back to r.RemoteAddr.
-// NOTE: X-Forwarded-For can be spoofed if no trusted proxy strips it first;
-// ensure your proxy configuration removes untrusted values in production.
+func forgotPasswordHandler(svc EmailFlowService, frontendURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Email string `json:"email"`
+		}
+		// Silently ignore decode errors — always respond with 200.
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Email != "" {
+			_ = svc.ForgotPassword(r.Context(), req.Email, frontendURL)
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message": "if that email is registered you will receive a password reset link",
+		})
+	}
+}
+
+func resetPasswordHandler(svc EmailFlowService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Token    string `json:"token"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			return
+		}
+		if req.Token == "" || req.Password == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"token and password are required"})
+			return
+		}
+		if err := svc.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+			switch {
+			case errors.Is(err, ErrInvalidToken):
+				writeJSON(w, http.StatusBadRequest, errorResponse{"invalid or expired reset token"})
+			case errors.Is(err, ErrInvalidInput):
+				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+			default:
+				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"message": "password reset successfully"})
+	}
+}
+
+func verifyEmailHandler(svc EmailFlowService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"token is required"})
+			return
+		}
+		if err := svc.VerifyEmail(r.Context(), req.Token); err != nil {
+			switch {
+			case errors.Is(err, ErrInvalidToken):
+				writeJSON(w, http.StatusBadRequest, errorResponse{"invalid or expired verification token"})
+			default:
+				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"message": "email verified — you can now log in"})
+	}
+}
+
+func resendVerificationHandler(svc EmailFlowService, frontendURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Email string `json:"email"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Email != "" {
+			_ = svc.ResendVerification(r.Context(), req.Email, frontendURL)
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message": "if that email is registered and unverified you will receive a new verification link",
+		})
+	}
+}
+
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		if i := strings.IndexByte(xff, ','); i > 0 {
@@ -270,12 +345,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// AccountHandlerOption configures optional features on the account handler.
+type AccountHandlerOption func(*accountHandlerConfig)
+
+type accountHandlerConfig struct{}
+
 // NewAccountHandler returns an http.Handler for user account management routes.
 // Routes are expected to be mounted at /users/me and run behind RequireAuth.
 //
-//	PUT  /password  — change password
-//	DELETE /        — delete (soft) account
-func NewAccountHandler(svc AccountManager) http.Handler {
+//	PUT    /password  — change password
+//	DELETE /          — delete (soft) account
+func NewAccountHandler(svc AccountManager, _ ...AccountHandlerOption) http.Handler {
 	r := chi.NewRouter()
 	r.Put("/password", changePasswordHandler(svc))
 	r.Delete("/", deleteAccountHandler(svc))
