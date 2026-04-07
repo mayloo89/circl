@@ -322,7 +322,7 @@ func main() {
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
-	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {

@@ -31,7 +31,7 @@ type DBPinger interface {
 // reportsHandler is the reports sub-router (reports.NewManager); must run behind requireAuth.
 // localStorageHandler serves uploaded files in dev mode; nil in production.
 // requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, availableHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -45,6 +45,7 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 
 	r.Get("/health", healthHandler(db, env))
 	r.Mount("/auth", authHandler)
+	r.Handle("/profiles/available", availableHandler)
 
 	// SSE stream — auth is handled inside the handler via ?token= query param
 	// because the browser EventSource API does not support custom headers.

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { registerSchema } from "@/lib/validation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
@@ -30,6 +30,35 @@ export default function RegisterPage() {
   const [submitError, setSubmitError] = useState("")
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
+
+  // Username availability check
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameChecking, setUsernameChecking] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const usernameRegex = /^[a-z0-9_]{3,30}$/
+    if (!usernameRegex.test(username)) {
+      setUsernameAvailable(null)
+      return
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setUsernameChecking(true)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/profiles/available?username=${encodeURIComponent(username)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setUsernameAvailable(data.available)
+        }
+      } catch {
+        // silently ignore — availability check is best-effort
+      } finally {
+        setUsernameChecking(false)
+      }
+    }, 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [username])
 
   const allRulesMet = PASSWORD_RULES.every(({ test }) => test(password))
 
@@ -176,18 +205,32 @@ export default function RegisterPage() {
               <label htmlFor="username" className="block text-sm font-medium text-gray-300">
                 Username
               </label>
-              <input
-                id="username"
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                onBlur={(e) => validateField("username", e.target.value)}
-                className={fieldClass(fieldErrors.username)}
-                placeholder="lowercase_letters_digits"
-              />
+              <div className="relative">
+                <input
+                  id="username"
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => { setUsername(e.target.value); setUsernameAvailable(null) }}
+                  onBlur={(e) => validateField("username", e.target.value)}
+                  className={fieldClass(fieldErrors.username)}
+                  placeholder="lowercase_letters_digits"
+                />
+                {usernameChecking && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">…</span>
+                )}
+                {!usernameChecking && usernameAvailable === true && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-sm">✓</span>
+                )}
+                {!usernameChecking && usernameAvailable === false && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 text-sm">✗</span>
+                )}
+              </div>
               {fieldErrors.username && (
                 <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.username}</p>
+              )}
+              {!fieldErrors.username && usernameAvailable === false && (
+                <p className="mt-1 text-xs text-red-400" role="alert">Username already taken</p>
               )}
             </div>
 
@@ -253,7 +296,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading || !allRulesMet}
+            disabled={loading || !allRulesMet || usernameAvailable === false}
             className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             {loading ? "Creating account…" : "Create account"}
