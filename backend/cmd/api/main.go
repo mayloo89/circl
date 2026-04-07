@@ -14,6 +14,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mayloo89/circl/backend/internal/admin"
@@ -344,8 +345,8 @@ func main() {
 //
 // POST /test/users — creates a verified user, seeds the profile, returns token + id + email + password.
 func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore profiles.Store, jwtSecret string, tokenExpiry time.Duration) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /users", func(w http.ResponseWriter, r *http.Request) {
+	mux := chi.NewRouter()
+	mux.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Email    string `json:"email"`
 			Password string `json:"password"`
