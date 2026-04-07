@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -41,6 +42,8 @@ func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 			*dest[1].(*string) = "user@example.com"
 			*dest[2].(*string) = "$2a$10$hash"
 			*dest[3].(*string) = "active"
+			*dest[4].(*bool) = false
+			// dest[5] is *time.Time (email_verified_at), leave as nil
 			return nil
 		}},
 	}}
@@ -85,6 +88,8 @@ func TestPgStore_CreateUser_Success(t *testing.T) {
 			*dest[1].(*string) = "new@example.com"
 			*dest[2].(*string) = "$2a$10$hash"
 			*dest[3].(*string) = "active"
+			*dest[4].(*bool) = false
+			// dest[5] is *time.Time (email_verified_at), leave as nil
 			return nil
 		}},
 	}}
@@ -131,6 +136,8 @@ func TestPgStore_GetUserByID_Success(t *testing.T) {
 			*dest[1].(*string) = "user@example.com"
 			*dest[2].(*string) = "$2a$10$hash"
 			*dest[3].(*string) = "active"
+			*dest[4].(*bool) = false
+			// dest[5] is *time.Time (email_verified_at), leave as nil
 			return nil
 		}},
 	}}
@@ -195,6 +202,134 @@ func TestPgStore_DeleteUser_ExecError(t *testing.T) {
 	}
 }
 
+// --- CreatePasswordReset ---
+
+func TestPgStore_CreatePasswordReset_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.CreatePasswordReset(t.Context(), "uid", "hash", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_CreatePasswordReset_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.CreatePasswordReset(t.Context(), "uid", "hash", time.Now().Add(time.Hour)); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetPasswordReset ---
+
+func TestPgStore_GetPasswordReset_Success(t *testing.T) {
+	exp := time.Now().Add(time.Hour)
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(dest ...any) error {
+			*dest[0].(*string) = "pr-id"
+			*dest[1].(*string) = "uid"
+			*dest[2].(*string) = "h"
+			*dest[3].(*time.Time) = exp
+			// dest[4] is *time.Time (used_at), leave as nil
+			return nil
+		}},
+	}}
+	r, err := store.GetPasswordReset(t.Context(), "h")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.ID != "pr-id" {
+		t.Errorf("ID = %q, want %q", r.ID, "pr-id")
+	}
+}
+
+func TestPgStore_GetPasswordReset_NotFound(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error { return pgx.ErrNoRows }},
+	}}
+	if _, err := store.GetPasswordReset(t.Context(), "nope"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- MarkPasswordResetUsed ---
+
+func TestPgStore_MarkPasswordResetUsed_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.MarkPasswordResetUsed(t.Context(), "pr-id"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_MarkPasswordResetUsed_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.MarkPasswordResetUsed(t.Context(), "pr-id"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- CreateEmailVerification ---
+
+func TestPgStore_CreateEmailVerification_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.CreateEmailVerification(t.Context(), "uid", "hash", time.Now().Add(24*time.Hour)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_CreateEmailVerification_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.CreateEmailVerification(t.Context(), "uid", "hash", time.Now().Add(time.Hour)); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetEmailVerification ---
+
+func TestPgStore_GetEmailVerification_Success(t *testing.T) {
+	exp := time.Now().Add(24 * time.Hour)
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(dest ...any) error {
+			*dest[0].(*string) = "ev-id"
+			*dest[1].(*string) = "uid"
+			*dest[2].(*string) = "h"
+			*dest[3].(*time.Time) = exp
+			// dest[4] is *time.Time (verified_at), leave as nil
+			return nil
+		}},
+	}}
+	r, err := store.GetEmailVerification(t.Context(), "h")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.ID != "ev-id" {
+		t.Errorf("ID = %q, want %q", r.ID, "ev-id")
+	}
+}
+
+func TestPgStore_GetEmailVerification_NotFound(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		row: &mockRow{scanFn: func(_ ...any) error { return pgx.ErrNoRows }},
+	}}
+	if _, err := store.GetEmailVerification(t.Context(), "nope"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- MarkEmailVerified ---
+
+func TestPgStore_MarkEmailVerified_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.MarkEmailVerified(t.Context(), "uid", "ev-id"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_MarkEmailVerified_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.MarkEmailVerified(t.Context(), "uid", "ev-id"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 // --- NewStore ---
 
 func TestNewStore(t *testing.T) {
@@ -219,7 +354,7 @@ func TestStore_Integration(t *testing.T) {
 	defer pool.Close()
 
 	store := NewStore(pool)
-	svc := NewService(store)
+	svc := NewService(store, &noopMailer{})
 
 	const email = "store_integration@example.com"
 	t.Cleanup(func() {
@@ -236,7 +371,20 @@ func TestStore_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("login with registered user", func(t *testing.T) {
+	t.Run("login before verification returns ErrEmailNotVerified", func(t *testing.T) {
+		_, err := svc.Login(t.Context(), email, "Secure1pass")
+		if !errors.Is(err, ErrEmailNotVerified) {
+			t.Errorf("got %v, want ErrEmailNotVerified", err)
+		}
+	})
+
+	t.Run("login after manual verification succeeds", func(t *testing.T) {
+		// Simulate email verification by setting email_verified_at directly.
+		_, err := pool.Exec(context.Background(),
+			`UPDATE users SET email_verified_at = now() WHERE email = $1`, email)
+		if err != nil {
+			t.Fatalf("manual verify: %v", err)
+		}
 		user, err := svc.Login(t.Context(), email, "Secure1pass")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

@@ -7,15 +7,20 @@ import { useState } from "react"
 
 import { loginSchema } from "@/lib/validation"
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [emailNotVerified, setEmailNotVerified] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setEmailNotVerified(false)
 
     const parsed = loginSchema.safeParse({ email, password })
     if (!parsed.success) {
@@ -31,11 +36,23 @@ export default function LoginPage() {
 
     if (result?.error === "AccountLocked") {
       setError("Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.")
+    } else if (result?.error === "EmailNotVerified") {
+      setEmailNotVerified(true)
     } else if (result?.error) {
       setError("Invalid email or password.")
     } else {
       router.push("/")
     }
+  }
+
+  const handleResend = async () => {
+    setResendSent(false)
+    await fetch(`${API_URL}/auth/resend-verification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+    setResendSent(true)
   }
 
   return (
@@ -48,8 +65,29 @@ export default function LoginPage() {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded-md bg-red-950 p-4 text-sm text-red-400 ring-1 ring-red-900">{error}</div>
+            <div className="rounded-md bg-red-950 p-4 text-sm text-red-400 ring-1 ring-red-900" role="alert">
+              {error}
+            </div>
           )}
+
+          {emailNotVerified && (
+            <div className="rounded-md bg-yellow-950 p-4 text-sm text-yellow-300 ring-1 ring-yellow-800" role="alert">
+              <p className="font-medium">Email not verified</p>
+              <p className="mt-1 text-yellow-400">Check your inbox for the verification link.</p>
+              {resendSent ? (
+                <p className="mt-2 text-green-400">Verification email sent — check your inbox.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  className="mt-2 text-yellow-300 underline hover:text-yellow-200"
+                >
+                  Resend verification email
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300">
@@ -65,9 +103,14 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                  Password
+                </label>
+                <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"

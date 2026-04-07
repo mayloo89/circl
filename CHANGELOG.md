@@ -9,6 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Email infrastructure: registration verification, forgot password, reset password** ([PR #50](https://github.com/mayloo89/circl/pull/50)):
+  - Migration `000022`: adds `email_verified_at` to `users`; creates `password_resets` and `email_verifications` tables
+  - New `email` package with `Sender` interface, `ConsoleSender` (stdout, for dev/test), and `SMTPSender` (go-mail, TLS-opportunistic)
+  - Mailpit added to `docker-compose.yml` for local email capture (SMTP port 1025, web UI port 8025)
+  - Email verification is **hard-enforced**: `POST /auth/login` returns `403 {"error":"email_not_verified"}` for unverified accounts; no JWT is issued
+  - Registration sends a verification email async (goroutine) and returns `201 {"message":"..."}` without a JWT
+  - New public endpoints: `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/verify-email`, `POST /auth/resend-verification`
+  - Tokens: 32-byte cryptographically random, hex-encoded; SHA-256 hash stored in DB; expiry 1h (reset) / 24h (verification)
+  - `forgot-password` and `resend-verification` are email-enumeration-safe (always return 200)
+  - Frontend: `/forgot-password`, `/reset-password`, `/verify-email` pages added
+  - Login page: "Forgot password?" link, email-not-verified warning banner with inline resend button
+  - Register page simplified to email + password + confirm only; shows "Check your email" confirmation state after submit
+  - `registerEmailPasswordSchema` added to `frontend/lib/validation.ts`
+  - NextAuth `authorize`: distinguishes `EmailNotVerified` (403) from invalid credentials for granular error handling
+
 - **Chat upload restrictions + image resizing** ([PR #49](https://github.com/mayloo89/circl/pull/49)):
   - Chat attachments restricted to images and videos only — PDF, documents, and archives are now rejected by both backend and frontend
   - JPEG and PNG originals are resized to a maximum of 1024px on their longest edge before storage (configurable via `IMAGE_MAX_PX` env var)

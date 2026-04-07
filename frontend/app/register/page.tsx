@@ -1,29 +1,19 @@
 "use client"
 
-import { signIn } from "next-auth/react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { registerSchema } from "@/lib/validation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
-async function seedProfile(token: string, username: string, dateOfBirth: string, displayName: string) {
-  return fetch(`${API_URL}/profiles/me`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ username, date_of_birth: dateOfBirth, display_name: displayName, interests: [] }),
-  })
-}
-
 type FieldErrors = {
   email?: string
-  username?: string
-  date_of_birth?: string
   password?: string
   confirm?: string
+  username?: string
+  date_of_birth?: string
 }
 
 function fieldClass(error?: string) {
@@ -39,23 +29,48 @@ export default function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitError, setSubmitError] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
+  const [registered, setRegistered] = useState(false)
 
-  const [retryToken, setRetryToken] = useState<string | null>(null)
-  const [retryUsername, setRetryUsername] = useState("")
+  // Username availability check
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameChecking, setUsernameChecking] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const usernameRegex = /^[a-z0-9_]{3,30}$/
+    if (!usernameRegex.test(username)) {
+      setUsernameAvailable(null)
+      return
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setUsernameChecking(true)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/profiles/available?username=${encodeURIComponent(username)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setUsernameAvailable(data.available)
+        }
+      } catch {
+        // silently ignore — availability check is best-effort
+      } finally {
+        setUsernameChecking(false)
+      }
+    }, 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [username])
 
   const allRulesMet = PASSWORD_RULES.every(({ test }) => test(password))
 
   function validateField(field: keyof FieldErrors, value: string) {
-    const shape = registerSchema.shape as Record<string, { safeParse: (v: unknown) => { success: boolean; error?: { issues: { message: string }[] } } }>
     if (field === "confirm") {
-      if (value && value !== password) {
-        setFieldErrors((prev) => ({ ...prev, confirm: "Passwords do not match" }))
-      } else {
-        setFieldErrors((prev) => ({ ...prev, confirm: undefined }))
-      }
+      setFieldErrors((prev) => ({
+        ...prev,
+        confirm: value && value !== password ? "Passwords do not match" : undefined,
+      }))
       return
     }
+    const shape = registerSchema.shape as Record<string, { safeParse: (v: unknown) => { success: boolean; error?: { issues: { message: string }[] } } }>
     const fieldSchema = shape[field]
     if (!fieldSchema) return
     const result = fieldSchema.safeParse(value)
@@ -63,20 +78,6 @@ export default function RegisterPage() {
       ...prev,
       [field]: result.success ? undefined : result.error?.issues[0]?.message,
     }))
-  }
-
-  async function finishWithToken(token: string, takenUsername: string) {
-    setRetryToken(token)
-    setRetryUsername(takenUsername)
-  }
-
-  async function signInAndRedirect(destination: string) {
-    const result = await signIn("credentials", { email, password, redirect: false })
-    if (result?.ok) {
-      router.push(destination)
-    } else {
-      router.push("/login")
-    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,24 +100,32 @@ export default function RegisterPage() {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
+        body: JSON.stringify({
+          email: parsed.data.email,
+          password: parsed.data.password,
+          username: parsed.data.username,
+          date_of_birth: parsed.data.date_of_birth,
+        }),
       })
 
-      if (res.status === 409) { setSubmitError("An account with this email already exists"); return }
+      if (res.status === 409) {
+        const body = await res.json()
+        if (body.error === "username already taken") {
+          setFieldErrors((prev) => ({ ...prev, username: "Username already taken" }))
+        } else {
+          setSubmitError("An account with this email already exists.")
+        }
+        return
+      }
       if (res.status === 429) { setSubmitError("Too many registrations from this network. Please try again later."); return }
-      if (res.status === 400) { const body = await res.json(); setSubmitError(body.error ?? "Invalid input"); return }
+      if (res.status === 400) {
+        const body = await res.json()
+        setSubmitError(body.error ?? "Invalid input.")
+        return
+      }
       if (!res.ok) { setSubmitError("Registration failed. Please try again."); return }
 
-      const { token } = await res.json()
-      const displayName = parsed.data.email.split("@")[0]
-      const profileRes = await seedProfile(token, parsed.data.username, parsed.data.date_of_birth, displayName)
-
-      if (profileRes.status === 409) {
-        await finishWithToken(token, parsed.data.username)
-        return
-      }
-
-      await signInAndRedirect(profileRes.ok ? "/" : "/profile")
+      setRegistered(true)
     } catch {
       setSubmitError("Network error. Please try again.")
     } finally {
@@ -124,77 +133,35 @@ export default function RegisterPage() {
     }
   }
 
-  async function handleRetryUsername(e: React.FormEvent) {
-    e.preventDefault()
-    if (!retryToken) return
-
-    if (!/^[a-z0-9_]{3,30}$/.test(retryUsername)) {
-      setSubmitError("Username must be 3–30 characters: lowercase letters, digits, or underscores")
-      return
-    }
-
-    setLoading(true)
-    setSubmitError("")
-    try {
-      const displayName = email.split("@")[0]
-      const profileRes = await seedProfile(retryToken, retryUsername, dateOfBirth, displayName)
-
-      if (profileRes.status === 409) {
-        setSubmitError("Username already taken. Please choose a different one.")
-        return
-      }
-
-      await signInAndRedirect(profileRes.ok ? "/" : "/profile")
-    } catch {
-      setSubmitError("Network error. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (retryToken) {
+  if (registered) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
-          <div>
-            <h2 className="text-center text-3xl font-bold text-white">Circl</h2>
-            <p className="mt-2 text-center text-sm text-gray-400">Choose a username</p>
-          </div>
-
-          <form className="mt-8 space-y-6" onSubmit={handleRetryUsername}>
-            {submitError && (
-              <div className="rounded-md bg-red-950 p-4 text-sm text-red-400 ring-1 ring-red-900">{submitError}</div>
-            )}
-
-            <p className="rounded-lg bg-amber-950 p-3 text-sm text-amber-300 ring-1 ring-amber-700">
-              Your account was created, but <strong>@{username}</strong> is already taken. Please choose a different username.
-            </p>
-
-            <div>
-              <label htmlFor="retry-username" className="block text-sm font-medium text-gray-300">Username</label>
-              <div className="relative mt-1">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">@</span>
-                <input
-                  id="retry-username"
-                  type="text"
-                  required
-                  value={retryUsername}
-                  onChange={(e) => setRetryUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                  maxLength={30}
-                  placeholder="your_username"
-                  className="block w-full rounded-md border border-gray-700 bg-gray-800 pl-7 pr-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-
+        <div className="w-full max-w-md space-y-6 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800 text-center">
+          <div className="text-5xl text-indigo-400">✉</div>
+          <h2 className="text-2xl font-bold text-white">Check your email</h2>
+          <p className="text-sm text-gray-400">
+            We sent a verification link to <span className="text-white font-medium">{email}</span>.
+            Click it to activate your account before signing in.
+          </p>
+          <p className="text-xs text-gray-500">
+            Didn&apos;t receive it?{" "}
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50"
+              type="button"
+              className="text-indigo-400 hover:text-indigo-300 underline"
+              onClick={async () => {
+                await fetch(`${API_URL}/auth/resend-verification`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email }),
+                })
+              }}
             >
-              {loading ? "Continuing…" : "Continue"}
+              Resend verification email
             </button>
-          </form>
+          </p>
+          <Link href="/login" className="block text-sm text-indigo-400 hover:text-indigo-300">
+            Back to sign in
+          </Link>
         </div>
       </div>
     )
@@ -204,109 +171,133 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-950">
       <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
-          <h2 className="text-center text-3xl font-bold text-white">Circl</h2>
-          <p className="mt-2 text-center text-sm text-gray-400">Create your account</p>
+          <h2 className="text-center text-3xl font-bold text-white">Create account</h2>
+          <p className="mt-2 text-center text-sm text-gray-400">Join Circl today</p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {submitError && (
-            <div className="rounded-md bg-red-950 p-4 text-sm text-red-400 ring-1 ring-red-900">{submitError}</div>
+            <div className="rounded-md bg-red-950 p-4 text-sm text-red-400 ring-1 ring-red-900" role="alert">
+              {submitError}
+            </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">Email</label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                Email address
+              </label>
               <input
                 id="email"
                 type="email"
-                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onBlur={() => validateField("email", email)}
+                onBlur={(e) => validateField("email", e.target.value)}
                 className={fieldClass(fieldErrors.email)}
               />
-              {fieldErrors.email && <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.email}</p>}
+              {fieldErrors.email && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.email}</p>
+              )}
             </div>
 
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-300">
-                Username <span className="font-normal text-gray-500">(3–30 chars, lowercase, digits, _)</span>
+                Username
               </label>
-              <div className="relative mt-1">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">@</span>
+              <div className="relative">
                 <input
                   id="username"
                   type="text"
-                  autoComplete="username"
                   required
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                  onBlur={() => validateField("username", username)}
-                  maxLength={30}
-                  placeholder="your_username"
-                  className={`block w-full rounded-md border ${fieldErrors.username ? "border-red-500" : "border-gray-700"} bg-gray-800 pl-7 pr-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${fieldErrors.username ? "focus:border-red-400 focus:ring-red-400" : "focus:border-indigo-500 focus:ring-indigo-500"}`}
+                  onChange={(e) => { setUsername(e.target.value); setUsernameAvailable(null) }}
+                  onBlur={(e) => validateField("username", e.target.value)}
+                  className={fieldClass(fieldErrors.username)}
+                  placeholder="lowercase_letters_digits"
                 />
+                {usernameChecking && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">…</span>
+                )}
+                {!usernameChecking && usernameAvailable === true && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-sm">✓</span>
+                )}
+                {!usernameChecking && usernameAvailable === false && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 text-sm">✗</span>
+                )}
               </div>
-              {fieldErrors.username && <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.username}</p>}
+              {fieldErrors.username && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.username}</p>
+              )}
+              {!fieldErrors.username && usernameAvailable === false && (
+                <p className="mt-1 text-xs text-red-400" role="alert">Username already taken</p>
+              )}
             </div>
 
             <div>
-              <label htmlFor="date-of-birth" className="block text-sm font-medium text-gray-300">
-                Date of birth <span className="font-normal text-gray-500">(must be 18+)</span>
+              <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-300">
+                Date of birth
               </label>
               <input
-                id="date-of-birth"
+                id="date_of_birth"
                 type="date"
                 required
                 value={dateOfBirth}
                 onChange={(e) => setDateOfBirth(e.target.value)}
-                onBlur={() => validateField("date_of_birth", dateOfBirth)}
+                onBlur={(e) => validateField("date_of_birth", e.target.value)}
                 className={fieldClass(fieldErrors.date_of_birth)}
               />
-              {fieldErrors.date_of_birth && <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.date_of_birth}</p>}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-300">Password</label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onBlur={() => validateField("password", password)}
-                  className={fieldClass(fieldErrors.password)}
-                />
-                {fieldErrors.password && !password && (
-                  <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.password}</p>
-                )}
-              </div>
-              <PasswordRequirements password={password} />
+              {fieldErrors.date_of_birth && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.date_of_birth}</p>
+              )}
             </div>
 
             <div>
-              <label htmlFor="confirm" className="block text-sm font-medium text-gray-300">Confirm password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onBlur={(e) => validateField("password", e.target.value)}
+                className={fieldClass(fieldErrors.password)}
+              />
+              {fieldErrors.password && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.password}</p>
+              )}
+              {password && (
+                <div className="mt-2">
+                  <PasswordRequirements password={password} />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="confirm" className="block text-sm font-medium text-gray-300">
+                Confirm password
+              </label>
               <input
                 id="confirm"
                 type="password"
-                autoComplete="new-password"
                 required
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                onBlur={() => validateField("confirm", confirm)}
+                onBlur={(e) => validateField("confirm", e.target.value)}
                 className={fieldClass(fieldErrors.confirm)}
               />
-              {fieldErrors.confirm && <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.confirm}</p>}
+              {fieldErrors.confirm && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.confirm}</p>
+              )}
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={loading || !allRulesMet}
-            className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50"
+            disabled={loading || !allRulesMet || usernameAvailable === false}
+            className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             {loading ? "Creating account…" : "Create account"}
           </button>

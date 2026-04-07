@@ -26,7 +26,7 @@ func (m *mockAuthInternal) Register(_ context.Context, _, _ string) (*User, erro
 }
 
 // TestLoginHandler_TokenGenerateError covers the defensive error path when
-// the token generator fails (e.g. signing infrastructure is unavailable).
+// the token generator fails.
 func TestLoginHandler_TokenGenerateError(t *testing.T) {
 	orig := generateTokenFn
 	t.Cleanup(func() { generateTokenFn = orig })
@@ -44,20 +44,17 @@ func TestLoginHandler_TokenGenerateError(t *testing.T) {
 	}
 }
 
-// TestRegisterHandler_TokenGenerateError covers the same defensive path for register.
-func TestRegisterHandler_TokenGenerateError(t *testing.T) {
-	orig := generateTokenFn
-	t.Cleanup(func() { generateTokenFn = orig })
-	generateTokenFn = func(_ string, _ bool, _ string, _ time.Duration) (string, error) {
-		return "", errors.New("sign error")
-	}
-
+// TestRegisterHandler_TokenGenerateError is not needed anymore since register
+// no longer issues a JWT. Kept for historical context — register returns 201 with
+// a message regardless of token generation.
+func TestRegisterHandler_NoTokenIssued(t *testing.T) {
 	h := NewHandler(&mockAuthInternal{user: &User{ID: "1", Email: "u@u.com"}}, "secret", time.Hour)
 	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	// Register returns 201 with a message — no token in response.
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
 }

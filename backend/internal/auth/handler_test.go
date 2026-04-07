@@ -13,6 +13,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/profiles"
 )
 
 const testUserID = "test-user-uuid"
@@ -175,6 +176,46 @@ func TestLoginHandler_ContentType(t *testing.T) {
 
 // --- Register handler ---
 
+// mockProfileStore is a minimal test double for profiles.Store used in register tests.
+type mockProfileStore struct {
+	upsertErr error
+}
+
+func (m *mockProfileStore) Upsert(_ context.Context, _ string, _ profiles.ProfileInput) (*profiles.Profile, error) {
+	return &profiles.Profile{}, m.upsertErr
+}
+func (m *mockProfileStore) GetByUserID(_ context.Context, _ string) (*profiles.Profile, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) GetByUsername(_ context.Context, _ string) (*profiles.Profile, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) IsUsernameAvailable(_ context.Context, _ string) (bool, error) {
+	return true, nil
+}
+func (m *mockProfileStore) SyncInterests(_ context.Context, _ string, _ []string) error { return nil }
+func (m *mockProfileStore) UpdateAvatar(_ context.Context, _, _ string) error           { return nil }
+func (m *mockProfileStore) GetPhotosByUserID(_ context.Context, _ string) ([]profiles.ProfilePhoto, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) CountPhotos(_ context.Context, _ string) (int, error) { return 0, nil }
+func (m *mockProfileStore) AddPhoto(_ context.Context, _, _ string) (*profiles.ProfilePhoto, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) DeletePhoto(_ context.Context, _, _ string) error { return nil }
+func (m *mockProfileStore) GetPreferences(_ context.Context, _ string) (*profiles.ProfilePreferences, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) UpsertPreferences(_ context.Context, _ string, _ profiles.ProfilePreferences) (*profiles.ProfilePreferences, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) SearchInterests(_ context.Context, _ string, _ int) ([]profiles.InterestSuggestion, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) ([]profiles.BrowseProfile, error) {
+	return nil, nil
+}
+
 func TestRegisterHandler_Success(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
 
@@ -185,9 +226,24 @@ func TestRegisterHandler_Success(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
-	body := rec.Body.Bytes()
-	assertJSONField(t, body, "email", "new@example.com")
-	assertJSONFieldNonEmpty(t, body, "token")
+	assertJSONFieldNonEmpty(t, rec.Body.Bytes(), "message")
+}
+
+func TestRegisterHandler_UsernameTaken(t *testing.T) {
+	ps := &mockProfileStore{upsertErr: profiles.ErrUsernameTaken}
+	h := newHandler(
+		&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}},
+		auth.WithProfileStore(ps),
+	)
+
+	body := `{"email":"new@example.com","password":"securepass","username":"taken_user","date_of_birth":"1990-01-01"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
 }
 
 func TestRegisterHandler_EmailTaken(t *testing.T) {
@@ -365,6 +421,159 @@ func TestLoginHandler_LimiterError(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d (limiter error must not block login)", rec.Code, http.StatusOK)
+	}
+}
+
+// --- Login: email not verified ---
+
+func TestLoginHandler_EmailNotVerified(t *testing.T) {
+	h := newHandler(&mockAuth{loginErr: auth.ErrEmailNotVerified})
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	assertJSONField(t, rec.Body.Bytes(), "error", "email_not_verified")
+}
+
+// --- Email flow handlers ---
+
+// mockEmailFlow is a test double for EmailFlowService.
+type mockEmailFlow struct {
+	forgotErr   error
+	resetErr    error
+	sendVerErr  error
+	resendErr   error
+	verifyErr   error
+}
+
+func (m *mockEmailFlow) ForgotPassword(_ context.Context, _, _ string) error    { return m.forgotErr }
+func (m *mockEmailFlow) ResetPassword(_ context.Context, _, _ string) error     { return m.resetErr }
+func (m *mockEmailFlow) SendVerificationEmail(_ context.Context, _, _, _ string) error {
+	return m.sendVerErr
+}
+func (m *mockEmailFlow) ResendVerification(_ context.Context, _, _ string) error { return m.resendErr }
+func (m *mockEmailFlow) VerifyEmail(_ context.Context, _ string) error           { return m.verifyErr }
+
+func newHandlerWithEmailFlow(a *mockAuth, ef auth.EmailFlowService) http.Handler {
+	return auth.NewHandler(a, testSecret, testExpiry,
+		auth.WithEmailFlow(ef, "http://localhost:3000"),
+	)
+}
+
+func TestForgotPasswordHandler_AlwaysOK(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{})
+
+	for _, body := range []string{
+		`{"email":"user@example.com"}`,
+		`{}`,
+		`not-json`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("body=%q: status = %d, want 200", body, rec.Code)
+		}
+	}
+}
+
+func TestResetPasswordHandler_Success(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{})
+
+	req := httptest.NewRequest(http.MethodPost, "/reset-password",
+		strings.NewReader(`{"token":"abc","password":"NewPass1"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestResetPasswordHandler_InvalidToken(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{resetErr: auth.ErrInvalidToken})
+
+	req := httptest.NewRequest(http.MethodPost, "/reset-password",
+		strings.NewReader(`{"token":"bad","password":"NewPass1"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestResetPasswordHandler_MissingFields(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{})
+
+	for _, body := range []string{
+		`{"token":"","password":"NewPass1"}`,
+		`{"token":"abc","password":""}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/reset-password", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("body=%q: status = %d, want 400", body, rec.Code)
+		}
+	}
+}
+
+func TestVerifyEmailHandler_Success(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{})
+
+	req := httptest.NewRequest(http.MethodPost, "/verify-email",
+		strings.NewReader(`{"token":"abc123"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestVerifyEmailHandler_InvalidToken(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{verifyErr: auth.ErrInvalidToken})
+
+	req := httptest.NewRequest(http.MethodPost, "/verify-email",
+		strings.NewReader(`{"token":"bad"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestVerifyEmailHandler_MissingToken(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{})
+
+	req := httptest.NewRequest(http.MethodPost, "/verify-email", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestResendVerificationHandler_AlwaysOK(t *testing.T) {
+	h := newHandlerWithEmailFlow(&mockAuth{}, &mockEmailFlow{})
+
+	for _, body := range []string{
+		`{"email":"user@example.com"}`,
+		`{}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("body=%q: status = %d, want 200", body, rec.Code)
+		}
 	}
 }
 

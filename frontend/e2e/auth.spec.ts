@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test"
 import { createUser } from "./fixtures"
 
 test.describe("auth", () => {
-  test("registers a new account and lands on home", async ({ page }) => {
+  test("registers a new account and shows email verification screen", async ({ page }) => {
     const ts = Date.now()
     const email = `e2e.new.${ts}@example.com`
     const password = "Password1!"
@@ -10,13 +10,12 @@ test.describe("auth", () => {
     await page.goto("/register")
     await page.locator("#email").fill(email)
     await page.locator("#username").fill(`newuser${ts}`.slice(0, 30))
-    await page.locator("#date-of-birth").fill("1990-06-15")
+    await page.locator("#date_of_birth").fill("1990-06-15")
     await page.locator("#password").fill(password)
     await page.locator("#confirm").fill(password)
     await page.getByRole("button", { name: "Create account" }).click()
 
-    await page.waitForURL("/")
-    await expect(page.getByText("Welcome to Circl")).toBeVisible()
+    await expect(page.getByText("Check your email")).toBeVisible()
   })
 
   test("logs in with valid credentials", async ({ page, request }) => {
@@ -49,7 +48,7 @@ test.describe("auth", () => {
     await page.goto("/register")
     await page.locator("#email").fill(user.email)
     await page.locator("#username").fill(`dupuser${ts}`.slice(0, 30))
-    await page.locator("#date-of-birth").fill("1990-06-15")
+    await page.locator("#date_of_birth").fill("1990-06-15")
     await page.locator("#password").fill(user.password)
     await page.locator("#confirm").fill(user.password)
     await page.getByRole("button", { name: "Create account" }).click()

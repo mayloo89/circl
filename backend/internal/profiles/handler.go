@@ -519,3 +519,24 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
+
+// PublicAvailableHandler returns an http.HandlerFunc for GET /profiles/available
+// that does not require authentication. Used at registration time.
+func PublicAvailableHandler(svc ProfileManager) http.HandlerFunc {
+	type availableResponse struct {
+		Available bool `json:"available"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := r.URL.Query().Get("username")
+		if username == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"username query parameter is required"})
+			return
+		}
+		available, err := svc.IsUsernameAvailable(r.Context(), username)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+		writeJSON(w, http.StatusOK, availableResponse{Available: available})
+	}
+}

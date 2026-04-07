@@ -48,6 +48,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Settings page** ([PR #47](https://github.com/mayloo89/circl/pull/47)): push notifications toggle, change password with live validation, delete account, avatar dropdown menu
 - ✅ **UX improvements** ([PR #48](https://github.com/mayloo89/circl/pull/48)): contact removal confirmation dialog, clickable profile from search results, registration inline validation with live password checklist
 - ✅ **Chat upload restrictions + image resizing** ([PR #49](https://github.com/mayloo89/circl/pull/49)): chat attachments restricted to images and videos; JPEG/PNG originals resized to max 1024px (configurable); thumbnails remain at 480px
+- ✅ **Email verification + forgot/reset password** ([PR #50](https://github.com/mayloo89/circl/pull/50)): hard email enforcement (login blocked until verified); forgot/reset password flow; Mailpit for local email dev; `ConsoleSender` for testing; `SMTPSender` for production
 
 ## Local setup
 
@@ -155,8 +156,12 @@ All protected routes require `Authorization: Bearer <token>`.
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/health` | — | Server and DB status |
-| `POST` | `/auth/register` | — | Create account |
-| `POST` | `/auth/login` | — | Login, returns JWT |
+| `POST` | `/auth/register` | — | Create account (sends verification email) |
+| `POST` | `/auth/login` | — | Login, returns JWT (requires verified email) |
+| `POST` | `/auth/forgot-password` | — | Send password reset email |
+| `POST` | `/auth/reset-password` | — | Reset password with token |
+| `POST` | `/auth/verify-email` | — | Verify email address with token |
+| `POST` | `/auth/resend-verification` | — | Resend verification email |
 | `GET` | `/profiles/me` | ✅ | Get own profile (auto-created) |
 | `PUT` | `/profiles/me` | ✅ | Update display name and bio |
 | `PUT` | `/profiles/me/avatar` | ✅ | Update avatar URL independently |
