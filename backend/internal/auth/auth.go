@@ -21,6 +21,8 @@ const (
 	maxPasswordLen = 128
 )
 
+const deletionGracePeriod = 30 * 24 * time.Hour
+
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email already taken")
@@ -28,6 +30,8 @@ var (
 	ErrAccountLocked      = errors.New("account locked")
 	ErrEmailNotVerified   = errors.New("email not verified")
 	ErrInvalidToken       = errors.New("invalid or expired token")
+	ErrAccountDeleted     = errors.New("account deleted")
+	ErrAccountNotDeleted  = errors.New("account not deleted")
 )
 
 // User holds the data returned after a successful login or registration.
@@ -44,6 +48,8 @@ type Store interface {
 	GetUserByID(ctx context.Context, userID string) (*userRecord, error)
 	UpdatePassword(ctx context.Context, userID, newHash string) error
 	DeleteUser(ctx context.Context, userID string) error
+	ReactivateUser(ctx context.Context, userID string) error
+	PurgeExpiredDeletedUsers(ctx context.Context, before time.Time) (int64, error)
 	CreatePasswordReset(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error
 	GetPasswordReset(ctx context.Context, tokenHash string) (*passwordResetRecord, error)
 	MarkPasswordResetUsed(ctx context.Context, id string) error
@@ -56,6 +62,7 @@ type Store interface {
 type AccountManager interface {
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 	DeleteAccount(ctx context.Context, userID, password string) error
+	ReactivateAccount(ctx context.Context, email, password string) (*User, error)
 }
 
 // EmailFlowService handles password reset and email verification.
@@ -71,6 +78,7 @@ type EmailFlowService interface {
 type Authenticator interface {
 	Login(ctx context.Context, email, password string) (*User, error)
 	Register(ctx context.Context, email, password string) (*User, error)
+	ReactivateAccount(ctx context.Context, email, password string) (*User, error)
 }
 
 // userRecord is the internal DB representation of an authenticated user.
@@ -81,6 +89,7 @@ type userRecord struct {
 	Status          string
 	IsAdmin         bool
 	EmailVerifiedAt *time.Time
+	DeletedAt       *time.Time
 }
 
 // passwordResetRecord represents a password reset token row.
@@ -113,8 +122,8 @@ func NewService(store Store, mailer email.Sender) *Service {
 }
 
 // Login verifies credentials and returns the authenticated user.
-// Returns ErrEmailNotVerified if the account exists and credentials are correct
-// but the email address has not yet been confirmed.
+// Returns ErrEmailNotVerified if the email has not been confirmed.
+// Returns ErrAccountDeleted if the account is within the 30-day reactivation window.
 func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User, error) {
 	record, err := s.store.GetUserByEmail(ctx, emailAddr)
 	if err != nil {
@@ -122,13 +131,21 @@ func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User,
 		return nil, ErrInvalidCredentials
 	}
 
-	if record.Status != "active" {
+	// Allow deleted accounts within the grace period to authenticate so we can
+	// offer reactivation — but do not issue a session.
+	withinGrace := record.DeletedAt != nil && time.Since(*record.DeletedAt) < deletionGracePeriod
+
+	if record.Status != "active" && !withinGrace {
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$dummyhashfordummypassword000000"), []byte(password))
 		return nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
+	}
+
+	if withinGrace {
+		return nil, ErrAccountDeleted
 	}
 
 	if record.EmailVerifiedAt == nil {
@@ -185,6 +202,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, n
 }
 
 // DeleteAccount verifies password and soft-deletes the account.
+// The account enters a 30-day grace period during which it can be reactivated.
 func (s *Service) DeleteAccount(ctx context.Context, userID, password string) error {
 	record, err := s.store.GetUserByID(ctx, userID)
 	if err != nil {
@@ -197,6 +215,32 @@ func (s *Service) DeleteAccount(ctx context.Context, userID, password string) er
 		return ErrInvalidCredentials
 	}
 	return s.store.DeleteUser(ctx, userID)
+}
+
+// ReactivateAccount restores a soft-deleted account within the grace period.
+func (s *Service) ReactivateAccount(ctx context.Context, emailAddr, password string) (*User, error) {
+	record, err := s.store.GetUserByEmail(ctx, emailAddr)
+	if err != nil {
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$dummyhashfordummypassword000000"), []byte(password))
+		return nil, ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	if record.DeletedAt == nil {
+		return nil, ErrAccountNotDeleted
+	}
+	if time.Since(*record.DeletedAt) >= deletionGracePeriod {
+		return nil, ErrInvalidCredentials
+	}
+
+	if err := s.store.ReactivateUser(ctx, record.ID); err != nil {
+		return nil, fmt.Errorf("reactivate user: %w", err)
+	}
+
+	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
 }
 
 // ForgotPassword generates a password reset token and sends the reset email.

@@ -43,14 +43,14 @@ func NewStore(pool *pgxpool.Pool) Store {
 
 func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, status, is_admin, email_verified_at
+		`SELECT id, email, password_hash, status, is_admin, email_verified_at, deleted_at
 		   FROM users
 		  WHERE email = $1
 		  LIMIT 1`,
 		email,
 	)
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -61,14 +61,14 @@ func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord
 
 func (s *pgStore) GetUserByID(ctx context.Context, userID string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, status, is_admin, email_verified_at
+		`SELECT id, email, password_hash, status, is_admin, email_verified_at, deleted_at
 		   FROM users
 		  WHERE id = $1
 		  LIMIT 1`,
 		userID,
 	)
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -88,9 +88,10 @@ func (s *pgStore) UpdatePassword(ctx context.Context, userID, newHash string) er
 	return nil
 }
 
+// DeleteUser soft-deletes the account: sets status='deleted' and deleted_at=now().
 func (s *pgStore) DeleteUser(ctx context.Context, userID string) error {
 	_, err := s.db.Exec(ctx,
-		`UPDATE users SET status = 'deleted' WHERE id = $1`,
+		`UPDATE users SET status = 'deleted', deleted_at = now() WHERE id = $1`,
 		userID,
 	)
 	if err != nil {
@@ -99,15 +100,46 @@ func (s *pgStore) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
+// ReactivateUser restores a soft-deleted account within the grace period.
+func (s *pgStore) ReactivateUser(ctx context.Context, userID string) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE users SET status = 'active', deleted_at = NULL WHERE id = $1`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("reactivate user: %w", err)
+	}
+	return nil
+}
+
+// PurgeExpiredDeletedUsers anonymizes accounts deleted before the given cutoff.
+// Returns the number of rows affected.
+func (s *pgStore) PurgeExpiredDeletedUsers(ctx context.Context, before time.Time) (int64, error) {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE users
+		    SET email        = 'deleted-' || id || '@purged',
+		        password_hash = '',
+		        status        = 'purged',
+		        deleted_at    = deleted_at  -- preserve for audit
+		  WHERE status = 'deleted'
+		    AND deleted_at < $1`,
+		before,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("purge deleted users: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (s *pgStore) CreateUser(ctx context.Context, email, passwordHash string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, provider, status)
 		 VALUES ($1, $2, 'local', 'active')
-		 RETURNING id, email, password_hash, status, is_admin, email_verified_at`,
+		 RETURNING id, email, password_hash, status, is_admin, email_verified_at, deleted_at`,
 		email, passwordHash,
 	)
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrEmailTaken

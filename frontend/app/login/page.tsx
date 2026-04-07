@@ -15,12 +15,21 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [emailNotVerified, setEmailNotVerified] = useState(false)
   const [resendSent, setResendSent] = useState(false)
+  const [accountDeleted, setAccountDeleted] = useState(false)
+  const [reactivating, setReactivating] = useState(false)
+  const [reactivateError, setReactivateError] = useState("")
   const router = useRouter()
+
+  const resetAlerts = () => {
+    setError("")
+    setEmailNotVerified(false)
+    setAccountDeleted(false)
+    setReactivateError("")
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
-    setEmailNotVerified(false)
+    resetAlerts()
 
     const parsed = loginSchema.safeParse({ email, password })
     if (!parsed.success) {
@@ -38,6 +47,8 @@ export default function LoginPage() {
       setError("Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.")
     } else if (result?.error === "EmailNotVerified") {
       setEmailNotVerified(true)
+    } else if (result?.error === "AccountDeleted") {
+      setAccountDeleted(true)
     } else if (result?.error) {
       setError("Invalid email or password.")
     } else {
@@ -53,6 +64,32 @@ export default function LoginPage() {
       body: JSON.stringify({ email }),
     })
     setResendSent(true)
+  }
+
+  const handleReactivate = async () => {
+    setReactivating(true)
+    setReactivateError("")
+    try {
+      const res = await fetch(`${API_URL}/auth/reactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setReactivateError((data as { error?: string }).error ?? "Reactivation failed. Please try again.")
+        return
+      }
+      // Account reactivated — sign in normally
+      const result = await signIn("credentials", { email, password, redirect: false })
+      if (result?.error) {
+        setReactivateError("Account reactivated but sign-in failed. Please try again.")
+      } else {
+        router.push("/")
+      }
+    } finally {
+      setReactivating(false)
+    }
   }
 
   return (
@@ -85,6 +122,26 @@ export default function LoginPage() {
                   Resend verification email
                 </button>
               )}
+            </div>
+          )}
+
+          {accountDeleted && (
+            <div className="rounded-md bg-orange-950 p-4 text-sm text-orange-300 ring-1 ring-orange-900" role="alert">
+              <p className="font-medium">Account scheduled for deletion</p>
+              <p className="mt-1 text-orange-400">
+                Your account is within the 30-day grace period. You can reactivate it now and nothing will be lost.
+              </p>
+              {reactivateError && (
+                <p className="mt-2 text-red-400">{reactivateError}</p>
+              )}
+              <button
+                type="button"
+                onClick={handleReactivate}
+                disabled={reactivating}
+                className="mt-3 w-full rounded-md bg-orange-700 px-3 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              >
+                {reactivating ? "Reactivating…" : "Reactivate my account"}
+              </button>
             </div>
           )}
 

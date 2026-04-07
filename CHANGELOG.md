@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Reversible account deletion with 30-day grace period** ([PR #51](https://github.com/mayloo89/circl/pull/51)):
+  - Migration `000023`: adds `deleted_at TIMESTAMPTZ` column to `users`
+  - `DELETE /users/me` now sets `status = 'deleted'` and records `deleted_at` timestamp instead of hard-deleting
+  - `POST /auth/login` returns `403 {"error":"account_deleted"}` for deleted accounts within the 30-day grace period (password is still verified)
+  - New `POST /auth/reactivate` endpoint: verifies credentials, checks grace period, restores `status = 'active'` and clears `deleted_at`
+  - Accounts past the 30-day window receive `401 {"error":"invalid credentials"}` — indistinguishable from wrong password
+  - Daily background worker (`worker.PurgeDeletedAccounts`) anonymizes expired deleted accounts: replaces email with `deleted-{id}@purged`, clears `password_hash`, sets `status = 'purged'`
+  - Login page: handles `AccountDeleted` error — shows an orange warning banner with a one-click "Reactivate my account" button
+  - Settings delete-account section: updated messaging to mention the 30-day window and reversibility
+  - `TEST_ENDPOINTS_ENABLED=true` guard for `POST /test/users` (E2E fixture endpoint) — never exposed in production
+  - E2E fixtures: `createUser` now calls `POST /test/users` directly, bypassing email verification requirement
+
 - **Email infrastructure: registration verification, forgot password, reset password** ([PR #50](https://github.com/mayloo89/circl/pull/50)):
   - Migration `000022`: adds `email_verified_at` to `users`; creates `password_resets` and `email_verifications` tables
   - New `email` package with `Sender` interface, `ConsoleSender` (stdout, for dev/test), and `SMTPSender` (go-mail, TLS-opportunistic)

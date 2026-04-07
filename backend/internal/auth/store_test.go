@@ -44,6 +44,7 @@ func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 			*dest[3].(*string) = "active"
 			*dest[4].(*bool) = false
 			// dest[5] is *time.Time (email_verified_at), leave as nil
+			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
 		}},
 	}}
@@ -90,6 +91,7 @@ func TestPgStore_CreateUser_Success(t *testing.T) {
 			*dest[3].(*string) = "active"
 			*dest[4].(*bool) = false
 			// dest[5] is *time.Time (email_verified_at), leave as nil
+			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
 		}},
 	}}
@@ -138,6 +140,7 @@ func TestPgStore_GetUserByID_Success(t *testing.T) {
 			*dest[3].(*string) = "active"
 			*dest[4].(*bool) = false
 			// dest[5] is *time.Time (email_verified_at), leave as nil
+			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
 		}},
 	}}
@@ -198,6 +201,42 @@ func TestPgStore_DeleteUser_ExecError(t *testing.T) {
 	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
 
 	if err := store.DeleteUser(t.Context(), "uuid-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ReactivateUser ---
+
+func TestPgStore_ReactivateUser_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.ReactivateUser(t.Context(), "uuid-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_ReactivateUser_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.ReactivateUser(t.Context(), "uuid-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- PurgeExpiredDeletedUsers ---
+
+func TestPgStore_PurgeExpiredDeletedUsers_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	n, err := store.PurgeExpiredDeletedUsers(t.Context(), time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("rows = %d, want 0", n)
+	}
+}
+
+func TestPgStore_PurgeExpiredDeletedUsers_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if _, err := store.PurgeExpiredDeletedUsers(t.Context(), time.Now()); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }

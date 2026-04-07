@@ -116,6 +116,7 @@ func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration,
 	r := chi.NewRouter()
 	r.Post("/login", loginHandler(auth, jwtSecret, tokenExpiry, cfg))
 	r.Post("/register", registerHandler(auth, cfg))
+	r.Post("/reactivate", reactivateHandler(auth, jwtSecret, tokenExpiry))
 	if cfg.emailFlow != nil {
 		r.Post("/forgot-password", forgotPasswordHandler(cfg.emailFlow, cfg.frontendURL))
 		r.Post("/reset-password", resetPasswordHandler(cfg.emailFlow))
@@ -165,6 +166,10 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 
 		user, err := auth.Login(r.Context(), req.Email, req.Password)
 		if err != nil {
+			if errors.Is(err, ErrAccountDeleted) {
+				writeJSON(w, http.StatusForbidden, errorResponse{"account_deleted"})
+				return
+			}
 			if errors.Is(err, ErrEmailNotVerified) {
 				writeJSON(w, http.StatusForbidden, errorResponse{"email_not_verified"})
 				return
@@ -273,6 +278,41 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 		writeJSON(w, http.StatusCreated, map[string]string{
 			"message": "account created — check your email to verify your address before logging in",
 		})
+	}
+}
+
+func reactivateHandler(svc Authenticator, jwtSecret string, tokenExpiry time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req loginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			return
+		}
+		if req.Email == "" || req.Password == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{"email and password are required"})
+			return
+		}
+
+		user, err := svc.ReactivateAccount(r.Context(), req.Email, req.Password)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrAccountNotDeleted):
+				writeJSON(w, http.StatusConflict, errorResponse{"account is not deleted"})
+			case errors.Is(err, ErrInvalidCredentials):
+				writeJSON(w, http.StatusUnauthorized, errorResponse{"invalid credentials"})
+			default:
+				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			}
+			return
+		}
+
+		tok, err := generateTokenFn(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok})
 	}
 }
 

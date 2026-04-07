@@ -322,6 +322,16 @@ func main() {
 	})
 	ephemeralCleaner.Start(appCtx)
 
+	// Daily purge of accounts past the 30-day deletion grace period.
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		worker.PurgeDeletedAccounts(appCtx, authStore)
+		for range ticker.C {
+			worker.PurgeDeletedAccounts(appCtx, authStore)
+		}
+	}()
+
 	uploadHandler := uploads.NewHandler(uploadSvc)
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)

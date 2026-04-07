@@ -25,6 +25,10 @@ func (m *mockAuthInternal) Register(_ context.Context, _, _ string) (*User, erro
 	return m.user, m.registerErr
 }
 
+func (m *mockAuthInternal) ReactivateAccount(_ context.Context, _, _ string) (*User, error) {
+	return m.user, m.loginErr
+}
+
 // TestLoginHandler_TokenGenerateError covers the defensive error path when
 // the token generator fails.
 func TestLoginHandler_TokenGenerateError(t *testing.T) {

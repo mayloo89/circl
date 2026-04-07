@@ -25,7 +25,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           })
 
           if (res.status === 429) throw new Error("AccountLocked")
-          if (res.status === 403) throw new Error("EmailNotVerified")
+          if (res.status === 403) {
+            const body = await res.json().catch(() => ({}))
+            if ((body as { error?: string }).error === "account_deleted") {
+              throw new Error("AccountDeleted")
+            }
+            throw new Error("EmailNotVerified")
+          }
           if (!res.ok) return null
 
           const user = await res.json()
@@ -35,7 +41,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             isAdmin = payload.is_admin === true
           } catch { /* ignore malformed token */ }
           return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin }
-        } catch {
+        } catch (err) {
+          if (err instanceof Error && ["AccountLocked", "EmailNotVerified", "AccountDeleted"].includes(err.message)) {
+            throw err
+          }
           // Backend unavailable — fail closed (do not grant access)
           return null
         }
