@@ -14,6 +14,8 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/mayloo89/circl/backend/internal/admin"
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/email"
@@ -30,6 +32,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/reports"
 	"github.com/mayloo89/circl/backend/internal/server"
 	"github.com/mayloo89/circl/backend/internal/storage"
+	"github.com/mayloo89/circl/backend/internal/token"
 	"github.com/mayloo89/circl/backend/internal/uploads"
 	"github.com/mayloo89/circl/backend/internal/worker"
 )
@@ -322,12 +325,73 @@ func main() {
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
-	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, requireAuth)
+	var testHandler http.Handler
+	if config.EnvOrDefault("TEST_ENDPOINTS_ENABLED", "false") == "true" {
+		log.Println("WARNING: test endpoints enabled — do not use in production")
+		testHandler = newTestHandler(pool, authSvc, profileStore, jwtSecret, tokenExpiry)
+	}
+
+	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, testHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+// newTestHandler returns a handler for test-only endpoints.
+// It must only be mounted when TEST_ENDPOINTS_ENABLED=true.
+//
+// POST /test/users — creates a verified user, seeds the profile, returns token + id + email + password.
+func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore profiles.Store, jwtSecret string, tokenExpiry time.Duration) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /users", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+			Username string `json:"username"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.Password == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if req.Username == "" {
+			req.Username = "u_" + strings.ReplaceAll(req.Email[:strings.Index(req.Email, "@")], ".", "_")
+		}
+
+		user, err := authSvc.Register(r.Context(), req.Email, req.Password)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}) //nolint:errcheck
+			return
+		}
+
+		// Mark email as verified directly in the database.
+		pool.Exec(r.Context(), `UPDATE users SET email_verified_at = now() WHERE id = $1`, user.ID) //nolint:errcheck,exhaustruct
+
+		// Seed profile.
+		dob := time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
+		profileStore.Upsert(r.Context(), user.ID, profiles.ProfileInput{ //nolint:errcheck
+			Username:    req.Username,
+			DisplayName: req.Username,
+			DateOfBirth: &dob,
+		})
+
+		tok, err := token.Generate(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck
+			"id":       user.ID,
+			"email":    user.Email,
+			"password": req.Password,
+			"token":    tok,
+		})
+	})
+	return mux
 }
 
 // contactNotifier implements notifications.Notifier and enriches contact events

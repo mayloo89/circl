@@ -31,7 +31,7 @@ type DBPinger interface {
 // reportsHandler is the reports sub-router (reports.NewManager); must run behind requireAuth.
 // localStorageHandler serves uploaded files in dev mode; nil in production.
 // requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, availableHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, localStorageHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, availableHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, localStorageHandler http.Handler, testHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -72,6 +72,12 @@ func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler
 	// (i.e. when STORAGE_PROVIDER=local for development).
 	if localStorageHandler != nil {
 		r.Mount("/uploads/files", localStorageHandler)
+	}
+
+	// Test endpoints — only mounted when TEST_ENDPOINTS_ENABLED=true.
+	// Never set this in production.
+	if testHandler != nil {
+		r.Mount("/test", testHandler)
 	}
 
 	return r
