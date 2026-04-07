@@ -13,6 +13,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/profiles"
 )
 
 const testUserID = "test-user-uuid"
@@ -175,6 +176,46 @@ func TestLoginHandler_ContentType(t *testing.T) {
 
 // --- Register handler ---
 
+// mockProfileStore is a minimal test double for profiles.Store used in register tests.
+type mockProfileStore struct {
+	upsertErr error
+}
+
+func (m *mockProfileStore) Upsert(_ context.Context, _ string, _ profiles.ProfileInput) (*profiles.Profile, error) {
+	return &profiles.Profile{}, m.upsertErr
+}
+func (m *mockProfileStore) GetByUserID(_ context.Context, _ string) (*profiles.Profile, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) GetByUsername(_ context.Context, _ string) (*profiles.Profile, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) IsUsernameAvailable(_ context.Context, _ string) (bool, error) {
+	return true, nil
+}
+func (m *mockProfileStore) SyncInterests(_ context.Context, _ string, _ []string) error { return nil }
+func (m *mockProfileStore) UpdateAvatar(_ context.Context, _, _ string) error           { return nil }
+func (m *mockProfileStore) GetPhotosByUserID(_ context.Context, _ string) ([]profiles.ProfilePhoto, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) CountPhotos(_ context.Context, _ string) (int, error) { return 0, nil }
+func (m *mockProfileStore) AddPhoto(_ context.Context, _, _ string) (*profiles.ProfilePhoto, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) DeletePhoto(_ context.Context, _, _ string) error { return nil }
+func (m *mockProfileStore) GetPreferences(_ context.Context, _ string) (*profiles.ProfilePreferences, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) UpsertPreferences(_ context.Context, _ string, _ profiles.ProfilePreferences) (*profiles.ProfilePreferences, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) SearchInterests(_ context.Context, _ string, _ int) ([]profiles.InterestSuggestion, error) {
+	return nil, nil
+}
+func (m *mockProfileStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) ([]profiles.BrowseProfile, error) {
+	return nil, nil
+}
+
 func TestRegisterHandler_Success(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
 
@@ -186,6 +227,23 @@ func TestRegisterHandler_Success(t *testing.T) {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
 	assertJSONFieldNonEmpty(t, rec.Body.Bytes(), "message")
+}
+
+func TestRegisterHandler_UsernameTaken(t *testing.T) {
+	ps := &mockProfileStore{upsertErr: profiles.ErrUsernameTaken}
+	h := newHandler(
+		&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}},
+		auth.WithProfileStore(ps),
+	)
+
+	body := `{"email":"new@example.com","password":"securepass","username":"taken_user","date_of_birth":"1990-01-01"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
 }
 
 func TestRegisterHandler_EmailTaken(t *testing.T) {

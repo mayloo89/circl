@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 
-import { registerEmailPasswordSchema } from "@/lib/validation"
+import { registerSchema } from "@/lib/validation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -12,6 +12,8 @@ type FieldErrors = {
   email?: string
   password?: string
   confirm?: string
+  username?: string
+  date_of_birth?: string
 }
 
 function fieldClass(error?: string) {
@@ -22,6 +24,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
+  const [username, setUsername] = useState("")
+  const [dateOfBirth, setDateOfBirth] = useState("")
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitError, setSubmitError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -37,7 +41,7 @@ export default function RegisterPage() {
       }))
       return
     }
-    const shape = registerEmailPasswordSchema.shape as Record<string, { safeParse: (v: unknown) => { success: boolean; error?: { issues: { message: string }[] } } }>
+    const shape = registerSchema.shape as Record<string, { safeParse: (v: unknown) => { success: boolean; error?: { issues: { message: string }[] } } }>
     const fieldSchema = shape[field]
     if (!fieldSchema) return
     const result = fieldSchema.safeParse(value)
@@ -51,16 +55,13 @@ export default function RegisterPage() {
     e.preventDefault()
     setSubmitError("")
 
-    const parsed = registerEmailPasswordSchema.safeParse({ email, password })
-    if (!parsed.success || password !== confirm) {
+    const parsed = registerSchema.safeParse({ email, password, confirm, username, date_of_birth: dateOfBirth })
+    if (!parsed.success) {
       const errors: FieldErrors = {}
-      if (parsed.error) {
-        for (const issue of parsed.error.issues) {
-          const path = issue.path[0] as keyof FieldErrors
-          if (!errors[path]) errors[path] = issue.message
-        }
+      for (const issue of parsed.error.issues) {
+        const path = issue.path[0] as keyof FieldErrors
+        if (!errors[path]) errors[path] = issue.message
       }
-      if (password !== confirm) errors.confirm = "Passwords do not match"
       setFieldErrors(errors)
       return
     }
@@ -70,10 +71,23 @@ export default function RegisterPage() {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
+        body: JSON.stringify({
+          email: parsed.data.email,
+          password: parsed.data.password,
+          username: parsed.data.username,
+          date_of_birth: parsed.data.date_of_birth,
+        }),
       })
 
-      if (res.status === 409) { setSubmitError("An account with this email already exists."); return }
+      if (res.status === 409) {
+        const body = await res.json()
+        if (body.error === "username already taken") {
+          setFieldErrors((prev) => ({ ...prev, username: "Username already taken" }))
+        } else {
+          setSubmitError("An account with this email already exists.")
+        }
+        return
+      }
       if (res.status === 429) { setSubmitError("Too many registrations from this network. Please try again later."); return }
       if (res.status === 400) {
         const body = await res.json()
@@ -155,6 +169,43 @@ export default function RegisterPage() {
               />
               {fieldErrors.email && (
                 <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onBlur={(e) => validateField("username", e.target.value)}
+                className={fieldClass(fieldErrors.username)}
+                placeholder="lowercase_letters_digits"
+              />
+              {fieldErrors.username && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.username}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-300">
+                Date of birth
+              </label>
+              <input
+                id="date_of_birth"
+                type="date"
+                required
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                onBlur={(e) => validateField("date_of_birth", e.target.value)}
+                className={fieldClass(fieldErrors.date_of_birth)}
+              />
+              {fieldErrors.date_of_birth && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.date_of_birth}</p>
               )}
             </div>
 

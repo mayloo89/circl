@@ -138,6 +138,7 @@ func main() {
 		auth.WithLoginIPLimit(loginIPLimit, 15*time.Minute),
 		auth.WithRegisterIPLimit(registerIPLimit, time.Hour),
 		auth.WithEmailFlow(authSvc, frontendURL),
+		auth.WithProfileStore(profileStore),
 	)
 
 	reportMgr := reports.NewManager(reportSvc,

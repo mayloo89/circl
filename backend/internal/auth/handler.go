@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/profiles"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
 
@@ -49,6 +50,7 @@ type handlerConfig struct {
 	registerIPWindow time.Duration
 	emailFlow        EmailFlowService
 	frontendURL      string
+	profileStore     profiles.Store
 }
 
 func WithLocker(l LoginLocker) HandlerOption { return func(c *handlerConfig) { c.locker = l } }
@@ -70,9 +72,21 @@ func WithEmailFlow(svc EmailFlowService, frontendURL string) HandlerOption {
 	return func(c *handlerConfig) { c.emailFlow = svc; c.frontendURL = frontendURL }
 }
 
+// WithProfileStore enables profile seeding at registration time (username + DOB).
+func WithProfileStore(s profiles.Store) HandlerOption {
+	return func(c *handlerConfig) { c.profileStore = s }
+}
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type registerRequest struct {
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	Username    string `json:"username"`
+	DateOfBirth string `json:"date_of_birth"` // "YYYY-MM-DD"
 }
 
 type userResponse struct {
@@ -201,7 +215,7 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 			}
 		}
 
-		var req loginRequest
+		var req registerRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
 			return
@@ -222,6 +236,27 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
 			}
 			return
+		}
+
+		// Seed the profile with username and date of birth if a profile store is configured.
+		if cfg.profileStore != nil && (req.Username != "" || req.DateOfBirth != "") {
+			in := profiles.ProfileInput{Username: req.Username}
+			if req.DateOfBirth != "" {
+				if dob, err := time.Parse("2006-01-02", req.DateOfBirth); err == nil {
+					in.DateOfBirth = &dob
+				}
+			}
+			if _, err := cfg.profileStore.Upsert(r.Context(), user.ID, in); err != nil {
+				if errors.Is(err, profiles.ErrUsernameTaken) {
+					// User was created but the username is taken — roll back user creation
+					// is not trivial here, so return a conflict; the user must retry with a
+					// different username. The unverified account will remain but is inert.
+					writeJSON(w, http.StatusConflict, errorResponse{"username already taken"})
+					return
+				}
+				log.Printf("auth: seed profile for user %s: %v", user.ID, err)
+				// Non-fatal: account exists, user can set profile later.
+			}
 		}
 
 		// Send verification email asynchronously; ignore send errors — the user
