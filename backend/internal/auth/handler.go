@@ -262,8 +262,9 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 		// Send verification email asynchronously; ignore send errors — the user
 		// can request a resend from the login page.
 		if cfg.emailFlow != nil {
+			ctx := context.WithoutCancel(r.Context())
 			go func() {
-				if err := cfg.emailFlow.SendVerificationEmail(r.Context(), user.ID, user.Email, cfg.frontendURL); err != nil {
+				if err := cfg.emailFlow.SendVerificationEmail(ctx, user.ID, user.Email, cfg.frontendURL); err != nil {
 					log.Printf("auth: send verification email: %v", err)
 				}
 			}()
