@@ -173,9 +173,12 @@ func TestService_Login_AccountDeleted_WithinGrace(t *testing.T) {
 		},
 	}, noop)
 
-	_, err := svc.Login(t.Context(), "user@example.com", "secret")
-	if !errors.Is(err, ErrAccountDeleted) {
-		t.Errorf("got %v, want ErrAccountDeleted", err)
+	user, err := svc.Login(t.Context(), "user@example.com", "secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !user.Reactivated {
+		t.Error("expected Reactivated = true")
 	}
 }
 
@@ -193,80 +196,6 @@ func TestService_Login_AccountDeleted_PastGrace(t *testing.T) {
 	}, noop)
 
 	_, err := svc.Login(t.Context(), "user@example.com", "secret")
-	if !errors.Is(err, ErrInvalidCredentials) {
-		t.Errorf("got %v, want ErrInvalidCredentials", err)
-	}
-}
-
-func TestService_ReactivateAccount_Success(t *testing.T) {
-	deletedAt := time.Now().Add(-time.Hour)
-	svc := NewService(&mockStore{
-		record: &userRecord{
-			ID:           "abc-123",
-			Email:        "user@example.com",
-			PasswordHash: hashPassword(t, "secret"),
-			Status:       "deleted",
-			DeletedAt:    &deletedAt,
-		},
-	}, noop)
-
-	user, err := svc.ReactivateAccount(t.Context(), "user@example.com", "secret")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if user.ID != "abc-123" {
-		t.Errorf("ID = %q, want %q", user.ID, "abc-123")
-	}
-}
-
-func TestService_ReactivateAccount_WrongPassword(t *testing.T) {
-	deletedAt := time.Now().Add(-time.Hour)
-	svc := NewService(&mockStore{
-		record: &userRecord{
-			ID:           "abc-123",
-			Email:        "user@example.com",
-			PasswordHash: hashPassword(t, "secret"),
-			Status:       "deleted",
-			DeletedAt:    &deletedAt,
-		},
-	}, noop)
-
-	_, err := svc.ReactivateAccount(t.Context(), "user@example.com", "wrong")
-	if !errors.Is(err, ErrInvalidCredentials) {
-		t.Errorf("got %v, want ErrInvalidCredentials", err)
-	}
-}
-
-func TestService_ReactivateAccount_NotDeleted(t *testing.T) {
-	svc := NewService(&mockStore{
-		record: &userRecord{
-			ID:              "abc-123",
-			Email:           "user@example.com",
-			PasswordHash:    hashPassword(t, "secret"),
-			Status:          "active",
-			EmailVerifiedAt: verifiedAt(),
-		},
-	}, noop)
-
-	_, err := svc.ReactivateAccount(t.Context(), "user@example.com", "secret")
-	if !errors.Is(err, ErrAccountNotDeleted) {
-		t.Errorf("got %v, want ErrAccountNotDeleted", err)
-	}
-}
-
-func TestService_ReactivateAccount_PastGrace(t *testing.T) {
-	deletedAt := time.Now().Add(-31 * 24 * time.Hour)
-	svc := NewService(&mockStore{
-		record: &userRecord{
-			ID:           "abc-123",
-			Email:        "user@example.com",
-			PasswordHash: hashPassword(t, "secret"),
-			Status:       "deleted",
-			DeletedAt:    &deletedAt,
-		},
-	}, noop)
-
-	_, err := svc.ReactivateAccount(t.Context(), "user@example.com", "secret")
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("got %v, want ErrInvalidCredentials", err)
 	}

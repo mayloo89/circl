@@ -30,15 +30,14 @@ var (
 	ErrAccountLocked      = errors.New("account locked")
 	ErrEmailNotVerified   = errors.New("email not verified")
 	ErrInvalidToken       = errors.New("invalid or expired token")
-	ErrAccountDeleted     = errors.New("account deleted")
-	ErrAccountNotDeleted  = errors.New("account not deleted")
 )
 
 // User holds the data returned after a successful login or registration.
 type User struct {
-	ID      string
-	Email   string
-	IsAdmin bool
+	ID          string
+	Email       string
+	IsAdmin     bool
+	Reactivated bool // true when login automatically restored a soft-deleted account
 }
 
 // Store is the data-access interface required by the auth service.
@@ -62,7 +61,6 @@ type Store interface {
 type AccountManager interface {
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 	DeleteAccount(ctx context.Context, userID, password string) error
-	ReactivateAccount(ctx context.Context, email, password string) (*User, error)
 }
 
 // EmailFlowService handles password reset and email verification.
@@ -78,7 +76,6 @@ type EmailFlowService interface {
 type Authenticator interface {
 	Login(ctx context.Context, email, password string) (*User, error)
 	Register(ctx context.Context, email, password string) (*User, error)
-	ReactivateAccount(ctx context.Context, email, password string) (*User, error)
 }
 
 // userRecord is the internal DB representation of an authenticated user.
@@ -122,8 +119,9 @@ func NewService(store Store, mailer email.Sender) *Service {
 }
 
 // Login verifies credentials and returns the authenticated user.
+// If the account was soft-deleted within the 30-day grace period it is
+// automatically reactivated and the returned User has Reactivated set to true.
 // Returns ErrEmailNotVerified if the email has not been confirmed.
-// Returns ErrAccountDeleted if the account is within the 30-day reactivation window.
 func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User, error) {
 	record, err := s.store.GetUserByEmail(ctx, emailAddr)
 	if err != nil {
@@ -131,8 +129,6 @@ func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User,
 		return nil, ErrInvalidCredentials
 	}
 
-	// Allow deleted accounts within the grace period to authenticate so we can
-	// offer reactivation — but do not issue a session.
 	withinGrace := record.DeletedAt != nil && time.Since(*record.DeletedAt) < deletionGracePeriod
 
 	if record.Status != "active" && !withinGrace {
@@ -145,7 +141,10 @@ func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User,
 	}
 
 	if withinGrace {
-		return nil, ErrAccountDeleted
+		if err := s.store.ReactivateUser(ctx, record.ID); err != nil {
+			return nil, fmt.Errorf("reactivate user: %w", err)
+		}
+		return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin, Reactivated: true}, nil
 	}
 
 	if record.EmailVerifiedAt == nil {
@@ -215,32 +214,6 @@ func (s *Service) DeleteAccount(ctx context.Context, userID, password string) er
 		return ErrInvalidCredentials
 	}
 	return s.store.DeleteUser(ctx, userID)
-}
-
-// ReactivateAccount restores a soft-deleted account within the grace period.
-func (s *Service) ReactivateAccount(ctx context.Context, emailAddr, password string) (*User, error) {
-	record, err := s.store.GetUserByEmail(ctx, emailAddr)
-	if err != nil {
-		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$dummyhashfordummypassword000000"), []byte(password))
-		return nil, ErrInvalidCredentials
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
-		return nil, ErrInvalidCredentials
-	}
-
-	if record.DeletedAt == nil {
-		return nil, ErrAccountNotDeleted
-	}
-	if time.Since(*record.DeletedAt) >= deletionGracePeriod {
-		return nil, ErrInvalidCredentials
-	}
-
-	if err := s.store.ReactivateUser(ctx, record.ID); err != nil {
-		return nil, fmt.Errorf("reactivate user: %w", err)
-	}
-
-	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
 }
 
 // ForgotPassword generates a password reset token and sends the reset email.

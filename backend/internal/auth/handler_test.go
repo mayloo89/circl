@@ -38,10 +38,6 @@ func (m *mockAuth) Register(_ context.Context, _, _ string) (*auth.User, error) 
 	return m.user, m.registerErr
 }
 
-func (m *mockAuth) ReactivateAccount(_ context.Context, _, _ string) (*auth.User, error) {
-	return m.user, m.loginErr
-}
-
 // mockLocker is a test double for LoginLocker.
 type mockLocker struct {
 	isLockedVal    bool
@@ -166,65 +162,25 @@ func TestLoginHandler_PasswordTooLong(t *testing.T) {
 	}
 }
 
-func TestLoginHandler_AccountDeleted(t *testing.T) {
-	h := newHandler(&mockAuth{loginErr: auth.ErrAccountDeleted})
+func TestLoginHandler_AccountReactivated(t *testing.T) {
+	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com", Reactivated: true}})
 
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-	assertJSONField(t, rec.Body.Bytes(), "error", "account_deleted")
-}
-
-func TestReactivateHandler_Success(t *testing.T) {
-	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}})
-
-	req := httptest.NewRequest(http.MethodPost, "/reactivate", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	assertJSONFieldNonEmpty(t, rec.Body.Bytes(), "token")
-}
-
-func TestReactivateHandler_InvalidCredentials(t *testing.T) {
-	h := newHandler(&mockAuth{loginErr: auth.ErrInvalidCredentials})
-
-	req := httptest.NewRequest(http.MethodPost, "/reactivate", strings.NewReader(`{"email":"u@u.com","password":"wrong"}`))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
 	}
-}
-
-func TestReactivateHandler_AccountNotDeleted(t *testing.T) {
-	h := newHandler(&mockAuth{loginErr: auth.ErrAccountNotDeleted})
-
-	req := httptest.NewRequest(http.MethodPost, "/reactivate", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusConflict {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	if resp["reactivated"] != true {
+		t.Errorf("reactivated = %v, want true", resp["reactivated"])
 	}
-}
-
-func TestReactivateHandler_MissingFields(t *testing.T) {
-	h := newHandler(&mockAuth{})
-
-	req := httptest.NewRequest(http.MethodPost, "/reactivate", strings.NewReader(`{"email":"","password":""}`))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if tok, _ := resp["token"].(string); tok == "" {
+		t.Error("expected non-empty token")
 	}
 }
 
@@ -657,10 +613,6 @@ func (m *mockAccountManager) ChangePassword(_ context.Context, _, _, _ string) e
 
 func (m *mockAccountManager) DeleteAccount(_ context.Context, _, _ string) error {
 	return m.deleteAccountErr
-}
-
-func (m *mockAccountManager) ReactivateAccount(_ context.Context, _, _ string) (*auth.User, error) {
-	return nil, nil
 }
 
 // authedReq creates a test request with the test user ID injected into context

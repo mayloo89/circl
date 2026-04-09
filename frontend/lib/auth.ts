@@ -25,13 +25,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           })
 
           if (res.status === 429) throw new Error("AccountLocked")
-          if (res.status === 403) {
-            const body = await res.json().catch(() => ({}))
-            if ((body as { error?: string }).error === "account_deleted") {
-              throw new Error("AccountDeleted")
-            }
-            throw new Error("EmailNotVerified")
-          }
+          if (res.status === 403) throw new Error("EmailNotVerified")
           if (!res.ok) return null
 
           const user = await res.json()
@@ -40,9 +34,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const payload = JSON.parse(atob(user.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
             isAdmin = payload.is_admin === true
           } catch { /* ignore malformed token */ }
-          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin }
+          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin, reactivated: user.reactivated ?? false }
         } catch (err) {
-          if (err instanceof Error && ["AccountLocked", "EmailNotVerified", "AccountDeleted"].includes(err.message)) {
+          if (err instanceof Error && ["AccountLocked", "EmailNotVerified"].includes(err.message)) {
             throw err
           }
           // Backend unavailable — fail closed (do not grant access)
@@ -60,6 +54,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id
         token.accessToken = user.accessToken
         token.isAdmin = user.isAdmin
+        token.reactivated = user.reactivated
       }
       return token
     },
@@ -69,6 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       session.accessToken = token.accessToken
       session.isAdmin = token.isAdmin as boolean | undefined
+      session.reactivated = token.reactivated as boolean | undefined
       return session
     },
   },
