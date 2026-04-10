@@ -393,7 +393,7 @@ func TestStore_Integration(t *testing.T) {
 	defer pool.Close()
 
 	store := NewStore(pool)
-	svc := NewService(store, &noopMailer{})
+	svc := NewService(store, &noopMailer{}, "")
 
 	const email = "store_integration@example.com"
 	t.Cleanup(func() {

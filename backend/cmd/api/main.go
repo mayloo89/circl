@@ -99,7 +99,7 @@ func main() {
 	}
 
 	authStore := auth.NewStore(pool)
-	authSvc := auth.NewService(authStore, mailer)
+	authSvc := auth.NewService(authStore, mailer, frontendURL)
 
 	profileStore := profiles.NewStore(pool)
 	profileSvc := profiles.NewService(profileStore)

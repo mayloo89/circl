@@ -109,13 +109,14 @@ type emailVerificationRecord struct {
 
 // Service handles authentication business logic.
 type Service struct {
-	store  Store
-	mailer email.Sender
+	store       Store
+	mailer      email.Sender
+	frontendURL string
 }
 
 // NewService creates a new auth Service backed by the given Store and Sender.
-func NewService(store Store, mailer email.Sender) *Service {
-	return &Service{store: store, mailer: mailer}
+func NewService(store Store, mailer email.Sender, frontendURL string) *Service {
+	return &Service{store: store, mailer: mailer, frontendURL: frontendURL}
 }
 
 // Login verifies credentials and returns the authenticated user.
@@ -202,6 +203,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, n
 
 // DeleteAccount verifies password and soft-deletes the account.
 // The account enters a 30-day grace period during which it can be reactivated.
+// A warning email is sent asynchronously so the user knows how to undo the deletion.
 func (s *Service) DeleteAccount(ctx context.Context, userID, password string) error {
 	record, err := s.store.GetUserByID(ctx, userID)
 	if err != nil {
@@ -213,7 +215,15 @@ func (s *Service) DeleteAccount(ctx context.Context, userID, password string) er
 	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
 		return ErrInvalidCredentials
 	}
-	return s.store.DeleteUser(ctx, userID)
+	if err := s.store.DeleteUser(ctx, userID); err != nil {
+		return err
+	}
+	loginURL := s.frontendURL + "/login"
+	bgCtx := context.WithoutCancel(ctx)
+	go func() {
+		_ = s.mailer.Send(bgCtx, email.AccountDeletionMessage(record.Email, loginURL))
+	}()
+	return nil
 }
 
 // ForgotPassword generates a password reset token and sends the reset email.
