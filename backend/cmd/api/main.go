@@ -326,9 +326,9 @@ func main() {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
-		worker.PurgeDeletedAccounts(appCtx, authStore)
+		worker.PurgeDeletedAccounts(appCtx, authStore, fileStorage)
 		for range ticker.C {
-			worker.PurgeDeletedAccounts(appCtx, authStore)
+			worker.PurgeDeletedAccounts(appCtx, authStore, fileStorage)
 		}
 	}()
 

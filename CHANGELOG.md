@@ -11,12 +11,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - **Reversible account deletion with 30-day grace period** ([PR #51](https://github.com/mayloo89/circl/pull/51)):
   - Migration `000023`: adds `deleted_at TIMESTAMPTZ` column to `users`
-  - `DELETE /users/me` now sets `status = 'deleted'` and records `deleted_at` timestamp instead of hard-deleting
-  - `POST /auth/login` returns `403 {"error":"account_deleted"}` for deleted accounts within the 30-day grace period (password is still verified)
-  - New `POST /auth/reactivate` endpoint: verifies credentials, checks grace period, restores `status = 'active'` and clears `deleted_at`
+  - `DELETE /users/me` now sets `status = 'deleted'` and records `deleted_at` timestamp; sends a deletion warning email async with a link to sign in and reactivate
+  - Reactivation is automatic on login: `POST /auth/login` restores `status = 'active'` when valid credentials are supplied within the 30-day grace period and returns `{"reactivated": true}` in the response
   - Accounts past the 30-day window receive `401 {"error":"invalid credentials"}` — indistinguishable from wrong password
-  - Daily background worker (`worker.PurgeDeletedAccounts`) anonymizes expired deleted accounts: replaces email with `deleted-{id}@purged`, clears `password_hash`, sets `status = 'purged'`
-  - Login page: handles `AccountDeleted` error — shows an orange warning banner with a one-click "Reactivate my account" button
+  - Login page: detects `reactivated: true` via a direct pre-signIn probe and shows a modal popup ("Account reactivated") before navigating home
+  - Daily background worker (`worker.PurgeDeletedAccounts`) fully purges expired deleted accounts:
+    - Retrieves all S3/MinIO upload keys for the user
+    - Deletes files from object storage (originals + thumbnails)
+    - Removes all associated DB records: uploads, profile photos, profiles, contacts, push subscriptions, room memberships
+    - Anonymizes the `users` row in-place (email → `deleted-{id}@purged`, password hash cleared, status → `purged`) — row is kept to preserve `messages.sender_id` FK integrity
   - Settings delete-account section: updated messaging to mention the 30-day window and reversibility
   - `TEST_ENDPOINTS_ENABLED=true` guard for `POST /test/users` (E2E fixture endpoint) — never exposed in production
   - E2E fixtures: `createUser` now calls `POST /test/users` directly, bypassing email verification requirement

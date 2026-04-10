@@ -37,10 +37,15 @@ func (m *mockStore) GetUserByID(_ context.Context, _ string) (*userRecord, error
 
 func (m *mockStore) UpdatePassword(_ context.Context, _, _ string) error      { return m.updateErr }
 func (m *mockStore) DeleteUser(_ context.Context, _ string) error             { return m.deleteErr }
-func (m *mockStore) ReactivateUser(_ context.Context, _ string) error         { return nil }
-func (m *mockStore) PurgeExpiredDeletedUsers(_ context.Context, _ time.Time) (int64, error) {
-	return 0, nil
+func (m *mockStore) ReactivateUser(_ context.Context, _ string) error { return nil }
+func (m *mockStore) GetExpiredDeletedUserIDs(_ context.Context, _ time.Time) ([]string, error) {
+	return nil, nil
 }
+func (m *mockStore) GetUserUploadKeys(_ context.Context, _ string) ([]string, []string, error) {
+	return nil, nil, nil
+}
+func (m *mockStore) DeleteUserData(_ context.Context, _ string) error  { return nil }
+func (m *mockStore) AnonymizeUser(_ context.Context, _ string) error   { return nil }
 
 func (m *mockStore) CreatePasswordReset(_ context.Context, _, _ string, _ time.Time) error {
 	return nil

@@ -48,7 +48,10 @@ type Store interface {
 	UpdatePassword(ctx context.Context, userID, newHash string) error
 	DeleteUser(ctx context.Context, userID string) error
 	ReactivateUser(ctx context.Context, userID string) error
-	PurgeExpiredDeletedUsers(ctx context.Context, before time.Time) (int64, error)
+	GetExpiredDeletedUserIDs(ctx context.Context, before time.Time) ([]string, error)
+	GetUserUploadKeys(ctx context.Context, userID string) (storageKeys, thumbnailKeys []string, err error)
+	DeleteUserData(ctx context.Context, userID string) error
+	AnonymizeUser(ctx context.Context, userID string) error
 	CreatePasswordReset(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error
 	GetPasswordReset(ctx context.Context, tokenHash string) (*passwordResetRecord, error)
 	MarkPasswordResetUsed(ctx context.Context, id string) error
