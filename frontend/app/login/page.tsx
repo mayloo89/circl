@@ -1,6 +1,6 @@
 "use client"
 
-import { signIn, useSession } from "next-auth/react"
+import { signIn } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -17,7 +17,6 @@ export default function LoginPage() {
   const [resendSent, setResendSent] = useState(false)
   const [reactivated, setReactivated] = useState(false)
   const router = useRouter()
-  const { update } = useSession()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,6 +30,21 @@ export default function LoginPage() {
       return
     }
 
+    // Call the backend directly first to capture the reactivated flag before
+    // going through NextAuth, which doesn't expose extra response fields.
+    let wasReactivated = false
+    try {
+      const probe = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
+      })
+      if (probe.ok) {
+        const data = await probe.json() as { reactivated?: boolean }
+        wasReactivated = data.reactivated === true
+      }
+    } catch { /* backend unreachable — let signIn handle the error */ }
+
     const result = await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
@@ -43,14 +57,11 @@ export default function LoginPage() {
       setEmailNotVerified(true)
     } else if (result?.error) {
       setError("Invalid email or password.")
+    } else if (wasReactivated) {
+      setReactivated(true)
+      setTimeout(() => router.push("/"), 2500)
     } else {
-      const session = await update()
-      if (session?.reactivated) {
-        setReactivated(true)
-        setTimeout(() => router.push("/"), 2500)
-      } else {
-        router.push("/")
-      }
+      router.push("/")
     }
   }
 
