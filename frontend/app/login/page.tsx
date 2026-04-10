@@ -1,6 +1,6 @@
 "use client"
 
-import { getSession, signIn } from "next-auth/react"
+import { signIn, useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [resendSent, setResendSent] = useState(false)
   const [reactivated, setReactivated] = useState(false)
   const router = useRouter()
+  const { update } = useSession()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,7 +44,7 @@ export default function LoginPage() {
     } else if (result?.error) {
       setError("Invalid email or password.")
     } else {
-      const session = await getSession()
+      const session = await update()
       if (session?.reactivated) {
         setReactivated(true)
         setTimeout(() => router.push("/"), 2500)
