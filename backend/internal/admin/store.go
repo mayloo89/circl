@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,6 +20,7 @@ type rowScanner interface {
 // querier is the minimal DB interface required by pgStore.
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) rowScanner
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
@@ -27,6 +29,10 @@ type pgxQuerier struct{ pool *pgxpool.Pool }
 
 func (q *pgxQuerier) QueryRow(ctx context.Context, sql string, args ...any) rowScanner {
 	return q.pool.QueryRow(ctx, sql, args...)
+}
+
+func (q *pgxQuerier) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return q.pool.Query(ctx, sql, args...)
 }
 
 func (q *pgxQuerier) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
@@ -100,4 +106,108 @@ func (s *pgStore) IsActiveUser(ctx context.Context, userID string) (bool, error)
 		return false, fmt.Errorf("is active user: %w", err)
 	}
 	return exists, nil
+}
+
+// GetStats returns aggregate counts for the admin dashboard.
+func (s *pgStore) GetStats(ctx context.Context) (*Stats, error) {
+	var st Stats
+
+	err := s.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE deleted_at IS NULL),
+			COUNT(*) FILTER (WHERE status = 'active' AND deleted_at IS NULL),
+			COUNT(*) FILTER (WHERE status = 'suspended' AND deleted_at IS NULL),
+			COUNT(*) FILTER (WHERE status = 'banned' AND deleted_at IS NULL),
+			COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)
+		FROM users`,
+	).Scan(&st.TotalUsers, &st.ActiveUsers, &st.SuspendedUsers, &st.BannedUsers, &st.DeletedUsers)
+	if err != nil {
+		return nil, fmt.Errorf("admin stats users: %w", err)
+	}
+
+	err = s.db.QueryRow(ctx,
+		`SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'pending') FROM reports`,
+	).Scan(&st.TotalReports, &st.PendingReports)
+	if err != nil {
+		return nil, fmt.Errorf("admin stats reports: %w", err)
+	}
+
+	err = s.db.QueryRow(ctx, `SELECT COUNT(*) FROM rooms`).Scan(&st.TotalRooms)
+	if err != nil {
+		return nil, fmt.Errorf("admin stats rooms: %w", err)
+	}
+
+	return &st, nil
+}
+
+// ListUsers returns a paginated list of users with optional email/username search and status filter.
+func (s *pgStore) ListUsers(ctx context.Context, query, status string, limit, offset int) ([]*UserRecord, int, error) {
+	var conds []string
+	var args []any
+	n := 1
+
+	conds = append(conds, "u.deleted_at IS NULL")
+
+	if status != "" {
+		conds = append(conds, fmt.Sprintf("u.status = $%d", n))
+		args = append(args, status)
+		n++
+	}
+	if query != "" {
+		pat := "%" + query + "%"
+		conds = append(conds, fmt.Sprintf("(u.email ILIKE $%d OR p.username ILIKE $%d OR p.display_name ILIKE $%d)", n, n, n))
+		args = append(args, pat)
+		n++
+	}
+
+	where := strings.Join(conds, " AND ")
+	sql := fmt.Sprintf(`
+		SELECT u.id, u.email,
+		       COALESCE(p.username, '') AS username,
+		       COALESCE(p.display_name, '') AS display_name,
+		       u.status, u.is_admin, u.created_at,
+		       COUNT(*) OVER() AS total_count
+		FROM users u
+		LEFT JOIN profiles p ON p.user_id = u.id
+		WHERE %s
+		ORDER BY u.created_at DESC
+		LIMIT $%d OFFSET $%d`, where, n, n+1)
+
+	args = append(args, limit, offset)
+
+	rows, err := s.db.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("admin list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*UserRecord
+	var total int
+	for rows.Next() {
+		var u UserRecord
+		if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.DisplayName,
+			&u.Status, &u.IsAdmin, &u.CreatedAt, &total); err != nil {
+			return nil, 0, fmt.Errorf("admin list users scan: %w", err)
+		}
+		users = append(users, &u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("admin list users rows: %w", err)
+	}
+	if users == nil {
+		users = []*UserRecord{}
+	}
+	return users, total, nil
+}
+
+// ReactivateUser sets a user's status back to 'active'.
+func (s *pgStore) ReactivateUser(ctx context.Context, userID string) error {
+	tag, err := s.db.Exec(ctx, `UPDATE users SET status = 'active' WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("admin reactivate user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
 }

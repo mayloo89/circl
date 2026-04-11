@@ -15,11 +15,13 @@ var (
 
 // UserRecord holds the admin view of a user.
 type UserRecord struct {
-	ID        string
-	Email     string
-	Status    string
-	IsAdmin   bool
-	CreatedAt time.Time
+	ID          string    `json:"id"`
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Status      string    `json:"status"`
+	IsAdmin     bool      `json:"is_admin"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Suspension records a moderation action against a user.
@@ -32,6 +34,18 @@ type Suspension struct {
 	CreatedAt      time.Time
 }
 
+// Stats holds aggregate counts for the admin dashboard.
+type Stats struct {
+	TotalUsers     int `json:"total_users"`
+	ActiveUsers    int `json:"active_users"`
+	SuspendedUsers int `json:"suspended_users"`
+	BannedUsers    int `json:"banned_users"`
+	DeletedUsers   int `json:"deleted_users"`
+	TotalReports   int `json:"total_reports"`
+	PendingReports int `json:"pending_reports"`
+	TotalRooms     int `json:"total_rooms"`
+}
+
 // Store is the data-access interface for admin/moderation operations.
 type Store interface {
 	GetUserByID(ctx context.Context, userID string) (*UserRecord, error)
@@ -39,6 +53,9 @@ type Store interface {
 	CreateSuspension(ctx context.Context, userID string, suspendedUntil *time.Time, reason, createdBy string) (*Suspension, error)
 	// IsActiveUser satisfies middleware.UserStatusChecker.
 	IsActiveUser(ctx context.Context, userID string) (bool, error)
+	GetStats(ctx context.Context) (*Stats, error)
+	ListUsers(ctx context.Context, query, status string, limit, offset int) ([]*UserRecord, int, error)
+	ReactivateUser(ctx context.Context, userID string) error
 }
 
 // Service wraps the admin Store with business logic.
@@ -85,4 +102,19 @@ func (s *Service) BanUser(ctx context.Context, userID, reason, adminID string) e
 	}
 	_, err := s.store.CreateSuspension(ctx, userID, nil, reason, adminID)
 	return err
+}
+
+// GetStats returns aggregate counts for the admin dashboard.
+func (s *Service) GetStats(ctx context.Context) (*Stats, error) {
+	return s.store.GetStats(ctx)
+}
+
+// ListUsers returns a paginated list of users with optional search and status filter.
+func (s *Service) ListUsers(ctx context.Context, query, status string, limit, offset int) ([]*UserRecord, int, error) {
+	return s.store.ListUsers(ctx, query, status, limit, offset)
+}
+
+// ReactivateUser sets the user's status back to 'active'.
+func (s *Service) ReactivateUser(ctx context.Context, userID string) error {
+	return s.store.ReactivateUser(ctx, userID)
 }

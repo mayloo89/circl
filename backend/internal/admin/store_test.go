@@ -10,23 +10,71 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// --- mock querier ---
+// --- mock row / rows ---
 
 type mockRow struct {
 	scanFn func(dest ...any) error
 }
 
-func (m *mockRow) Scan(dest ...any) error {
-	return m.scanFn(dest...)
+func (m *mockRow) Scan(dest ...any) error { return m.scanFn(dest...) }
+
+// mockRows implements pgx.Rows for unit tests.
+type mockRows struct {
+	data    [][]any
+	pos     int
+	scanErr error
+	rowsErr error
 }
+
+func (r *mockRows) Next() bool                                   { r.pos++; return r.pos <= len(r.data) }
+func (r *mockRows) Close()                                       {}
+func (r *mockRows) Err() error                                   { return r.rowsErr }
+func (r *mockRows) CommandTag() pgconn.CommandTag                { return pgconn.CommandTag{} }
+func (r *mockRows) FieldDescriptions() []pgconn.FieldDescription { return nil }
+func (r *mockRows) Values() ([]any, error)                       { return nil, nil }
+func (r *mockRows) RawValues() [][]byte                          { return nil }
+func (r *mockRows) Conn() *pgx.Conn                              { return nil }
+func (r *mockRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	row := r.data[r.pos-1]
+	for i, d := range dest {
+		switch v := d.(type) {
+		case *string:
+			*v = row[i].(string)
+		case *bool:
+			*v = row[i].(bool)
+		case *int:
+			*v = row[i].(int)
+		case *time.Time:
+			*v = row[i].(time.Time)
+		case **time.Time:
+			if row[i] == nil {
+				*v = nil
+			} else {
+				t := row[i].(time.Time)
+				*v = &t
+			}
+		}
+	}
+	return nil
+}
+
+// --- mock querier ---
 
 type mockQuerier struct {
 	queryRowFn func(ctx context.Context, sql string, args ...any) rowScanner
+	queryFn    func(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	execFn     func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
 func (m *mockQuerier) QueryRow(ctx context.Context, sql string, args ...any) rowScanner {
 	return m.queryRowFn(ctx, sql, args...)
+}
+
+func (m *mockQuerier) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return m.queryFn(ctx, sql, args...)
 }
 
 func (m *mockQuerier) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
@@ -233,6 +281,352 @@ func TestPgStore_IsActiveUser_Error(t *testing.T) {
 	s := &pgStore{db: q}
 
 	_, err := s.IsActiveUser(context.Background(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetStats ---
+
+func TestPgStore_GetStats_Success(t *testing.T) {
+	call := 0
+	q := &mockQuerier{
+		queryRowFn: func(_ context.Context, _ string, _ ...any) rowScanner {
+			call++
+			switch call {
+			case 1: // user counts
+				return &mockRow{scanFn: func(dest ...any) error {
+					*dest[0].(*int) = 10
+					*dest[1].(*int) = 7
+					*dest[2].(*int) = 2
+					*dest[3].(*int) = 1
+					*dest[4].(*int) = 0
+					return nil
+				}}
+			case 2: // report counts
+				return &mockRow{scanFn: func(dest ...any) error {
+					*dest[0].(*int) = 5
+					*dest[1].(*int) = 3
+					return nil
+				}}
+			default: // room count
+				return &mockRow{scanFn: func(dest ...any) error {
+					*dest[0].(*int) = 4
+					return nil
+				}}
+			}
+		},
+	}
+	s := &pgStore{db: q}
+
+	st, err := s.GetStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetStats() error = %v", err)
+	}
+	if st.TotalUsers != 10 {
+		t.Errorf("TotalUsers = %d, want 10", st.TotalUsers)
+	}
+	if st.ActiveUsers != 7 {
+		t.Errorf("ActiveUsers = %d, want 7", st.ActiveUsers)
+	}
+	if st.SuspendedUsers != 2 {
+		t.Errorf("SuspendedUsers = %d, want 2", st.SuspendedUsers)
+	}
+	if st.BannedUsers != 1 {
+		t.Errorf("BannedUsers = %d, want 1", st.BannedUsers)
+	}
+	if st.TotalReports != 5 {
+		t.Errorf("TotalReports = %d, want 5", st.TotalReports)
+	}
+	if st.PendingReports != 3 {
+		t.Errorf("PendingReports = %d, want 3", st.PendingReports)
+	}
+	if st.TotalRooms != 4 {
+		t.Errorf("TotalRooms = %d, want 4", st.TotalRooms)
+	}
+}
+
+func TestPgStore_GetStats_UserQueryError(t *testing.T) {
+	q := &mockQuerier{
+		queryRowFn: func(_ context.Context, _ string, _ ...any) rowScanner {
+			return &mockRow{scanFn: func(_ ...any) error { return errors.New("db error") }}
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, err := s.GetStats(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_GetStats_ReportQueryError(t *testing.T) {
+	call := 0
+	q := &mockQuerier{
+		queryRowFn: func(_ context.Context, _ string, _ ...any) rowScanner {
+			call++
+			if call == 1 {
+				return &mockRow{scanFn: func(dest ...any) error {
+					*dest[0].(*int) = 0
+					*dest[1].(*int) = 0
+					*dest[2].(*int) = 0
+					*dest[3].(*int) = 0
+					*dest[4].(*int) = 0
+					return nil
+				}}
+			}
+			return &mockRow{scanFn: func(_ ...any) error { return errors.New("db error") }}
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, err := s.GetStats(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_GetStats_RoomQueryError(t *testing.T) {
+	call := 0
+	q := &mockQuerier{
+		queryRowFn: func(_ context.Context, _ string, _ ...any) rowScanner {
+			call++
+			if call == 1 {
+				return &mockRow{scanFn: func(dest ...any) error {
+					*dest[0].(*int) = 0
+					*dest[1].(*int) = 0
+					*dest[2].(*int) = 0
+					*dest[3].(*int) = 0
+					*dest[4].(*int) = 0
+					return nil
+				}}
+			}
+			if call == 2 {
+				return &mockRow{scanFn: func(dest ...any) error {
+					*dest[0].(*int) = 0
+					*dest[1].(*int) = 0
+					return nil
+				}}
+			}
+			return &mockRow{scanFn: func(_ ...any) error { return errors.New("db error") }}
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, err := s.GetStats(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ListUsers ---
+
+func TestPgStore_ListUsers_Success(t *testing.T) {
+	now := time.Now()
+	rows := &mockRows{
+		data: [][]any{
+			{"u-1", "a@example.com", "alice", "Alice", "active", false, now, 2},
+			{"u-2", "b@example.com", "bob", "Bob", "suspended", false, now, 2},
+		},
+	}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	users, total, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	if err != nil {
+		t.Fatalf("ListUsers() error = %v", err)
+	}
+	if total != 2 {
+		t.Errorf("total = %d, want 2", total)
+	}
+	if len(users) != 2 {
+		t.Fatalf("len(users) = %d, want 2", len(users))
+	}
+	if users[0].ID != "u-1" {
+		t.Errorf("users[0].ID = %q, want u-1", users[0].ID)
+	}
+	if users[0].Username != "alice" {
+		t.Errorf("users[0].Username = %q, want alice", users[0].Username)
+	}
+}
+
+func TestPgStore_ListUsers_Empty(t *testing.T) {
+	rows := &mockRows{data: [][]any{}}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	users, total, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	if err != nil {
+		t.Fatalf("ListUsers() error = %v", err)
+	}
+	if total != 0 {
+		t.Errorf("total = %d, want 0", total)
+	}
+	if len(users) != 0 {
+		t.Errorf("len(users) = %d, want 0", len(users))
+	}
+}
+
+func TestPgStore_ListUsers_WithStatus(t *testing.T) {
+	now := time.Now()
+	rows := &mockRows{
+		data: [][]any{
+			{"u-1", "a@example.com", "alice", "Alice", "active", false, now, 1},
+		},
+	}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	users, total, err := s.ListUsers(context.Background(), "", "active", 20, 0)
+	if err != nil {
+		t.Fatalf("ListUsers() with status error = %v", err)
+	}
+	if total != 1 {
+		t.Errorf("total = %d, want 1", total)
+	}
+	if len(users) != 1 {
+		t.Errorf("len(users) = %d, want 1", len(users))
+	}
+}
+
+func TestPgStore_ListUsers_WithQuery(t *testing.T) {
+	now := time.Now()
+	rows := &mockRows{
+		data: [][]any{
+			{"u-1", "alice@example.com", "alice", "Alice", "active", false, now, 1},
+		},
+	}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	users, _, err := s.ListUsers(context.Background(), "alice", "", 20, 0)
+	if err != nil {
+		t.Fatalf("ListUsers() with query error = %v", err)
+	}
+	if len(users) != 1 {
+		t.Errorf("len(users) = %d, want 1", len(users))
+	}
+}
+
+func TestPgStore_ListUsers_WithStatusAndQuery(t *testing.T) {
+	rows := &mockRows{data: [][]any{}}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, _, err := s.ListUsers(context.Background(), "alice", "active", 20, 0)
+	if err != nil {
+		t.Fatalf("ListUsers() with status+query error = %v", err)
+	}
+}
+
+func TestPgStore_ListUsers_QueryError(t *testing.T) {
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return nil, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, _, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_ListUsers_ScanError(t *testing.T) {
+	rows := &mockRows{
+		data:    [][]any{{"u-1", "a@example.com", "alice", "Alice", "active", false, time.Now(), 1}},
+		scanErr: errors.New("scan error"),
+	}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, _, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_ListUsers_RowsError(t *testing.T) {
+	rows := &mockRows{
+		data:    [][]any{},
+		rowsErr: errors.New("rows error"),
+	}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, _, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ReactivateUser ---
+
+func TestPgStore_ReactivateUser_Success(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("UPDATE 1"), nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.ReactivateUser(context.Background(), "u-1"); err != nil {
+		t.Fatalf("ReactivateUser() error = %v", err)
+	}
+}
+
+func TestPgStore_ReactivateUser_NotFound(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("UPDATE 0"), nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	err := s.ReactivateUser(context.Background(), "u-missing")
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestPgStore_ReactivateUser_Error(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	err := s.ReactivateUser(context.Background(), "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

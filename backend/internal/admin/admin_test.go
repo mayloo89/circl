@@ -18,6 +18,12 @@ type mockStore struct {
 	createSusErr  error
 	isActive      bool
 	isActiveErr   error
+	stats         *admin.Stats
+	getStatsErr   error
+	users         []*admin.UserRecord
+	usersTotal    int
+	listUsersErr  error
+	reactivateErr error
 }
 
 func (m *mockStore) GetUserByID(_ context.Context, _ string) (*admin.UserRecord, error) {
@@ -35,6 +41,20 @@ func (m *mockStore) CreateSuspension(_ context.Context, _ string, _ *time.Time, 
 func (m *mockStore) IsActiveUser(_ context.Context, _ string) (bool, error) {
 	return m.isActive, m.isActiveErr
 }
+
+func (m *mockStore) GetStats(_ context.Context) (*admin.Stats, error) {
+	return m.stats, m.getStatsErr
+}
+
+func (m *mockStore) ListUsers(_ context.Context, _, _ string, _, _ int) ([]*admin.UserRecord, int, error) {
+	return m.users, m.usersTotal, m.listUsersErr
+}
+
+func (m *mockStore) ReactivateUser(_ context.Context, _ string) error {
+	return m.reactivateErr
+}
+
+// --- SuspendUser ---
 
 func TestService_SuspendUser_Success(t *testing.T) {
 	store := &mockStore{
@@ -84,6 +104,8 @@ func TestService_SuspendUser_StatusError(t *testing.T) {
 	}
 }
 
+// --- BanUser ---
+
 func TestService_BanUser_Success(t *testing.T) {
 	store := &mockStore{
 		suspension: &admin.Suspension{ID: "s-1"},
@@ -105,6 +127,8 @@ func TestService_BanUser_StatusError(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+// --- IsActiveUser ---
 
 func TestService_IsActiveUser_True(t *testing.T) {
 	store := &mockStore{isActive: true}
@@ -129,5 +153,98 @@ func TestService_IsActiveUser_False(t *testing.T) {
 	}
 	if active {
 		t.Error("expected active=false")
+	}
+}
+
+// --- GetStats ---
+
+func TestService_GetStats_Success(t *testing.T) {
+	st := &admin.Stats{TotalUsers: 10, ActiveUsers: 7, PendingReports: 3}
+	store := &mockStore{stats: st}
+	svc := admin.NewService(store)
+
+	got, err := svc.GetStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetStats() error = %v", err)
+	}
+	if got.TotalUsers != 10 {
+		t.Errorf("TotalUsers = %d, want 10", got.TotalUsers)
+	}
+	if got.ActiveUsers != 7 {
+		t.Errorf("ActiveUsers = %d, want 7", got.ActiveUsers)
+	}
+}
+
+func TestService_GetStats_Error(t *testing.T) {
+	store := &mockStore{getStatsErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	_, err := svc.GetStats(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ListUsers ---
+
+func TestService_ListUsers_Success(t *testing.T) {
+	users := []*admin.UserRecord{
+		{ID: "u-1", Email: "a@example.com", Status: "active"},
+		{ID: "u-2", Email: "b@example.com", Status: "suspended"},
+	}
+	store := &mockStore{users: users, usersTotal: 2}
+	svc := admin.NewService(store)
+
+	got, total, err := svc.ListUsers(context.Background(), "", "", 20, 0)
+	if err != nil {
+		t.Fatalf("ListUsers() error = %v", err)
+	}
+	if total != 2 {
+		t.Errorf("total = %d, want 2", total)
+	}
+	if len(got) != 2 {
+		t.Errorf("len(users) = %d, want 2", len(got))
+	}
+}
+
+func TestService_ListUsers_Error(t *testing.T) {
+	store := &mockStore{listUsersErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	_, _, err := svc.ListUsers(context.Background(), "", "", 20, 0)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ReactivateUser ---
+
+func TestService_ReactivateUser_Success(t *testing.T) {
+	store := &mockStore{}
+	svc := admin.NewService(store)
+
+	err := svc.ReactivateUser(context.Background(), "u-1")
+	if err != nil {
+		t.Fatalf("ReactivateUser() error = %v", err)
+	}
+}
+
+func TestService_ReactivateUser_NotFound(t *testing.T) {
+	store := &mockStore{reactivateErr: admin.ErrUserNotFound}
+	svc := admin.NewService(store)
+
+	err := svc.ReactivateUser(context.Background(), "u-missing")
+	if !errors.Is(err, admin.ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestService_ReactivateUser_Error(t *testing.T) {
+	store := &mockStore{reactivateErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	err := svc.ReactivateUser(context.Background(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }
