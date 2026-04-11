@@ -631,3 +631,106 @@ func TestPgStore_ReactivateUser_Error(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+// --- ListChannels ---
+
+func TestPgStore_ListChannels_Success(t *testing.T) {
+	now := time.Now()
+	rows := &mockRows{
+		data: [][]any{
+			{"ch-1", "general", "General chat", "u-1", now},
+			{"ch-2", "random", "", "", now},
+		},
+	}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	channels, err := s.ListChannels(t.Context())
+	if err != nil {
+		t.Fatalf("ListChannels() error = %v", err)
+	}
+	if len(channels) != 2 {
+		t.Fatalf("len(channels) = %d, want 2", len(channels))
+	}
+	if channels[0].ID != "ch-1" || channels[0].Name != "general" {
+		t.Errorf("channels[0] = %+v, want {ID:ch-1 Name:general}", channels[0])
+	}
+}
+
+func TestPgStore_ListChannels_Empty(t *testing.T) {
+	rows := &mockRows{data: [][]any{}}
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return rows, nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	channels, err := s.ListChannels(t.Context())
+	if err != nil {
+		t.Fatalf("ListChannels() error = %v", err)
+	}
+	if len(channels) != 0 {
+		t.Errorf("expected empty slice, got %d channels", len(channels))
+	}
+}
+
+func TestPgStore_ListChannels_QueryError(t *testing.T) {
+	q := &mockQuerier{
+		queryFn: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
+			return nil, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	_, err := s.ListChannels(t.Context())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- DeleteChannel ---
+
+func TestPgStore_DeleteChannel_Success(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("DELETE 1"), nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.DeleteChannel(t.Context(), "ch-1"); err != nil {
+		t.Fatalf("DeleteChannel() error = %v", err)
+	}
+}
+
+func TestPgStore_DeleteChannel_NotFound(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("DELETE 0"), nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	err := s.DeleteChannel(t.Context(), "ch-missing")
+	if !errors.Is(err, ErrChannelNotFound) {
+		t.Errorf("error = %v, want ErrChannelNotFound", err)
+	}
+}
+
+func TestPgStore_DeleteChannel_Error(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.DeleteChannel(t.Context(), "ch-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

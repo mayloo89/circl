@@ -25,9 +25,10 @@ export default async function AdminLayout({
           <p className="mt-0.5 text-xs font-medium text-indigo-400 uppercase tracking-wider">Admin</p>
         </div>
         <nav className="mt-2 px-2 py-2 flex flex-col gap-0.5">
-          <SidebarLink href="/admin" exact>Dashboard</SidebarLink>
+          <SidebarLink href="/admin">Dashboard</SidebarLink>
           <SidebarLink href="/admin/users">Users</SidebarLink>
           <SidebarLink href="/admin/reports">Reports</SidebarLink>
+          <SidebarLink href="/admin/channels">Channels</SidebarLink>
         </nav>
       </aside>
 
@@ -39,11 +40,9 @@ export default async function AdminLayout({
 
 function SidebarLink({
   href,
-  exact,
   children,
 }: {
   href: string
-  exact?: boolean
   children: React.ReactNode
 }) {
   return (

@@ -211,3 +211,47 @@ func (s *pgStore) ReactivateUser(ctx context.Context, userID string) error {
 	}
 	return nil
 }
+
+// ListChannels returns all public channel rooms ordered by creation date.
+func (s *pgStore) ListChannels(ctx context.Context) ([]ChannelRecord, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, name, COALESCE(description, ''), COALESCE(creator_id::text, ''), created_at
+		  FROM rooms
+		 WHERE type = 'channel'
+		 ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("admin list channels: %w", err)
+	}
+	defer rows.Close()
+
+	var channels []ChannelRecord
+	for rows.Next() {
+		var c ChannelRecord
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatorID, &c.CreatedAt); err != nil {
+			return nil, fmt.Errorf("admin list channels scan: %w", err)
+		}
+		channels = append(channels, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("admin list channels rows: %w", err)
+	}
+	if channels == nil {
+		channels = []ChannelRecord{}
+	}
+	return channels, nil
+}
+
+// DeleteChannel removes a channel room and cascades to its messages.
+func (s *pgStore) DeleteChannel(ctx context.Context, channelID string) error {
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM rooms WHERE id = $1 AND type = 'channel'`,
+		channelID,
+	)
+	if err != nil {
+		return fmt.Errorf("admin delete channel: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrChannelNotFound
+	}
+	return nil
+}

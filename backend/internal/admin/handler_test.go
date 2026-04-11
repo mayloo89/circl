@@ -440,3 +440,124 @@ func TestUpdateUserStatus_ReactivateInternalError(t *testing.T) {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
 }
+
+// --- GET /channels ---
+
+func TestListChannels_Success(t *testing.T) {
+	channels := []admin.ChannelRecord{
+		{ID: "ch-1", Name: "general", Description: "General chat"},
+		{ID: "ch-2", Name: "random", Description: ""},
+	}
+	store := &mockStore{channels: channels}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/channels", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got []admin.ChannelRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len(channels) = %d, want 2", len(got))
+	}
+}
+
+func TestListChannels_Empty(t *testing.T) {
+	store := &mockStore{channels: []admin.ChannelRecord{}}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/channels", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestListChannels_InternalError(t *testing.T) {
+	store := &mockStore{listChansErr: errors.New("db error")}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/channels", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestListChannels_Unauthorized(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := httptest.NewRequest(http.MethodGet, "/channels", nil)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+// --- DELETE /channels/{id} ---
+
+func TestDeleteChannel_Success(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodDelete, "/channels/ch-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestDeleteChannel_NotFound(t *testing.T) {
+	store := &mockStore{deleteChansErr: admin.ErrChannelNotFound}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodDelete, "/channels/ch-missing", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestDeleteChannel_InternalError(t *testing.T) {
+	store := &mockStore{deleteChansErr: errors.New("db error")}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodDelete, "/channels/ch-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestDeleteChannel_Forbidden(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	req := httptest.NewRequest(http.MethodDelete, "/channels/ch-1", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}

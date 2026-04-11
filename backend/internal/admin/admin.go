@@ -11,6 +11,8 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 	// ErrAlreadySuspended is returned when the user is already suspended or banned.
 	ErrAlreadySuspended = errors.New("user already suspended or banned")
+	// ErrChannelNotFound is returned when the target channel does not exist.
+	ErrChannelNotFound = errors.New("channel not found")
 )
 
 // UserRecord holds the admin view of a user.
@@ -32,6 +34,15 @@ type Suspension struct {
 	Reason         string
 	CreatedBy      string
 	CreatedAt      time.Time
+}
+
+// ChannelRecord holds the admin view of a public channel.
+type ChannelRecord struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatorID   string    `json:"creator_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Stats holds aggregate counts for the admin dashboard.
@@ -56,6 +67,8 @@ type Store interface {
 	GetStats(ctx context.Context) (*Stats, error)
 	ListUsers(ctx context.Context, query, status string, limit, offset int) ([]*UserRecord, int, error)
 	ReactivateUser(ctx context.Context, userID string) error
+	ListChannels(ctx context.Context) ([]ChannelRecord, error)
+	DeleteChannel(ctx context.Context, channelID string) error
 }
 
 // Service wraps the admin Store with business logic.
@@ -117,4 +130,14 @@ func (s *Service) ListUsers(ctx context.Context, query, status string, limit, of
 // ReactivateUser sets the user's status back to 'active'.
 func (s *Service) ReactivateUser(ctx context.Context, userID string) error {
 	return s.store.ReactivateUser(ctx, userID)
+}
+
+// ListChannels returns all public channel rooms.
+func (s *Service) ListChannels(ctx context.Context) ([]ChannelRecord, error) {
+	return s.store.ListChannels(ctx)
+}
+
+// DeleteChannel removes a channel room and all its messages.
+func (s *Service) DeleteChannel(ctx context.Context, channelID string) error {
+	return s.store.DeleteChannel(ctx, channelID)
 }

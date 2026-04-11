@@ -26,6 +26,8 @@ func NewHandler(svc *Service) http.Handler {
 	r.Get("/stats", h.getStats)
 	r.Get("/users", h.listUsers)
 	r.Put("/users/{id}/status", h.updateUserStatus)
+	r.Get("/channels", h.listChannels)
+	r.Delete("/channels/{id}", h.deleteChannel)
 	return r
 }
 
@@ -69,6 +71,36 @@ func (h *handler) listUsers(w http.ResponseWriter, r *http.Request) {
 		"users": users,
 		"total": total,
 	})
+}
+
+// listChannels handles GET /admin/channels.
+func (h *handler) listChannels(w http.ResponseWriter, r *http.Request) {
+	channels, err := h.svc.ListChannels(r.Context())
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(channels) //nolint:errcheck
+}
+
+// deleteChannel handles DELETE /admin/channels/{id}.
+func (h *handler) deleteChannel(w http.ResponseWriter, r *http.Request) {
+	channelID := chi.URLParam(r, "id")
+	if channelID == "" {
+		http.Error(w, "Missing channel ID", http.StatusBadRequest)
+		return
+	}
+	err := h.svc.DeleteChannel(r.Context(), channelID)
+	if errors.Is(err, ErrChannelNotFound) {
+		http.Error(w, "Channel not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // updateUserStatus handles PUT /admin/users/{id}/status.

@@ -11,19 +11,22 @@ import (
 
 // mockStore is a test double for admin.Store.
 type mockStore struct {
-	user          *admin.UserRecord
-	getUserErr    error
-	setStatusErr  error
-	suspension    *admin.Suspension
-	createSusErr  error
-	isActive      bool
-	isActiveErr   error
-	stats         *admin.Stats
-	getStatsErr   error
-	users         []*admin.UserRecord
-	usersTotal    int
-	listUsersErr  error
-	reactivateErr error
+	user            *admin.UserRecord
+	getUserErr      error
+	setStatusErr    error
+	suspension      *admin.Suspension
+	createSusErr    error
+	isActive        bool
+	isActiveErr     error
+	stats           *admin.Stats
+	getStatsErr     error
+	users           []*admin.UserRecord
+	usersTotal      int
+	listUsersErr    error
+	reactivateErr   error
+	channels        []admin.ChannelRecord
+	listChansErr    error
+	deleteChansErr  error
 }
 
 func (m *mockStore) GetUserByID(_ context.Context, _ string) (*admin.UserRecord, error) {
@@ -52,6 +55,14 @@ func (m *mockStore) ListUsers(_ context.Context, _, _ string, _, _ int) ([]*admi
 
 func (m *mockStore) ReactivateUser(_ context.Context, _ string) error {
 	return m.reactivateErr
+}
+
+func (m *mockStore) ListChannels(_ context.Context) ([]admin.ChannelRecord, error) {
+	return m.channels, m.listChansErr
+}
+
+func (m *mockStore) DeleteChannel(_ context.Context, _ string) error {
+	return m.deleteChansErr
 }
 
 // --- SuspendUser ---
@@ -245,6 +256,65 @@ func TestService_ReactivateUser_Error(t *testing.T) {
 
 	err := svc.ReactivateUser(t.Context(), "u-1")
 	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ListChannels ---
+
+func TestService_ListChannels_Success(t *testing.T) {
+	channels := []admin.ChannelRecord{
+		{ID: "ch-1", Name: "general"},
+		{ID: "ch-2", Name: "random"},
+	}
+	store := &mockStore{channels: channels}
+	svc := admin.NewService(store)
+
+	got, err := svc.ListChannels(t.Context())
+	if err != nil {
+		t.Fatalf("ListChannels() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2", len(got))
+	}
+}
+
+func TestService_ListChannels_Error(t *testing.T) {
+	store := &mockStore{listChansErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	_, err := svc.ListChannels(t.Context())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- DeleteChannel ---
+
+func TestService_DeleteChannel_Success(t *testing.T) {
+	store := &mockStore{}
+	svc := admin.NewService(store)
+
+	if err := svc.DeleteChannel(t.Context(), "ch-1"); err != nil {
+		t.Fatalf("DeleteChannel() error = %v", err)
+	}
+}
+
+func TestService_DeleteChannel_NotFound(t *testing.T) {
+	store := &mockStore{deleteChansErr: admin.ErrChannelNotFound}
+	svc := admin.NewService(store)
+
+	err := svc.DeleteChannel(t.Context(), "ch-missing")
+	if !errors.Is(err, admin.ErrChannelNotFound) {
+		t.Errorf("error = %v, want ErrChannelNotFound", err)
+	}
+}
+
+func TestService_DeleteChannel_Error(t *testing.T) {
+	store := &mockStore{deleteChansErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	if err := svc.DeleteChannel(t.Context(), "ch-1"); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
