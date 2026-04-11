@@ -246,7 +246,7 @@ function DeleteAccountSection({ token }: { token: string | undefined }) {
           <div>
             <p className="text-sm font-medium text-gray-200">Delete account</p>
             <p className="mt-0.5 text-xs text-gray-500">
-              Permanently deactivates your account. This cannot be undone.
+              Schedules your account for deletion. You have 30 days to change your mind.
             </p>
           </div>
           {!expanded && (
@@ -259,8 +259,8 @@ function DeleteAccountSection({ token }: { token: string | undefined }) {
         {expanded && (
           <div className="border-t border-gray-700 px-5 pb-5 pt-4">
             <p className="mb-4 text-sm text-gray-400">
-              Enter your password to confirm. You will be signed out
-              immediately and will not be able to log back in.
+              Enter your password to confirm. You will be signed out immediately.
+              Your account will be permanently deleted after 30 days — you can reactivate it any time before then by signing in.
             </p>
             <Input
               id="delete-password"
@@ -297,8 +297,8 @@ function DeleteAccountSection({ token }: { token: string | undefined }) {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Are you absolutely sure?"
-        message="This action is irreversible. Your account will be permanently deactivated."
+        title="Schedule account for deletion?"
+        message="Your account will be signed out and scheduled for deletion. You have 30 days to reactivate it by signing in again."
         confirmLabel="Yes, delete my account"
         onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}

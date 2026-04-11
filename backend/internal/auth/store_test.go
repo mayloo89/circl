@@ -14,16 +14,48 @@ import (
 
 // mockQuerier is a test double for the querier interface.
 type mockQuerier struct {
-	row     rowScanner
-	execErr error
+	row      rowScanner
+	execErr  error
+	queryErr error
+	queryRows [][]any // rows returned by Query, each element is one row's values
 }
 
 func (m *mockQuerier) QueryRow(_ context.Context, _ string, _ ...any) rowScanner {
 	return m.row
 }
 
+func (m *mockQuerier) Query(_ context.Context, _ string, _ ...any) (rows, error) {
+	if m.queryErr != nil {
+		return nil, m.queryErr
+	}
+	return &mockRows{data: m.queryRows}, nil
+}
+
 func (m *mockQuerier) Exec(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, m.execErr
+}
+
+// mockRows is a test double for the rows interface.
+type mockRows struct {
+	data [][]any
+	pos  int
+}
+
+func (r *mockRows) Next() bool   { r.pos++; return r.pos <= len(r.data) }
+func (r *mockRows) Err() error   { return nil }
+func (r *mockRows) Close()       {}
+func (r *mockRows) Scan(dest ...any) error {
+	row := r.data[r.pos-1]
+	for i, d := range dest {
+		if i >= len(row) {
+			break
+		}
+		switch v := d.(type) {
+		case *string:
+			*v = row[i].(string)
+		}
+	}
+	return nil
 }
 
 // mockRow is a test double for rowScanner.
@@ -44,6 +76,7 @@ func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 			*dest[3].(*string) = "active"
 			*dest[4].(*bool) = false
 			// dest[5] is *time.Time (email_verified_at), leave as nil
+			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
 		}},
 	}}
@@ -90,6 +123,7 @@ func TestPgStore_CreateUser_Success(t *testing.T) {
 			*dest[3].(*string) = "active"
 			*dest[4].(*bool) = false
 			// dest[5] is *time.Time (email_verified_at), leave as nil
+			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
 		}},
 	}}
@@ -138,6 +172,7 @@ func TestPgStore_GetUserByID_Success(t *testing.T) {
 			*dest[3].(*string) = "active"
 			*dest[4].(*bool) = false
 			// dest[5] is *time.Time (email_verified_at), leave as nil
+			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
 		}},
 	}}
@@ -198,6 +233,126 @@ func TestPgStore_DeleteUser_ExecError(t *testing.T) {
 	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
 
 	if err := store.DeleteUser(t.Context(), "uuid-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ReactivateUser ---
+
+func TestPgStore_ReactivateUser_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.ReactivateUser(t.Context(), "uuid-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_ReactivateUser_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.ReactivateUser(t.Context(), "uuid-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetExpiredDeletedUserIDs ---
+
+func TestPgStore_GetExpiredDeletedUserIDs_Empty(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{queryRows: nil}}
+	ids, err := store.GetExpiredDeletedUserIDs(t.Context(), time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("ids = %v, want empty", ids)
+	}
+}
+
+func TestPgStore_GetExpiredDeletedUserIDs_SomeRows(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		queryRows: [][]any{{"uid-1"}, {"uid-2"}},
+	}}
+	ids, err := store.GetExpiredDeletedUserIDs(t.Context(), time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != "uid-1" || ids[1] != "uid-2" {
+		t.Errorf("ids = %v, want [uid-1 uid-2]", ids)
+	}
+}
+
+func TestPgStore_GetExpiredDeletedUserIDs_QueryError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{queryErr: errors.New("db error")}}
+	if _, err := store.GetExpiredDeletedUserIDs(t.Context(), time.Now()); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetUserUploadKeys ---
+
+func TestPgStore_GetUserUploadKeys_Empty(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{queryRows: nil}}
+	sk, tk, err := store.GetUserUploadKeys(t.Context(), "uid-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sk) != 0 || len(tk) != 0 {
+		t.Errorf("expected empty slices, got sk=%v tk=%v", sk, tk)
+	}
+}
+
+func TestPgStore_GetUserUploadKeys_SomeRows(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{
+		queryRows: [][]any{
+			{"uploads/img1.jpg", "uploads/img1_thumb.jpg"},
+			{"uploads/img2.jpg", ""},
+		},
+	}}
+	sk, tk, err := store.GetUserUploadKeys(t.Context(), "uid-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sk) != 2 || sk[0] != "uploads/img1.jpg" || sk[1] != "uploads/img2.jpg" {
+		t.Errorf("storageKeys = %v, want [uploads/img1.jpg uploads/img2.jpg]", sk)
+	}
+	if len(tk) != 2 || tk[0] != "uploads/img1_thumb.jpg" || tk[1] != "" {
+		t.Errorf("thumbnailKeys = %v, want [uploads/img1_thumb.jpg ]", tk)
+	}
+}
+
+func TestPgStore_GetUserUploadKeys_QueryError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{queryErr: errors.New("db error")}}
+	if _, _, err := store.GetUserUploadKeys(t.Context(), "uid-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- DeleteUserData ---
+
+func TestPgStore_DeleteUserData_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.DeleteUserData(t.Context(), "uid-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_DeleteUserData_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.DeleteUserData(t.Context(), "uid-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- AnonymizeUser ---
+
+func TestPgStore_AnonymizeUser_Success(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{}}
+	if err := store.AnonymizeUser(t.Context(), "uid-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPgStore_AnonymizeUser_ExecError(t *testing.T) {
+	store := &pgStore{db: &mockQuerier{execErr: errors.New("db error")}}
+	if err := store.AnonymizeUser(t.Context(), "uid-1"); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
@@ -354,7 +509,7 @@ func TestStore_Integration(t *testing.T) {
 	defer pool.Close()
 
 	store := NewStore(pool)
-	svc := NewService(store, &noopMailer{})
+	svc := NewService(store, &noopMailer{}, "")
 
 	const email = "store_integration@example.com"
 	t.Cleanup(func() {

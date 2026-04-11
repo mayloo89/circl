@@ -15,18 +15,35 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [emailNotVerified, setEmailNotVerified] = useState(false)
   const [resendSent, setResendSent] = useState(false)
+  const [reactivated, setReactivated] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setEmailNotVerified(false)
+    setReactivated(false)
 
     const parsed = loginSchema.safeParse({ email, password })
     if (!parsed.success) {
       setError(parsed.error.issues[0].message)
       return
     }
+
+    // Call the backend directly first to capture the reactivated flag before
+    // going through NextAuth, which doesn't expose extra response fields.
+    let wasReactivated = false
+    try {
+      const probe = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
+      })
+      if (probe.ok) {
+        const data = await probe.json() as { reactivated?: boolean }
+        wasReactivated = data.reactivated === true
+      }
+    } catch { /* backend unreachable — let signIn handle the error */ }
 
     const result = await signIn("credentials", {
       email: parsed.data.email,
@@ -40,6 +57,8 @@ export default function LoginPage() {
       setEmailNotVerified(true)
     } else if (result?.error) {
       setError("Invalid email or password.")
+    } else if (wasReactivated) {
+      setReactivated(true)
     } else {
       router.push("/")
     }
@@ -57,6 +76,30 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-950">
+
+      {reactivated && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-xl bg-gray-900 p-8 text-center shadow-2xl ring-1 ring-green-800">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-900 ring-1 ring-green-700">
+              <svg className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white">Account reactivated</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              Welcome back! Your account has been restored. All your data is intact.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="mt-6 w-full rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            >
+              Go to home
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
           <h2 className="text-center text-3xl font-bold text-white">Circl</h2>

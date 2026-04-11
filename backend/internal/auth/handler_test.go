@@ -162,6 +162,28 @@ func TestLoginHandler_PasswordTooLong(t *testing.T) {
 	}
 }
 
+func TestLoginHandler_AccountReactivated(t *testing.T) {
+	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com", Reactivated: true}})
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if resp["reactivated"] != true {
+		t.Errorf("reactivated = %v, want true", resp["reactivated"])
+	}
+	if tok, _ := resp["token"].(string); tok == "" {
+		t.Error("expected non-empty token")
+	}
+}
+
 func TestLoginHandler_ContentType(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "1", Email: "u@u.com"}})
 

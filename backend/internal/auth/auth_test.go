@@ -35,8 +35,17 @@ func (m *mockStore) GetUserByID(_ context.Context, _ string) (*userRecord, error
 	return m.record, m.getErr
 }
 
-func (m *mockStore) UpdatePassword(_ context.Context, _, _ string) error { return m.updateErr }
-func (m *mockStore) DeleteUser(_ context.Context, _ string) error        { return m.deleteErr }
+func (m *mockStore) UpdatePassword(_ context.Context, _, _ string) error      { return m.updateErr }
+func (m *mockStore) DeleteUser(_ context.Context, _ string) error             { return m.deleteErr }
+func (m *mockStore) ReactivateUser(_ context.Context, _ string) error { return nil }
+func (m *mockStore) GetExpiredDeletedUserIDs(_ context.Context, _ time.Time) ([]string, error) {
+	return nil, nil
+}
+func (m *mockStore) GetUserUploadKeys(_ context.Context, _ string) ([]string, []string, error) {
+	return nil, nil, nil
+}
+func (m *mockStore) DeleteUserData(_ context.Context, _ string) error  { return nil }
+func (m *mockStore) AnonymizeUser(_ context.Context, _ string) error   { return nil }
 
 func (m *mockStore) CreatePasswordReset(_ context.Context, _, _ string, _ time.Time) error {
 	return nil
@@ -87,7 +96,7 @@ func TestService_Login_Success(t *testing.T) {
 			Status:          "active",
 			EmailVerifiedAt: verifiedAt(),
 		},
-	}, noop)
+	}, noop, "")
 
 	user, err := svc.Login(t.Context(), "user@example.com", "secret")
 	if err != nil {
@@ -99,7 +108,7 @@ func TestService_Login_Success(t *testing.T) {
 }
 
 func TestService_Login_UserNotFound(t *testing.T) {
-	svc := NewService(&mockStore{getErr: errors.New("user not found")}, noop)
+	svc := NewService(&mockStore{getErr: errors.New("user not found")}, noop, "")
 
 	_, err := svc.Login(t.Context(), "nobody@example.com", "password")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -115,7 +124,7 @@ func TestService_Login_WrongPassword(t *testing.T) {
 			PasswordHash: hashPassword(t, "correct"),
 			Status:       "active",
 		},
-	}, noop)
+	}, noop, "")
 
 	_, err := svc.Login(t.Context(), "user@example.com", "wrong")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -131,7 +140,7 @@ func TestService_Login_SuspendedAccount(t *testing.T) {
 			PasswordHash: hashPassword(t, "secret"),
 			Status:       "suspended",
 		},
-	}, noop)
+	}, noop, "")
 
 	_, err := svc.Login(t.Context(), "user@example.com", "secret")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -148,7 +157,7 @@ func TestService_Login_EmailNotVerified(t *testing.T) {
 			Status:          "active",
 			EmailVerifiedAt: nil, // not verified
 		},
-	}, noop)
+	}, noop, "")
 
 	_, err := svc.Login(t.Context(), "user@example.com", "secret")
 	if !errors.Is(err, ErrEmailNotVerified) {
@@ -156,10 +165,51 @@ func TestService_Login_EmailNotVerified(t *testing.T) {
 	}
 }
 
+func TestService_Login_AccountDeleted_WithinGrace(t *testing.T) {
+	deletedAt := time.Now().Add(-time.Hour) // deleted 1 hour ago — within 30-day window
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:              "abc-123",
+			Email:           "user@example.com",
+			PasswordHash:    hashPassword(t, "secret"),
+			Status:          "deleted",
+			EmailVerifiedAt: verifiedAt(),
+			DeletedAt:       &deletedAt,
+		},
+	}, noop, "")
+
+	user, err := svc.Login(t.Context(), "user@example.com", "secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !user.Reactivated {
+		t.Error("expected Reactivated = true")
+	}
+}
+
+func TestService_Login_AccountDeleted_PastGrace(t *testing.T) {
+	deletedAt := time.Now().Add(-31 * 24 * time.Hour) // deleted 31 days ago
+	svc := NewService(&mockStore{
+		record: &userRecord{
+			ID:              "abc-123",
+			Email:           "user@example.com",
+			PasswordHash:    hashPassword(t, "secret"),
+			Status:          "deleted",
+			EmailVerifiedAt: verifiedAt(),
+			DeletedAt:       &deletedAt,
+		},
+	}, noop, "")
+
+	_, err := svc.Login(t.Context(), "user@example.com", "secret")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("got %v, want ErrInvalidCredentials", err)
+	}
+}
+
 // --- Register ---
 
 func TestService_Register_Success(t *testing.T) {
-	svc := NewService(&mockStore{}, noop)
+	svc := NewService(&mockStore{}, noop, "")
 
 	user, err := svc.Register(t.Context(), "new@example.com", "Secure1pass")
 	if err != nil {
@@ -171,7 +221,7 @@ func TestService_Register_Success(t *testing.T) {
 }
 
 func TestService_Register_InvalidEmail(t *testing.T) {
-	svc := NewService(&mockStore{}, noop)
+	svc := NewService(&mockStore{}, noop, "")
 
 	_, err := svc.Register(t.Context(), "not-an-email", "securepass")
 	if !errors.Is(err, ErrInvalidInput) {
@@ -180,7 +230,7 @@ func TestService_Register_InvalidEmail(t *testing.T) {
 }
 
 func TestService_Register_PasswordTooShort(t *testing.T) {
-	svc := NewService(&mockStore{}, noop)
+	svc := NewService(&mockStore{}, noop, "")
 
 	_, err := svc.Register(t.Context(), "user@example.com", "short")
 	if !errors.Is(err, ErrInvalidInput) {
@@ -189,7 +239,7 @@ func TestService_Register_PasswordTooShort(t *testing.T) {
 }
 
 func TestService_Register_PasswordTooLong(t *testing.T) {
-	svc := NewService(&mockStore{}, noop)
+	svc := NewService(&mockStore{}, noop, "")
 
 	longPass := make([]byte, maxPasswordLen+1)
 	for i := range longPass {
@@ -203,7 +253,7 @@ func TestService_Register_PasswordTooLong(t *testing.T) {
 }
 
 func TestService_Register_EmailTaken(t *testing.T) {
-	svc := NewService(&mockStore{createErr: ErrEmailTaken}, noop)
+	svc := NewService(&mockStore{createErr: ErrEmailTaken}, noop, "")
 
 	_, err := svc.Register(t.Context(), "taken@example.com", "Secure1pass")
 	if !errors.Is(err, ErrEmailTaken) {
@@ -221,7 +271,7 @@ func TestService_ChangePassword_Success(t *testing.T) {
 			PasswordHash: hashPassword(t, "OldPass1"),
 			Status:       "active",
 		},
-	}, noop)
+	}, noop, "")
 
 	if err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "NewPass2"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -235,7 +285,7 @@ func TestService_ChangePassword_WrongCurrentPassword(t *testing.T) {
 			PasswordHash: hashPassword(t, "OldPass1"),
 			Status:       "active",
 		},
-	}, noop)
+	}, noop, "")
 
 	err := svc.ChangePassword(t.Context(), "abc-123", "WrongPass1", "NewPass2")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -250,7 +300,7 @@ func TestService_ChangePassword_NewPasswordTooWeak(t *testing.T) {
 			PasswordHash: hashPassword(t, "OldPass1"),
 			Status:       "active",
 		},
-	}, noop)
+	}, noop, "")
 
 	err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "weak")
 	if !errors.Is(err, ErrInvalidInput) {
@@ -259,7 +309,7 @@ func TestService_ChangePassword_NewPasswordTooWeak(t *testing.T) {
 }
 
 func TestService_ChangePassword_UserNotFound(t *testing.T) {
-	svc := NewService(&mockStore{getErr: errors.New("user not found")}, noop)
+	svc := NewService(&mockStore{getErr: errors.New("user not found")}, noop, "")
 
 	err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "NewPass2")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -275,7 +325,7 @@ func TestService_ChangePassword_UpdateError(t *testing.T) {
 			Status:       "active",
 		},
 		updateErr: errors.New("db error"),
-	}, noop)
+	}, noop, "")
 
 	err := svc.ChangePassword(t.Context(), "abc-123", "OldPass1", "NewPass2")
 	if err == nil {
@@ -292,7 +342,7 @@ func TestService_DeleteAccount_Success(t *testing.T) {
 			PasswordHash: hashPassword(t, "MyPass1"),
 			Status:       "active",
 		},
-	}, noop)
+	}, noop, "")
 
 	if err := svc.DeleteAccount(t.Context(), "abc-123", "MyPass1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -306,7 +356,7 @@ func TestService_DeleteAccount_WrongPassword(t *testing.T) {
 			PasswordHash: hashPassword(t, "MyPass1"),
 			Status:       "active",
 		},
-	}, noop)
+	}, noop, "")
 
 	err := svc.DeleteAccount(t.Context(), "abc-123", "WrongPass1")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -315,7 +365,7 @@ func TestService_DeleteAccount_WrongPassword(t *testing.T) {
 }
 
 func TestService_DeleteAccount_UserNotFound(t *testing.T) {
-	svc := NewService(&mockStore{getErr: errors.New("user not found")}, noop)
+	svc := NewService(&mockStore{getErr: errors.New("user not found")}, noop, "")
 
 	err := svc.DeleteAccount(t.Context(), "abc-123", "MyPass1")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -327,7 +377,7 @@ func TestService_DeleteAccount_UserNotFound(t *testing.T) {
 
 func TestService_ForgotPassword_UnknownEmail(t *testing.T) {
 	// Always returns nil regardless of whether the email exists.
-	svc := NewService(&mockStore{getErr: errors.New("not found")}, noop)
+	svc := NewService(&mockStore{getErr: errors.New("not found")}, noop, "")
 	if err := svc.ForgotPassword(t.Context(), "nobody@example.com", "http://localhost:3000"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -340,7 +390,7 @@ func TestService_ForgotPassword_KnownEmail(t *testing.T) {
 			Email:  "user@example.com",
 			Status: "active",
 		},
-	}, noop)
+	}, noop, "")
 	if err := svc.ForgotPassword(t.Context(), "user@example.com", "http://localhost:3000"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -349,7 +399,7 @@ func TestService_ForgotPassword_KnownEmail(t *testing.T) {
 // --- ResetPassword ---
 
 func TestService_ResetPassword_EmptyToken(t *testing.T) {
-	svc := NewService(&mockStore{}, noop)
+	svc := NewService(&mockStore{}, noop, "")
 	err := svc.ResetPassword(t.Context(), "", "NewPass1")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
@@ -357,7 +407,7 @@ func TestService_ResetPassword_EmptyToken(t *testing.T) {
 }
 
 func TestService_ResetPassword_InvalidToken(t *testing.T) {
-	svc := NewService(&mockStore{}, noop) // GetPasswordReset returns "not found"
+	svc := NewService(&mockStore{}, noop, "") // GetPasswordReset returns "not found"
 	err := svc.ResetPassword(t.Context(), "badtoken", "NewPass1")
 	if !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("got %v, want ErrInvalidToken", err)
@@ -376,7 +426,7 @@ func TestService_ResetPassword_WeakPassword(t *testing.T) {
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
 	}
-	svc := NewService(prs, noop)
+	svc := NewService(prs, noop, "")
 	err := svc.ResetPassword(t.Context(), "validtoken", "weak")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
@@ -386,7 +436,7 @@ func TestService_ResetPassword_WeakPassword(t *testing.T) {
 // --- VerifyEmail ---
 
 func TestService_VerifyEmail_EmptyToken(t *testing.T) {
-	svc := NewService(&mockStore{}, noop)
+	svc := NewService(&mockStore{}, noop, "")
 	err := svc.VerifyEmail(t.Context(), "")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
@@ -394,7 +444,7 @@ func TestService_VerifyEmail_EmptyToken(t *testing.T) {
 }
 
 func TestService_VerifyEmail_InvalidToken(t *testing.T) {
-	svc := NewService(&mockStore{}, noop) // GetEmailVerification returns "not found"
+	svc := NewService(&mockStore{}, noop, "") // GetEmailVerification returns "not found"
 	err := svc.VerifyEmail(t.Context(), "badtoken")
 	if !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("got %v, want ErrInvalidToken", err)
@@ -410,7 +460,7 @@ func TestService_VerifyEmail_ExpiredToken(t *testing.T) {
 			ExpiresAt: time.Now().Add(-time.Hour), // expired
 		},
 	}
-	svc := NewService(ev, noop)
+	svc := NewService(ev, noop, "")
 	err := svc.VerifyEmail(t.Context(), "sometoken")
 	if !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("got %v, want ErrInvalidToken", err)
@@ -428,7 +478,7 @@ func TestService_VerifyEmail_AlreadyUsed(t *testing.T) {
 			VerifiedAt: &usedAt,
 		},
 	}
-	svc := NewService(ev, noop)
+	svc := NewService(ev, noop, "")
 	err := svc.VerifyEmail(t.Context(), "sometoken")
 	if !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("got %v, want ErrInvalidToken", err)
@@ -438,7 +488,7 @@ func TestService_VerifyEmail_AlreadyUsed(t *testing.T) {
 // --- ResendVerification ---
 
 func TestService_ResendVerification_UnknownEmail(t *testing.T) {
-	svc := NewService(&mockStore{getErr: errors.New("not found")}, noop)
+	svc := NewService(&mockStore{getErr: errors.New("not found")}, noop, "")
 	if err := svc.ResendVerification(t.Context(), "nobody@example.com", "http://localhost:3000"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -452,7 +502,7 @@ func TestService_ResendVerification_AlreadyVerified(t *testing.T) {
 			Status:          "active",
 			EmailVerifiedAt: verifiedAt(),
 		},
-	}, noop)
+	}, noop, "")
 	if err := svc.ResendVerification(t.Context(), "u@e.com", "http://localhost:3000"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

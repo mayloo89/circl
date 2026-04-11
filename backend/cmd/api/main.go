@@ -99,7 +99,7 @@ func main() {
 	}
 
 	authStore := auth.NewStore(pool)
-	authSvc := auth.NewService(authStore, mailer)
+	authSvc := auth.NewService(authStore, mailer, frontendURL)
 
 	profileStore := profiles.NewStore(pool)
 	profileSvc := profiles.NewService(profileStore)
@@ -321,6 +321,16 @@ func main() {
 		chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
 	})
 	ephemeralCleaner.Start(appCtx)
+
+	// Daily purge of accounts past the 30-day deletion grace period.
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		worker.PurgeDeletedAccounts(appCtx, authStore, fileStorage)
+		for range ticker.C {
+			worker.PurgeDeletedAccounts(appCtx, authStore, fileStorage)
+		}
+	}()
 
 	uploadHandler := uploads.NewHandler(uploadSvc)
 

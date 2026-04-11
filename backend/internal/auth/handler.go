@@ -90,9 +90,10 @@ type registerRequest struct {
 }
 
 type userResponse struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Token string `json:"token"`
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	Token       string `json:"token"`
+	Reactivated bool   `json:"reactivated,omitempty"`
 }
 
 type errorResponse struct {
@@ -198,7 +199,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			return
 		}
 
-		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok})
+		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok, Reactivated: user.Reactivated})
 	}
 }
 

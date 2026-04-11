@@ -21,6 +21,8 @@ const (
 	maxPasswordLen = 128
 )
 
+const deletionGracePeriod = 30 * 24 * time.Hour
+
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email already taken")
@@ -32,9 +34,10 @@ var (
 
 // User holds the data returned after a successful login or registration.
 type User struct {
-	ID      string
-	Email   string
-	IsAdmin bool
+	ID          string
+	Email       string
+	IsAdmin     bool
+	Reactivated bool // true when login automatically restored a soft-deleted account
 }
 
 // Store is the data-access interface required by the auth service.
@@ -44,6 +47,11 @@ type Store interface {
 	GetUserByID(ctx context.Context, userID string) (*userRecord, error)
 	UpdatePassword(ctx context.Context, userID, newHash string) error
 	DeleteUser(ctx context.Context, userID string) error
+	ReactivateUser(ctx context.Context, userID string) error
+	GetExpiredDeletedUserIDs(ctx context.Context, before time.Time) ([]string, error)
+	GetUserUploadKeys(ctx context.Context, userID string) (storageKeys, thumbnailKeys []string, err error)
+	DeleteUserData(ctx context.Context, userID string) error
+	AnonymizeUser(ctx context.Context, userID string) error
 	CreatePasswordReset(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error
 	GetPasswordReset(ctx context.Context, tokenHash string) (*passwordResetRecord, error)
 	MarkPasswordResetUsed(ctx context.Context, id string) error
@@ -81,6 +89,7 @@ type userRecord struct {
 	Status          string
 	IsAdmin         bool
 	EmailVerifiedAt *time.Time
+	DeletedAt       *time.Time
 }
 
 // passwordResetRecord represents a password reset token row.
@@ -103,18 +112,20 @@ type emailVerificationRecord struct {
 
 // Service handles authentication business logic.
 type Service struct {
-	store  Store
-	mailer email.Sender
+	store       Store
+	mailer      email.Sender
+	frontendURL string
 }
 
 // NewService creates a new auth Service backed by the given Store and Sender.
-func NewService(store Store, mailer email.Sender) *Service {
-	return &Service{store: store, mailer: mailer}
+func NewService(store Store, mailer email.Sender, frontendURL string) *Service {
+	return &Service{store: store, mailer: mailer, frontendURL: frontendURL}
 }
 
 // Login verifies credentials and returns the authenticated user.
-// Returns ErrEmailNotVerified if the account exists and credentials are correct
-// but the email address has not yet been confirmed.
+// If the account was soft-deleted within the 30-day grace period it is
+// automatically reactivated and the returned User has Reactivated set to true.
+// Returns ErrEmailNotVerified if the email has not been confirmed.
 func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User, error) {
 	record, err := s.store.GetUserByEmail(ctx, emailAddr)
 	if err != nil {
@@ -122,13 +133,22 @@ func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User,
 		return nil, ErrInvalidCredentials
 	}
 
-	if record.Status != "active" {
+	withinGrace := record.DeletedAt != nil && time.Since(*record.DeletedAt) < deletionGracePeriod
+
+	if record.Status != "active" && !withinGrace {
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$dummyhashfordummypassword000000"), []byte(password))
 		return nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
+	}
+
+	if withinGrace {
+		if err := s.store.ReactivateUser(ctx, record.ID); err != nil {
+			return nil, fmt.Errorf("reactivate user: %w", err)
+		}
+		return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin, Reactivated: true}, nil
 	}
 
 	if record.EmailVerifiedAt == nil {
@@ -185,6 +205,8 @@ func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, n
 }
 
 // DeleteAccount verifies password and soft-deletes the account.
+// The account enters a 30-day grace period during which it can be reactivated.
+// A warning email is sent asynchronously so the user knows how to undo the deletion.
 func (s *Service) DeleteAccount(ctx context.Context, userID, password string) error {
 	record, err := s.store.GetUserByID(ctx, userID)
 	if err != nil {
@@ -196,7 +218,15 @@ func (s *Service) DeleteAccount(ctx context.Context, userID, password string) er
 	if err := bcrypt.CompareHashAndPassword([]byte(record.PasswordHash), []byte(password)); err != nil {
 		return ErrInvalidCredentials
 	}
-	return s.store.DeleteUser(ctx, userID)
+	if err := s.store.DeleteUser(ctx, userID); err != nil {
+		return err
+	}
+	loginURL := s.frontendURL + "/login"
+	bgCtx := context.WithoutCancel(ctx)
+	go func() {
+		_ = s.mailer.Send(bgCtx, email.AccountDeletionMessage(record.Email, loginURL))
+	}()
+	return nil
 }
 
 // ForgotPassword generates a password reset token and sends the reset email.

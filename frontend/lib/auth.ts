@@ -34,8 +34,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const payload = JSON.parse(atob(user.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
             isAdmin = payload.is_admin === true
           } catch { /* ignore malformed token */ }
-          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin }
-        } catch {
+          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin, reactivated: user.reactivated ?? false }
+        } catch (err) {
+          if (err instanceof Error && ["AccountLocked", "EmailNotVerified"].includes(err.message)) {
+            throw err
+          }
           // Backend unavailable — fail closed (do not grant access)
           return null
         }
@@ -51,6 +54,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id
         token.accessToken = user.accessToken
         token.isAdmin = user.isAdmin
+        token.reactivated = user.reactivated
       }
       return token
     },
@@ -60,6 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       session.accessToken = token.accessToken
       session.isAdmin = token.isAdmin as boolean | undefined
+      session.reactivated = token.reactivated as boolean | undefined
       return session
     },
   },
