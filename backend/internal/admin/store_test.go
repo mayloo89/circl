@@ -99,7 +99,7 @@ func TestPgStore_GetUserByID_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	u, err := s.GetUserByID(context.Background(), "u-1")
+	u, err := s.GetUserByID(t.Context(), "u-1")
 	if err != nil {
 		t.Fatalf("GetUserByID() error = %v", err)
 	}
@@ -121,7 +121,7 @@ func TestPgStore_GetUserByID_NotFound(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.GetUserByID(context.Background(), "u-1")
+	_, err := s.GetUserByID(t.Context(), "u-1")
 	if !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("error = %v, want ErrUserNotFound", err)
 	}
@@ -136,7 +136,7 @@ func TestPgStore_GetUserByID_Error(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.GetUserByID(context.Background(), "u-1")
+	_, err := s.GetUserByID(t.Context(), "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -155,7 +155,7 @@ func TestPgStore_SetUserStatus_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	if err := s.SetUserStatus(context.Background(), "u-1", "suspended"); err != nil {
+	if err := s.SetUserStatus(t.Context(), "u-1", "suspended"); err != nil {
 		t.Fatalf("SetUserStatus() error = %v", err)
 	}
 }
@@ -168,7 +168,7 @@ func TestPgStore_SetUserStatus_NotFound(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	err := s.SetUserStatus(context.Background(), "u-missing", "suspended")
+	err := s.SetUserStatus(t.Context(), "u-missing", "suspended")
 	if !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("error = %v, want ErrUserNotFound", err)
 	}
@@ -182,7 +182,7 @@ func TestPgStore_SetUserStatus_Error(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	err := s.SetUserStatus(context.Background(), "u-1", "suspended")
+	err := s.SetUserStatus(t.Context(), "u-1", "suspended")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -207,7 +207,7 @@ func TestPgStore_CreateSuspension_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	sus, err := s.CreateSuspension(context.Background(), "u-1", nil, "spam", "admin-1")
+	sus, err := s.CreateSuspension(t.Context(), "u-1", nil, "spam", "admin-1")
 	if err != nil {
 		t.Fatalf("CreateSuspension() error = %v", err)
 	}
@@ -224,7 +224,7 @@ func TestPgStore_CreateSuspension_Error(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.CreateSuspension(context.Background(), "u-1", nil, "spam", "admin-1")
+	_, err := s.CreateSuspension(t.Context(), "u-1", nil, "spam", "admin-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -243,7 +243,7 @@ func TestPgStore_IsActiveUser_True(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	active, err := s.IsActiveUser(context.Background(), "u-1")
+	active, err := s.IsActiveUser(t.Context(), "u-1")
 	if err != nil {
 		t.Fatalf("IsActiveUser() error = %v", err)
 	}
@@ -263,7 +263,7 @@ func TestPgStore_IsActiveUser_False(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	active, err := s.IsActiveUser(context.Background(), "u-1")
+	active, err := s.IsActiveUser(t.Context(), "u-1")
 	if err != nil {
 		t.Fatalf("IsActiveUser() error = %v", err)
 	}
@@ -280,7 +280,7 @@ func TestPgStore_IsActiveUser_Error(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.IsActiveUser(context.Background(), "u-1")
+	_, err := s.IsActiveUser(t.Context(), "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -319,7 +319,7 @@ func TestPgStore_GetStats_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	st, err := s.GetStats(context.Background())
+	st, err := s.GetStats(t.Context())
 	if err != nil {
 		t.Fatalf("GetStats() error = %v", err)
 	}
@@ -354,7 +354,7 @@ func TestPgStore_GetStats_UserQueryError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.GetStats(context.Background())
+	_, err := s.GetStats(t.Context())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -380,7 +380,7 @@ func TestPgStore_GetStats_ReportQueryError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.GetStats(context.Background())
+	_, err := s.GetStats(t.Context())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -413,7 +413,7 @@ func TestPgStore_GetStats_RoomQueryError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.GetStats(context.Background())
+	_, err := s.GetStats(t.Context())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -436,7 +436,7 @@ func TestPgStore_ListUsers_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	users, total, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	users, total, err := s.ListUsers(t.Context(), "", "", 20, 0)
 	if err != nil {
 		t.Fatalf("ListUsers() error = %v", err)
 	}
@@ -463,7 +463,7 @@ func TestPgStore_ListUsers_Empty(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	users, total, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	users, total, err := s.ListUsers(t.Context(), "", "", 20, 0)
 	if err != nil {
 		t.Fatalf("ListUsers() error = %v", err)
 	}
@@ -489,7 +489,7 @@ func TestPgStore_ListUsers_WithStatus(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	users, total, err := s.ListUsers(context.Background(), "", "active", 20, 0)
+	users, total, err := s.ListUsers(t.Context(), "", "active", 20, 0)
 	if err != nil {
 		t.Fatalf("ListUsers() with status error = %v", err)
 	}
@@ -515,7 +515,7 @@ func TestPgStore_ListUsers_WithQuery(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	users, _, err := s.ListUsers(context.Background(), "alice", "", 20, 0)
+	users, _, err := s.ListUsers(t.Context(), "alice", "", 20, 0)
 	if err != nil {
 		t.Fatalf("ListUsers() with query error = %v", err)
 	}
@@ -533,7 +533,7 @@ func TestPgStore_ListUsers_WithStatusAndQuery(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, _, err := s.ListUsers(context.Background(), "alice", "active", 20, 0)
+	_, _, err := s.ListUsers(t.Context(), "alice", "active", 20, 0)
 	if err != nil {
 		t.Fatalf("ListUsers() with status+query error = %v", err)
 	}
@@ -547,7 +547,7 @@ func TestPgStore_ListUsers_QueryError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, _, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	_, _, err := s.ListUsers(t.Context(), "", "", 20, 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -565,7 +565,7 @@ func TestPgStore_ListUsers_ScanError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, _, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	_, _, err := s.ListUsers(t.Context(), "", "", 20, 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -583,7 +583,7 @@ func TestPgStore_ListUsers_RowsError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, _, err := s.ListUsers(context.Background(), "", "", 20, 0)
+	_, _, err := s.ListUsers(t.Context(), "", "", 20, 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -599,7 +599,7 @@ func TestPgStore_ReactivateUser_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	if err := s.ReactivateUser(context.Background(), "u-1"); err != nil {
+	if err := s.ReactivateUser(t.Context(), "u-1"); err != nil {
 		t.Fatalf("ReactivateUser() error = %v", err)
 	}
 }
@@ -612,7 +612,7 @@ func TestPgStore_ReactivateUser_NotFound(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	err := s.ReactivateUser(context.Background(), "u-missing")
+	err := s.ReactivateUser(t.Context(), "u-missing")
 	if !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("error = %v, want ErrUserNotFound", err)
 	}
@@ -626,7 +626,7 @@ func TestPgStore_ReactivateUser_Error(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	err := s.ReactivateUser(context.Background(), "u-1")
+	err := s.ReactivateUser(t.Context(), "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

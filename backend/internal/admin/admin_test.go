@@ -63,7 +63,7 @@ func TestService_SuspendUser_Success(t *testing.T) {
 	}
 	svc := admin.NewService(store)
 
-	err := svc.SuspendUser(context.Background(), "u-1", "spam", 7, "admin-1")
+	err := svc.SuspendUser(t.Context(), "u-1", "spam", 7, "admin-1")
 	if err != nil {
 		t.Fatalf("SuspendUser() error = %v, want nil", err)
 	}
@@ -74,7 +74,7 @@ func TestService_SuspendUser_AlreadySuspended(t *testing.T) {
 		store := &mockStore{user: &admin.UserRecord{ID: "u-1", Status: status}}
 		svc := admin.NewService(store)
 
-		err := svc.SuspendUser(context.Background(), "u-1", "spam", 7, "admin-1")
+		err := svc.SuspendUser(t.Context(), "u-1", "spam", 7, "admin-1")
 		if !errors.Is(err, admin.ErrAlreadySuspended) {
 			t.Errorf("status=%q: error = %v, want ErrAlreadySuspended", status, err)
 		}
@@ -85,7 +85,7 @@ func TestService_SuspendUser_UserNotFound(t *testing.T) {
 	store := &mockStore{getUserErr: admin.ErrUserNotFound}
 	svc := admin.NewService(store)
 
-	err := svc.SuspendUser(context.Background(), "u-1", "spam", 7, "admin-1")
+	err := svc.SuspendUser(t.Context(), "u-1", "spam", 7, "admin-1")
 	if !errors.Is(err, admin.ErrUserNotFound) {
 		t.Errorf("error = %v, want ErrUserNotFound", err)
 	}
@@ -98,7 +98,7 @@ func TestService_SuspendUser_StatusError(t *testing.T) {
 	}
 	svc := admin.NewService(store)
 
-	err := svc.SuspendUser(context.Background(), "u-1", "spam", 7, "admin-1")
+	err := svc.SuspendUser(t.Context(), "u-1", "spam", 7, "admin-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -112,7 +112,7 @@ func TestService_BanUser_Success(t *testing.T) {
 	}
 	svc := admin.NewService(store)
 
-	err := svc.BanUser(context.Background(), "u-1", "severe violation", "admin-1")
+	err := svc.BanUser(t.Context(), "u-1", "severe violation", "admin-1")
 	if err != nil {
 		t.Fatalf("BanUser() error = %v, want nil", err)
 	}
@@ -122,7 +122,7 @@ func TestService_BanUser_StatusError(t *testing.T) {
 	store := &mockStore{setStatusErr: errors.New("db error")}
 	svc := admin.NewService(store)
 
-	err := svc.BanUser(context.Background(), "u-1", "severe violation", "admin-1")
+	err := svc.BanUser(t.Context(), "u-1", "severe violation", "admin-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -134,7 +134,7 @@ func TestService_IsActiveUser_True(t *testing.T) {
 	store := &mockStore{isActive: true}
 	svc := admin.NewService(store)
 
-	active, err := svc.IsActiveUser(context.Background(), "u-1")
+	active, err := svc.IsActiveUser(t.Context(), "u-1")
 	if err != nil {
 		t.Fatalf("IsActiveUser() error = %v", err)
 	}
@@ -147,7 +147,7 @@ func TestService_IsActiveUser_False(t *testing.T) {
 	store := &mockStore{isActive: false}
 	svc := admin.NewService(store)
 
-	active, err := svc.IsActiveUser(context.Background(), "u-1")
+	active, err := svc.IsActiveUser(t.Context(), "u-1")
 	if err != nil {
 		t.Fatalf("IsActiveUser() error = %v", err)
 	}
@@ -163,7 +163,7 @@ func TestService_GetStats_Success(t *testing.T) {
 	store := &mockStore{stats: st}
 	svc := admin.NewService(store)
 
-	got, err := svc.GetStats(context.Background())
+	got, err := svc.GetStats(t.Context())
 	if err != nil {
 		t.Fatalf("GetStats() error = %v", err)
 	}
@@ -179,7 +179,7 @@ func TestService_GetStats_Error(t *testing.T) {
 	store := &mockStore{getStatsErr: errors.New("db error")}
 	svc := admin.NewService(store)
 
-	_, err := svc.GetStats(context.Background())
+	_, err := svc.GetStats(t.Context())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -195,7 +195,7 @@ func TestService_ListUsers_Success(t *testing.T) {
 	store := &mockStore{users: users, usersTotal: 2}
 	svc := admin.NewService(store)
 
-	got, total, err := svc.ListUsers(context.Background(), "", "", 20, 0)
+	got, total, err := svc.ListUsers(t.Context(), "", "", 20, 0)
 	if err != nil {
 		t.Fatalf("ListUsers() error = %v", err)
 	}
@@ -211,7 +211,7 @@ func TestService_ListUsers_Error(t *testing.T) {
 	store := &mockStore{listUsersErr: errors.New("db error")}
 	svc := admin.NewService(store)
 
-	_, _, err := svc.ListUsers(context.Background(), "", "", 20, 0)
+	_, _, err := svc.ListUsers(t.Context(), "", "", 20, 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -223,7 +223,7 @@ func TestService_ReactivateUser_Success(t *testing.T) {
 	store := &mockStore{}
 	svc := admin.NewService(store)
 
-	err := svc.ReactivateUser(context.Background(), "u-1")
+	err := svc.ReactivateUser(t.Context(), "u-1")
 	if err != nil {
 		t.Fatalf("ReactivateUser() error = %v", err)
 	}
@@ -233,7 +233,7 @@ func TestService_ReactivateUser_NotFound(t *testing.T) {
 	store := &mockStore{reactivateErr: admin.ErrUserNotFound}
 	svc := admin.NewService(store)
 
-	err := svc.ReactivateUser(context.Background(), "u-missing")
+	err := svc.ReactivateUser(t.Context(), "u-missing")
 	if !errors.Is(err, admin.ErrUserNotFound) {
 		t.Errorf("error = %v, want ErrUserNotFound", err)
 	}
@@ -243,7 +243,7 @@ func TestService_ReactivateUser_Error(t *testing.T) {
 	store := &mockStore{reactivateErr: errors.New("db error")}
 	svc := admin.NewService(store)
 
-	err := svc.ReactivateUser(context.Background(), "u-1")
+	err := svc.ReactivateUser(t.Context(), "u-1")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
