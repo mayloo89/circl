@@ -24,7 +24,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }),
           })
 
-          if (res.status === 429) throw new Error("AccountLocked")
+          if (res.status === 429) {
+            const data = await res.json().catch(() => ({}))
+            const msg = ((data as { error?: string }).error ?? "").toLowerCase()
+            if (msg.includes("account temporarily locked")) throw new Error("AccountLocked")
+            throw new Error("RateLimited")
+          }
           if (res.status === 403) throw new Error("EmailNotVerified")
           if (!res.ok) return null
 
@@ -36,7 +41,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           } catch { /* ignore malformed token */ }
           return { id: user.id, email: user.email, name: user.email, accessToken: user.token, role, reactivated: user.reactivated ?? false }
         } catch (err) {
-          if (err instanceof Error && ["AccountLocked", "EmailNotVerified"].includes(err.message)) {
+          if (err instanceof Error && ["AccountLocked", "RateLimited", "EmailNotVerified"].includes(err.message)) {
             throw err
           }
           // Backend unavailable — fail closed (do not grant access)

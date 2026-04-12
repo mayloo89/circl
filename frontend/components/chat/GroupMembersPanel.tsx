@@ -92,10 +92,11 @@ export default function GroupMembersPanel({
         onNameUpdated(newName.trim())
         setRenaming(false)
       } else {
-        setError("Failed to rename group.")
+        const data = await res.json().catch(() => ({}))
+        setError((data as { error?: string }).error ?? "Failed to rename group.")
       }
     } catch {
-      setError("Failed to rename group.")
+      setError("Network error. Please try again.")
     } finally {
       setRenameLoading(false)
     }
@@ -128,10 +129,11 @@ export default function GroupMembersPanel({
         setAddingMember(false)
         loadMembers()
       } else {
-        setError("Failed to add member.")
+        const data = await res.json().catch(() => ({}))
+        setError((data as { error?: string }).error ?? "Failed to add member.")
       }
     } catch {
-      setError("Failed to add member.")
+      setError("Network error. Please try again.")
     } finally {
       setAddLoading(null)
     }
@@ -162,10 +164,11 @@ export default function GroupMembersPanel({
           loadMembers()
         }
       } else {
-        setError("Failed to remove member.")
+        const data = await res.json().catch(() => ({}))
+        setError((data as { error?: string }).error ?? "Failed to remove member.")
       }
     } catch {
-      setError("Failed to remove member.")
+      setError("Network error. Please try again.")
     } finally {
       setRemoveLoading(false)
     }

@@ -39,6 +39,16 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
       })
+      if (probe.status === 429) {
+        const data = await probe.json().catch(() => ({}))
+        const msg = ((data as { error?: string }).error ?? "").toLowerCase()
+        if (msg.includes("account temporarily locked")) {
+          setError("Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.")
+        } else {
+          setError("Too many login attempts from your network. Please wait a moment before trying again.")
+        }
+        return
+      }
       if (probe.ok) {
         const data = await probe.json() as { reactivated?: boolean }
         wasReactivated = data.reactivated === true
@@ -53,6 +63,8 @@ export default function LoginPage() {
 
     if (result?.error === "AccountLocked") {
       setError("Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.")
+    } else if (result?.error === "RateLimited") {
+      setError("Too many login attempts from your network. Please wait a moment before trying again.")
     } else if (result?.error === "EmailNotVerified") {
       setEmailNotVerified(true)
     } else if (result?.error) {
@@ -146,14 +158,9 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                  Password
-                </label>
-                <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
-                  Forgot password?
-                </Link>
-              </div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                Password
+              </label>
               <input
                 id="password"
                 type="password"
@@ -162,6 +169,11 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
               />
+              <div className="mt-1 text-right">
+                <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
           </div>
           <button

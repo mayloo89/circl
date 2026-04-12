@@ -16,7 +16,17 @@ const MAX_BIO = 280
 const MAX_PHOTOS = 6
 const MAX_INTERESTS = 20
 
-const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
+const GENDER_OPTIONS = [
+  "Male",
+  "Female",
+  "Trans male",
+  "Trans female",
+  "Non-binary",
+  "Prefer not to say",
+  "Custom",
+]
+
+const CUSTOM_GENDER = "Custom"
 
 interface InterestSuggestion {
   name: string
@@ -178,7 +188,7 @@ function ProfileSkeleton() {
 }
 
 function effectiveGender(gender: string, genderOther: string): string {
-  return gender === "Other" ? genderOther : gender
+  return gender === CUSTOM_GENDER ? genderOther : gender
 }
 
 function useAutoReset(value: string, setValue: (v: string) => void, delay = 10_000) {
@@ -271,7 +281,7 @@ export default function ProfilePage() {
         setAvatarURL(data.avatar_url)
         setDateOfBirth(data.date_of_birth ?? "")
         if (data.gender && !GENDER_OPTIONS.includes(data.gender)) {
-          setGender("Other")
+          setGender(CUSTOM_GENDER)
           setGenderOther(data.gender)
         } else {
           setGender(data.gender ?? "")
@@ -547,7 +557,7 @@ export default function ProfilePage() {
               <select
                 id="gender"
                 value={gender}
-                onChange={(e) => { setGender(e.target.value); if (e.target.value !== "Other") setGenderOther("") }}
+                onChange={(e) => { setGender(e.target.value); if (e.target.value !== CUSTOM_GENDER) setGenderOther("") }}
                 className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white shadow-sm focus:outline-none focus:ring-1 ${
                   effectiveGender(gender, genderOther) !== (profile?.gender ?? "")
                     ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
@@ -559,7 +569,7 @@ export default function ProfilePage() {
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
-              {gender === "Other" && (
+              {gender === CUSTOM_GENDER && (
                 <input
                   type="text"
                   value={genderOther}

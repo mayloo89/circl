@@ -77,13 +77,17 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), member_ids: [...selected] }),
       })
-      if (!res.ok) { setError("Failed to create group."); return }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError((data as { error?: string }).error ?? "Failed to create group.")
+        return
+      }
       const room = await res.json()
       setName("")
       setSelected(new Set())
       onCreated(room.id as string)
     } catch {
-      setError("Failed to create group.")
+      setError("Network error. Please try again.")
     } finally {
       setLoading(false)
     }
