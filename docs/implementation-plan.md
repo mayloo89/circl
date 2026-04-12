@@ -112,11 +112,12 @@
 - [x] **Chat upload restrictions + image resizing** (PR #49): `CategoryChatAttachment` restricted to images + videos (PDF removed); JPEG/PNG originals resized to `IMAGE_MAX_PX` (default 1024px) before EXIF strip; configurable via env var; `ChatInput` accept updated
 - [x] **Email infrastructure: verification + forgot/reset password** (PR #50): migration 000022 (`email_verified_at`, `password_resets`, `email_verifications`); `email` package (`Sender` interface, `ConsoleSender`, `SMTPSender` via go-mail); Mailpit in docker-compose; hard email enforcement (login blocked until verified); 4 new auth endpoints; token generation with SHA-256 hash storage; email-enumeration-safe responses; register page simplified to email+password; `/forgot-password`, `/reset-password`, `/verify-email` frontend pages
 - [x] **Reversible account deletion** (PR #51): migration 000023 (`deleted_at`); `DELETE /users/me` soft-deletes with grace period; `POST /auth/reactivate` endpoint; login returns `403 account_deleted` within 30-day window; daily `PurgeDeletedAccounts` worker anonymizes expired accounts; login page reactivation banner; settings page updated messaging; `POST /test/users` endpoint behind `TEST_ENDPOINTS_ENABLED` guard for E2E fixtures
+- [x] **Admin panel + role-based access control** (PR #52): migration 000024 replaces `is_admin boolean` with `role TEXT` (`user`/`admin`/`super_admin`); `token.RoleUser/RoleAdmin/RoleSuperAdmin` constants; `RequireSuperAdmin` middleware (super_admin only) alongside existing `RequireAdmin` (admin or super_admin); `HardDeleteUser` purges all user data across 9 tables + anonymizes the user row immediately; `SetUserRole` with role validation; super-admin-only routes (`DELETE /admin/users/{id}`, `PUT /admin/users/{id}/role`); channel CRUD (`POST/PUT/DELETE /admin/channels/{id}`); admin frontend: dashboard, user list with suspend/ban/reactivate/hard-delete/role modals, reports review, channel management with create and edit modals; `session.role` string replaces `session.isAdmin` boolean throughout frontend; profile links from user list
 
-- [ ] **Phase 6 — Observability**: zerolog; OpenTelemetry; Prometheus metrics; Sentry.
-- [ ] **Phase 7 — Security hardening**: CSP/HSTS headers; CSRF; token rotation; input validation; security audit.
-- [ ] **Phase 8 — Deployment**: production hosting (Fly.io + Vercel + Neon + Upstash); CI/CD pipeline.
-- [ ] **Phase 9 — Polish & launch**: accessibility audit; onboarding flow; landing page; final docs.
+- [ ] **Phase 6 — Observability**: zerolog; structured request logging (method, path, status, latency, request_id); replace all log.Printf calls; Prometheus metrics; /metrics endpoint; enhanced /health (DB + Redis ping).
+- [ ] **Phase 7 — Security hardening**: CSP/HSTS headers in Next.js + backend; WebSocket origin validation; token rotation (refresh tokens, Redis blacklist); non-root Docker user; graceful shutdown.
+- [ ] **Phase 8 — Deployment**: CI/CD (GitHub Actions, golangci-lint, coverage); production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets management.
+- [ ] **Phase 9 — Polish & launch**: onboarding wizard; landing page for unauthenticated users; accessibility audit; final docs (README, CONTRIBUTING, OpenAPI).
 
 ## 9. Testing strategy
 - Unit: handlers and services (auth, chat, profiles, contacts).
