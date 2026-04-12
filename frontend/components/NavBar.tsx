@@ -168,7 +168,7 @@ export default function NavBar() {
               >
                 Settings
               </Link>
-              {session.isAdmin && (
+              {(session.role === "admin" || session.role === "super_admin") && (
                 <>
                   <div className="my-1 border-t border-gray-700" />
                   <Link

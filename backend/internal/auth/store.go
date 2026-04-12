@@ -56,14 +56,14 @@ func NewStore(pool *pgxpool.Pool) Store {
 
 func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, status, is_admin, email_verified_at, deleted_at
+		`SELECT id, email, password_hash, status, role, email_verified_at, deleted_at
 		   FROM users
 		  WHERE email = $1
 		  LIMIT 1`,
 		email,
 	)
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.Role, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -74,14 +74,14 @@ func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord
 
 func (s *pgStore) GetUserByID(ctx context.Context, userID string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, status, is_admin, email_verified_at, deleted_at
+		`SELECT id, email, password_hash, status, role, email_verified_at, deleted_at
 		   FROM users
 		  WHERE id = $1
 		  LIMIT 1`,
 		userID,
 	)
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.Role, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -212,11 +212,11 @@ func (s *pgStore) CreateUser(ctx context.Context, email, passwordHash string) (*
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, provider, status)
 		 VALUES ($1, $2, 'local', 'active')
-		 RETURNING id, email, password_hash, status, is_admin, email_verified_at, deleted_at`,
+		 RETURNING id, email, password_hash, status, role, email_verified_at, deleted_at`,
 		email, passwordHash,
 	)
 	var u userRecord
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.IsAdmin, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.Role, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrEmailTaken

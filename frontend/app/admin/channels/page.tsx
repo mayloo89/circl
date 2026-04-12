@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useCallback, useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
+import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -15,11 +16,148 @@ interface Channel {
   created_at: string
 }
 
+function CreateModal({
+  token,
+  onDone,
+  onClose,
+}: {
+  token: string
+  onDone: () => void
+  onClose: () => void
+}) {
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  async function submit() {
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/admin/channels`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name, description }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        setError(text.trim() || "Failed to create channel")
+        return
+      }
+      onDone()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="w-full max-w-md rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-white">Create channel</h2>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Name</label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. general"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Description</label>
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description"
+          />
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={loading} onClick={submit}>Create</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditModal({
+  channel,
+  token,
+  onDone,
+  onClose,
+}: {
+  channel: Channel
+  token: string
+  onDone: () => void
+  onClose: () => void
+}) {
+  const [name, setName] = useState(channel.name)
+  const [description, setDescription] = useState(channel.description)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  async function submit() {
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/admin/channels/${channel.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name, description }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        setError(text.trim() || "Failed to update channel")
+        return
+      }
+      onDone()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="w-full max-w-md rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-white">Edit #{channel.name}</h2>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Name</label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Description</label>
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description"
+          />
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={loading} onClick={submit}>Save</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminChannelsPage() {
   const { data: session } = useSession()
   const [channels, setChannels] = useState<Channel[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<Channel | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Channel | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState("")
@@ -67,7 +205,12 @@ export default function AdminChannelsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-6">Channels</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-white">Channels</h1>
+        <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+          Create channel
+        </Button>
+      </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
@@ -88,7 +231,7 @@ export default function AdminChannelsPage() {
                   <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24 ml-auto" /></td>
                 </tr>
               ))
             ) : channels.length === 0 ? (
@@ -108,13 +251,22 @@ export default function AdminChannelsPage() {
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => { setDeleteTarget(c); setDeleteError("") }}
-                    >
-                      Delete
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setEditTarget(c)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => { setDeleteTarget(c); setDeleteError("") }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -123,7 +275,23 @@ export default function AdminChannelsPage() {
         </table>
       </div>
 
-      {/* Delete confirmation modal */}
+      {createOpen && session?.accessToken && (
+        <CreateModal
+          token={session.accessToken}
+          onDone={() => { setCreateOpen(false); fetchChannels() }}
+          onClose={() => setCreateOpen(false)}
+        />
+      )}
+
+      {editTarget && session?.accessToken && (
+        <EditModal
+          channel={editTarget}
+          token={session.accessToken}
+          onDone={() => { setEditTarget(null); fetchChannels() }}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-sm rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">

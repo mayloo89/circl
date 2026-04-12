@@ -27,7 +27,17 @@ func NewHandler(svc *Service) http.Handler {
 	r.Get("/users", h.listUsers)
 	r.Put("/users/{id}/status", h.updateUserStatus)
 	r.Get("/channels", h.listChannels)
+	r.Post("/channels", h.createChannel)
+	r.Put("/channels/{id}", h.updateChannel)
 	r.Delete("/channels/{id}", h.deleteChannel)
+
+	// Super-admin-only routes.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireSuperAdmin)
+		r.Delete("/users/{id}", h.hardDeleteUser)
+		r.Put("/users/{id}/role", h.setUserRole)
+	})
+
 	return r
 }
 
@@ -94,6 +104,133 @@ func (h *handler) deleteChannel(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.DeleteChannel(r.Context(), channelID)
 	if errors.Is(err, ErrChannelNotFound) {
 		http.Error(w, "Channel not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// createChannel handles POST /admin/channels.
+// Body: {"name":"...","description":"..."}
+func (h *handler) createChannel(w http.ResponseWriter, r *http.Request) {
+	adminID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	ch, err := h.svc.CreateChannel(r.Context(), adminID, req.Name, req.Description)
+	if errors.Is(err, ErrChannelNameTaken) {
+		http.Error(w, "Channel name already taken", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(ch) //nolint:errcheck
+}
+
+// updateChannel handles PUT /admin/channels/{id}.
+// Body: {"name":"...","description":"..."}
+func (h *handler) updateChannel(w http.ResponseWriter, r *http.Request) {
+	channelID := chi.URLParam(r, "id")
+	if channelID == "" {
+		http.Error(w, "Missing channel ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.UpdateChannel(r.Context(), channelID, req.Name, req.Description)
+	if errors.Is(err, ErrChannelNotFound) {
+		http.Error(w, "Channel not found", http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, ErrChannelNameTaken) {
+		http.Error(w, "Channel name already taken", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// hardDeleteUser handles DELETE /admin/users/{id}.
+// Immediately purges all user data with no grace period. Super-admin only.
+func (h *handler) hardDeleteUser(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	if userID == "" {
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	err := h.svc.HardDeleteUser(r.Context(), userID)
+	if errors.Is(err, ErrUserNotFound) {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setUserRole handles PUT /admin/users/{id}/role.
+// Body: {"role":"user"|"admin"|"super_admin"}. Super-admin only.
+func (h *handler) setUserRole(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	if userID == "" {
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.SetUserRole(r.Context(), userID, req.Role)
+	if errors.Is(err, ErrInvalidRole) {
+		http.Error(w, "Invalid role: must be user, admin, or super_admin", http.StatusBadRequest)
+		return
+	}
+	if errors.Is(err, ErrUserNotFound) {
+		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {

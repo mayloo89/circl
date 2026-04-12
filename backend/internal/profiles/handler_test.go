@@ -116,7 +116,7 @@ func serve(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 
 func authedReq(t *testing.T, method, path, body string) *http.Request {
 	t.Helper()
-	tok, err := token.Generate("user-123", false, testSecret, time.Hour)
+	tok, err := token.Generate("user-123", token.RoleUser, testSecret, time.Hour)
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}

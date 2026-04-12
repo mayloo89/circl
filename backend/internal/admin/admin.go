@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/mayloo89/circl/backend/internal/token"
 )
 
 var (
@@ -13,6 +15,10 @@ var (
 	ErrAlreadySuspended = errors.New("user already suspended or banned")
 	// ErrChannelNotFound is returned when the target channel does not exist.
 	ErrChannelNotFound = errors.New("channel not found")
+	// ErrChannelNameTaken is returned when a channel with the same name already exists.
+	ErrChannelNameTaken = errors.New("channel name already taken")
+	// ErrInvalidRole is returned when the given role string is not valid.
+	ErrInvalidRole = errors.New("invalid role")
 )
 
 // UserRecord holds the admin view of a user.
@@ -22,7 +28,7 @@ type UserRecord struct {
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name"`
 	Status      string    `json:"status"`
-	IsAdmin     bool      `json:"is_admin"`
+	Role        string    `json:"role"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -69,6 +75,12 @@ type Store interface {
 	ReactivateUser(ctx context.Context, userID string) error
 	ListChannels(ctx context.Context) ([]ChannelRecord, error)
 	DeleteChannel(ctx context.Context, channelID string) error
+	CreateChannel(ctx context.Context, adminID, name, description string) (*ChannelRecord, error)
+	UpdateChannel(ctx context.Context, channelID, name, description string) error
+	// HardDeleteUser immediately purges all user data and anonymizes the users row.
+	HardDeleteUser(ctx context.Context, userID string) error
+	// SetUserRole updates the role of an existing user.
+	SetUserRole(ctx context.Context, userID, role string) error
 }
 
 // Service wraps the admin Store with business logic.
@@ -140,4 +152,31 @@ func (s *Service) ListChannels(ctx context.Context) ([]ChannelRecord, error) {
 // DeleteChannel removes a channel room and all its messages.
 func (s *Service) DeleteChannel(ctx context.Context, channelID string) error {
 	return s.store.DeleteChannel(ctx, channelID)
+}
+
+// CreateChannel creates a new public channel room owned by the admin.
+func (s *Service) CreateChannel(ctx context.Context, adminID, name, description string) (*ChannelRecord, error) {
+	return s.store.CreateChannel(ctx, adminID, name, description)
+}
+
+// UpdateChannel changes the name and description of an existing channel.
+func (s *Service) UpdateChannel(ctx context.Context, channelID, name, description string) error {
+	return s.store.UpdateChannel(ctx, channelID, name, description)
+}
+
+// HardDeleteUser immediately purges all user data and anonymizes the users row.
+// Unlike the self-delete flow, there is no grace period.
+func (s *Service) HardDeleteUser(ctx context.Context, userID string) error {
+	return s.store.HardDeleteUser(ctx, userID)
+}
+
+// SetUserRole updates the role of an existing user.
+// Valid roles are "user", "admin", and "super_admin".
+func (s *Service) SetUserRole(ctx context.Context, userID, role string) error {
+	switch role {
+	case token.RoleUser, token.RoleAdmin, token.RoleSuperAdmin:
+	default:
+		return ErrInvalidRole
+	}
+	return s.store.SetUserRole(ctx, userID, role)
 }

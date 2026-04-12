@@ -11,22 +11,27 @@ import (
 
 // mockStore is a test double for admin.Store.
 type mockStore struct {
-	user            *admin.UserRecord
-	getUserErr      error
-	setStatusErr    error
-	suspension      *admin.Suspension
-	createSusErr    error
-	isActive        bool
-	isActiveErr     error
-	stats           *admin.Stats
-	getStatsErr     error
-	users           []*admin.UserRecord
-	usersTotal      int
-	listUsersErr    error
-	reactivateErr   error
-	channels        []admin.ChannelRecord
-	listChansErr    error
-	deleteChansErr  error
+	user              *admin.UserRecord
+	getUserErr        error
+	setStatusErr      error
+	suspension        *admin.Suspension
+	createSusErr      error
+	isActive          bool
+	isActiveErr       error
+	stats             *admin.Stats
+	getStatsErr       error
+	users             []*admin.UserRecord
+	usersTotal        int
+	listUsersErr      error
+	reactivateErr     error
+	channels          []admin.ChannelRecord
+	listChansErr      error
+	deleteChansErr    error
+	createdChannel    *admin.ChannelRecord
+	createChanErr     error
+	updateChanErr     error
+	hardDeleteErr     error
+	setRoleErr        error
 }
 
 func (m *mockStore) GetUserByID(_ context.Context, _ string) (*admin.UserRecord, error) {
@@ -63,6 +68,22 @@ func (m *mockStore) ListChannels(_ context.Context) ([]admin.ChannelRecord, erro
 
 func (m *mockStore) DeleteChannel(_ context.Context, _ string) error {
 	return m.deleteChansErr
+}
+
+func (m *mockStore) CreateChannel(_ context.Context, _, _, _ string) (*admin.ChannelRecord, error) {
+	return m.createdChannel, m.createChanErr
+}
+
+func (m *mockStore) UpdateChannel(_ context.Context, _, _, _ string) error {
+	return m.updateChanErr
+}
+
+func (m *mockStore) HardDeleteUser(_ context.Context, _ string) error {
+	return m.hardDeleteErr
+}
+
+func (m *mockStore) SetUserRole(_ context.Context, _, _ string) error {
+	return m.setRoleErr
 }
 
 // --- SuspendUser ---
@@ -315,6 +336,153 @@ func TestService_DeleteChannel_Error(t *testing.T) {
 	svc := admin.NewService(store)
 
 	if err := svc.DeleteChannel(t.Context(), "ch-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- CreateChannel ---
+
+func TestService_CreateChannel_Success(t *testing.T) {
+	ch := &admin.ChannelRecord{ID: "ch-1", Name: "general"}
+	store := &mockStore{createdChannel: ch}
+	svc := admin.NewService(store)
+
+	got, err := svc.CreateChannel(t.Context(), "admin-1", "general", "desc")
+	if err != nil {
+		t.Fatalf("CreateChannel() error = %v", err)
+	}
+	if got.ID != "ch-1" {
+		t.Errorf("ID = %q, want ch-1", got.ID)
+	}
+}
+
+func TestService_CreateChannel_NameTaken(t *testing.T) {
+	store := &mockStore{createChanErr: admin.ErrChannelNameTaken}
+	svc := admin.NewService(store)
+
+	_, err := svc.CreateChannel(t.Context(), "admin-1", "general", "")
+	if !errors.Is(err, admin.ErrChannelNameTaken) {
+		t.Errorf("error = %v, want ErrChannelNameTaken", err)
+	}
+}
+
+func TestService_CreateChannel_Error(t *testing.T) {
+	store := &mockStore{createChanErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	if _, err := svc.CreateChannel(t.Context(), "admin-1", "general", ""); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- UpdateChannel ---
+
+func TestService_UpdateChannel_Success(t *testing.T) {
+	store := &mockStore{}
+	svc := admin.NewService(store)
+
+	if err := svc.UpdateChannel(t.Context(), "ch-1", "new-name", "new-desc"); err != nil {
+		t.Fatalf("UpdateChannel() error = %v", err)
+	}
+}
+
+func TestService_UpdateChannel_NotFound(t *testing.T) {
+	store := &mockStore{updateChanErr: admin.ErrChannelNotFound}
+	svc := admin.NewService(store)
+
+	err := svc.UpdateChannel(t.Context(), "ch-missing", "x", "")
+	if !errors.Is(err, admin.ErrChannelNotFound) {
+		t.Errorf("error = %v, want ErrChannelNotFound", err)
+	}
+}
+
+func TestService_UpdateChannel_NameTaken(t *testing.T) {
+	store := &mockStore{updateChanErr: admin.ErrChannelNameTaken}
+	svc := admin.NewService(store)
+
+	err := svc.UpdateChannel(t.Context(), "ch-1", "taken", "")
+	if !errors.Is(err, admin.ErrChannelNameTaken) {
+		t.Errorf("error = %v, want ErrChannelNameTaken", err)
+	}
+}
+
+func TestService_UpdateChannel_Error(t *testing.T) {
+	store := &mockStore{updateChanErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	if err := svc.UpdateChannel(t.Context(), "ch-1", "x", ""); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- HardDeleteUser ---
+
+func TestService_HardDeleteUser_Success(t *testing.T) {
+	store := &mockStore{}
+	svc := admin.NewService(store)
+
+	if err := svc.HardDeleteUser(t.Context(), "u-1"); err != nil {
+		t.Fatalf("HardDeleteUser() error = %v", err)
+	}
+}
+
+func TestService_HardDeleteUser_NotFound(t *testing.T) {
+	store := &mockStore{hardDeleteErr: admin.ErrUserNotFound}
+	svc := admin.NewService(store)
+
+	err := svc.HardDeleteUser(t.Context(), "u-missing")
+	if !errors.Is(err, admin.ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestService_HardDeleteUser_Error(t *testing.T) {
+	store := &mockStore{hardDeleteErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	if err := svc.HardDeleteUser(t.Context(), "u-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- SetUserRole ---
+
+func TestService_SetUserRole_Success(t *testing.T) {
+	for _, role := range []string{"user", "admin", "super_admin"} {
+		store := &mockStore{}
+		svc := admin.NewService(store)
+
+		if err := svc.SetUserRole(t.Context(), "u-1", role); err != nil {
+			t.Errorf("role=%q: error = %v, want nil", role, err)
+		}
+	}
+}
+
+func TestService_SetUserRole_InvalidRole(t *testing.T) {
+	store := &mockStore{}
+	svc := admin.NewService(store)
+
+	err := svc.SetUserRole(t.Context(), "u-1", "owner")
+	if !errors.Is(err, admin.ErrInvalidRole) {
+		t.Errorf("error = %v, want ErrInvalidRole", err)
+	}
+}
+
+func TestService_SetUserRole_NotFound(t *testing.T) {
+	store := &mockStore{setRoleErr: admin.ErrUserNotFound}
+	svc := admin.NewService(store)
+
+	err := svc.SetUserRole(t.Context(), "u-missing", "user")
+	if !errors.Is(err, admin.ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestService_SetUserRole_Error(t *testing.T) {
+	store := &mockStore{setRoleErr: errors.New("db error")}
+	svc := admin.NewService(store)
+
+	if err := svc.SetUserRole(t.Context(), "u-1", "admin"); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }

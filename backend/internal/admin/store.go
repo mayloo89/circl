@@ -51,11 +51,11 @@ func NewStore(pool *pgxpool.Pool) Store {
 func (s *pgStore) GetUserByID(ctx context.Context, userID string) (*UserRecord, error) {
 	var u UserRecord
 	err := s.db.QueryRow(ctx,
-		`SELECT id, email, status, is_admin, created_at
+		`SELECT id, email, status, role, created_at
 		   FROM users
 		  WHERE id = $1`,
 		userID,
-	).Scan(&u.ID, &u.Email, &u.Status, &u.IsAdmin, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Status, &u.Role, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUserNotFound
@@ -165,7 +165,7 @@ func (s *pgStore) ListUsers(ctx context.Context, query, status string, limit, of
 		SELECT u.id, u.email,
 		       COALESCE(p.username, '') AS username,
 		       COALESCE(p.display_name, '') AS display_name,
-		       u.status, u.is_admin, u.created_at,
+		       u.status, u.role, u.created_at,
 		       COUNT(*) OVER() AS total_count
 		FROM users u
 		LEFT JOIN profiles p ON p.user_id = u.id
@@ -186,7 +186,7 @@ func (s *pgStore) ListUsers(ctx context.Context, query, status string, limit, of
 	for rows.Next() {
 		var u UserRecord
 		if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.DisplayName,
-			&u.Status, &u.IsAdmin, &u.CreatedAt, &total); err != nil {
+			&u.Status, &u.Role, &u.CreatedAt, &total); err != nil {
 			return nil, 0, fmt.Errorf("admin list users scan: %w", err)
 		}
 		users = append(users, &u)
@@ -254,4 +254,100 @@ func (s *pgStore) DeleteChannel(ctx context.Context, channelID string) error {
 		return ErrChannelNotFound
 	}
 	return nil
+}
+
+// CreateChannel inserts a new public channel room.
+func (s *pgStore) CreateChannel(ctx context.Context, adminID, name, description string) (*ChannelRecord, error) {
+	var c ChannelRecord
+	err := s.db.QueryRow(ctx,
+		`INSERT INTO rooms (type, name, description, creator_id)
+		 VALUES ('channel', $1, $2, $3)
+		 RETURNING id, name, COALESCE(description, ''), COALESCE(creator_id::text, ''), created_at`,
+		name, description, adminID,
+	).Scan(&c.ID, &c.Name, &c.Description, &c.CreatorID, &c.CreatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrChannelNameTaken
+		}
+		return nil, fmt.Errorf("admin create channel: %w", err)
+	}
+	return &c, nil
+}
+
+// UpdateChannel changes the name and description of an existing channel.
+func (s *pgStore) UpdateChannel(ctx context.Context, channelID, name, description string) error {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE rooms SET name = $2, description = $3
+		  WHERE id = $1 AND type = 'channel'`,
+		channelID, name, description,
+	)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrChannelNameTaken
+		}
+		return fmt.Errorf("admin update channel: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrChannelNotFound
+	}
+	return nil
+}
+
+// HardDeleteUser immediately purges all user-associated data and anonymizes the
+// users row. Unlike the self-delete grace-period flow, this is irreversible.
+func (s *pgStore) HardDeleteUser(ctx context.Context, userID string) error {
+	stmts := []string{
+		`DELETE FROM uploads              WHERE user_id      = $1`,
+		`DELETE FROM profile_photos       WHERE user_id      = $1`,
+		`DELETE FROM profiles             WHERE user_id      = $1`,
+		`DELETE FROM contacts             WHERE requester_id = $1 OR addressee_id = $1`,
+		`DELETE FROM push_subscriptions   WHERE user_id      = $1`,
+		`DELETE FROM room_members         WHERE user_id      = $1`,
+		`DELETE FROM suspensions          WHERE user_id      = $1`,
+		`DELETE FROM password_resets      WHERE user_id      = $1`,
+		`DELETE FROM email_verifications  WHERE user_id      = $1`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(ctx, stmt, userID); err != nil {
+			return fmt.Errorf("hard delete user: %w", err)
+		}
+	}
+	tag, err := s.db.Exec(ctx,
+		`UPDATE users
+		    SET email         = 'deleted-' || id || '@purged',
+		        password_hash = '',
+		        status        = 'purged',
+		        role          = 'user',
+		        deleted_at    = now()
+		  WHERE id = $1`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("hard delete user anonymize: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// SetUserRole updates the role column for the given user.
+func (s *pgStore) SetUserRole(ctx context.Context, userID, role string) error {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE users SET role = $2 WHERE id = $1`,
+		userID, role,
+	)
+	if err != nil {
+		return fmt.Errorf("set user role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// isUniqueViolation returns true for PostgreSQL unique-constraint errors (code 23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

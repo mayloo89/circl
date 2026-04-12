@@ -133,13 +133,13 @@ func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
 }
 
 func authedReq(r *http.Request) *http.Request {
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }
 
 func adminReq(r *http.Request) *http.Request {
-	tok, _ := token.Generate(testUserID, true, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleAdmin, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }
@@ -704,7 +704,7 @@ func TestWSHandler_InvalidToken(t *testing.T) {
 func TestWSHandler_NotMember(t *testing.T) {
 	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
 	h := chat.NewWSHandler(&mockManager{room: groupRoom, isMember: false}, nil, testSecret, nil)
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -716,7 +716,7 @@ func TestWSHandler_NotMember(t *testing.T) {
 func TestWSHandler_MemberCheckError(t *testing.T) {
 	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
 	h := chat.NewWSHandler(&mockManager{room: groupRoom, memberErr: errors.New("db fail")}, nil, testSecret, nil)
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -757,7 +757,7 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -806,7 +806,7 @@ func TestWSHandler_IgnoresEmptyContent(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -845,7 +845,7 @@ func TestWSHandler_HubShutdownSendsCloseFrame(t *testing.T) {
 	go hub.Run(ctx)
 
 	mgr := &mockManager{isMember: true}
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -893,7 +893,7 @@ func TestWSHandler_SendAttachmentMessage(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -951,7 +951,7 @@ func TestWSHandler_SendVideoAttachment(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -996,7 +996,7 @@ func TestWSHandler_SendFileAttachment(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1033,7 +1033,7 @@ func TestWSHandler_IgnoresUnknownType(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1065,7 +1065,7 @@ func TestWSHandler_IgnoresAttachmentWithEmptyContent(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1096,7 +1096,7 @@ func TestWSHandler_IgnoresAttachmentWithoutUploadID(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1128,7 +1128,7 @@ func TestWSHandler_SaveMessageError(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, msgErr: errors.New("db fail")}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1170,7 +1170,7 @@ func TestWSHandler_SendViewOnceMessage(t *testing.T) {
 		CreatedAt: now,
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1228,7 +1228,7 @@ func TestWSHandler_SendTTLMessage(t *testing.T) {
 		CreatedAt: now,
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1270,7 +1270,7 @@ func TestWSHandler_SendTTLMessage(t *testing.T) {
 func TestWSHandler_InvalidTTLIgnored(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1302,7 +1302,7 @@ func TestWSHandler_TypingEventBroadcast(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, displayName: "Alice"}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1352,7 +1352,7 @@ func TestWSHandler_TypingEventDebounced(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, displayName: "Bob"}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1414,7 +1414,7 @@ func TestWSHandler_ThumbnailURLBroadcast(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
@@ -1500,7 +1500,7 @@ func TestWSHandler_BlockedMessageSilentlyDropped(t *testing.T) {
 		},
 	}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil, cfg))
@@ -1552,7 +1552,7 @@ func TestWSHandler_NotBlockedMessageDelivered(t *testing.T) {
 		},
 	}
 
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil, cfg))

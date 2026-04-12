@@ -91,7 +91,7 @@ func TestPgStore_GetUserByID_Success(t *testing.T) {
 				*dest[0].(*string) = "u-1"
 				*dest[1].(*string) = "user@example.com"
 				*dest[2].(*string) = "active"
-				*dest[3].(*bool) = false
+				*dest[3].(*string) = "user"
 				*dest[4].(*time.Time) = now
 				return nil
 			}}
@@ -425,8 +425,8 @@ func TestPgStore_ListUsers_Success(t *testing.T) {
 	now := time.Now()
 	rows := &mockRows{
 		data: [][]any{
-			{"u-1", "a@example.com", "alice", "Alice", "active", false, now, 2},
-			{"u-2", "b@example.com", "bob", "Bob", "suspended", false, now, 2},
+			{"u-1", "a@example.com", "alice", "Alice", "active", "user", now, 2},
+			{"u-2", "b@example.com", "bob", "Bob", "suspended", "user", now, 2},
 		},
 	}
 	q := &mockQuerier{
@@ -479,7 +479,7 @@ func TestPgStore_ListUsers_WithStatus(t *testing.T) {
 	now := time.Now()
 	rows := &mockRows{
 		data: [][]any{
-			{"u-1", "a@example.com", "alice", "Alice", "active", false, now, 1},
+			{"u-1", "a@example.com", "alice", "Alice", "active", "user", now, 1},
 		},
 	}
 	q := &mockQuerier{
@@ -505,7 +505,7 @@ func TestPgStore_ListUsers_WithQuery(t *testing.T) {
 	now := time.Now()
 	rows := &mockRows{
 		data: [][]any{
-			{"u-1", "alice@example.com", "alice", "Alice", "active", false, now, 1},
+			{"u-1", "alice@example.com", "alice", "Alice", "active", "user", now, 1},
 		},
 	}
 	q := &mockQuerier{
@@ -555,7 +555,7 @@ func TestPgStore_ListUsers_QueryError(t *testing.T) {
 
 func TestPgStore_ListUsers_ScanError(t *testing.T) {
 	rows := &mockRows{
-		data:    [][]any{{"u-1", "a@example.com", "alice", "Alice", "active", false, time.Now(), 1}},
+		data:    [][]any{{"u-1", "a@example.com", "alice", "Alice", "active", "user", time.Now(), 1}},
 		scanErr: errors.New("scan error"),
 	}
 	q := &mockQuerier{
@@ -731,6 +731,118 @@ func TestPgStore_DeleteChannel_Error(t *testing.T) {
 	s := &pgStore{db: q}
 
 	if err := s.DeleteChannel(t.Context(), "ch-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- HardDeleteUser ---
+
+func TestPgStore_HardDeleteUser_Success(t *testing.T) {
+	call := 0
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			call++
+			if call <= 9 { // 9 DELETE statements
+				return pgconn.NewCommandTag("DELETE 1"), nil
+			}
+			return pgconn.NewCommandTag("UPDATE 1"), nil // anonymize
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.HardDeleteUser(t.Context(), "u-1"); err != nil {
+		t.Fatalf("HardDeleteUser() error = %v", err)
+	}
+}
+
+func TestPgStore_HardDeleteUser_DeleteStmtError(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.HardDeleteUser(t.Context(), "u-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_HardDeleteUser_AnonymizeError(t *testing.T) {
+	call := 0
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			call++
+			if call <= 9 {
+				return pgconn.NewCommandTag("DELETE 1"), nil
+			}
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.HardDeleteUser(t.Context(), "u-1"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPgStore_HardDeleteUser_NotFound(t *testing.T) {
+	call := 0
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			call++
+			if call <= 9 {
+				return pgconn.NewCommandTag("DELETE 0"), nil
+			}
+			return pgconn.NewCommandTag("UPDATE 0"), nil // user row not found
+		},
+	}
+	s := &pgStore{db: q}
+
+	err := s.HardDeleteUser(t.Context(), "u-missing")
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+// --- SetUserRole ---
+
+func TestPgStore_SetUserRole_Success(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("UPDATE 1"), nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.SetUserRole(t.Context(), "u-1", "admin"); err != nil {
+		t.Fatalf("SetUserRole() error = %v", err)
+	}
+}
+
+func TestPgStore_SetUserRole_NotFound(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("UPDATE 0"), nil
+		},
+	}
+	s := &pgStore{db: q}
+
+	err := s.SetUserRole(t.Context(), "u-missing", "user")
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestPgStore_SetUserRole_Error(t *testing.T) {
+	q := &mockQuerier{
+		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, errors.New("db error")
+		},
+	}
+	s := &pgStore{db: q}
+
+	if err := s.SetUserRole(t.Context(), "u-1", "admin"); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }

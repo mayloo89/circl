@@ -389,7 +389,7 @@ func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore prof
 			DateOfBirth: &dob,
 		})
 
-		tok, err := token.Generate(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
+		tok, err := token.Generate(user.ID, user.Role, jwtSecret, tokenExpiry)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return

@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
@@ -14,7 +15,7 @@ interface UserRecord {
   username: string
   display_name: string
   status: string
-  is_admin: boolean
+  role: string
   created_at: string
 }
 
@@ -24,6 +25,11 @@ const STATUS_BADGE: Record<string, string> = {
   active: "bg-green-900 text-green-300",
   suspended: "bg-yellow-900 text-yellow-300",
   banned: "bg-red-900 text-red-300",
+}
+
+const ROLE_BADGE: Record<string, string> = {
+  super_admin: "text-yellow-400",
+  admin: "text-indigo-400",
 }
 
 // Modal for suspend action (needs duration + reason)
@@ -101,6 +107,125 @@ function SuspendModal({
   )
 }
 
+// Modal for hard delete — super_admin only
+function HardDeleteModal({
+  user,
+  token,
+  onDone,
+  onClose,
+}: {
+  user: UserRecord
+  token: string
+  onDone: () => void
+  onClose: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  async function confirm() {
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${user.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        setError(text.trim() || "Failed to delete user")
+        return
+      }
+      onDone()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="w-full max-w-sm rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-white">Permanently delete account?</h2>
+        <p className="text-sm text-gray-400">
+          This will immediately purge all data for <span className="text-gray-200">{user.email}</span> — messages will show as &ldquo;deleted user&rdquo; but all profile, contacts, and media will be erased. This cannot be undone.
+        </p>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" loading={loading} onClick={confirm}>Delete permanently</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Modal for changing role — super_admin only
+function RoleModal({
+  user,
+  token,
+  onDone,
+  onClose,
+}: {
+  user: UserRecord
+  token: string
+  onDone: () => void
+  onClose: () => void
+}) {
+  const [role, setRole] = useState(user.role)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  async function submit() {
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${user.id}/role`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        setError(text.trim() || "Failed to update role")
+        return
+      }
+      onDone()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="w-full max-w-sm rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-white">Change role for {user.email}</h2>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div className="flex gap-3">
+          {(["user", "admin", "super_admin"] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRole(r)}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                role === r
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+              }`}
+            >
+              {r === "super_admin" ? "Super admin" : r === "admin" ? "Admin" : "User"}
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={loading} onClick={submit}>Save</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminUsersPage() {
   const { data: session } = useSession()
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -111,8 +236,11 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [suspendTarget, setSuspendTarget] = useState<UserRecord | null>(null)
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<UserRecord | null>(null)
+  const [roleTarget, setRoleTarget] = useState<UserRecord | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  const isSuperAdmin = session?.role === "super_admin"
   const limit = 20
 
   const fetchUsers = useCallback(async () => {
@@ -229,10 +357,21 @@ export default function AdminUsersPage() {
               users.map((u) => (
                 <tr key={u.id} className="bg-gray-950 hover:bg-gray-900">
                   <td className="px-4 py-3">
-                    <p className="text-gray-100 font-medium">{u.display_name || u.username || "—"}</p>
+                    {u.username ? (
+                      <Link
+                        href={`/profile/${u.username}`}
+                        className="text-gray-100 font-medium hover:text-indigo-400 transition-colors"
+                      >
+                        {u.display_name || u.username}
+                      </Link>
+                    ) : (
+                      <p className="text-gray-100 font-medium">{u.display_name || "—"}</p>
+                    )}
                     <p className="text-xs text-gray-500">{u.email}</p>
-                    {u.is_admin && (
-                      <span className="text-xs text-indigo-400 font-medium">admin</span>
+                    {u.role !== "user" && (
+                      <span className={`text-xs font-medium ${ROLE_BADGE[u.role] ?? "text-gray-400"}`}>
+                        {u.role === "super_admin" ? "super admin" : u.role}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -274,6 +413,24 @@ export default function AdminUsersPage() {
                         >
                           Reactivate
                         </Button>
+                      )}
+                      {isSuperAdmin && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setRoleTarget(u)}
+                          >
+                            Role
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => setHardDeleteTarget(u)}
+                          >
+                            Delete
+                          </Button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -318,6 +475,24 @@ export default function AdminUsersPage() {
           token={session.accessToken}
           onDone={() => { setSuspendTarget(null); fetchUsers() }}
           onClose={() => setSuspendTarget(null)}
+        />
+      )}
+
+      {hardDeleteTarget && session?.accessToken && (
+        <HardDeleteModal
+          user={hardDeleteTarget}
+          token={session.accessToken}
+          onDone={() => { setHardDeleteTarget(null); fetchUsers() }}
+          onClose={() => setHardDeleteTarget(null)}
+        />
+      )}
+
+      {roleTarget && session?.accessToken && (
+        <RoleModal
+          user={roleTarget}
+          token={session.accessToken}
+          onDone={() => { setRoleTarget(null); fetchUsers() }}
+          onClose={() => setRoleTarget(null)}
         />
       )}
     </div>

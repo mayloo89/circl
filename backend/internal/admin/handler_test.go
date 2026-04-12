@@ -26,7 +26,14 @@ func serve(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 
 // adminRequest adds a valid admin Bearer token to the request.
 func adminRequest(r *http.Request) *http.Request {
-	tok, _ := token.Generate(testAdminID, true, testSecret, time.Hour)
+	tok, _ := token.Generate(testAdminID, token.RoleAdmin, testSecret, time.Hour)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	return r
+}
+
+// superAdminRequest adds a valid super_admin Bearer token to the request.
+func superAdminRequest(r *http.Request) *http.Request {
+	tok, _ := token.Generate(testAdminID, token.RoleSuperAdmin, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }
@@ -80,7 +87,7 @@ func TestGetStats_Forbidden(t *testing.T) {
 	h := newHandler(store)
 
 	// Non-admin token (isAdmin = false)
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
@@ -181,7 +188,7 @@ func TestListUsers_Forbidden(t *testing.T) {
 	store := &mockStore{users: []*admin.UserRecord{}}
 	h := newHandler(store)
 
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/users", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
@@ -385,7 +392,7 @@ func TestUpdateUserStatus_Forbidden(t *testing.T) {
 	store := &mockStore{}
 	h := newHandler(store)
 
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodPut, "/users/u-1/status", strings.NewReader(`{"action":"ban"}`))
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
@@ -551,7 +558,7 @@ func TestDeleteChannel_Forbidden(t *testing.T) {
 	store := &mockStore{}
 	h := newHandler(store)
 
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 	req := httptest.NewRequest(http.MethodDelete, "/channels/ch-1", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
@@ -559,5 +566,368 @@ func TestDeleteChannel_Forbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+// --- POST /channels ---
+
+func TestCreateChannel_Success(t *testing.T) {
+	ch := &admin.ChannelRecord{ID: "ch-new", Name: "general", Description: "General chat"}
+	store := &mockStore{createdChannel: ch}
+	h := newHandler(store)
+
+	body := `{"name":"general","description":"General chat"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", rec.Code)
+	}
+	var got admin.ChannelRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if got.ID != "ch-new" {
+		t.Errorf("ID = %q, want ch-new", got.ID)
+	}
+}
+
+func TestCreateChannel_MissingName(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	body := `{"description":"no name here"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCreateChannel_NameTaken(t *testing.T) {
+	store := &mockStore{createChanErr: admin.ErrChannelNameTaken}
+	h := newHandler(store)
+
+	body := `{"name":"general"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", rec.Code)
+	}
+}
+
+func TestCreateChannel_InternalError(t *testing.T) {
+	store := &mockStore{createChanErr: errors.New("db error")}
+	h := newHandler(store)
+
+	body := `{"name":"general"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestCreateChannel_MalformedJSON(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader("{bad")))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCreateChannel_Forbidden(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	req := httptest.NewRequest(http.MethodPost, "/channels", strings.NewReader(`{"name":"x"}`))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+// --- PUT /channels/{id} ---
+
+func TestUpdateChannel_Success(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	body := `{"name":"updated","description":"new desc"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/channels/ch-1", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestUpdateChannel_MissingName(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	body := `{"description":"no name"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/channels/ch-1", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestUpdateChannel_NotFound(t *testing.T) {
+	store := &mockStore{updateChanErr: admin.ErrChannelNotFound}
+	h := newHandler(store)
+
+	body := `{"name":"x"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/channels/ch-missing", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestUpdateChannel_NameTaken(t *testing.T) {
+	store := &mockStore{updateChanErr: admin.ErrChannelNameTaken}
+	h := newHandler(store)
+
+	body := `{"name":"taken"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/channels/ch-1", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", rec.Code)
+	}
+}
+
+func TestUpdateChannel_InternalError(t *testing.T) {
+	store := &mockStore{updateChanErr: errors.New("db error")}
+	h := newHandler(store)
+
+	body := `{"name":"x"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/channels/ch-1", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestUpdateChannel_MalformedJSON(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/channels/ch-1", strings.NewReader("{bad")))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestUpdateChannel_Forbidden(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	req := httptest.NewRequest(http.MethodPut, "/channels/ch-1", strings.NewReader(`{"name":"x"}`))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+// --- DELETE /users/{id} ---
+
+func TestHardDeleteUser_Success(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := superAdminRequest(httptest.NewRequest(http.MethodDelete, "/users/u-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestHardDeleteUser_NotFound(t *testing.T) {
+	store := &mockStore{hardDeleteErr: admin.ErrUserNotFound}
+	h := newHandler(store)
+
+	req := superAdminRequest(httptest.NewRequest(http.MethodDelete, "/users/u-missing", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestHardDeleteUser_InternalError(t *testing.T) {
+	store := &mockStore{hardDeleteErr: errors.New("db error")}
+	h := newHandler(store)
+
+	req := superAdminRequest(httptest.NewRequest(http.MethodDelete, "/users/u-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// Regular admin cannot hard-delete (only super_admin can).
+func TestHardDeleteUser_ForbiddenForAdmin(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodDelete, "/users/u-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestHardDeleteUser_Unauthorized(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/u-1", nil)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+// --- PUT /users/{id}/role ---
+
+func TestSetUserRole_Success(t *testing.T) {
+	for _, role := range []string{"user", "admin", "super_admin"} {
+		store := &mockStore{}
+		h := newHandler(store)
+
+		body := `{"role":"` + role + `"}`
+		req := superAdminRequest(httptest.NewRequest(http.MethodPut, "/users/u-1/role", strings.NewReader(body)))
+		rec := httptest.NewRecorder()
+		serve(h, req, rec)
+
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("role=%q: status = %d, want 204", role, rec.Code)
+		}
+	}
+}
+
+func TestSetUserRole_InvalidRole(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	body := `{"role":"owner"}`
+	req := superAdminRequest(httptest.NewRequest(http.MethodPut, "/users/u-1/role", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestSetUserRole_NotFound(t *testing.T) {
+	store := &mockStore{setRoleErr: admin.ErrUserNotFound}
+	h := newHandler(store)
+
+	body := `{"role":"user"}`
+	req := superAdminRequest(httptest.NewRequest(http.MethodPut, "/users/u-missing/role", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestSetUserRole_InternalError(t *testing.T) {
+	store := &mockStore{setRoleErr: errors.New("db error")}
+	h := newHandler(store)
+
+	body := `{"role":"admin"}`
+	req := superAdminRequest(httptest.NewRequest(http.MethodPut, "/users/u-1/role", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestSetUserRole_MalformedJSON(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := superAdminRequest(httptest.NewRequest(http.MethodPut, "/users/u-1/role", strings.NewReader("{bad")))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+// Regular admin cannot set role (only super_admin can).
+func TestSetUserRole_ForbiddenForAdmin(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	body := `{"role":"user"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPut, "/users/u-1/role", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestSetUserRole_Unauthorized(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := httptest.NewRequest(http.MethodPut, "/users/u-1/role", strings.NewReader(`{"role":"admin"}`))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
 	}
 }

@@ -27,7 +27,7 @@ func (n *noFlusherWriter) WriteHeader(code int)         { n.rec.WriteHeader(code
 func TestSSEHandler_Headers(t *testing.T) {
 	hub := notifications.NewHub()
 	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
@@ -47,7 +47,7 @@ func TestSSEHandler_Headers(t *testing.T) {
 func TestSSEHandler_ConnectedEvent(t *testing.T) {
 	hub := notifications.NewHub()
 	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
@@ -64,7 +64,7 @@ func TestSSEHandler_ConnectedEvent(t *testing.T) {
 func TestSSEHandler_ReceivesNotification(t *testing.T) {
 	hub := notifications.NewHub()
 	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
@@ -114,7 +114,7 @@ func TestSSEHandler_Unauthorized_InvalidToken(t *testing.T) {
 func TestSSEHandler_ClientDisconnect(t *testing.T) {
 	hub := notifications.NewHub()
 	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil).WithContext(ctx)
@@ -139,7 +139,7 @@ func TestSSEHandler_ClientDisconnect(t *testing.T) {
 func TestSSEHandler_NoFlusher(t *testing.T) {
 	hub := notifications.NewHub()
 	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
 
 	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil)
 	rec := httptest.NewRecorder()

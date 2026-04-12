@@ -34,7 +34,7 @@ func okHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestRequireAuth_ValidToken(t *testing.T) {
-	tok, _ := token.Generate("user-123", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-123", token.RoleUser, testSecret, time.Hour)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -86,7 +86,7 @@ func TestRequireAuth_InvalidToken(t *testing.T) {
 }
 
 func TestRequireAuth_ExpiredToken(t *testing.T) {
-	tok, _ := token.Generate("user-123", false, testSecret, -time.Second)
+	tok, _ := token.Generate("user-123", token.RoleUser, testSecret, -time.Second)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -108,7 +108,7 @@ func TestUserIDFromContext_Missing(t *testing.T) {
 }
 
 func TestRequireAuth_StatusChecker_ActiveUser(t *testing.T) {
-	tok, _ := token.Generate("user-123", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-123", token.RoleUser, testSecret, time.Hour)
 	checker := &mockStatusChecker{active: true}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -123,7 +123,7 @@ func TestRequireAuth_StatusChecker_ActiveUser(t *testing.T) {
 }
 
 func TestRequireAuth_StatusChecker_SuspendedUser(t *testing.T) {
-	tok, _ := token.Generate("user-123", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-123", token.RoleUser, testSecret, time.Hour)
 	checker := &mockStatusChecker{active: false}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -138,7 +138,7 @@ func TestRequireAuth_StatusChecker_SuspendedUser(t *testing.T) {
 }
 
 func TestRequireAuth_StatusChecker_Error(t *testing.T) {
-	tok, _ := token.Generate("user-123", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-123", token.RoleUser, testSecret, time.Hour)
 	checker := &mockStatusChecker{active: false, err: errors.New("db down")}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -155,7 +155,7 @@ func TestRequireAuth_StatusChecker_Error(t *testing.T) {
 
 func TestRequireAuth_NoChecker_OnlyJWTValidation(t *testing.T) {
 	// Without a checker, only JWT validation is performed.
-	tok, _ := token.Generate("user-123", false, testSecret, time.Hour)
+	tok, _ := token.Generate("user-123", token.RoleUser, testSecret, time.Hour)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -169,7 +169,7 @@ func TestRequireAuth_NoChecker_OnlyJWTValidation(t *testing.T) {
 }
 
 func TestIsAdminFromContext_True(t *testing.T) {
-	tok, _ := token.Generate("admin-user", true, testSecret, time.Hour)
+	tok, _ := token.Generate("admin-user", token.RoleAdmin, testSecret, time.Hour)
 
 	var gotAdmin bool
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +189,7 @@ func TestIsAdminFromContext_True(t *testing.T) {
 }
 
 func TestIsAdminFromContext_False(t *testing.T) {
-	tok, _ := token.Generate("regular-user", false, testSecret, time.Hour)
+	tok, _ := token.Generate("regular-user", token.RoleUser, testSecret, time.Hour)
 
 	var gotAdmin bool
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

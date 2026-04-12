@@ -7,21 +7,27 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	RoleUser       = "user"
+	RoleAdmin      = "admin"
+	RoleSuperAdmin = "super_admin"
+)
+
 // Claims holds the JWT payload. Subject (sub) contains the user ID.
 type Claims struct {
 	jwt.RegisteredClaims
-	IsAdmin bool `json:"is_admin,omitempty"`
+	Role string `json:"role,omitempty"`
 }
 
-// Generate creates a signed HS256 JWT for the given userID and admin flag.
-func Generate(userID string, isAdmin bool, secret string, expiry time.Duration) (string, error) {
+// Generate creates a signed HS256 JWT for the given userID and role.
+func Generate(userID, role, secret string, expiry time.Duration) (string, error) {
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 		},
-		IsAdmin: isAdmin,
+		Role: role,
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
