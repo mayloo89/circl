@@ -3,9 +3,10 @@ import { render, screen } from "@testing-library/react"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
 
 describe("PasswordRequirements", () => {
-  it("renders nothing when password is empty", () => {
-    const { container } = render(<PasswordRequirements password="" />)
-    expect(container.firstChild).toBeNull()
+  it("renders all rules when password is empty", () => {
+    render(<PasswordRequirements password="" />)
+    expect(screen.getByRole("list")).toBeInTheDocument()
+    expect(screen.getAllByRole("listitem")).toHaveLength(PASSWORD_RULES.length)
   })
 
   it("shows all 4 rules when password is non-empty", () => {

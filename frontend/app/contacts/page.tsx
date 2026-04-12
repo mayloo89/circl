@@ -143,77 +143,106 @@ export default function ContactsPage() {
     }
   }
 
+  async function apiError(res: Response, fallback: string): Promise<string> {
+    const data = await res.json().catch(() => ({}))
+    return (data as { error?: string }).error ?? fallback
+  }
+
   async function sendRequest(addresseeID: string) {
     setError("")
-    const res = await fetch(`${API_URL}/contacts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ addressee_id: addresseeID }),
-    })
-    if (res.status === 409) { setError("Contact request already sent."); return }
-    if (!res.ok) { setError("Failed to send contact request."); return }
-    const contact = await res.json()
-    const user = searchResults.find((u) => u.id === addresseeID)
-    if (user) setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, username: user.username, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
-    setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
+    try {
+      const res = await fetch(`${API_URL}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ addressee_id: addresseeID }),
+      })
+      if (res.status === 409) { setError("Contact request already sent."); return }
+      if (!res.ok) { setError(await apiError(res, "Failed to send contact request.")); return }
+      const contact = await res.json()
+      const user = searchResults.find((u) => u.id === addresseeID)
+      if (user) setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, username: user.username, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
+      setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
+    } catch {
+      setError("Network error. Please try again.")
+    }
   }
 
   async function accept(contactID: string) {
     setError("")
-    const res = await fetch(`${API_URL}/contacts/${contactID}/accept`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) { setError("Failed to accept contact."); return }
-    const accepted = pending.find((r) => r.contact_id === contactID)
-    setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
-    if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, username: accepted.username, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
-    refreshPendingCount()
+    try {
+      const res = await fetch(`${API_URL}/contacts/${contactID}/accept`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) { setError(await apiError(res, "Failed to accept contact request.")); return }
+      const accepted = pending.find((r) => r.contact_id === contactID)
+      setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
+      if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, username: accepted.username, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
+      refreshPendingCount()
+    } catch {
+      setError("Network error. Please try again.")
+    }
   }
 
   async function cancelSent(contactID: string) {
     setError("")
-    const res = await fetch(`${API_URL}/contacts/${contactID}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) { setError("Failed to cancel request."); return }
-    setSent((prev) => prev.filter((r) => r.contact_id !== contactID))
+    try {
+      const res = await fetch(`${API_URL}/contacts/${contactID}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) { setError(await apiError(res, "Failed to cancel request.")); return }
+      setSent((prev) => prev.filter((r) => r.contact_id !== contactID))
+    } catch {
+      setError("Network error. Please try again.")
+    }
   }
 
   async function startDM(peerID: string) {
     setError("")
-    const res = await fetch(`${API_URL}/chat/rooms/dm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ peer_id: peerID }),
-    })
-    if (!res.ok) { setError("Failed to open conversation."); return }
-    const room = await res.json()
-    router.push(`/chat/${room.id}`)
+    try {
+      const res = await fetch(`${API_URL}/chat/rooms/dm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ peer_id: peerID }),
+      })
+      if (!res.ok) { setError(await apiError(res, "Failed to open conversation.")); return }
+      const room = await res.json()
+      router.push(`/chat/${room.id}`)
+    } catch {
+      setError("Network error. Please try again.")
+    }
   }
 
   async function remove(contactID: string) {
     setError("")
-    const res = await fetch(`${API_URL}/contacts/${contactID}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) { setError("Failed to remove contact."); return }
-    setContacts((prev) => prev.filter((c) => c.contact_id !== contactID))
-    setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
-    refreshPendingCount()
+    try {
+      const res = await fetch(`${API_URL}/contacts/${contactID}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) { setError(await apiError(res, "Failed to remove contact.")); return }
+      setContacts((prev) => prev.filter((c) => c.contact_id !== contactID))
+      setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
+      refreshPendingCount()
+    } catch {
+      setError("Network error. Please try again.")
+    }
   }
 
   async function unblock(userID: string) {
     setError("")
-    const res = await fetch(`${API_URL}/contacts/${userID}/block`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) { setError("Failed to unblock user."); return }
-    setBlocked((prev) => prev.filter((b) => b.user_id !== userID))
-    setUnblockConfirm(null)
+    try {
+      const res = await fetch(`${API_URL}/contacts/${userID}/block`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) { setError(await apiError(res, "Failed to unblock user.")); return }
+      setBlocked((prev) => prev.filter((b) => b.user_id !== userID))
+      setUnblockConfirm(null)
+    } catch {
+      setError("Network error. Please try again.")
+    }
   }
 
   if (status === "loading" || loading) {

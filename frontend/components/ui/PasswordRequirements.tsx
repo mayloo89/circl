@@ -6,7 +6,6 @@ export const PASSWORD_RULES = [
 ]
 
 export default function PasswordRequirements({ password }: { password: string }) {
-  if (!password) return null
   return (
     <ul className="flex flex-col gap-1 pl-0.5" aria-label="Password requirements">
       {PASSWORD_RULES.map(({ label, test }) => {

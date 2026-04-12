@@ -27,6 +27,8 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("")
   const [dateOfBirth, setDateOfBirth] = useState("")
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [touched, setTouched] = useState<Partial<Record<keyof FieldErrors, boolean>>>({})
+  const [passwordFocused, setPasswordFocused] = useState(false)
   const [submitError, setSubmitError] = useState("")
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
@@ -78,6 +80,19 @@ export default function RegisterPage() {
       ...prev,
       [field]: result.success ? undefined : result.error?.issues[0]?.message,
     }))
+  }
+
+  function touchField(field: keyof FieldErrors) {
+    setTouched((prev) => ({ ...prev, [field]: true }))
+  }
+
+  function handleChange(field: keyof FieldErrors, value: string) {
+    if (field === "email") setEmail(value)
+    else if (field === "password") setPassword(value)
+    else if (field === "confirm") setConfirm(value)
+    else if (field === "username") { setUsername(value); setUsernameAvailable(null) }
+    else if (field === "date_of_birth") setDateOfBirth(value)
+    if (touched[field]) validateField(field, value)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -192,8 +207,8 @@ export default function RegisterPage() {
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onBlur={(e) => validateField("email", e.target.value)}
+                onChange={(e) => handleChange("email", e.target.value)}
+                onBlur={(e) => { touchField("email"); validateField("email", e.target.value) }}
                 className={fieldClass(fieldErrors.email)}
               />
               {fieldErrors.email && (
@@ -211,8 +226,8 @@ export default function RegisterPage() {
                   type="text"
                   required
                   value={username}
-                  onChange={(e) => { setUsername(e.target.value); setUsernameAvailable(null) }}
-                  onBlur={(e) => validateField("username", e.target.value)}
+                  onChange={(e) => handleChange("username", e.target.value)}
+                  onBlur={(e) => { touchField("username"); validateField("username", e.target.value) }}
                   className={fieldClass(fieldErrors.username)}
                   placeholder="lowercase_letters_digits"
                 />
@@ -243,8 +258,8 @@ export default function RegisterPage() {
                 type="date"
                 required
                 value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                onBlur={(e) => validateField("date_of_birth", e.target.value)}
+                onChange={(e) => handleChange("date_of_birth", e.target.value)}
+                onBlur={(e) => { touchField("date_of_birth"); validateField("date_of_birth", e.target.value) }}
                 className={fieldClass(fieldErrors.date_of_birth)}
               />
               {fieldErrors.date_of_birth && (
@@ -261,14 +276,15 @@ export default function RegisterPage() {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onBlur={(e) => validateField("password", e.target.value)}
+                onChange={(e) => handleChange("password", e.target.value)}
+                onBlur={(e) => { touchField("password"); validateField("password", e.target.value); setPasswordFocused(false) }}
+                onFocus={() => setPasswordFocused(true)}
                 className={fieldClass(fieldErrors.password)}
               />
               {fieldErrors.password && (
                 <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.password}</p>
               )}
-              {password && (
+              {(passwordFocused || password) && (
                 <div className="mt-2">
                   <PasswordRequirements password={password} />
                 </div>
@@ -284,8 +300,8 @@ export default function RegisterPage() {
                 type="password"
                 required
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                onBlur={(e) => validateField("confirm", e.target.value)}
+                onChange={(e) => handleChange("confirm", e.target.value)}
+                onBlur={(e) => { touchField("confirm"); validateField("confirm", e.target.value) }}
                 className={fieldClass(fieldErrors.confirm)}
               />
               {fieldErrors.confirm && (

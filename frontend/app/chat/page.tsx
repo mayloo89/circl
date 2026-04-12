@@ -145,19 +145,17 @@ export default function ChatPage() {
         />
       )}
       <div className="w-full max-w-lg space-y-6 px-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-white">Messages</h1>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setCreateGroupOpen(true)}
-              aria-label="Create group"
-            >
-              New group
-            </Button>
-            <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>← Home</Button>
-          </div>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>←</Button>
+          <h1 className="flex-1 text-3xl font-bold text-white">Messages</h1>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setCreateGroupOpen(true)}
+            aria-label="Create group"
+          >
+            New group
+          </Button>
         </div>
 
         {error && (
