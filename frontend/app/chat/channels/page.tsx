@@ -109,7 +109,7 @@ export default function ChannelsPage() {
   const [query, setQuery] = useState("")
 
   const token = session?.accessToken
-  const isAdmin = session?.isAdmin === true
+  const isAdmin = session?.role === "admin" || session?.role === "super_admin"
 
   function loadChannels() {
     if (!token) return

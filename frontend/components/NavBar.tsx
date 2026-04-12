@@ -168,6 +168,19 @@ export default function NavBar() {
               >
                 Settings
               </Link>
+              {(session.role === "admin" || session.role === "super_admin") && (
+                <>
+                  <div className="my-1 border-t border-gray-700" />
+                  <Link
+                    href="/admin"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-2 text-sm text-amber-400 hover:bg-gray-700 hover:text-amber-300"
+                  >
+                    Admin panel
+                  </Link>
+                </>
+              )}
               <div className="my-1 border-t border-gray-700" />
               <button
                 role="menuitem"

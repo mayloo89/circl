@@ -4,12 +4,12 @@ import "next-auth/jwt"
 declare module "next-auth" {
   interface Session {
     accessToken?: string
-    isAdmin?: boolean
+    role?: string
     reactivated?: boolean
   }
   interface User {
     accessToken?: string
-    isAdmin?: boolean
+    role?: string
     reactivated?: boolean
   }
 }
@@ -17,7 +17,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string
-    isAdmin?: boolean
+    role?: string
     reactivated?: boolean
   }
 }

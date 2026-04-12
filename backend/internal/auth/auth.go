@@ -36,7 +36,7 @@ var (
 type User struct {
 	ID          string
 	Email       string
-	IsAdmin     bool
+	Role        string
 	Reactivated bool // true when login automatically restored a soft-deleted account
 }
 
@@ -87,7 +87,7 @@ type userRecord struct {
 	Email           string
 	PasswordHash    string
 	Status          string
-	IsAdmin         bool
+	Role            string
 	EmailVerifiedAt *time.Time
 	DeletedAt       *time.Time
 }
@@ -148,14 +148,14 @@ func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User,
 		if err := s.store.ReactivateUser(ctx, record.ID); err != nil {
 			return nil, fmt.Errorf("reactivate user: %w", err)
 		}
-		return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin, Reactivated: true}, nil
+		return &User{ID: record.ID, Email: record.Email, Role: record.Role, Reactivated: true}, nil
 	}
 
 	if record.EmailVerifiedAt == nil {
 		return nil, ErrEmailNotVerified
 	}
 
-	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
+	return &User{ID: record.ID, Email: record.Email, Role: record.Role}, nil
 }
 
 // Register creates a new local user account and returns the created user.
@@ -179,7 +179,7 @@ func (s *Service) Register(ctx context.Context, emailAddr, password string) (*Us
 		return nil, err
 	}
 
-	return &User{ID: record.ID, Email: record.Email, IsAdmin: record.IsAdmin}, nil
+	return &User{ID: record.ID, Email: record.Email, Role: record.Role}, nil
 }
 
 // ChangePassword verifies currentPassword and replaces it with newPassword.

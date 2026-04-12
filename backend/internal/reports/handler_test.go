@@ -49,7 +49,7 @@ func (m *mockLimiter) Allow(_ context.Context, _ string, _ int, _ time.Duration)
 
 // adminAuthedRequest adds a valid admin Bearer token to the request.
 func adminAuthedRequest(r *http.Request) *http.Request {
-	tok, _ := token.Generate(adminUserID, true, testSecret, time.Hour)
+	tok, _ := token.Generate(adminUserID, token.RoleAdmin, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }
@@ -92,7 +92,7 @@ func serve(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 
 // authedRequest adds a valid Bearer token for testUserID to the request.
 func authedRequest(r *http.Request) *http.Request {
-	tok, _ := token.Generate(testUserID, false, testSecret, time.Hour)
+	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	return r
 }

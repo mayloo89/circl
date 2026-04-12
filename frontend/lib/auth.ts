@@ -29,12 +29,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!res.ok) return null
 
           const user = await res.json()
-          let isAdmin = false
+          let role = "user"
           try {
             const payload = JSON.parse(atob(user.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
-            isAdmin = payload.is_admin === true
+            if (typeof payload.role === "string") role = payload.role
           } catch { /* ignore malformed token */ }
-          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, isAdmin, reactivated: user.reactivated ?? false }
+          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, role, reactivated: user.reactivated ?? false }
         } catch (err) {
           if (err instanceof Error && ["AccountLocked", "EmailNotVerified"].includes(err.message)) {
             throw err
@@ -53,7 +53,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id
         token.accessToken = user.accessToken
-        token.isAdmin = user.isAdmin
+        token.role = user.role
         token.reactivated = user.reactivated
       }
       return token
@@ -63,7 +63,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string
       }
       session.accessToken = token.accessToken
-      session.isAdmin = token.isAdmin as boolean | undefined
+      session.role = token.role as string | undefined
       session.reactivated = token.reactivated as boolean | undefined
       return session
     },

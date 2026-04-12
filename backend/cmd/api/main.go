@@ -333,6 +333,7 @@ func main() {
 	}()
 
 	uploadHandler := uploads.NewHandler(uploadSvc)
+	adminHandler := admin.NewHandler(adminSvc)
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
@@ -342,7 +343,7 @@ func main() {
 		testHandler = newTestHandler(pool, authSvc, profileStore, jwtSecret, tokenExpiry)
 	}
 
-	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, localStorageHandler, testHandler, requireAuth)
+	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, adminHandler, localStorageHandler, testHandler, requireAuth)
 
 	log.Printf("Server running on :%s (env: %s)\n", port, env)
 	if err := http.ListenAndServe(":"+port, h); err != nil {
@@ -388,7 +389,7 @@ func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore prof
 			DateOfBirth: &dob,
 		})
 
-		tok, err := token.Generate(user.ID, user.IsAdmin, jwtSecret, tokenExpiry)
+		tok, err := token.Generate(user.ID, user.Role, jwtSecret, tokenExpiry)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return

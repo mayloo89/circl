@@ -74,7 +74,7 @@ func TestPgStore_GetUserByEmail_Success(t *testing.T) {
 			*dest[1].(*string) = "user@example.com"
 			*dest[2].(*string) = "$2a$10$hash"
 			*dest[3].(*string) = "active"
-			*dest[4].(*bool) = false
+			*dest[4].(*string) = "user"
 			// dest[5] is *time.Time (email_verified_at), leave as nil
 			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
@@ -121,7 +121,7 @@ func TestPgStore_CreateUser_Success(t *testing.T) {
 			*dest[1].(*string) = "new@example.com"
 			*dest[2].(*string) = "$2a$10$hash"
 			*dest[3].(*string) = "active"
-			*dest[4].(*bool) = false
+			*dest[4].(*string) = "user"
 			// dest[5] is *time.Time (email_verified_at), leave as nil
 			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil
@@ -170,7 +170,7 @@ func TestPgStore_GetUserByID_Success(t *testing.T) {
 			*dest[1].(*string) = "user@example.com"
 			*dest[2].(*string) = "$2a$10$hash"
 			*dest[3].(*string) = "active"
-			*dest[4].(*bool) = false
+			*dest[4].(*string) = "user"
 			// dest[5] is *time.Time (email_verified_at), leave as nil
 			// dest[6] is *time.Time (deleted_at), leave as nil
 			return nil

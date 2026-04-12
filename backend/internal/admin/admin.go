@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/mayloo89/circl/backend/internal/token"
 )
 
 var (
@@ -11,15 +13,23 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 	// ErrAlreadySuspended is returned when the user is already suspended or banned.
 	ErrAlreadySuspended = errors.New("user already suspended or banned")
+	// ErrChannelNotFound is returned when the target channel does not exist.
+	ErrChannelNotFound = errors.New("channel not found")
+	// ErrChannelNameTaken is returned when a channel with the same name already exists.
+	ErrChannelNameTaken = errors.New("channel name already taken")
+	// ErrInvalidRole is returned when the given role string is not valid.
+	ErrInvalidRole = errors.New("invalid role")
 )
 
 // UserRecord holds the admin view of a user.
 type UserRecord struct {
-	ID        string
-	Email     string
-	Status    string
-	IsAdmin   bool
-	CreatedAt time.Time
+	ID          string    `json:"id"`
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Status      string    `json:"status"`
+	Role        string    `json:"role"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Suspension records a moderation action against a user.
@@ -32,6 +42,27 @@ type Suspension struct {
 	CreatedAt      time.Time
 }
 
+// ChannelRecord holds the admin view of a public channel.
+type ChannelRecord struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatorID   string    `json:"creator_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Stats holds aggregate counts for the admin dashboard.
+type Stats struct {
+	TotalUsers     int `json:"total_users"`
+	ActiveUsers    int `json:"active_users"`
+	SuspendedUsers int `json:"suspended_users"`
+	BannedUsers    int `json:"banned_users"`
+	DeletedUsers   int `json:"deleted_users"`
+	TotalReports   int `json:"total_reports"`
+	PendingReports int `json:"pending_reports"`
+	TotalRooms     int `json:"total_rooms"`
+}
+
 // Store is the data-access interface for admin/moderation operations.
 type Store interface {
 	GetUserByID(ctx context.Context, userID string) (*UserRecord, error)
@@ -39,6 +70,17 @@ type Store interface {
 	CreateSuspension(ctx context.Context, userID string, suspendedUntil *time.Time, reason, createdBy string) (*Suspension, error)
 	// IsActiveUser satisfies middleware.UserStatusChecker.
 	IsActiveUser(ctx context.Context, userID string) (bool, error)
+	GetStats(ctx context.Context) (*Stats, error)
+	ListUsers(ctx context.Context, query, status string, limit, offset int) ([]*UserRecord, int, error)
+	ReactivateUser(ctx context.Context, userID string) error
+	ListChannels(ctx context.Context) ([]ChannelRecord, error)
+	DeleteChannel(ctx context.Context, channelID string) error
+	CreateChannel(ctx context.Context, adminID, name, description string) (*ChannelRecord, error)
+	UpdateChannel(ctx context.Context, channelID, name, description string) error
+	// HardDeleteUser immediately purges all user data and anonymizes the users row.
+	HardDeleteUser(ctx context.Context, userID string) error
+	// SetUserRole updates the role of an existing user.
+	SetUserRole(ctx context.Context, userID, role string) error
 }
 
 // Service wraps the admin Store with business logic.
@@ -85,4 +127,56 @@ func (s *Service) BanUser(ctx context.Context, userID, reason, adminID string) e
 	}
 	_, err := s.store.CreateSuspension(ctx, userID, nil, reason, adminID)
 	return err
+}
+
+// GetStats returns aggregate counts for the admin dashboard.
+func (s *Service) GetStats(ctx context.Context) (*Stats, error) {
+	return s.store.GetStats(ctx)
+}
+
+// ListUsers returns a paginated list of users with optional search and status filter.
+func (s *Service) ListUsers(ctx context.Context, query, status string, limit, offset int) ([]*UserRecord, int, error) {
+	return s.store.ListUsers(ctx, query, status, limit, offset)
+}
+
+// ReactivateUser sets the user's status back to 'active'.
+func (s *Service) ReactivateUser(ctx context.Context, userID string) error {
+	return s.store.ReactivateUser(ctx, userID)
+}
+
+// ListChannels returns all public channel rooms.
+func (s *Service) ListChannels(ctx context.Context) ([]ChannelRecord, error) {
+	return s.store.ListChannels(ctx)
+}
+
+// DeleteChannel removes a channel room and all its messages.
+func (s *Service) DeleteChannel(ctx context.Context, channelID string) error {
+	return s.store.DeleteChannel(ctx, channelID)
+}
+
+// CreateChannel creates a new public channel room owned by the admin.
+func (s *Service) CreateChannel(ctx context.Context, adminID, name, description string) (*ChannelRecord, error) {
+	return s.store.CreateChannel(ctx, adminID, name, description)
+}
+
+// UpdateChannel changes the name and description of an existing channel.
+func (s *Service) UpdateChannel(ctx context.Context, channelID, name, description string) error {
+	return s.store.UpdateChannel(ctx, channelID, name, description)
+}
+
+// HardDeleteUser immediately purges all user data and anonymizes the users row.
+// Unlike the self-delete flow, there is no grace period.
+func (s *Service) HardDeleteUser(ctx context.Context, userID string) error {
+	return s.store.HardDeleteUser(ctx, userID)
+}
+
+// SetUserRole updates the role of an existing user.
+// Valid roles are "user", "admin", and "super_admin".
+func (s *Service) SetUserRole(ctx context.Context, userID, role string) error {
+	switch role {
+	case token.RoleUser, token.RoleAdmin, token.RoleSuperAdmin:
+	default:
+		return ErrInvalidRole
+	}
+	return s.store.SetUserRole(ctx, userID, role)
 }
