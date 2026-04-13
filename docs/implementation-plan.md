@@ -7,9 +7,11 @@
 - 1:1 chat and group rooms; persistent message history.
 - Online/offline presence with "last seen".
 - Photo and file uploads with CDN delivery.
+- Multi-language UI: Spanish (default), English, Portuguese — user-selectable, persisted to backend.
 
 ## 2. Stack
 - Frontend: Next.js (App Router) + React + TypeScript + Tailwind. Playwright for e2e.
+- i18n: next-intl — prefix-based locale routing (`/es/`, `/en/`, `/pt/`), `useTranslations` / `getTranslations`, `createNavigation`.
 - Backend: Go (chi) + middlewares; WebSockets (gorilla/websocket).
 - Auth: NextAuth.js (Auth.js) v5 with credentials provider; httpOnly cookies; JWT HS256.
 - DB: PostgreSQL + golang-migrate for schema migrations; pgx/v5 connection pool.
@@ -113,11 +115,13 @@
 - [x] **Email infrastructure: verification + forgot/reset password** (PR #50): migration 000022 (`email_verified_at`, `password_resets`, `email_verifications`); `email` package (`Sender` interface, `ConsoleSender`, `SMTPSender` via go-mail); Mailpit in docker-compose; hard email enforcement (login blocked until verified); 4 new auth endpoints; token generation with SHA-256 hash storage; email-enumeration-safe responses; register page simplified to email+password; `/forgot-password`, `/reset-password`, `/verify-email` frontend pages
 - [x] **Reversible account deletion** (PR #51): migration 000023 (`deleted_at`); `DELETE /users/me` soft-deletes with grace period; `POST /auth/reactivate` endpoint; login returns `403 account_deleted` within 30-day window; daily `PurgeDeletedAccounts` worker anonymizes expired accounts; login page reactivation banner; settings page updated messaging; `POST /test/users` endpoint behind `TEST_ENDPOINTS_ENABLED` guard for E2E fixtures
 - [x] **Admin panel + role-based access control** (PR #52): migration 000024 replaces `is_admin boolean` with `role TEXT` (`user`/`admin`/`super_admin`); `token.RoleUser/RoleAdmin/RoleSuperAdmin` constants; `RequireSuperAdmin` middleware (super_admin only) alongside existing `RequireAdmin` (admin or super_admin); `HardDeleteUser` purges all user data across 9 tables + anonymizes the user row immediately; `SetUserRole` with role validation; super-admin-only routes (`DELETE /admin/users/{id}`, `PUT /admin/users/{id}/role`); channel CRUD (`POST/PUT/DELETE /admin/channels/{id}`); admin frontend: dashboard, user list with suspend/ban/reactivate/hard-delete/role modals, reports review, channel management with create and edit modals; `session.role` string replaces `session.isAdmin` boolean throughout frontend; profile links from user list
+- [x] **UX polish** (PR #53): touched-state inline validation on registration; error messages read from backend response body; 429 rate-limit differentiated from credential errors on login; change-password collapses behind button; delete-account moved to modal; gender options extended (trans male/female, non-binary, custom free-text)
+- [x] **Internationalisation** (PR #54): next-intl with prefix-based URL routing (`/es/`, `/en/`, `/pt/`); all pages and components translated into ES/EN/PT; `app/[locale]/` restructure; language switcher in NavBar and Settings persists to backend; shared `apierror` package with stable machine-readable error codes across all 10 handlers; migration 000025 adds `locale` to `profile_preferences`; auth + intl middleware merged into single `middleware.ts`
 
-- [ ] **Phase 6 — Observability**: zerolog; structured request logging (method, path, status, latency, request_id); replace all log.Printf calls; Prometheus metrics; /metrics endpoint; enhanced /health (DB + Redis ping).
-- [ ] **Phase 7 — Security hardening**: CSP/HSTS headers in Next.js + backend; WebSocket origin validation; token rotation (refresh tokens, Redis blacklist); non-root Docker user; graceful shutdown.
-- [ ] **Phase 8 — Deployment**: CI/CD (GitHub Actions, golangci-lint, coverage); production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets management.
-- [ ] **Phase 9 — Polish & launch**: onboarding wizard; landing page for unauthenticated users; accessibility audit; final docs (README, CONTRIBUTING, OpenAPI).
+- [ ] **Phase 2 — Observability** (PR #55–56): zerolog; structured request logging (method, path, status, latency, request_id); replace all log.Printf calls; Prometheus metrics; /metrics endpoint; enhanced /health (DB + Redis ping).
+- [ ] **Phase 3 — Security hardening** (PR #57–58): CSP/HSTS headers in Next.js + backend; WebSocket origin validation; token rotation (refresh tokens, Redis blacklist); non-root Docker user; graceful shutdown.
+- [ ] **Phase 4 — Deployment** (PR #59–60): CI/CD (GitHub Actions, golangci-lint, coverage); production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets management.
+- [ ] **Phase 5 — Polish & launch** (PR #61–63): onboarding wizard; landing page for unauthenticated users; accessibility audit; final docs (README, CONTRIBUTING, OpenAPI).
 
 ## 9. Testing strategy
 - Unit: handlers and services (auth, chat, profiles, contacts).
