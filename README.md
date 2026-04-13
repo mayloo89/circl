@@ -50,6 +50,9 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Chat upload restrictions + image resizing** ([PR #49](https://github.com/mayloo89/circl/pull/49)): chat attachments restricted to images and videos; JPEG/PNG originals resized to max 1024px (configurable); thumbnails remain at 480px
 - ✅ **Email verification + forgot/reset password** ([PR #50](https://github.com/mayloo89/circl/pull/50)): hard email enforcement (login blocked until verified); forgot/reset password flow; Mailpit for local email dev; `ConsoleSender` for testing; `SMTPSender` for production
 - ✅ **Reversible account deletion** ([PR #51](https://github.com/mayloo89/circl/pull/51)): soft delete with 30-day grace period; login automatically reactivates account within the grace period and shows a confirmation modal; deletion warning email sent on delete; daily background worker fully purges expired accounts — deletes S3 files (originals + thumbnails), removes all DB records, anonymizes the users row
+- ✅ **Admin panel: channel management, RBAC, hard delete** ([PR #52](https://github.com/mayloo89/circl/pull/52)): create/edit/delete public channels from admin UI; super_admin can promote/demote admins; hard-delete permanently removes all user data from DB and S3
+- ✅ **UX polish** ([PR #53](https://github.com/mayloo89/circl/pull/53)): touched-state inline validation, backend error codes surfaced in UI, 429 differentiated on login, change-password collapsible, delete-account modal, extended gender options (trans male/female, non-binary, custom)
+- ✅ **Internationalisation — ES / EN / PT** ([PR #54](https://github.com/mayloo89/circl/pull/54)): next-intl with prefix-based routing (`/es/`, `/en/`, `/pt/`); all pages translated; language switcher in NavBar and Settings persists preference to backend; shared `apierror` package with stable machine-readable error codes across all handlers; migration `000025` adds `locale` to `profile_preferences`
 
 ## Local setup
 
@@ -194,6 +197,8 @@ All protected routes require `Authorization: Bearer <token>`.
 | `GET` | `/presence?ids=` | ✅ | Batch presence query (online + last seen) |
 | `POST` | `/uploads/request` | ✅ | Request an upload URL (validates type/size) |
 | `POST` | `/uploads/{id}/confirm` | ✅ | Confirm upload completed |
+| `GET` | `/profiles/me/preferences` | ✅ | Get search preferences and locale |
+| `PUT` | `/profiles/me/preferences` | ✅ | Update search preferences and locale |
 | `POST` | `/push/subscribe` | ✅ | Subscribe to web push notifications |
 | `DELETE` | `/push/unsubscribe` | ✅ | Unsubscribe from push notifications |
 | `GET` | `/push/vapid-public-key` | ✅ | Get VAPID public key for subscription |
@@ -203,40 +208,53 @@ All protected routes require `Authorization: Bearer <token>`.
 ```
 circl/
 ├── frontend/               # Next.js app
-│   ├── app/               # App Router pages and layouts
-│   │   ├── chat/          # Chat list and room pages
-│   │   ├── contacts/      # Contacts page
-│   │   ├── login/         # Login page
-│   │   ├── profile/       # Private profile page (edit)
-│   │   │   └── [username]/  # Public profile page (read-only)
-│   │   └── register/      # Register page
-│   ├── components/        # Shared UI components (NavBar, SignOutButton)
-│   ├── contexts/          # React contexts (NotificationsContext / SSE event bus)
-│   ├── hooks/             # Custom hooks (useNotifications, useChat, useHeartbeat, usePresence, useUpload)
+│   ├── app/
+│   │   ├── [locale]/      # All pages under locale prefix (/es/, /en/, /pt/)
+│   │   │   ├── admin/     # Admin panel (dashboard, users, reports, channels)
+│   │   │   ├── browse/    # Profile discovery
+│   │   │   ├── chat/      # Chat list, room, and channels pages
+│   │   │   ├── contacts/  # Contacts page
+│   │   │   ├── login/     # Login page
+│   │   │   ├── profile/   # Own profile (edit) + [username] public view
+│   │   │   ├── settings/  # Settings (notifications, language, password, delete)
+│   │   │   └── layout.tsx # Locale layout: <html lang>, NextIntlClientProvider
+│   │   ├── layout.tsx     # Minimal root shell (no html/body)
+│   │   └── page.tsx       # Redirects → /es
+│   ├── i18n/              # next-intl config (routing, request, navigation)
+│   ├── messages/          # Translation files: en.json, es.json, pt.json
+│   ├── middleware.ts       # Auth guard + intl locale routing (merged)
+│   ├── components/        # Shared UI components (NavBar, ui/*, profile/*, chat/*)
+│   ├── contexts/          # React contexts (NotificationsContext, PushContext)
+│   ├── hooks/             # Custom hooks (useChat, usePresence, useUpload, …)
 │   ├── lib/               # Auth config (NextAuth.js)
 │   ├── types/             # next-auth type augmentation
 │   └── package.json
 ├── backend/               # Go API
 │   ├── cmd/api/           # Server entry point (main.go)
 │   ├── internal/          # Business logic (clean architecture)
+│   │   ├── apierror/      # Shared error writer + stable error code constants
 │   │   ├── auth/          # Register/login handler, service, store
+│   │   ├── admin/         # Admin moderation handler, service, store
 │   │   ├── contacts/      # Contacts handler, service, store
 │   │   ├── config/        # Env helpers
 │   │   ├── db/            # Connection pool, migrations runner
-│   │   ├── middleware/    # JWT RequireAuth middleware
+│   │   ├── middleware/    # JWT RequireAuth, RequireAdmin middleware
 │   │   ├── chat/          # Chat rooms, Hub (WebSocket fan-out), store, handler
 │   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
 │   │   ├── presence/      # Redis heartbeat, offline, batch presence query
-│   │   ├── storage/       # Storage interface, LocalStorage, file validation
+│   │   ├── storage/       # Storage interface, LocalStorage, S3Storage
 │   │   ├── uploads/       # Upload lifecycle (request → confirm), Postgres tracking
-│   │   ├── profiles/      # Profile handler, service, store
+│   │   ├── profiles/      # Profile handler, service, store; preferences (locale)
+│   │   ├── push/          # Web Push (VAPID) handler, service, store
+│   │   ├── reports/       # User report handler, service, store
 │   │   ├── server/        # Chi router, CORS, health handler
 │   │   └── token/         # JWT generate/validate
-│   ├── migrations/        # SQL migrations (up + down)
+│   ├── migrations/        # SQL migrations (up + down), currently at 000025
 │   └── go.mod
 ├── docs/
-│   └── implementation-plan.md
-├── .github/workflows/     # CI/CD
+│   ├── implementation-plan.md
+│   └── production-readiness.md
+├── .github/workflows/     # CI/CD (frontend, backend, backend-integration, e2e)
 ├── CHANGELOG.md
 └── README.md
 ```

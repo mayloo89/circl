@@ -9,6 +9,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Internationalisation — ES / EN / PT** ([PR #54](https://github.com/mayloo89/circl/pull/54)):
+  - Frontend fully translated into Spanish (default), English, and Portuguese using `next-intl` with prefix-based URL routing (`/es/`, `/en/`, `/pt/`)
+  - All pages and components updated to use `useTranslations` / `getTranslations`; message files cover all namespaces (auth, nav, settings, chat, contacts, profile, browse, admin)
+  - `app/` restructured to `app/[locale]/`; root layout reduced to a minimal shell; `[locale]/layout.tsx` owns `<html lang>`
+  - `i18n/routing.ts`, `i18n/request.ts`, `i18n/navigation.ts` wiring; locale-aware `Link`, `useRouter`, `usePathname` from `@/i18n/navigation`
+  - Language switcher in the user dropdown (NavBar) and a dedicated Language section in Settings — both persist the chosen locale to the backend via `PUT /profiles/me/preferences`
+  - Shared `apierror` package (`backend/internal/apierror`): `Write()`, `WriteJSON()`, and ~25 stable machine-readable error code constants (`unauthorized`, `username_taken`, `invalid_token`, etc.)
+  - All 10 backend handlers migrated from ad-hoc `http.Error` / `json.Encode` to `apierror.Write` / `apierror.WriteJSON`; frontend error checks updated to use the stable `code` field instead of matching English message strings
+  - Migration `000025`: adds `locale TEXT NOT NULL DEFAULT 'es'` to `profile_preferences`; `GET/PUT /profiles/me/preferences` persists and returns the locale
+  - Auth and intl middleware merged into a single `middleware.ts` (was split between `proxy.ts` + `middleware.ts`)
+
+- **Admin panel: channel management, role-based access control, and hard delete** ([PR #52](https://github.com/mayloo89/circl/pull/52)):
+  - Channel management UI in the admin panel: create, edit, and delete public channels
+  - Role-based access control: super_admin role can promote/demote admins; admin cannot modify other admins
+  - Hard delete for users: permanently removes all associated data (profile, photos, messages, uploads) from DB and S3
+  - Admin panel sidebar navigation with Dashboard, Users, Reports, and Channels sections
+
+- **UX polish** ([PR #53](https://github.com/mayloo89/circl/pull/53)):
+  - Inline registration validation uses touched-state pattern — errors only shown after the user has interacted with a field
+  - Error messages read from backend response body instead of generic fallback strings
+  - 429 rate-limit errors differentiated from credential errors on the login page
+  - Settings: change-password form collapses behind a button (expanded on click); delete-account moved to a modal with confirmation step
+  - Gender options extended: Male, Female, Trans male, Trans female, Non-binary, Prefer not to say, Custom (free-text input)
+
 - **Reversible account deletion with 30-day grace period** ([PR #51](https://github.com/mayloo89/circl/pull/51)):
   - Migration `000023`: adds `deleted_at TIMESTAMPTZ` column to `users`
   - `DELETE /users/me` now sets `status = 'deleted'` and records `deleted_at` timestamp; sends a deletion warning email async with a link to sign in and reactivate
