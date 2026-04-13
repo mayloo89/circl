@@ -1,9 +1,11 @@
 "use client"
 
-import Link from "next/link"
 import { signOut, useSession } from "next-auth/react"
 import { useEffect, useRef, useState } from "react"
+import { useTranslations } from "next-intl"
 
+import { Link, useRouter, usePathname } from "@/i18n/navigation"
+import { routing, type Locale } from "@/i18n/routing"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { usePushContext } from "@/contexts/PushContext"
 import Avatar from "@/components/ui/Avatar"
@@ -43,7 +45,10 @@ function BellIcon({ muted }: { muted?: boolean }) {
   )
 }
 
+const LOCALE_SHORT: Record<Locale, string> = { es: "ES", en: "EN", pt: "PT" }
+
 export default function NavBar() {
+  const t = useTranslations("nav")
   const { data: session, status } = useSession()
   const { pendingCount, unreadChatCount } = useNotificationsContext()
   const [avatarURL, setAvatarURL] = useState("")
@@ -51,6 +56,8 @@ export default function NavBar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const { permission, supported, enable, disable } = usePushContext()
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.accessToken) return
@@ -94,22 +101,41 @@ export default function NavBar() {
     await signOut()
   }
 
+  async function handleLocaleChange(locale: Locale) {
+    setMenuOpen(false)
+    if (session?.accessToken) {
+      try {
+        await fetch(`${API_URL}/profiles/me/preferences`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+          body: JSON.stringify({ locale }),
+        })
+      } catch {
+        // non-critical
+      }
+    }
+    router.replace(pathname, { locale })
+  }
+
   if (status !== "authenticated") return null
 
   return (
     <nav className="flex items-center bg-gray-900 px-6 py-3 shadow ring-1 ring-gray-800">
       <Link href="/" className="text-lg font-bold text-white hover:text-gray-300">Circl</Link>
       <div className="ml-auto flex items-center gap-6">
-        <Link href="/browse" className="text-sm text-gray-300 hover:text-white">Browse</Link>
+        <Link href="/browse" className="text-sm text-gray-300 hover:text-white">{t("browse")}</Link>
         <Link href="/chat" className="relative text-sm text-gray-300 hover:text-white">
-          Messages
+          {t("messages")}
           {unreadChatCount > 0 && (
             <Badge count={unreadChatCount} max={9} variant="dot" className="absolute -right-4 -top-2" />
           )}
         </Link>
-        <Link href="/chat/channels" className="text-sm text-gray-300 hover:text-white">Channels</Link>
+        <Link href="/chat/channels" className="text-sm text-gray-300 hover:text-white">{t("channels")}</Link>
         <Link href="/contacts" className="relative text-sm text-gray-300 hover:text-white">
-          Contacts
+          {t("contacts")}
           {pendingCount > 0 && (
             <Badge count={pendingCount} max={9} variant="dot" className="absolute -right-4 -top-2" />
           )}
@@ -117,9 +143,9 @@ export default function NavBar() {
         {supported && permission !== "granted" && (
           <button
             onClick={enable}
-            title="Enable push notifications"
+            title={t("enablePush")}
             className="text-gray-400 hover:text-white"
-            aria-label="Enable push notifications"
+            aria-label={t("enablePush")}
           >
             <BellIcon muted />
           </button>
@@ -127,9 +153,9 @@ export default function NavBar() {
         {supported && permission === "granted" && (
           <button
             onClick={disable}
-            title="Disable push notifications"
+            title={t("disablePush")}
             className="text-green-400 hover:text-gray-400"
-            aria-label="Disable push notifications"
+            aria-label={t("disablePush")}
           >
             <BellIcon />
           </button>
@@ -140,7 +166,7 @@ export default function NavBar() {
           <button
             onClick={() => setMenuOpen((v) => !v)}
             className="rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-            aria-label="Open user menu"
+            aria-label={t("openUserMenu")}
             aria-haspopup="true"
             aria-expanded={menuOpen}
           >
@@ -150,7 +176,7 @@ export default function NavBar() {
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-50 mt-2 w-44 rounded-lg bg-gray-800 py-1 shadow-lg ring-1 ring-gray-700"
+              className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg bg-gray-800 py-1 shadow-lg ring-1 ring-gray-700"
             >
               <Link
                 href="/profile"
@@ -158,7 +184,7 @@ export default function NavBar() {
                 onClick={() => setMenuOpen(false)}
                 className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white"
               >
-                Profile
+                {t("profile")}
               </Link>
               <Link
                 href="/settings"
@@ -166,7 +192,7 @@ export default function NavBar() {
                 onClick={() => setMenuOpen(false)}
                 className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white"
               >
-                Settings
+                {t("settings")}
               </Link>
               {(session.role === "admin" || session.role === "super_admin") && (
                 <>
@@ -177,17 +203,36 @@ export default function NavBar() {
                     onClick={() => setMenuOpen(false)}
                     className="block px-4 py-2 text-sm text-amber-400 hover:bg-gray-700 hover:text-amber-300"
                   >
-                    Admin panel
+                    {t("adminPanel")}
                   </Link>
                 </>
               )}
+
+              {/* Language switcher */}
+              <div className="my-1 border-t border-gray-700" />
+              <div className="px-4 py-2">
+                <p className="mb-1.5 text-xs font-medium text-gray-500">{t("language")}</p>
+                <div className="flex gap-1">
+                  {routing.locales.map((locale) => (
+                    <button
+                      key={locale}
+                      role="menuitem"
+                      onClick={() => handleLocaleChange(locale)}
+                      className="rounded px-2 py-1 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {LOCALE_SHORT[locale]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="my-1 border-t border-gray-700" />
               <button
                 role="menuitem"
                 onClick={handleSignOut}
                 className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-700 hover:text-red-300"
               >
-                Log out
+                {t("logOut")}
               </button>
             </div>
           )}

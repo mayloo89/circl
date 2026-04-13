@@ -1,0 +1,331 @@
+"use client"
+
+import { useTranslations } from "next-intl"
+import { useEffect, useRef, useState } from "react"
+import { Link } from "@/i18n/navigation"
+
+import { registerSchema } from "@/lib/validation"
+import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+
+type FieldErrors = {
+  email?: string
+  password?: string
+  confirm?: string
+  username?: string
+  date_of_birth?: string
+}
+
+function fieldClass(error?: string) {
+  return `mt-1 block w-full rounded-md border ${error ? "border-red-500" : "border-gray-700"} bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${error ? "focus:border-red-400 focus:ring-red-400" : "focus:border-indigo-500 focus:ring-indigo-500"}`
+}
+
+export default function RegisterPage() {
+  const t = useTranslations("register")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [username, setUsername] = useState("")
+  const [dateOfBirth, setDateOfBirth] = useState("")
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [touched, setTouched] = useState<Partial<Record<keyof FieldErrors, boolean>>>({})
+  const [passwordFocused, setPasswordFocused] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [registered, setRegistered] = useState(false)
+
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameChecking, setUsernameChecking] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const usernameRegex = /^[a-z0-9_]{3,30}$/
+    if (!usernameRegex.test(username)) {
+      setUsernameAvailable(null)
+      return
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setUsernameChecking(true)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/profiles/available?username=${encodeURIComponent(username)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setUsernameAvailable(data.available)
+        }
+      } catch {
+        // silently ignore — availability check is best-effort
+      } finally {
+        setUsernameChecking(false)
+      }
+    }, 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [username])
+
+  const allRulesMet = PASSWORD_RULES.every(({ test }) => test(password))
+
+  function validateField(field: keyof FieldErrors, value: string) {
+    if (field === "confirm") {
+      setFieldErrors((prev) => ({
+        ...prev,
+        confirm: value && value !== password ? t("passwordsMismatch") : undefined,
+      }))
+      return
+    }
+    const shape = registerSchema.shape as Record<string, { safeParse: (v: unknown) => { success: boolean; error?: { issues: { message: string }[] } } }>
+    const fieldSchema = shape[field]
+    if (!fieldSchema) return
+    const result = fieldSchema.safeParse(value)
+    setFieldErrors((prev) => ({
+      ...prev,
+      [field]: result.success ? undefined : result.error?.issues[0]?.message,
+    }))
+  }
+
+  function touchField(field: keyof FieldErrors) {
+    setTouched((prev) => ({ ...prev, [field]: true }))
+  }
+
+  function handleChange(field: keyof FieldErrors, value: string) {
+    if (field === "email") setEmail(value)
+    else if (field === "password") setPassword(value)
+    else if (field === "confirm") setConfirm(value)
+    else if (field === "username") { setUsername(value); setUsernameAvailable(null) }
+    else if (field === "date_of_birth") setDateOfBirth(value)
+    if (touched[field]) validateField(field, value)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitError("")
+
+    const parsed = registerSchema.safeParse({ email, password, confirm, username, date_of_birth: dateOfBirth })
+    if (!parsed.success) {
+      const errors: FieldErrors = {}
+      for (const issue of parsed.error.issues) {
+        const path = issue.path[0] as keyof FieldErrors
+        if (!errors[path]) errors[path] = issue.message
+      }
+      setFieldErrors(errors)
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: parsed.data.email,
+          password: parsed.data.password,
+          username: parsed.data.username,
+          date_of_birth: parsed.data.date_of_birth,
+        }),
+      })
+
+      if (res.status === 409) {
+        const body = await res.json()
+        if (body.code === "username_taken") {
+          setFieldErrors((prev) => ({ ...prev, username: t("usernameTaken") }))
+        } else {
+          setSubmitError(t("emailTaken"))
+        }
+        return
+      }
+      if (res.status === 429) { setSubmitError(t("rateLimited")); return }
+      if (res.status === 400) {
+        const body = await res.json()
+        setSubmitError(body.error ?? t("invalidInput"))
+        return
+      }
+      if (!res.ok) { setSubmitError(t("failed")); return }
+
+      setRegistered(true)
+    } catch {
+      setSubmitError(t("failed"))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (registered) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+        <div className="w-full max-w-md space-y-6 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800 text-center">
+          <div className="text-5xl text-indigo-400">✉</div>
+          <h2 className="text-2xl font-bold text-white">{t("checkEmail")}</h2>
+          <p className="text-sm text-gray-400">
+            {t("checkEmailDesc", { email })}
+          </p>
+          <p className="text-xs text-gray-500">
+            {t("didntReceive")}{" "}
+            <button
+              type="button"
+              className="text-indigo-400 hover:text-indigo-300 underline"
+              onClick={async () => {
+                await fetch(`${API_URL}/auth/resend-verification`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email }),
+                })
+              }}
+            >
+              {t("resendVerification")}
+            </button>
+          </p>
+          <Link href="/login" className="block text-sm text-indigo-400 hover:text-indigo-300">
+            {t("backToSignIn")}
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-950">
+      <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
+        <div>
+          <h2 className="text-center text-3xl font-bold text-white">{t("title")}</h2>
+          <p className="mt-2 text-center text-sm text-gray-400">{t("subtitle")}</p>
+        </div>
+
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {submitError && (
+            <div className="rounded-md bg-red-950 p-4 text-sm text-red-400 ring-1 ring-red-900" role="alert">
+              {submitError}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                {t("email")}
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                onBlur={(e) => { touchField("email"); validateField("email", e.target.value) }}
+                className={fieldClass(fieldErrors.email)}
+              />
+              {fieldErrors.email && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300">
+                {t("username")}
+              </label>
+              <div className="relative">
+                <input
+                  id="username"
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => handleChange("username", e.target.value)}
+                  onBlur={(e) => { touchField("username"); validateField("username", e.target.value) }}
+                  className={fieldClass(fieldErrors.username)}
+                  placeholder="lowercase_letters_digits"
+                />
+                {usernameChecking && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">…</span>
+                )}
+                {!usernameChecking && usernameAvailable === true && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-sm">✓</span>
+                )}
+                {!usernameChecking && usernameAvailable === false && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 text-sm">✗</span>
+                )}
+              </div>
+              {fieldErrors.username && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.username}</p>
+              )}
+              {!fieldErrors.username && usernameAvailable === false && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{t("usernameTaken")}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-300">
+                {t("dateOfBirth")}
+              </label>
+              <input
+                id="date_of_birth"
+                type="date"
+                required
+                value={dateOfBirth}
+                onChange={(e) => handleChange("date_of_birth", e.target.value)}
+                onBlur={(e) => { touchField("date_of_birth"); validateField("date_of_birth", e.target.value) }}
+                className={fieldClass(fieldErrors.date_of_birth)}
+              />
+              {fieldErrors.date_of_birth && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.date_of_birth}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                {t("password")}
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => handleChange("password", e.target.value)}
+                onBlur={(e) => { touchField("password"); validateField("password", e.target.value); setPasswordFocused(false) }}
+                onFocus={() => setPasswordFocused(true)}
+                className={fieldClass(fieldErrors.password)}
+              />
+              {fieldErrors.password && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.password}</p>
+              )}
+              {(passwordFocused || password) && (
+                <div className="mt-2">
+                  <PasswordRequirements password={password} />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="confirm" className="block text-sm font-medium text-gray-300">
+                {t("confirmPassword")}
+              </label>
+              <input
+                id="confirm"
+                type="password"
+                required
+                value={confirm}
+                onChange={(e) => handleChange("confirm", e.target.value)}
+                onBlur={(e) => { touchField("confirm"); validateField("confirm", e.target.value) }}
+                className={fieldClass(fieldErrors.confirm)}
+              />
+              {fieldErrors.confirm && (
+                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.confirm}</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !allRulesMet || usernameAvailable === false}
+            className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          >
+            {loading ? t("submitting") : t("submit")}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-gray-400">
+          {t("alreadyHaveAccount")}{" "}
+          <Link href="/login" className="font-medium text-indigo-400 hover:text-indigo-300">
+            {t("signIn")}
+          </Link>
+        </p>
+      </div>
+    </div>
+  )
+}

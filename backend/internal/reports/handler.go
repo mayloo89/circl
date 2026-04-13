@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 )
 
@@ -55,7 +56,7 @@ func NewHandler(m *Manager) http.Handler {
 func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 	reporterID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 		return
 	}
 
@@ -65,7 +66,7 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("reports: rate limiter error: %v", err)
 		} else if !allowed {
-			http.Error(w, "Too many reports", http.StatusTooManyRequests)
+			apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many reports")
 			return
 		}
 	}
@@ -76,36 +77,33 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 		Description    string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 		return
 	}
 
 	if req.ReportedUserID == "" {
-		http.Error(w, "reported_user_id is required", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "reported_user_id is required")
 		return
 	}
 	if req.Reason == "" {
-		http.Error(w, "reason is required", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "reason is required")
 		return
 	}
 
 	report, err := m.svc.Create(r.Context(), reporterID, req.ReportedUserID, req.Reason, req.Description)
 	if err != nil {
-		if errors.Is(err, ErrSelfReport) {
-			http.Error(w, "Cannot report yourself", http.StatusBadRequest)
-			return
+		switch {
+		case errors.Is(err, ErrSelfReport):
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "cannot report yourself")
+		case errors.Is(err, ErrInvalidReason):
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid reason")
+		default:
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		}
-		if errors.Is(err, ErrInvalidReason) {
-			http.Error(w, "Invalid reason", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(report) //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusCreated, report)
 }
 
 // ListReports handles GET /reports (admin only).
@@ -115,15 +113,14 @@ func (m *Manager) ListReports(w http.ResponseWriter, r *http.Request) {
 	reports, err := m.svc.List(r.Context(), status)
 	if err != nil {
 		if errors.Is(err, ErrInvalidStatus) {
-			http.Error(w, "Invalid status", http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid status")
 			return
 		}
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(reports) //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusOK, reports)
 }
 
 // UpdateReportStatus handles PUT /reports/{id}/status (admin only).
@@ -132,13 +129,13 @@ func (m *Manager) ListReports(w http.ResponseWriter, r *http.Request) {
 func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 	reviewerID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 		return
 	}
 
 	reportID := chi.URLParam(r, "id")
 	if reportID == "" {
-		http.Error(w, "Missing report ID", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing report id")
 		return
 	}
 
@@ -149,31 +146,30 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		Reason       string `json:"reason"`        // for suspend/ban
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 		return
 	}
 
 	if req.Status == "" {
-		http.Error(w, "status is required", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "status is required")
 		return
 	}
 
 	if req.Action != "" && req.Action != "suspend" && req.Action != "ban" {
-		http.Error(w, "Invalid action", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid action")
 		return
 	}
 
 	report, err := m.svc.UpdateStatus(r.Context(), reportID, req.Status, reviewerID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			http.Error(w, "Report not found", http.StatusNotFound)
-			return
+		switch {
+		case errors.Is(err, ErrNotFound):
+			apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "report not found")
+		case errors.Is(err, ErrInvalidStatus):
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid status")
+		default:
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		}
-		if errors.Is(err, ErrInvalidStatus) {
-			http.Error(w, "Invalid status", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
@@ -190,6 +186,5 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(report) //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusOK, report)
 }

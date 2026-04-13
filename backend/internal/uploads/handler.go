@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/storage"
 )
@@ -31,13 +32,13 @@ func requestHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		var req request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 
@@ -54,16 +55,14 @@ func requestHandler(svc *Service) http.HandlerFunc {
 				errors.Is(err, storage.ErrInvalidContentType),
 				errors.Is(err, storage.ErrFileTooLarge),
 				errors.Is(err, storage.ErrInvalidFilename):
-				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 			default:
-				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(out) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusCreated, out)
 	}
 }
 
@@ -72,13 +71,13 @@ func confirmHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		uploadID := chi.URLParam(r, "id")
 		if uploadID == "" {
-			http.Error(w, `{"error":"missing upload id"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing upload id")
 			return
 		}
 
@@ -86,18 +85,17 @@ func confirmHandler(svc *Service) http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrNotFound):
-				http.Error(w, `{"error":"upload not found"}`, http.StatusNotFound)
+				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "upload not found")
 			case errors.Is(err, ErrForbidden):
-				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			case errors.Is(err, ErrNotPending):
-				http.Error(w, `{"error":"upload already confirmed"}`, http.StatusConflict)
+				apierror.Write(w, http.StatusConflict, apierror.CodeInvalidRequest, "upload already confirmed")
 			default:
-				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(out) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, out)
 	}
 }

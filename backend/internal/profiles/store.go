@@ -483,15 +483,15 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 // Returns an empty preferences object if none have been set yet.
 func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference
+		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference, locale
 		   FROM profile_preferences
 		  WHERE user_id = $1`,
 		userID,
 	)
 	var p ProfilePreferences
-	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference); err != nil {
+	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &ProfilePreferences{UserID: userID, GenderPreference: []string{}}, nil
+			return &ProfilePreferences{UserID: userID, GenderPreference: []string{}, Locale: "es"}, nil
 		}
 		return nil, fmt.Errorf("get preferences: %w", err)
 	}
@@ -507,21 +507,26 @@ func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs Pr
 	if genderPref == nil {
 		genderPref = []string{}
 	}
+	locale := prefs.Locale
+	if locale == "" {
+		locale = "es"
+	}
 
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO profile_preferences (user_id, min_age, max_age, max_distance_km, gender_preference)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO profile_preferences (user_id, min_age, max_age, max_distance_km, gender_preference, locale)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET min_age           = EXCLUDED.min_age,
 		        max_age           = EXCLUDED.max_age,
 		        max_distance_km   = EXCLUDED.max_distance_km,
 		        gender_preference = EXCLUDED.gender_preference,
+		        locale            = EXCLUDED.locale,
 		        updated_at        = now()
-		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference`,
-		userID, prefs.MinAge, prefs.MaxAge, prefs.MaxDistanceKm, genderPref,
+		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference, locale`,
+		userID, prefs.MinAge, prefs.MaxAge, prefs.MaxDistanceKm, genderPref, locale,
 	)
 	var p ProfilePreferences
-	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference); err != nil {
+	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale); err != nil {
 		return nil, fmt.Errorf("upsert preferences: %w", err)
 	}
 	if p.GenderPreference == nil {

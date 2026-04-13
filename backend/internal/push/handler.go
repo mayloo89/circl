@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 )
 
@@ -24,11 +25,10 @@ func NewHandler(svc *Service) http.Handler {
 func vapidPublicKeyHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !svc.Enabled() {
-			http.Error(w, `{"error":"push notifications not configured"}`, http.StatusServiceUnavailable)
+			apierror.Write(w, http.StatusServiceUnavailable, apierror.CodeServiceUnavailable, "push notifications not configured")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"public_key": svc.VAPIDPublicKey()}) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, map[string]string{"public_key": svc.VAPIDPublicKey()})
 	}
 }
 
@@ -37,7 +37,7 @@ func subscribeHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -47,16 +47,16 @@ func subscribeHandler(svc *Service) http.HandlerFunc {
 			Auth     string `json:"auth"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.Endpoint == "" || req.P256DH == "" || req.Auth == "" {
-			http.Error(w, "endpoint, p256dh, and auth are required", http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "endpoint, p256dh, and auth are required")
 			return
 		}
 
 		if err := svc.Subscribe(r.Context(), userID, req.Endpoint, req.P256DH, req.Auth); err != nil {
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -69,7 +69,7 @@ func unsubscribeHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -77,16 +77,16 @@ func unsubscribeHandler(svc *Service) http.HandlerFunc {
 			Endpoint string `json:"endpoint"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.Endpoint == "" {
-			http.Error(w, "endpoint is required", http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "endpoint is required")
 			return
 		}
 
 		if err := svc.Unsubscribe(r.Context(), userID, req.Endpoint); err != nil {
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 

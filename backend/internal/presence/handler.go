@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/notifications"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // Notifier is satisfied by *notifications.Hub.
@@ -33,13 +33,13 @@ func heartbeatHandler(store *Store, notifier Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		justOnline, err := store.Heartbeat(r.Context(), userID)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -71,11 +71,11 @@ func offlineHandler(store *Store, notifier Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		if err := store.Offline(r.Context(), userID); err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		// Notify contacts so they can update presence immediately.
@@ -103,7 +103,7 @@ func getPresenceHandler(store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -122,7 +122,7 @@ func getPresenceHandler(store *Store) http.HandlerFunc {
 
 		info, err := store.GetPresence(r.Context(), ids)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 

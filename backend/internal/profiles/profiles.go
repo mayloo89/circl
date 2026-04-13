@@ -68,6 +68,7 @@ type ProfilePreferences struct {
 	MaxAge           *int
 	MaxDistanceKm    *int
 	GenderPreference []string
+	Locale           string
 }
 
 // InterestSuggestion is a suggested interest with its global usage count.
