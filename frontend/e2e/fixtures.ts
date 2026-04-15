@@ -25,11 +25,11 @@ export async function createUser(request: APIRequestContext): Promise<TestUser> 
 }
 
 export async function loginAs(page: Page, user: TestUser): Promise<void> {
-  await page.goto("/login")
+  await page.goto("/en/login")
   await page.locator("#email").fill(user.email)
   await page.locator("#password").fill(user.password)
   await page.getByRole("button", { name: "Sign in" }).click()
-  await page.waitForURL("/")
+  await page.waitForURL(/\/en\/?$/)
 }
 
 type E2EFixtures = {
