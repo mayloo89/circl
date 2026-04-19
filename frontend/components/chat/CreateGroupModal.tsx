@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
@@ -32,6 +33,8 @@ interface Props {
 }
 
 export default function CreateGroupModal({ open, token, onClose, onCreated }: Props) {
+  const t = useTranslations("chatRoom")
+  const tc = useTranslations("common")
   const [name, setName] = useState("")
   const [contacts, setContacts] = useState<Contact[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -55,7 +58,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
           }))
         )
       )
-      .catch(() => setError("Failed to load contacts."))
+      .catch(() => setError(t("failedLoadContacts")))
       .finally(() => setLoadingContacts(false))
   }, [open, token])
 
@@ -68,7 +71,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
   }
 
   async function handleCreate() {
-    if (!name.trim()) { setError("Group name is required."); return }
+    if (!name.trim()) { setError(t("groupNameRequired")); return }
     setLoading(true)
     setError("")
     try {
@@ -79,7 +82,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError((data as { error?: string }).error ?? "Failed to create group.")
+        setError((data as { error?: string }).error ?? t("failedCreateGroup"))
         return
       }
       const room = await res.json()
@@ -87,7 +90,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
       setSelected(new Set())
       onCreated(room.id as string)
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     } finally {
       setLoading(false)
     }
@@ -107,7 +110,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-          <h2 className="text-base font-semibold text-white">New group</h2>
+          <h2 className="text-base font-semibold text-white">{t("createGroupTitle")}</h2>
           <button
             type="button"
             aria-label="Close"
@@ -120,8 +123,8 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
 
         <div className="space-y-4 p-5">
           <Input
-            label="Group name"
-            placeholder="e.g. Weekend crew"
+            label={t("groupNameLabel")}
+            placeholder={t("createGroupNamePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -129,12 +132,12 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
 
           <div>
             <p className="mb-2 text-xs font-medium text-gray-400">
-              Add contacts{selected.size > 0 ? ` (${selected.size} selected)` : ""}
+              {selected.size > 0 ? t("addContactsSelected", { count: selected.size }) : t("addContacts")}
             </p>
             {loadingContacts ? (
-              <p className="text-xs text-gray-500">Loading contacts…</p>
+              <p className="text-xs text-gray-500">{t("loadingContacts")}</p>
             ) : contacts.length === 0 ? (
-              <p className="text-xs text-gray-500">No contacts yet.</p>
+              <p className="text-xs text-gray-500">{t("noContactsYet")}</p>
             ) : (
               <ul className="max-h-60 overflow-y-auto divide-y divide-gray-800 rounded-lg ring-1 ring-gray-800">
                 {contacts.map((c) => {
@@ -173,7 +176,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
 
         <div className="flex justify-end gap-3 border-t border-gray-800 px-5 py-4">
           <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>
-            Cancel
+            {tc("cancel")}
           </Button>
           <Button
             variant="primary"
@@ -182,7 +185,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
             loading={loading}
             disabled={!name.trim()}
           >
-            Create group
+            {t("createGroup")}
           </Button>
         </div>
       </div>

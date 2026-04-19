@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { useRouter } from "@/i18n/navigation"
 import { useEffect, useRef, useState } from "react"
 
+import { useTranslations } from "next-intl"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type SendOpts } from "@/hooks/useChat"
 import { usePresence, formatLastSeen } from "@/hooks/usePresence"
@@ -80,6 +81,7 @@ export default function ChatRoomPage() {
   const params = useParams()
   const roomId = typeof params.roomId === "string" ? params.roomId : null
 
+  const t = useTranslations("chatRoom")
   const token = session?.accessToken
   const userID = session?.user?.id
 
@@ -402,7 +404,7 @@ export default function ChatRoomPage() {
   if (status === "loading") {
     return (
       <div className="flex h-full items-center justify-center bg-gray-950">
-        <p className="text-gray-400">Loading...</p>
+        <p className="text-gray-400">{t("loading")}</p>
       </div>
     )
   }
@@ -441,9 +443,9 @@ export default function ChatRoomPage() {
 
       <ConfirmDialog
         open={leaveConfirmOpen}
-        title="Leave channel"
-        message="You will stop receiving messages and your name will be removed from the participant list."
-        confirmLabel="Leave"
+        title={t("leaveChannelTitle")}
+        message={t("leaveChannelMessage")}
+        confirmLabel={t("leave")}
         onConfirm={confirmLeave}
         onCancel={() => setLeaveConfirmOpen(false)}
       />
@@ -451,9 +453,9 @@ export default function ChatRoomPage() {
       {room?.type === "dm" && (
         <ConfirmDialog
           open={blockConfirmOpen}
-          title="Block user"
-          message={`Block ${room.peer_name}? They will not be able to message you and will be hidden from your results.`}
-          confirmLabel="Block"
+          title={t("blockUserTitle")}
+          message={t("blockUserMessage", { name: room.peer_name ?? "" })}
+          confirmLabel={t("block")}
           loading={blockLoading}
           onConfirm={handleBlock}
           onCancel={() => setBlockConfirmOpen(false)}
@@ -462,7 +464,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button aria-label="Back to messages" onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="text-gray-400 hover:text-gray-200">
+        <button aria-label={t("backToMessages")} onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="text-gray-400 hover:text-gray-200">
           ←
         </button>
         {room ? (
@@ -477,10 +479,10 @@ export default function ChatRoomPage() {
                       <PresenceDot online={presence[room.peer_id]?.online ?? false} size="sm" />
                       <span className="text-xs text-gray-400">
                         {presence[room.peer_id]?.online
-                          ? "Online"
+                          ? t("online")
                           : presence[room.peer_id]?.last_seen_at
                           ? formatLastSeen(presence[room.peer_id].last_seen_at)
-                          : "Offline"}
+                          : t("offline")}
                       </span>
                     </div>
                   )}
@@ -488,11 +490,11 @@ export default function ChatRoomPage() {
               </button>
               <button
                 type="button"
-                aria-label="Block user"
+                aria-label={t("blockUserTitle")}
                 onClick={() => setBlockConfirmOpen(true)}
                 className="shrink-0 text-xs text-gray-600 hover:text-red-400"
               >
-                Block
+                {t("block")}
               </button>
             </>
           ) : (
@@ -501,7 +503,7 @@ export default function ChatRoomPage() {
                 type="button"
                 onClick={() => setGroupPanelOpen(true)}
                 className="flex flex-1 items-center gap-3 hover:opacity-80 text-left"
-                aria-label={room.type === "channel" ? "Channel settings" : "Group settings"}
+                aria-label={room.type === "channel" ? t("channelSettings") : t("groupSettings")}
               >
                 <Avatar name={groupName || room.name || "G"} size="md" color="indigo" />
                 <div className="flex flex-col">
@@ -510,14 +512,14 @@ export default function ChatRoomPage() {
                   </span>
                   <span className="text-xs text-gray-500">
                     {members.length > 0
-                      ? `${members.length} member${members.length !== 1 ? "s" : ""}`
-                      : room.type === "channel" ? "Public channel" : "Group"}
+                      ? t("membersCount", { count: members.length })
+                      : room.type === "channel" ? t("publicChannel") : t("group")}
                   </span>
                 </div>
               </button>
               <button
                 type="button"
-                aria-label={memberSidebarOpen ? "Hide members" : "Show members"}
+                aria-label={memberSidebarOpen ? t("hideMembers") : t("showMembers")}
                 onClick={() => setMemberSidebarOpen((v) => !v)}
                 className={`shrink-0 rounded p-1.5 text-sm transition-colors ${memberSidebarOpen ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}
               >
@@ -530,7 +532,7 @@ export default function ChatRoomPage() {
         ) : (
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${connected ? "bg-green-400" : "bg-gray-600"}`} />
-            <span className="text-sm text-gray-300">{connected ? "Connected" : "Connecting…"}</span>
+            <span className="text-sm text-gray-300">{connected ? t("connected") : t("connecting")}</span>
           </div>
         )}
       </div>
@@ -550,8 +552,8 @@ export default function ChatRoomPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
                   </svg>
                 </span>
-                <p className="text-sm font-medium text-gray-400">No messages yet</p>
-                <p className="text-xs text-gray-600">Say hello to start the conversation.</p>
+                <p className="text-sm font-medium text-gray-400">{t("noMessages")}</p>
+                <p className="text-xs text-gray-600">{t("noMessagesDesc")}</p>
               </div>
             ) : (
               <div className="px-4">
@@ -559,7 +561,7 @@ export default function ChatRoomPage() {
                 <div ref={topSentinelRef} className="h-px" />
                 {loadingOlderHistory && (
                   <div className="flex justify-center py-2">
-                    <span className="text-xs text-gray-500">Loading older messages…</span>
+                    <span className="text-xs text-gray-500">{t("loadingOlder")}</span>
                   </div>
                 )}
                 {allMessages.map((msg, i) => {
@@ -616,14 +618,14 @@ export default function ChatRoomPage() {
           <aside className="hidden sm:flex w-52 shrink-0 flex-col border-l border-gray-800 bg-gray-900">
             <div className="px-3 pt-3 pb-2 space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                Members — {members.length}
+                {t("membersTitle", { count: members.length })}
               </p>
               {room?.type === "channel" && (
                 <input
                   type="text"
                   value={memberQuery}
                   onChange={(e) => setMemberQuery(e.target.value)}
-                  placeholder="Filter members…"
+                  placeholder={t("filterMembers")}
                   className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               )}
@@ -669,7 +671,7 @@ export default function ChatRoomPage() {
                           </p>
                         )}
                         {m.is_admin && (
-                          <p className="text-[10px] text-indigo-400">Admin</p>
+                          <p className="text-[10px] text-indigo-400">{t("admin")}</p>
                         )}
                       </div>
                     </li>

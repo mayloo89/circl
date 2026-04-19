@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useRouter } from "@/i18n/navigation"
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 
 import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
@@ -42,13 +43,15 @@ interface CreateChannelModalProps {
 }
 
 function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelModalProps) {
+  const t = useTranslations("channels")
+  const tc = useTranslations("common")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
   async function handleCreate() {
-    if (!name.trim()) { setError("Name is required."); return }
+    if (!name.trim()) { setError(t("nameRequired")); return }
     setLoading(true)
     setError("")
     try {
@@ -57,12 +60,12 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), description: description.trim() }),
       })
-      if (!res.ok) { setError("Failed to create channel."); return }
+      if (!res.ok) { setError(t("failedCreate")); return }
       const room = await res.json()
       setName(""); setDescription("")
       onCreated({ ...room } as ChannelSummary)
     } catch {
-      setError("Failed to create channel.")
+      setError(t("failedCreate"))
     } finally {
       setLoading(false)
     }
@@ -80,18 +83,18 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-          <h2 className="text-base font-semibold text-white">New channel</h2>
+          <h2 className="text-base font-semibold text-white">{t("modalTitle")}</h2>
           <button type="button" onClick={handleClose} className="text-gray-500 hover:text-gray-300" aria-label="Close">✕</button>
         </div>
         <div className="space-y-4 p-5">
-          <Input label="Channel name" placeholder="e.g. general" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          <Input label="Description (optional)" placeholder="What's this channel about?" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Input label={t("channelNameLabel")} placeholder={t("channelNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <Input label={t("descriptionLabel")} placeholder={t("descriptionPlaceholder")} value={description} onChange={(e) => setDescription(e.target.value)} />
           {error && <p className="text-xs text-red-400">{error}</p>}
         </div>
         <div className="flex justify-end gap-3 border-t border-gray-800 px-5 py-4">
-          <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>Cancel</Button>
+          <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>{tc("cancel")}</Button>
           <Button variant="primary" size="sm" onClick={handleCreate} loading={loading} disabled={!name.trim()}>
-            Create channel
+            {t("createButton")}
           </Button>
         </div>
       </div>
@@ -100,6 +103,8 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
 }
 
 export default function ChannelsPage() {
+  const t = useTranslations("channels")
+  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const router = useRouter()
   const [channels, setChannels] = useState<ChannelSummary[]>([])
@@ -118,7 +123,7 @@ export default function ChannelsPage() {
     fetch(`${API_URL}/chat/channels`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((data: ChannelSummary[]) => setChannels(data))
-      .catch(() => setError("Failed to load channels."))
+      .catch(() => setError(t("failedLoad")))
       .finally(() => setLoading(false))
   }
 
@@ -150,23 +155,23 @@ export default function ChannelsPage() {
       <div className="w-full max-w-2xl space-y-6 px-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Channels</h1>
-            <p className="mt-1 text-sm text-gray-500">Public rooms anyone can join and chat in.</p>
+            <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+            <p className="mt-1 text-sm text-gray-500">{t("subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
               <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-                + New channel
+                {t("newChannel")}
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => router.push("/chat")}>← Messages</Button>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/chat")}>{t("backToMessages")}</Button>
           </div>
         </div>
 
         <Input
           labelHidden
-          label="Search channels"
-          placeholder="Search channels…"
+          label={t("searchLabel")}
+          placeholder={t("search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -174,7 +179,7 @@ export default function ChannelsPage() {
         {error && (
           <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
             <p className="text-sm text-red-400">{error}</p>
-            <Button variant="danger" size="sm" onClick={loadChannels} className="ml-3 shrink-0">Retry</Button>
+            <Button variant="danger" size="sm" onClick={loadChannels} className="ml-3 shrink-0">{tc("retry")}</Button>
           </div>
         )}
 
@@ -191,11 +196,11 @@ export default function ChannelsPage() {
                 </svg>
               </div>
               <p className="text-sm font-medium text-gray-300">
-                {query ? "No channels match your search." : "No channels yet."}
+                {query ? t("noResults") : t("noChannels")}
               </p>
               {!query && isAdmin && (
                 <Button variant="primary" size="sm" pill onClick={() => setCreateOpen(true)} className="mt-1">
-                  Create the first one
+                  {t("createFirst")}
                 </Button>
               )}
             </div>
@@ -210,7 +215,7 @@ export default function ChannelsPage() {
                       <p className="mt-0.5 truncate text-xs text-gray-400">{ch.description}</p>
                     )}
                     {ch.active_count > 0 && (
-                      <p className="mt-0.5 text-xs text-gray-600">{ch.active_count} online now</p>
+                      <p className="mt-0.5 text-xs text-gray-600">{t("onlineNow", { count: ch.active_count })}</p>
                     )}
                   </div>
                   <Button
@@ -218,7 +223,7 @@ export default function ChannelsPage() {
                     size="sm"
                     onClick={() => router.push(`/chat/${ch.id}`)}
                   >
-                    Enter
+                    {t("enter")}
                   </Button>
                 </li>
               ))}

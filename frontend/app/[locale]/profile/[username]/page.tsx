@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react"
 import { useParams } from "next/navigation"
 import { useRouter } from "@/i18n/navigation"
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
@@ -93,6 +94,8 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
 
+  const t = useTranslations("publicProfile")
+  const tc = useTranslations("common")
   const token = session?.accessToken
   const myID = session?.user?.id
 
@@ -107,8 +110,8 @@ export default function PublicProfilePage() {
       fetch(`${API_URL}/contacts/blocked`, { headers: { Authorization: `Bearer ${token}` } }),
     ])
       .then(async ([profileRes, contactsRes, sentRes, pendingRes, blockedRes]) => {
-        if (profileRes.status === 404) { setError("Profile not found."); return }
-        if (!profileRes.ok) throw new Error("Failed to load profile.")
+        if (profileRes.status === 404) { setError(t("notFound")); return }
+        if (!profileRes.ok) throw new Error(t("failedLoad"))
 
         const [prof, contacts, sent, pending, blocked]: [PublicProfile, AcceptedContact[], SentRequest[], PendingRequest[], BlockedUser[]] =
           await Promise.all([
@@ -135,7 +138,7 @@ export default function PublicProfilePage() {
         if (incomingEntry) { setContactStatus("incoming"); setContactId(incomingEntry.contact_id); return }
         setContactStatus("none")
       })
-      .catch(() => setError("Failed to load profile."))
+      .catch(() => setError(t("failedLoad")))
       .finally(() => setLoading(false))
   }, [status, token, username, myID, router])
 
@@ -150,7 +153,7 @@ export default function PublicProfilePage() {
         body: JSON.stringify({ addressee_id: profile.user_id }),
       })
       if (res.status === 409) { setContactStatus("sent"); return }
-      if (!res.ok) { setError("Failed to send contact request."); return }
+      if (!res.ok) { setError(t("failedContact")); return }
       const contact = await res.json()
       setContactId(contact.id)
       setContactStatus("sent")
@@ -168,7 +171,7 @@ export default function PublicProfilePage() {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { setError("Failed to accept contact."); return }
+      if (!res.ok) { setError(t("failedAccept")); return }
       setContactStatus("contact")
     } finally {
       setActionLoading(false)
@@ -185,7 +188,7 @@ export default function PublicProfilePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ peer_id: profile.user_id }),
       })
-      if (!res.ok) { setError("Failed to open conversation."); return }
+      if (!res.ok) { setError(t("failedMessage")); return }
       const room = await res.json()
       router.push(`/chat/${room.id}`)
     } finally {
@@ -202,7 +205,7 @@ export default function PublicProfilePage() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { setError("Failed to block user."); return }
+      if (!res.ok) { setError(t("failedBlock")); return }
       setIsBlocked(true)
       setBlockConfirmOpen(false)
     } finally {
@@ -219,7 +222,7 @@ export default function PublicProfilePage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { setError("Failed to unblock user."); return }
+      if (!res.ok) { setError(t("failedUnblock")); return }
       setIsBlocked(false)
       setContactStatus("none")
     } finally {
@@ -239,7 +242,7 @@ export default function PublicProfilePage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setReportError(data.error || "Failed to submit report.")
+        setReportError(data.error || t("failedReport"))
         return
       }
       setReportConfirmOpen(false)
@@ -262,11 +265,11 @@ export default function PublicProfilePage() {
       <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
         <div className="w-full max-w-lg px-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-white">Profile</h1>
-            <Button variant="ghost" aria-label="Go back" onClick={() => router.back()}>← Back</Button>
+            <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+            <Button variant="ghost" aria-label={tc("back")} onClick={() => router.back()}>← {tc("back")}</Button>
           </div>
           <p className="mt-6 rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">
-            {error || "Profile not found."}
+            {error || t("notFound")}
           </p>
         </div>
       </div>
@@ -283,9 +286,9 @@ export default function PublicProfilePage() {
 
       <ConfirmDialog
         open={blockConfirmOpen}
-        title="Block user"
-        message={`Block ${profile.display_name}? They will not be able to contact you and will be hidden from your browse and search results.`}
-        confirmLabel="Block"
+        title={t("blockUserTitle")}
+        message={t("blockUserMessage", { name: profile.display_name })}
+        confirmLabel={t("block")}
         loading={actionLoading}
         onConfirm={handleBlock}
         onCancel={() => setBlockConfirmOpen(false)}
@@ -303,15 +306,15 @@ export default function PublicProfilePage() {
         <div className="w-full max-w-lg space-y-6 px-4">
 
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-white">Profile</h1>
-            <Button variant="ghost" aria-label="Go back" onClick={() => router.back()}>← Back</Button>
+            <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+            <Button variant="ghost" aria-label={tc("back")} onClick={() => router.back()}>← {tc("back")}</Button>
           </div>
 
           {error && (
             <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
           )}
           {reportSuccess && (
-            <p className="rounded-md bg-green-950 p-3 text-sm text-green-400 ring-1 ring-green-900">Report submitted. Thank you.</p>
+            <p className="rounded-md bg-green-950 p-3 text-sm text-green-400 ring-1 ring-green-900">{t("reportSuccess")}</p>
           )}
 
           <ProfileHeader
@@ -335,7 +338,7 @@ export default function PublicProfilePage() {
                   {age && profile.gender ? (
                     <span>{age} · {profile.gender}</span>
                   ) : age ? (
-                    <span>{age} years old</span>
+                    <span>{t("ageYearsOld", { age })}</span>
                   ) : profile.gender ? (
                     <span>{profile.gender}</span>
                   ) : null}

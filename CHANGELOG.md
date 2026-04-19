@@ -11,7 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - **Internationalisation — ES / EN / PT** ([PR #54](https://github.com/mayloo89/circl/pull/54)):
   - Frontend fully translated into Spanish (default), English, and Portuguese using `next-intl` with prefix-based URL routing (`/es/`, `/en/`, `/pt/`)
-  - All pages and components updated to use `useTranslations` / `getTranslations`; message files cover all namespaces (auth, nav, settings, chat, contacts, profile, browse, admin)
+  - All pages translated: auth, browse, chat list, chat room, channels, contacts, profile (own + public), settings, admin
+  - All shared components translated: `ChatInput`, `MessageBubble`, `GroupMembersPanel`, `CreateGroupModal`, `ConfirmDialog`, `ReportDialog`, `PushPrompt`, `ContactCard`, `SearchBar`, `PhotoGallery`; message files cover all namespaces (auth, nav, common, chatRoom, channels, contacts, profile, publicProfile, report, pushPrompt, browse, settings, admin)
   - `app/` restructured to `app/[locale]/`; root layout reduced to a minimal shell; `[locale]/layout.tsx` owns `<html lang>`
   - `i18n/routing.ts`, `i18n/request.ts`, `i18n/navigation.ts` wiring; locale-aware `Link`, `useRouter`, `usePathname` from `@/i18n/navigation`
   - Language switcher in the user dropdown (NavBar) and a dedicated Language section in Settings — both persist the chosen locale to the backend via `PUT /profiles/me/preferences`
@@ -19,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - All 10 backend handlers migrated from ad-hoc `http.Error` / `json.Encode` to `apierror.Write` / `apierror.WriteJSON`; frontend error checks updated to use the stable `code` field instead of matching English message strings
   - Migration `000025`: adds `locale TEXT NOT NULL DEFAULT 'es'` to `profile_preferences`; `GET/PUT /profiles/me/preferences` persists and returns the locale
   - Auth and intl middleware merged into a single `middleware.ts` (was split between `proxy.ts` + `middleware.ts`)
+
+### Fixed
+- **Next.js downgraded from 16.2.2 to 16.1.1**: Turbopack memory regression in 16.2.2 caused unbounded memory growth (7+ GB) in the dev server; 16.1.1 is stable
 
 - **Admin panel: channel management, role-based access control, and hard delete** ([PR #52](https://github.com/mayloo89/circl/pull/52)):
   - Channel management UI in the admin panel: create, edit, and delete public channels

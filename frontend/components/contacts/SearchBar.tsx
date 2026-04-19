@@ -1,3 +1,6 @@
+"use client"
+
+import { useTranslations } from "next-intl"
 import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
@@ -19,15 +22,16 @@ interface SearchBarProps {
 }
 
 export default function SearchBar({ value, onChange, results, onAdd, onNavigate }: SearchBarProps) {
+  const t = useTranslations("contacts")
   return (
     <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-      <h2 className="mb-3 text-lg font-semibold text-white">Add Contact</h2>
+      <h2 className="mb-3 text-lg font-semibold text-white">{t("addContactTitle")}</h2>
       <Input
         label="Search contacts"
         labelHidden
         id="contact-search"
         type="text"
-        placeholder="Search by name or email..."
+        placeholder={t("searchByEmail")}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -45,7 +49,7 @@ export default function SearchBar({ value, onChange, results, onAdd, onNavigate 
                 <Avatar src={u.avatar_url} name={u.display_name || u.email} size="md" />
                 <span className="text-sm text-gray-200">{u.display_name || u.email}</span>
               </button>
-              <Button variant="primary" size="sm" onClick={() => onAdd(u.id)}>Add</Button>
+              <Button variant="primary" size="sm" onClick={() => onAdd(u.id)}>{t("add")}</Button>
             </li>
           ))}
         </ul>
