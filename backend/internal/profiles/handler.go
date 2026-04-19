@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 )
 
@@ -66,6 +67,7 @@ type preferencesResponse struct {
 	MaxAge           *int     `json:"max_age"`
 	MaxDistanceKm    *int     `json:"max_distance_km"`
 	GenderPreference []string `json:"gender_preference"`
+	Locale           string   `json:"locale"`
 }
 
 type updatePreferencesRequest struct {
@@ -73,15 +75,13 @@ type updatePreferencesRequest struct {
 	MaxAge           *int     `json:"max_age"`
 	MaxDistanceKm    *int     `json:"max_distance_km"`
 	GenderPreference []string `json:"gender_preference"`
+	Locale           string   `json:"locale"`
 }
 
 type addPhotoRequest struct {
 	URL string `json:"url"`
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
 
 // NewHandler returns an http.Handler with all profile routes.
 func NewHandler(svc ProfileManager) http.Handler {
@@ -104,17 +104,17 @@ func getMyProfile(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		profile, err := svc.GetMyProfile(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toResponse(profile))
+		apierror.WriteJSON(w, http.StatusOK, toResponse(profile))
 	}
 }
 
@@ -122,13 +122,13 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		var req updateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 
@@ -146,7 +146,7 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 		if req.DateOfBirth != nil {
 			t, err := time.Parse("2006-01-02", *req.DateOfBirth)
 			if err != nil {
-				writeJSON(w, http.StatusBadRequest, errorResponse{"invalid date_of_birth format, expected YYYY-MM-DD"})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidDOB, "invalid date_of_birth format, expected YYYY-MM-DD")
 				return
 			}
 			in.DateOfBirth = &t
@@ -155,18 +155,18 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 		profile, err := svc.UpdateMyProfile(r.Context(), userID, in)
 		if err != nil {
 			if errors.Is(err, ErrInvalidInput) {
-				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 				return
 			}
 			if errors.Is(err, ErrUsernameTaken) {
-				writeJSON(w, http.StatusConflict, errorResponse{"username already taken"})
+				apierror.Write(w, http.StatusConflict, apierror.CodeUsernameTaken, "username already taken")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toResponse(profile))
+		apierror.WriteJSON(w, http.StatusOK, toResponse(profile))
 	}
 }
 
@@ -175,7 +175,7 @@ func getPublicProfileByRef(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -191,13 +191,13 @@ func getPublicProfileByRef(svc ProfileManager) http.HandlerFunc {
 		}
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				writeJSON(w, http.StatusNotFound, errorResponse{"profile not found"})
+				apierror.Write(w, http.StatusNotFound, apierror.CodeProfileNotFound, "profile not found")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, toResponse(profile))
+		apierror.WriteJSON(w, http.StatusOK, toResponse(profile))
 	}
 }
 
@@ -208,16 +208,16 @@ func updateAvatar(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		var req request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if err := svc.UpdateAvatar(r.Context(), userID, req.AvatarURL); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -228,17 +228,17 @@ func getMyPreferences(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		prefs, err := svc.GetMyPreferences(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toPreferencesResponse(prefs))
+		apierror.WriteJSON(w, http.StatusOK, toPreferencesResponse(prefs))
 	}
 }
 
@@ -246,13 +246,13 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		var req updatePreferencesRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 
@@ -266,17 +266,18 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 			MaxAge:           req.MaxAge,
 			MaxDistanceKm:    req.MaxDistanceKm,
 			GenderPreference: genderPref,
+			Locale:           req.Locale,
 		})
 		if err != nil {
 			if errors.Is(err, ErrInvalidInput) {
-				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toPreferencesResponse(prefs))
+		apierror.WriteJSON(w, http.StatusOK, toPreferencesResponse(prefs))
 	}
 }
 
@@ -284,27 +285,27 @@ func addPhoto(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		var req addPhotoRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 
 		photo, err := svc.AddPhoto(r.Context(), userID, req.URL)
 		if err != nil {
 			if errors.Is(err, ErrInvalidInput) {
-				writeJSON(w, http.StatusUnprocessableEntity, errorResponse{err.Error()})
+				apierror.Write(w, http.StatusUnprocessableEntity, apierror.CodeInvalidRequest, err.Error())
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, photoResponse{ID: photo.ID, URL: photo.URL})
+		apierror.WriteJSON(w, http.StatusCreated, photoResponse{ID: photo.ID, URL: photo.URL})
 	}
 }
 
@@ -312,17 +313,17 @@ func deletePhoto(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		photoID := r.PathValue("photoID")
 		if err := svc.DeletePhoto(r.Context(), userID, photoID); err != nil {
 			if errors.Is(err, ErrPhotoNotFound) {
-				writeJSON(w, http.StatusNotFound, errorResponse{"photo not found"})
+				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "photo not found")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -338,14 +339,14 @@ func searchInterests(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		query := r.URL.Query().Get("q")
 		suggestions, err := svc.SearchInterests(r.Context(), query)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -353,7 +354,7 @@ func searchInterests(svc ProfileManager) http.HandlerFunc {
 		for i, s := range suggestions {
 			resp[i] = interestResponse{Name: s.Name, Count: s.Count}
 		}
-		writeJSON(w, http.StatusOK, resp)
+		apierror.WriteJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -381,20 +382,20 @@ func checkUsernameAvailable(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		username := r.URL.Query().Get("username")
 		if username == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"username query parameter is required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "username query parameter is required")
 			return
 		}
 		available, err := svc.IsUsernameAvailable(r.Context(), username)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, availableResponse{Available: available})
+		apierror.WriteJSON(w, http.StatusOK, availableResponse{Available: available})
 	}
 }
 
@@ -434,11 +435,16 @@ func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {
 	if genderPref == nil {
 		genderPref = []string{}
 	}
+	locale := p.Locale
+	if locale == "" {
+		locale = "es"
+	}
 	return preferencesResponse{
 		MinAge:           p.MinAge,
 		MaxAge:           p.MaxAge,
 		MaxDistanceKm:    p.MaxDistanceKm,
 		GenderPreference: genderPref,
+		Locale:           locale,
 	}
 }
 
@@ -466,7 +472,7 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -482,7 +488,7 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 
 		result, err := svc.Browse(r.Context(), userID, limit, cursor, sortByDistance, interests)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -506,7 +512,7 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 				Interests:     pInterests,
 			}
 		}
-		writeJSON(w, http.StatusOK, browsePageResponse{
+		apierror.WriteJSON(w, http.StatusOK, browsePageResponse{
 			Profiles:   resp,
 			NextCursor: result.NextCursor,
 			Limit:      limit,
@@ -514,11 +520,6 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
 
 // PublicAvailableHandler returns an http.HandlerFunc for GET /profiles/available
 // that does not require authentication. Used at registration time.
@@ -529,14 +530,14 @@ func PublicAvailableHandler(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.URL.Query().Get("username")
 		if username == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"username query parameter is required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "username query parameter is required")
 			return
 		}
 		available, err := svc.IsUsernameAvailable(r.Context(), username)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, availableResponse{Available: available})
+		apierror.WriteJSON(w, http.StatusOK, availableResponse{Available: available})
 	}
 }

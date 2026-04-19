@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
@@ -46,6 +47,9 @@ export default function GroupMembersPanel({
   onNameUpdated,
   onLeft,
 }: Props) {
+  const t = useTranslations("chatRoom")
+  const tc = useTranslations("common")
+  const tContacts = useTranslations("contacts")
   const [members, setMembers] = useState<MemberProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -73,7 +77,7 @@ export default function GroupMembersPanel({
     })
       .then((r) => r.json())
       .then((data: MemberProfile[]) => setMembers(data))
-      .catch(() => setError("Failed to load members."))
+      .catch(() => setError(t("failedLoadMembers")))
       .finally(() => setLoading(false))
   }
 
@@ -93,10 +97,10 @@ export default function GroupMembersPanel({
         setRenaming(false)
       } else {
         const data = await res.json().catch(() => ({}))
-        setError((data as { error?: string }).error ?? "Failed to rename group.")
+        setError((data as { error?: string }).error ?? t("failedRenameGroup"))
       }
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     } finally {
       setRenameLoading(false)
     }
@@ -111,7 +115,7 @@ export default function GroupMembersPanel({
       const data: Contact[] = await res.json()
       setContacts(data.filter((c) => !memberIds.has(c.user_id)))
     } catch {
-      setError("Failed to load contacts.")
+      setError(t("failedLoadContacts"))
     } finally {
       setContactsLoading(false)
     }
@@ -130,10 +134,10 @@ export default function GroupMembersPanel({
         loadMembers()
       } else {
         const data = await res.json().catch(() => ({}))
-        setError((data as { error?: string }).error ?? "Failed to add member.")
+        setError((data as { error?: string }).error ?? t("failedAddMember"))
       }
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     } finally {
       setAddLoading(null)
     }
@@ -165,10 +169,10 @@ export default function GroupMembersPanel({
         }
       } else {
         const data = await res.json().catch(() => ({}))
-        setError((data as { error?: string }).error ?? "Failed to remove member.")
+        setError((data as { error?: string }).error ?? t("failedRemoveMember"))
       }
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     } finally {
       setRemoveLoading(false)
     }
@@ -180,13 +184,15 @@ export default function GroupMembersPanel({
     <div className="flex h-full flex-col bg-gray-900">
       <ConfirmDialog
         open={!!removeConfirm}
-        title={isSelfLeave ? (roomType === "channel" ? "Leave channel" : "Leave group") : "Remove member"}
+        title={isSelfLeave ? (roomType === "channel" ? t("leaveChannelTitle") : t("leaveGroupTitle")) : t("removeMemberTitle")}
         message={
           isSelfLeave
-            ? `Leave this ${roomType === "channel" ? "channel" : "group"}? You will no longer receive messages.`
-            : `Remove ${removeConfirm?.display_name || removeConfirm?.username} from the ${roomType === "channel" ? "channel" : "group"}?`
+            ? (roomType === "channel" ? t("leaveThisChannel") : t("leaveThisGroup"))
+            : roomType === "channel"
+              ? t("removeFromChannel", { name: removeConfirm?.display_name || removeConfirm?.username || "" })
+              : t("removeFromGroup", { name: removeConfirm?.display_name || removeConfirm?.username || "" })
         }
-        confirmLabel={isSelfLeave ? "Leave" : "Remove"}
+        confirmLabel={isSelfLeave ? t("leave") : t("remove")}
         loading={removeLoading}
         onConfirm={handleRemove}
         onCancel={() => setRemoveConfirm(null)}
@@ -203,7 +209,7 @@ export default function GroupMembersPanel({
           ←
         </button>
         <h2 className="flex-1 text-sm font-semibold text-white">
-          {roomType === "channel" ? "Channel members" : "Group members"}
+          {roomType === "channel" ? t("channelMembersTitle") : t("groupMembersTitle")}
         </h2>
       </div>
 
@@ -214,7 +220,7 @@ export default function GroupMembersPanel({
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <Input
-                  label="Group name"
+                  label={t("groupNameLabel")}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   autoFocus
@@ -227,10 +233,10 @@ export default function GroupMembersPanel({
                 loading={renameLoading}
                 disabled={!newName.trim()}
               >
-                Save
+                {tc("save")}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => { setRenaming(false); setNewName(roomName) }}>
-                Cancel
+                {tc("cancel")}
               </Button>
             </div>
           ) : (
@@ -243,9 +249,9 @@ export default function GroupMembersPanel({
                   type="button"
                   onClick={() => { setNewName(roomName); setRenaming(true) }}
                   className="text-xs text-indigo-400 hover:text-indigo-300"
-                  aria-label="Rename group"
+                  aria-label={t("renameGroup")}
                 >
-                  Edit
+                  {tc("edit")}
                 </button>
               )}
             </div>
@@ -257,7 +263,7 @@ export default function GroupMembersPanel({
 
         {/* Member list */}
         {loading ? (
-          <p className="text-xs text-gray-500">Loading…</p>
+          <p className="text-xs text-gray-500">{tc("loading")}</p>
         ) : (
           <ul className="divide-y divide-gray-800 rounded-lg ring-1 ring-gray-800">
             {members.map((m) => (
@@ -266,7 +272,7 @@ export default function GroupMembersPanel({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-white">{m.display_name || m.username}</p>
                   {m.is_admin && (
-                    <p className="text-xs text-indigo-400">Admin</p>
+                    <p className="text-xs text-indigo-400">{t("admin")}</p>
                   )}
                 </div>
                 {/* Groups only: admin removes non-admin others */}
@@ -276,7 +282,7 @@ export default function GroupMembersPanel({
                     onClick={() => setRemoveConfirm(m)}
                     className="shrink-0 text-xs text-gray-500 hover:text-red-400"
                   >
-                    Remove
+                    {t("remove")}
                   </button>
                 )}
                 {/* Self-leave: channels allow anyone; groups only allow non-admins */}
@@ -286,7 +292,7 @@ export default function GroupMembersPanel({
                     onClick={() => setRemoveConfirm(m)}
                     className="shrink-0 text-xs text-gray-500 hover:text-red-400"
                   >
-                    Leave
+                    {t("leave")}
                   </button>
                 )}
               </li>
@@ -299,11 +305,11 @@ export default function GroupMembersPanel({
           <div>
             {addingMember ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-400">Select a contact to add</p>
+                <p className="text-xs font-medium text-gray-400">{t("addMemberPrompt")}</p>
                 {contactsLoading ? (
-                  <p className="text-xs text-gray-500">Loading…</p>
+                  <p className="text-xs text-gray-500">{tc("loading")}</p>
                 ) : contacts.length === 0 ? (
-                  <p className="text-xs text-gray-500">No contacts available to add.</p>
+                  <p className="text-xs text-gray-500">{t("noContactsToAdd")}</p>
                 ) : (
                   <ul className="max-h-48 overflow-y-auto divide-y divide-gray-800 rounded-lg ring-1 ring-gray-800">
                     {contacts.map((c) => (
@@ -318,14 +324,14 @@ export default function GroupMembersPanel({
                           loading={addLoading === c.user_id}
                           onClick={() => handleAdd(c.user_id)}
                         >
-                          Add
+                          {tContacts("add")}
                         </Button>
                       </li>
                     ))}
                   </ul>
                 )}
                 <Button variant="ghost" size="sm" onClick={() => setAddingMember(false)}>
-                  Cancel
+                  {tc("cancel")}
                 </Button>
               </div>
             ) : (
@@ -334,7 +340,7 @@ export default function GroupMembersPanel({
                 size="sm"
                 onClick={() => { setAddingMember(true); loadContacts() }}
               >
-                + Add member
+                {t("addMember")}
               </Button>
             )}
           </div>

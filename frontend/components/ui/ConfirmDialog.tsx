@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import Modal from "@/components/ui/Modal"
 import Button from "@/components/ui/Button"
 
@@ -22,6 +23,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const tc = useTranslations("common")
   return (
     <Modal open={open} onClose={onCancel}>
       <div
@@ -32,7 +34,7 @@ export default function ConfirmDialog({
         <p className="mt-2 text-sm text-gray-400">{message}</p>
         <div className="mt-5 flex justify-end gap-3">
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={loading}>
-            Cancel
+            {tc("cancel")}
           </Button>
           <Button variant="danger" size="sm" onClick={onConfirm} loading={loading}>
             {confirmLabel}

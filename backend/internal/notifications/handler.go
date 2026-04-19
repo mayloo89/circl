@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
 
@@ -18,19 +19,19 @@ func NewHandler(hub *Hub, jwtSecret string) http.HandlerFunc {
 		// Validate token from query param.
 		tok := r.URL.Query().Get("token")
 		if tok == "" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		claims, err := token.Validate(tok, jwtSecret)
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		userID := claims.Subject
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
-			http.Error(w, "streaming unsupported", http.StatusNotImplemented)
+			apierror.Write(w, http.StatusNotImplemented, apierror.CodeInternalError, "streaming unsupported")
 			return
 		}
 

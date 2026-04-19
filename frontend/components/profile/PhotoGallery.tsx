@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 
 import Button from "@/components/ui/Button"
 
@@ -31,13 +32,15 @@ export default function PhotoGallery({
   onPhotoClick,
   error,
 }: PhotoGalleryProps) {
+  const t = useTranslations("profile")
+  const tc = useTranslations("common")
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   if (!editable) {
     if (photos.length === 0) return null
     return (
       <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-        <h2 className="mb-4 text-lg font-semibold text-white">Photos</h2>
+        <h2 className="mb-4 text-lg font-semibold text-white">{t("photos")}</h2>
         <div className="grid grid-cols-3 gap-3">
           {photos.map((photo) => (
             <button
@@ -64,8 +67,8 @@ export default function PhotoGallery({
   return (
     <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Gallery</h2>
-        <span className="text-xs text-gray-500">{photos.length}/{maxPhotos}</span>
+        <h2 className="text-lg font-semibold text-white">{t("gallery")}</h2>
+        <span className="text-xs text-gray-500">{t("photosCount", { current: photos.length, max: maxPhotos })}</span>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -83,21 +86,21 @@ export default function PhotoGallery({
                 />
                 {isConfirming ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75 p-2">
-                    <p className="text-center text-xs font-medium text-white">Delete photo?</p>
+                    <p className="text-center text-xs font-medium text-white">{t("deletePhoto")}</p>
                     <div className="flex gap-2">
                       <Button
                         variant="danger"
                         size="sm"
                         onClick={() => { onDelete?.(photo.id); setConfirmDeleteId(null) }}
                       >
-                        Delete
+                        {tc("delete")}
                       </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+                      <Button variant="secondary" size="sm" onClick={() => setConfirmDeleteId(null)}>{tc("cancel")}</Button>
                     </div>
                   </div>
                 ) : (
                   <button
-                    aria-label="Delete photo"
+                    aria-label={t("deletePhoto")}
                     onClick={() => setConfirmDeleteId(photo.id)}
                     className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-red-600"
                   >

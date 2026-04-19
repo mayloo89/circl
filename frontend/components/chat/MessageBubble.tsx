@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { useTranslations } from "next-intl"
 
 import type { AnyMessage } from "@/types/chat"
 import { formatExpiry, expiryColorClass } from "@/lib/chatHelpers"
@@ -33,6 +34,7 @@ export default function MessageBubble({
   onViewOnce,
   onOpenMedia,
 }: MessageBubbleProps) {
+  const t = useTranslations("chatRoom")
   const avatarUrl = "sender_avatar_url" in msg ? msg.sender_avatar_url : ""
   const isViewOnce = msg.view_once
   const hasMedia =
@@ -80,7 +82,7 @@ export default function MessageBubble({
                   </>
                 )}
               </svg>
-              {isViewOnce ? "View-once message" : "Message expired"}
+              {isViewOnce ? t("viewOnceExpired") : t("messageExpired")}
             </div>
             <span className="mt-1 text-xs text-gray-700">
               {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -116,7 +118,7 @@ export default function MessageBubble({
                       </span>
                     </div>
                     <span className="text-xs font-medium text-gray-300">
-                      {msg.type === "image" ? "Tap to view photo" : msg.type === "video" ? "Tap to view video" : "Tap to open file"}
+                      {msg.type === "image" ? t("tapToViewPhoto") : msg.type === "video" ? t("tapToViewVideo") : t("tapToOpenFile")}
                     </span>
                   </button>
                 ) : (
@@ -133,7 +135,7 @@ export default function MessageBubble({
                         </svg>
                       </span>
                     </div>
-                    <span className="text-xs font-medium text-gray-300">Tap to read</span>
+                    <span className="text-xs font-medium text-gray-300">{t("tapToRead")}</span>
                   </button>
                 )
               ) : isViewOnce && isOwn ? (
@@ -143,7 +145,7 @@ export default function MessageBubble({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                  {msg.type === "image" ? "Photo · View once" : msg.type === "video" ? "Video · View once" : msg.type === "file" ? "File · View once" : "View once"}
+                  {msg.type === "image" ? t("photoViewOnce") : msg.type === "video" ? t("videoViewOnce") : msg.type === "file" ? t("fileViewOnce") : t("viewOnce")}
                 </span>
               ) : revealedText ? (
                 <span className="italic opacity-80">{revealedText}</span>
@@ -168,7 +170,7 @@ export default function MessageBubble({
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                   </svg>
-                  <span className="underline">Play video</span>
+                  <span className="underline">{t("playVideo")}</span>
                 </button>
               ) : msg.type === "file" && msg.content ? (
                 <a
@@ -205,7 +207,7 @@ export default function MessageBubble({
               )}
             </div>
             {isLastSeenOwn && (
-              <span className="mt-0.5 text-xs text-indigo-400">Seen</span>
+              <span className="mt-0.5 text-xs text-indigo-400">{t("seen")}</span>
             )}
           </>
         )}

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
@@ -191,7 +192,7 @@ func getDMHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -199,30 +200,29 @@ func getDMHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 			PeerID string `json:"peer_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PeerID == "" {
-			http.Error(w, `{"error":"peer_id is required"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "peer_id is required")
 			return
 		}
 
 		if cfg.IsBlocked != nil {
 			blocked, err := cfg.IsBlocked(r.Context(), userID, body.PeerID)
 			if err != nil {
-				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 				return
 			}
 			if blocked {
-				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 				return
 			}
 		}
 
 		room, err := svc.GetOrCreateDM(r.Context(), userID, body.PeerID)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(room) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, room)
 	}
 }
 
@@ -234,7 +234,7 @@ func createGroupHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -243,19 +243,17 @@ func createGroupHandler(svc Manager) http.HandlerFunc {
 			MemberIDs []string `json:"member_ids"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
-			http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeNameRequired, "name is required")
 			return
 		}
 
 		room, err := svc.CreateGroup(r.Context(), userID, body.Name, body.MemberIDs)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(room) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusCreated, room)
 	}
 }
 
@@ -270,24 +268,23 @@ func getRoomHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		roomID := chi.URLParam(r, "id")
 		room, err := svc.GetRoom(r.Context(), roomID)
 		if err != nil {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
 		if room.Type != RoomTypeChannel {
 			member, err := svc.IsMember(r.Context(), roomID, userID)
 			if err != nil || !member {
-				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 				return
 			}
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(room) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, room)
 	}
 }
 
@@ -296,18 +293,17 @@ func listRoomsHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		rooms, err := svc.ListRooms(r.Context(), userID)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(rooms) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, rooms)
 	}
 }
 
@@ -319,7 +315,7 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -327,13 +323,13 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 
 		member, err := svc.IsMember(r.Context(), roomID, userID)
 		if err != nil || !member {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 
 		room, err := svc.GetRoom(r.Context(), roomID)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		if room.Type == RoomTypeChannel {
@@ -346,7 +342,7 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 		if raw := r.URL.Query().Get("before"); raw != "" {
 			t, err := time.Parse(time.RFC3339, raw)
 			if err != nil {
-				http.Error(w, `{"error":"invalid before timestamp"}`, http.StatusBadRequest)
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid before timestamp")
 				return
 			}
 			before = &t
@@ -361,7 +357,7 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 
 		msgs, err := svc.ListMessages(r.Context(), roomID, before, limit)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -373,8 +369,7 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 			}
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(msgs) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, msgs)
 	}
 }
 
@@ -386,7 +381,7 @@ func markReadHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -394,7 +389,7 @@ func markReadHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 
 		readAt, err := svc.MarkRead(r.Context(), roomID, userID)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -415,7 +410,7 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -424,21 +419,21 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 
 		member, err := svc.IsMember(r.Context(), roomID, userID)
 		if err != nil || !member {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 
 		msg, keys, err := svc.ViewOnceMessage(r.Context(), msgID, roomID, userID)
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "message not found")
 			return
 		}
 		if errors.Is(err, ErrForbidden) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -470,8 +465,7 @@ func viewMessageHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 
 		// For text messages (or if ReadFile is unavailable), return JSON.
 		// No streaming race exists here, so cleanup runs synchronously.
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(msg) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, msg)
 
 		if len(keys) > 0 {
 			if cfg.DeleteFiles != nil {
@@ -492,7 +486,7 @@ func updateGroupHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		roomID := chi.URLParam(r, "id")
@@ -500,20 +494,20 @@ func updateGroupHandler(svc Manager) http.HandlerFunc {
 			Name string `json:"name"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
-			http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeNameRequired, "name is required")
 			return
 		}
 		err := svc.UpdateGroupName(r.Context(), roomID, userID, body.Name)
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
 		if errors.Is(err, ErrForbidden) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -528,17 +522,17 @@ func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		roomID := chi.URLParam(r, "id")
 		room, err := svc.GetRoom(r.Context(), roomID)
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -551,8 +545,7 @@ func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 			if participants == nil {
 				participants = []ClientInfo{}
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(participants) //nolint:errcheck
+			apierror.WriteJSON(w, http.StatusOK, participants)
 			return
 		}
 
@@ -560,16 +553,16 @@ func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 		userID, _ := middleware.UserIDFromContext(r.Context())
 		member, err := svc.IsMember(r.Context(), roomID, userID)
 		if err != nil || !member {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 
 		profiles, err := svc.ListMemberProfiles(r.Context(), roomID)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		json.NewEncoder(w).Encode(profiles) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, profiles)
 	}
 }
 
@@ -581,7 +574,7 @@ func addGroupMemberHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		roomID := chi.URLParam(r, "id")
@@ -589,20 +582,20 @@ func addGroupMemberHandler(svc Manager) http.HandlerFunc {
 			UserID string `json:"user_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UserID == "" {
-			http.Error(w, `{"error":"user_id is required"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "user_id is required")
 			return
 		}
 		err := svc.AddGroupMember(r.Context(), roomID, userID, body.UserID)
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
 		if errors.Is(err, ErrForbidden) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -618,22 +611,22 @@ func removeGroupMemberHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		actorID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		roomID := chi.URLParam(r, "id")
 		targetID := chi.URLParam(r, "userID")
 		err := svc.RemoveGroupMember(r.Context(), roomID, actorID, targetID)
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
 		if errors.Is(err, ErrForbidden) {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			return
 		}
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -648,12 +641,12 @@ func listChannelsHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		channels, err := svc.ListChannels(r.Context())
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		if cfg.Hub != nil {
@@ -661,8 +654,7 @@ func listChannelsHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 				channels[i].ActiveCount = len(cfg.Hub.RoomParticipants(r.Context(), channels[i].ID))
 			}
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(channels) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusOK, channels)
 	}
 }
 
@@ -674,7 +666,7 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		var body struct {
@@ -682,17 +674,15 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 			Description string `json:"description"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
-			http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeNameRequired, "name is required")
 			return
 		}
 		room, err := svc.CreateChannel(r.Context(), userID, body.Name, body.Description)
 		if err != nil {
-			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(room) //nolint:errcheck
+		apierror.WriteJSON(w, http.StatusCreated, room)
 	}
 }
 
@@ -705,12 +695,12 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 	return func(w http.ResponseWriter, r *http.Request) {
 		tok := r.URL.Query().Get("token")
 		if tok == "" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		claims, err := token.Validate(tok, jwtSecret)
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		userID := claims.Subject
@@ -719,11 +709,11 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 
 		room, err := svc.GetRoom(r.Context(), roomID)
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		isChannel := room.Type == RoomTypeChannel
@@ -731,7 +721,7 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 		if !isChannel {
 			member, err := svc.IsMember(r.Context(), roomID, userID)
 			if err != nil || !member {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 				return
 			}
 		}

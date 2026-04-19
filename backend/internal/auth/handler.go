@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/profiles"
 	"github.com/mayloo89/circl/backend/internal/token"
@@ -96,10 +97,6 @@ type userResponse struct {
 	Reactivated bool   `json:"reactivated,omitempty"`
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
 // generateTokenFn is a variable so tests can inject a failing implementation.
 var generateTokenFn func(string, string, string, time.Duration) (string, error) = token.Generate
 
@@ -134,22 +131,22 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			if err != nil {
 				log.Printf("auth: ip rate limiter error: %v", err)
 			} else if !allowed {
-				writeJSON(w, http.StatusTooManyRequests, errorResponse{"too many requests"})
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many requests")
 				return
 			}
 		}
 
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.Email == "" || req.Password == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"email and password are required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "email and password are required")
 			return
 		}
 		if len(req.Password) > maxPasswordLen {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"password too long"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodePasswordTooLong, "password too long")
 			return
 		}
 
@@ -159,7 +156,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			if err != nil {
 				log.Printf("auth: locker IsLocked error: %v", err)
 			} else if locked {
-				writeJSON(w, http.StatusTooManyRequests, errorResponse{"account temporarily locked due to too many failed login attempts"})
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeAccountLocked, "account temporarily locked due to too many failed login attempts")
 				return
 			}
 		}
@@ -167,7 +164,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 		user, err := auth.Login(r.Context(), req.Email, req.Password)
 		if err != nil {
 			if errors.Is(err, ErrEmailNotVerified) {
-				writeJSON(w, http.StatusForbidden, errorResponse{"email_not_verified"})
+				apierror.Write(w, http.StatusForbidden, apierror.CodeEmailNotVerified, "email_not_verified")
 				return
 			}
 			if errors.Is(err, ErrInvalidCredentials) {
@@ -176,14 +173,14 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 					if lerr != nil {
 						log.Printf("auth: locker RecordFailure error: %v", lerr)
 					} else if locked {
-						writeJSON(w, http.StatusTooManyRequests, errorResponse{"account temporarily locked due to too many failed login attempts"})
+						apierror.Write(w, http.StatusTooManyRequests, apierror.CodeAccountLocked, "account temporarily locked due to too many failed login attempts")
 						return
 					}
 				}
-				writeJSON(w, http.StatusUnauthorized, errorResponse{"invalid credentials"})
+				apierror.Write(w, http.StatusUnauthorized, apierror.CodeInvalidCredentials, "invalid credentials")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -195,11 +192,11 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 
 		tok, err := generateTokenFn(user.ID, user.Role, jwtSecret, tokenExpiry)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok, Reactivated: user.Reactivated})
+		apierror.WriteJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok, Reactivated: user.Reactivated})
 	}
 }
 
@@ -211,18 +208,18 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 			if err != nil {
 				log.Printf("auth: ip rate limiter error: %v", err)
 			} else if !allowed {
-				writeJSON(w, http.StatusTooManyRequests, errorResponse{"too many requests"})
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many requests")
 				return
 			}
 		}
 
 		var req registerRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.Email == "" || req.Password == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"email and password are required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "email and password are required")
 			return
 		}
 
@@ -230,11 +227,11 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrInvalidInput):
-				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 			case errors.Is(err, ErrEmailTaken):
-				writeJSON(w, http.StatusConflict, errorResponse{"email already taken"})
+				apierror.Write(w, http.StatusConflict, apierror.CodeEmailTaken, "email already taken")
 			default:
-				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
@@ -252,7 +249,7 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 					// User was created but the username is taken — roll back user creation
 					// is not trivial here, so return a conflict; the user must retry with a
 					// different username. The unverified account will remain but is inert.
-					writeJSON(w, http.StatusConflict, errorResponse{"username already taken"})
+					apierror.Write(w, http.StatusConflict, apierror.CodeUsernameTaken, "username already taken")
 					return
 				}
 				log.Printf("auth: seed profile for user %s: %v", user.ID, err)
@@ -271,7 +268,7 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 			}()
 		}
 
-		writeJSON(w, http.StatusCreated, map[string]string{
+		apierror.WriteJSON(w, http.StatusCreated, map[string]string{
 			"message": "account created — check your email to verify your address before logging in",
 		})
 	}
@@ -287,7 +284,7 @@ func forgotPasswordHandler(svc EmailFlowService, frontendURL string) http.Handle
 		if req.Email != "" {
 			_ = svc.ForgotPassword(r.Context(), req.Email, frontendURL)
 		}
-		writeJSON(w, http.StatusOK, map[string]string{
+		apierror.WriteJSON(w, http.StatusOK, map[string]string{
 			"message": "if that email is registered you will receive a password reset link",
 		})
 	}
@@ -300,25 +297,25 @@ func resetPasswordHandler(svc EmailFlowService) http.HandlerFunc {
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.Token == "" || req.Password == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"token and password are required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "token and password are required")
 			return
 		}
 		if err := svc.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
 			switch {
 			case errors.Is(err, ErrInvalidToken):
-				writeJSON(w, http.StatusBadRequest, errorResponse{"invalid or expired reset token"})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidToken, "invalid or expired reset token")
 			case errors.Is(err, ErrInvalidInput):
-				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 			default:
-				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": "password reset successfully"})
+		apierror.WriteJSON(w, http.StatusOK, map[string]string{"message": "password reset successfully"})
 	}
 }
 
@@ -328,19 +325,19 @@ func verifyEmailHandler(svc EmailFlowService) http.HandlerFunc {
 			Token string `json:"token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"token is required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "token is required")
 			return
 		}
 		if err := svc.VerifyEmail(r.Context(), req.Token); err != nil {
 			switch {
 			case errors.Is(err, ErrInvalidToken):
-				writeJSON(w, http.StatusBadRequest, errorResponse{"invalid or expired verification token"})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidToken, "invalid or expired verification token")
 			default:
-				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": "email verified — you can now log in"})
+		apierror.WriteJSON(w, http.StatusOK, map[string]string{"message": "email verified — you can now log in"})
 	}
 }
 
@@ -353,7 +350,7 @@ func resendVerificationHandler(svc EmailFlowService, frontendURL string) http.Ha
 		if req.Email != "" {
 			_ = svc.ResendVerification(r.Context(), req.Email, frontendURL)
 		}
-		writeJSON(w, http.StatusOK, map[string]string{
+		apierror.WriteJSON(w, http.StatusOK, map[string]string{
 			"message": "if that email is registered and unverified you will receive a new verification link",
 		})
 	}
@@ -374,12 +371,6 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
 }
 
 // AccountHandlerOption configures optional features on the account handler.
@@ -403,7 +394,7 @@ func changePasswordHandler(svc AccountManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -412,27 +403,27 @@ func changePasswordHandler(svc AccountManager) http.HandlerFunc {
 			NewPassword     string `json:"new_password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.CurrentPassword == "" || req.NewPassword == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"current_password and new_password are required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "current_password and new_password are required")
 			return
 		}
 
 		if err := svc.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
 			switch {
 			case errors.Is(err, ErrInvalidCredentials):
-				writeJSON(w, http.StatusUnauthorized, errorResponse{"current password is incorrect"})
+				apierror.Write(w, http.StatusUnauthorized, apierror.CodeInvalidCredentials, "current password is incorrect")
 			case errors.Is(err, ErrInvalidInput):
-				writeJSON(w, http.StatusBadRequest, errorResponse{err.Error()})
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 			default:
-				writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+		apierror.WriteJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
 	}
 }
 
@@ -440,7 +431,7 @@ func deleteAccountHandler(svc AccountManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{"unauthorized"})
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -448,20 +439,20 @@ func deleteAccountHandler(svc AccountManager) http.HandlerFunc {
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"invalid request body"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if req.Password == "" {
-			writeJSON(w, http.StatusBadRequest, errorResponse{"password is required"})
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "password is required")
 			return
 		}
 
 		if err := svc.DeleteAccount(r.Context(), userID, req.Password); err != nil {
 			if errors.Is(err, ErrInvalidCredentials) {
-				writeJSON(w, http.StatusUnauthorized, errorResponse{"invalid password"})
+				apierror.Write(w, http.StatusUnauthorized, apierror.CodeInvalidCredentials, "invalid password")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errorResponse{"internal server error"})
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 

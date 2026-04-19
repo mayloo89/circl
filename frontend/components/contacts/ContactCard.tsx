@@ -1,3 +1,6 @@
+"use client"
+
+import { useTranslations } from "next-intl"
 import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
 import PresenceDot from "@/components/ui/PresenceDot"
@@ -26,6 +29,7 @@ export default function ContactCard({
   onPrimary,
   onSecondary,
 }: ContactCardProps) {
+  const t = useTranslations("contacts")
   const label = displayName || email
 
   const leftContent =
@@ -56,21 +60,21 @@ export default function ContactCard({
 
       <div className="flex gap-2">
         {variant === "search-result" && (
-          <Button variant="primary" size="sm" onClick={onPrimary}>Add</Button>
+          <Button variant="primary" size="sm" onClick={onPrimary}>{t("add")}</Button>
         )}
         {variant === "pending" && (
           <>
-            <Button variant="success" size="sm" onClick={onPrimary}>Accept</Button>
-            <Button variant="secondary" size="sm" onClick={onSecondary}>Decline</Button>
+            <Button variant="success" size="sm" onClick={onPrimary}>{t("accept")}</Button>
+            <Button variant="secondary" size="sm" onClick={onSecondary}>{t("decline")}</Button>
           </>
         )}
         {variant === "sent" && (
-          <Button variant="secondary" size="sm" onClick={onSecondary}>Cancel</Button>
+          <Button variant="secondary" size="sm" onClick={onSecondary}>{t("cancel")}</Button>
         )}
         {variant === "contact" && (
           <>
-            <Button variant="primary" size="sm" onClick={onPrimary}>Message</Button>
-            <Button variant="danger" size="sm" onClick={onSecondary}>Remove</Button>
+            <Button variant="primary" size="sm" onClick={onPrimary}>{t("message")}</Button>
+            <Button variant="danger" size="sm" onClick={onSecondary}>{t("remove")}</Button>
           </>
         )}
       </div>

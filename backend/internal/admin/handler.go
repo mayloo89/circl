@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 )
 
@@ -45,11 +45,10 @@ func NewHandler(svc *Service) http.Handler {
 func (h *handler) getStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.svc.GetStats(r.Context())
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats) //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusOK, stats)
 }
 
 // listUsers handles GET /admin/users?q=&status=&limit=&offset=.
@@ -72,12 +71,11 @@ func (h *handler) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := h.svc.ListUsers(r.Context(), q, status, limit, offset)
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusOK, map[string]any{
 		"users": users,
 		"total": total,
 	})
@@ -87,27 +85,26 @@ func (h *handler) listUsers(w http.ResponseWriter, r *http.Request) {
 func (h *handler) listChannels(w http.ResponseWriter, r *http.Request) {
 	channels, err := h.svc.ListChannels(r.Context())
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(channels) //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusOK, channels)
 }
 
 // deleteChannel handles DELETE /admin/channels/{id}.
 func (h *handler) deleteChannel(w http.ResponseWriter, r *http.Request) {
 	channelID := chi.URLParam(r, "id")
 	if channelID == "" {
-		http.Error(w, "Missing channel ID", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing channel id")
 		return
 	}
 	err := h.svc.DeleteChannel(r.Context(), channelID)
 	if errors.Is(err, ErrChannelNotFound) {
-		http.Error(w, "Channel not found", http.StatusNotFound)
+		apierror.Write(w, http.StatusNotFound, apierror.CodeChannelNotFound, "channel not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -118,7 +115,7 @@ func (h *handler) deleteChannel(w http.ResponseWriter, r *http.Request) {
 func (h *handler) createChannel(w http.ResponseWriter, r *http.Request) {
 	adminID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 		return
 	}
 
@@ -127,26 +124,24 @@ func (h *handler) createChannel(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 		return
 	}
 	if req.Name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeNameRequired, "name is required")
 		return
 	}
 
 	ch, err := h.svc.CreateChannel(r.Context(), adminID, req.Name, req.Description)
 	if errors.Is(err, ErrChannelNameTaken) {
-		http.Error(w, "Channel name already taken", http.StatusConflict)
+		apierror.Write(w, http.StatusConflict, apierror.CodeChannelNameTaken, "channel name already taken")
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(ch) //nolint:errcheck
+	apierror.WriteJSON(w, http.StatusCreated, ch)
 }
 
 // updateChannel handles PUT /admin/channels/{id}.
@@ -154,7 +149,7 @@ func (h *handler) createChannel(w http.ResponseWriter, r *http.Request) {
 func (h *handler) updateChannel(w http.ResponseWriter, r *http.Request) {
 	channelID := chi.URLParam(r, "id")
 	if channelID == "" {
-		http.Error(w, "Missing channel ID", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing channel id")
 		return
 	}
 
@@ -163,25 +158,25 @@ func (h *handler) updateChannel(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 		return
 	}
 	if req.Name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeNameRequired, "name is required")
 		return
 	}
 
 	err := h.svc.UpdateChannel(r.Context(), channelID, req.Name, req.Description)
 	if errors.Is(err, ErrChannelNotFound) {
-		http.Error(w, "Channel not found", http.StatusNotFound)
+		apierror.Write(w, http.StatusNotFound, apierror.CodeChannelNotFound, "channel not found")
 		return
 	}
 	if errors.Is(err, ErrChannelNameTaken) {
-		http.Error(w, "Channel name already taken", http.StatusConflict)
+		apierror.Write(w, http.StatusConflict, apierror.CodeChannelNameTaken, "channel name already taken")
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -192,16 +187,16 @@ func (h *handler) updateChannel(w http.ResponseWriter, r *http.Request) {
 func (h *handler) hardDeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing user id")
 		return
 	}
 	err := h.svc.HardDeleteUser(r.Context(), userID)
 	if errors.Is(err, ErrUserNotFound) {
-		http.Error(w, "User not found", http.StatusNotFound)
+		apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -212,7 +207,7 @@ func (h *handler) hardDeleteUser(w http.ResponseWriter, r *http.Request) {
 func (h *handler) setUserRole(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing user id")
 		return
 	}
 
@@ -220,21 +215,21 @@ func (h *handler) setUserRole(w http.ResponseWriter, r *http.Request) {
 		Role string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 		return
 	}
 
 	err := h.svc.SetUserRole(r.Context(), userID, req.Role)
 	if errors.Is(err, ErrInvalidRole) {
-		http.Error(w, "Invalid role: must be user, admin, or super_admin", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid role: must be user, admin, or super_admin")
 		return
 	}
 	if errors.Is(err, ErrUserNotFound) {
-		http.Error(w, "User not found", http.StatusNotFound)
+		apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -245,13 +240,13 @@ func (h *handler) setUserRole(w http.ResponseWriter, r *http.Request) {
 func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 	adminID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 		return
 	}
 
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing user id")
 		return
 	}
 
@@ -261,7 +256,7 @@ func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 		DurationDays int    `json:"duration_days"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 		return
 	}
 
@@ -269,39 +264,39 @@ func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 	case "suspend":
 		err := h.svc.SuspendUser(r.Context(), userID, req.Reason, req.DurationDays, adminID)
 		if errors.Is(err, ErrUserNotFound) {
-			http.Error(w, "User not found", http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}
 		if errors.Is(err, ErrAlreadySuspended) {
-			http.Error(w, "User already suspended or banned", http.StatusConflict)
+			apierror.Write(w, http.StatusConflict, apierror.CodeInvalidRequest, "user already suspended or banned")
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 	case "ban":
 		err := h.svc.BanUser(r.Context(), userID, req.Reason, adminID)
 		if errors.Is(err, ErrUserNotFound) {
-			http.Error(w, "User not found", http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 	case "reactivate":
 		err := h.svc.ReactivateUser(r.Context(), userID)
 		if errors.Is(err, ErrUserNotFound) {
-			http.Error(w, "User not found", http.StatusNotFound)
+			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 	default:
-		http.Error(w, "Invalid action: must be suspend, ban, or reactivate", http.StatusBadRequest)
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid action: must be suspend, ban, or reactivate")
 		return
 	}
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/notifications"
 )
@@ -68,16 +69,16 @@ func searchUsersHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		q := r.URL.Query().Get("q")
 		results, err := svc.SearchUsers(r.Context(), q, userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, results)
+		apierror.WriteJSON(w, http.StatusOK, results)
 	}
 }
 
@@ -85,7 +86,7 @@ func sendRequestHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
@@ -93,11 +94,11 @@ func sendRequestHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 			AddresseeID string `json:"addressee_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, errResp("invalid request body"))
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
 		if body.AddresseeID == "" {
-			writeJSON(w, http.StatusBadRequest, errResp("addressee_id is required"))
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "addressee_id is required")
 			return
 		}
 
@@ -105,11 +106,11 @@ func sendRequestHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrSelfContact):
-				writeJSON(w, http.StatusBadRequest, errResp("cannot add yourself as a contact"))
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeSelfContact, "cannot add yourself as a contact")
 			case errors.Is(err, ErrAlreadyExists):
-				writeJSON(w, http.StatusConflict, errResp("contact request already exists"))
+				apierror.Write(w, http.StatusConflict, apierror.CodeContactExists, "contact request already exists")
 			default:
-				writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
@@ -124,7 +125,7 @@ func sendRequestHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 			})
 		}
 
-		writeJSON(w, http.StatusCreated, contact)
+		apierror.WriteJSON(w, http.StatusCreated, contact)
 	}
 }
 
@@ -132,15 +133,15 @@ func listAcceptedHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		contacts, err := svc.ListAccepted(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, contacts)
+		apierror.WriteJSON(w, http.StatusOK, contacts)
 	}
 }
 
@@ -148,15 +149,15 @@ func listPendingHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		contacts, err := svc.ListPending(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, contacts)
+		apierror.WriteJSON(w, http.StatusOK, contacts)
 	}
 }
 
@@ -164,15 +165,15 @@ func listSentHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		sent, err := svc.ListSent(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, sent)
+		apierror.WriteJSON(w, http.StatusOK, sent)
 	}
 }
 
@@ -180,17 +181,17 @@ func acceptHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		contactID := chi.URLParam(r, "id")
 		contact, err := svc.Accept(r.Context(), contactID, userID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				writeJSON(w, http.StatusNotFound, errResp("contact not found"))
+				apierror.Write(w, http.StatusNotFound, apierror.CodeContactNotFound, "contact not found")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -204,7 +205,7 @@ func acceptHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 			})
 		}
 
-		writeJSON(w, http.StatusOK, contact)
+		apierror.WriteJSON(w, http.StatusOK, contact)
 	}
 }
 
@@ -212,17 +213,17 @@ func deleteHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		contactID := chi.URLParam(r, "id")
 		contact, err := svc.Delete(r.Context(), contactID, userID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				writeJSON(w, http.StatusNotFound, errResp("contact not found"))
+				apierror.Write(w, http.StatusNotFound, apierror.CodeContactNotFound, "contact not found")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 
@@ -245,15 +246,15 @@ func listBlockedHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		blocked, err := svc.ListBlocked(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, blocked)
+		apierror.WriteJSON(w, http.StatusOK, blocked)
 	}
 }
 
@@ -261,7 +262,7 @@ func blockHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		targetID := chi.URLParam(r, "id")
@@ -269,11 +270,11 @@ func blockHandler(svc Manager) http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrSelfContact):
-				writeJSON(w, http.StatusBadRequest, errResp("cannot block yourself"))
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeSelfBlock, "cannot block yourself")
 			case errors.Is(err, ErrAlreadyBlocked):
-				writeJSON(w, http.StatusConflict, errResp("user already blocked"))
+				apierror.Write(w, http.StatusConflict, apierror.CodeAlreadyBlocked, "user already blocked")
 			default:
-				writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
 		}
@@ -285,31 +286,22 @@ func unblockHandler(svc Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, errResp("unauthorized"))
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 		targetID := chi.URLParam(r, "id")
 		err := svc.Unblock(r.Context(), userID, targetID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				writeJSON(w, http.StatusNotFound, errResp("block not found"))
+				apierror.Write(w, http.StatusNotFound, apierror.CodeBlockNotFound, "block not found")
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, errResp("internal server error"))
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
 
-func errResp(msg string) errorResponse { return errorResponse{Error: msg} }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}

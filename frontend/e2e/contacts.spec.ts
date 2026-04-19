@@ -4,7 +4,7 @@ test.describe("contacts", () => {
   test("can search for another user by email", async ({ authenticatedPage: { page }, request }) => {
     const userB = await createUser(request)
 
-    await page.goto("/contacts")
+    await page.goto("/en/contacts")
     await page.locator("#contact-search").fill(userB.email)
 
     await expect(page.getByRole("button", { name: "Add" }).first()).toBeVisible()
@@ -18,7 +18,7 @@ test.describe("contacts", () => {
     const ctxA = await browser.newContext()
     const pageA = await ctxA.newPage()
     await loginAs(pageA, userA)
-    await pageA.goto("/contacts")
+    await pageA.goto("/en/contacts")
     await pageA.locator("#contact-search").fill(userB.email)
     await pageA.getByRole("button", { name: "Add" }).first().click()
     await expect(pageA.getByText("Sent Requests")).toBeVisible()
@@ -27,7 +27,7 @@ test.describe("contacts", () => {
     const ctxB = await browser.newContext()
     const pageB = await ctxB.newPage()
     await loginAs(pageB, userB)
-    await pageB.goto("/contacts")
+    await pageB.goto("/en/contacts")
     await expect(pageB.getByText("Pending Requests")).toBeVisible()
     await pageB.getByRole("button", { name: "Accept" }).first().click()
 
@@ -46,14 +46,14 @@ test.describe("contacts", () => {
     const ctxA = await browser.newContext()
     const pageA = await ctxA.newPage()
     await loginAs(pageA, userA)
-    await pageA.goto("/contacts")
+    await pageA.goto("/en/contacts")
     await pageA.locator("#contact-search").fill(userB.email)
     await pageA.getByRole("button", { name: "Add" }).first().click()
 
     const ctxB = await browser.newContext()
     const pageB = await ctxB.newPage()
     await loginAs(pageB, userB)
-    await pageB.goto("/contacts")
+    await pageB.goto("/en/contacts")
     await pageB.getByRole("button", { name: "Accept" }).first().click()
 
     // User A refreshes contacts and opens the DM

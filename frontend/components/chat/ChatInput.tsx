@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
+import { useTranslations } from "next-intl"
 
 import type { EphemeralMode } from "@/types/chat"
 import { EPHEMERAL_LABELS } from "@/types/chat"
@@ -30,6 +31,17 @@ export default function ChatInput({
   disableAttach = false,
   disableEphemeral = false,
 }: ChatInputProps) {
+  const t = useTranslations("chatRoom")
+  const ephemeralLabels: Record<EphemeralMode, string> = {
+    off: t("ephemeralOff"),
+    view_once: t("ephemeralViewOnce"),
+    "15m": t("ephemeral15m"),
+    "30m": t("ephemeral30m"),
+    "1h": t("ephemeral1h"),
+    "6h": t("ephemeral6h"),
+    "12h": t("ephemeral12h"),
+    "24h": t("ephemeral24h"),
+  }
   const [input, setInput] = useState("")
   const [showEphemeralMenu, setShowEphemeralMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -68,7 +80,7 @@ export default function ChatInput({
               </>
             )}
           </svg>
-          {EPHEMERAL_LABELS[ephemeral]}
+          {ephemeralLabels[ephemeral]}
         </div>
       )}
 
@@ -85,8 +97,8 @@ export default function ChatInput({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={!connected || uploading}
-              aria-label="Attach file"
-              title="Attach file"
+              aria-label={t("attachFile")}
+              title={t("attachFile")}
               className="flex-none rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
             >
               {uploading ? (
@@ -108,8 +120,8 @@ export default function ChatInput({
           <button
             onClick={() => setShowEphemeralMenu((v) => !v)}
             disabled={!connected}
-            aria-label="Ephemeral message"
-            title="Ephemeral message"
+            aria-label={t("ephemeralMessage")}
+            title={t("ephemeralMessage")}
             className={`rounded-full p-2 transition-colors disabled:opacity-40 ${
               ephemeral !== "off"
                 ? "text-amber-400 hover:bg-amber-400/10"
@@ -131,7 +143,7 @@ export default function ChatInput({
 
           {showEphemeralMenu && (
             <div className="absolute bottom-full left-0 mb-2 w-48 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
-              <p className="px-4 py-2 text-xs text-gray-500">Applies to messages &amp; attachments</p>
+              <p className="px-4 py-2 text-xs text-gray-500">{t("ephemeralAppliesTo")}</p>
               <div className="border-t border-gray-700/60" />
               {(Object.keys(EPHEMERAL_LABELS) as EphemeralMode[]).map((mode) => (
                 <button
@@ -141,7 +153,7 @@ export default function ChatInput({
                     ephemeral === mode ? "text-amber-400" : "text-gray-300"
                   }`}
                 >
-                  {EPHEMERAL_LABELS[mode]}
+                  {ephemeralLabels[mode]}
                 </button>
               ))}
             </div>
@@ -153,7 +165,7 @@ export default function ChatInput({
           ref={effectiveRef}
           id="message-input"
           type="text"
-          placeholder="Message…"
+          placeholder={t("messagePlaceholder")}
           value={input}
           onChange={(e) => {
             setInput(e.target.value)
@@ -172,7 +184,7 @@ export default function ChatInput({
           disabled={!connected || !input.trim()}
           className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
-          Send
+          {t("send")}
         </button>
       </div>
     </div>
