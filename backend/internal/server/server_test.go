@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/server"
 )
 
@@ -17,7 +19,7 @@ type mockPinger struct{ err error }
 func (m *mockPinger) Ping(_ context.Context) error { return m.err }
 
 func TestHealthHandler_DBOk(t *testing.T) {
-	h := server.New(&mockPinger{}, "test", []string{"http://localhost:3000"}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), nil, nil, func(h http.Handler) http.Handler { return h })
+	h := server.New(&mockPinger{}, zerolog.Nop(), "test", []string{"http://localhost:3000"}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), nil, nil, func(h http.Handler) http.Handler { return h })
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -44,7 +46,7 @@ func TestHealthHandler_DBOk(t *testing.T) {
 }
 
 func TestHealthHandler_DBError(t *testing.T) {
-	h := server.New(&mockPinger{err: errors.New("connection refused")}, "test", []string{"*"}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), nil, nil, func(h http.Handler) http.Handler { return h })
+	h := server.New(&mockPinger{err: errors.New("connection refused")}, zerolog.Nop(), "test", []string{"*"}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), nil, nil, func(h http.Handler) http.Handler { return h })
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -65,7 +67,7 @@ func TestHealthHandler_DBError(t *testing.T) {
 }
 
 func TestHealthHandler_ContentType(t *testing.T) {
-	h := server.New(&mockPinger{}, "production", []string{"*"}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), nil, nil, func(h http.Handler) http.Handler { return h })
+	h := server.New(&mockPinger{}, zerolog.Nop(), "production", []string{"*"}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), nil, nil, func(h http.Handler) http.Handler { return h })
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

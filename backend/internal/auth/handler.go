@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/profiles"
@@ -129,7 +130,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			ip := clientIP(r)
 			allowed, err := cfg.limiter.Allow(r.Context(), "login:ip:"+ip, cfg.loginIPLimit, cfg.loginIPWindow)
 			if err != nil {
-				log.Printf("auth: ip rate limiter error: %v", err)
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: ip rate limiter error")
 			} else if !allowed {
 				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many requests")
 				return
@@ -154,7 +155,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 		if cfg.locker != nil {
 			locked, err := cfg.locker.IsLocked(r.Context(), lockKey, loginMaxFailures)
 			if err != nil {
-				log.Printf("auth: locker IsLocked error: %v", err)
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: locker IsLocked error")
 			} else if locked {
 				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeAccountLocked, "account temporarily locked due to too many failed login attempts")
 				return
@@ -171,7 +172,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 				if cfg.locker != nil {
 					locked, lerr := cfg.locker.RecordFailure(r.Context(), lockKey, loginMaxFailures, loginLockWindow)
 					if lerr != nil {
-						log.Printf("auth: locker RecordFailure error: %v", lerr)
+						zerolog.Ctx(r.Context()).Warn().Err(lerr).Msg("auth: locker RecordFailure error")
 					} else if locked {
 						apierror.Write(w, http.StatusTooManyRequests, apierror.CodeAccountLocked, "account temporarily locked due to too many failed login attempts")
 						return
@@ -186,7 +187,7 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 
 		if cfg.locker != nil {
 			if err := cfg.locker.Reset(r.Context(), lockKey); err != nil {
-				log.Printf("auth: locker Reset error: %v", err)
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: locker Reset error")
 			}
 		}
 
@@ -206,7 +207,7 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 			ip := clientIP(r)
 			allowed, err := cfg.limiter.Allow(r.Context(), "register:ip:"+ip, cfg.registerIPLimit, cfg.registerIPWindow)
 			if err != nil {
-				log.Printf("auth: ip rate limiter error: %v", err)
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: ip rate limiter error")
 			} else if !allowed {
 				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many requests")
 				return
@@ -252,7 +253,7 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 					apierror.Write(w, http.StatusConflict, apierror.CodeUsernameTaken, "username already taken")
 					return
 				}
-				log.Printf("auth: seed profile for user %s: %v", user.ID, err)
+				zerolog.Ctx(r.Context()).Warn().Err(err).Str("user_id", user.ID).Msg("auth: seed profile failed")
 				// Non-fatal: account exists, user can set profile later.
 			}
 		}
@@ -261,9 +262,10 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 		// can request a resend from the login page.
 		if cfg.emailFlow != nil {
 			ctx := context.WithoutCancel(r.Context())
+			reqLog := zerolog.Ctx(r.Context()).With().Str("user_id", user.ID).Logger()
 			go func() {
 				if err := cfg.emailFlow.SendVerificationEmail(ctx, user.ID, user.Email, cfg.frontendURL); err != nil {
-					log.Printf("auth: send verification email: %v", err)
+					reqLog.Warn().Err(err).Msg("auth: send verification email failed")
 				}
 			}()
 		}

@@ -10,11 +10,11 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
-	"log"
 	"path"
 	"strings"
 
 	"github.com/hibiken/asynq"
+	"github.com/rs/zerolog"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
 )
@@ -52,15 +52,21 @@ type ImageProcessor struct {
 	storage    ProcessingStorage
 	store      ThumbnailStore
 	imageMaxPx int
+	log        zerolog.Logger
 }
 
 // NewImageProcessor creates an ImageProcessor. imageMaxPx caps the longest
 // edge of JPEG and PNG originals; use 0 to apply the default (1024 px).
-func NewImageProcessor(st ProcessingStorage, store ThumbnailStore, imageMaxPx int) *ImageProcessor {
+func NewImageProcessor(st ProcessingStorage, store ThumbnailStore, imageMaxPx int, log zerolog.Logger) *ImageProcessor {
 	if imageMaxPx <= 0 {
 		imageMaxPx = defaultImageMaxPx
 	}
-	return &ImageProcessor{storage: st, store: store, imageMaxPx: imageMaxPx}
+	return &ImageProcessor{
+		storage:    st,
+		store:      store,
+		imageMaxPx: imageMaxPx,
+		log:        log.With().Str("component", "image_worker").Logger(),
+	}
 }
 
 // EnqueueProcessImage enqueues a process-image task using the given client.
@@ -80,7 +86,7 @@ func (p *ImageProcessor) Handle(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("worker: unmarshal payload: %w", err)
 	}
 	if err := p.process(ctx, payload); err != nil {
-		log.Printf("worker: process image %s: %v", payload.UploadID, err)
+		p.log.Error().Err(err).Str("upload_id", payload.UploadID).Msg("process image failed")
 		return err
 	}
 	return nil

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // --- mocks ---
@@ -50,13 +52,13 @@ func (m *mockFileStorage) Delete(_ context.Context, key string) error {
 func TestPurgeDeletedAccounts_NoneExpired(t *testing.T) {
 	store := &mockAccountPurger{ids: nil}
 	fs := &mockFileStorage{}
-	PurgeDeletedAccounts(t.Context(), store, fs) // should not panic or log error
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs) // should not panic or log error
 }
 
 func TestPurgeDeletedAccounts_GetIDsError(t *testing.T) {
 	store := &mockAccountPurger{getIDsErr: errors.New("db error")}
 	fs := &mockFileStorage{}
-	PurgeDeletedAccounts(t.Context(), store, fs) // should log error, not panic
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs) // should log error, not panic
 }
 
 func TestPurgeDeletedAccounts_PurgesUsers(t *testing.T) {
@@ -66,7 +68,7 @@ func TestPurgeDeletedAccounts_PurgesUsers(t *testing.T) {
 		thumbKeys:  []string{"uploads/img_thumb.jpg"},
 	}
 	fs := &mockFileStorage{}
-	PurgeDeletedAccounts(t.Context(), store, fs)
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs)
 
 	// Each user has 1 storage key + 1 thumbnail = 2 deletions per user × 2 users = 4.
 	if len(fs.deleted) != 4 {
@@ -82,7 +84,7 @@ func TestPurgeDeletedAccounts_StorageErrorDoesNotAbort(t *testing.T) {
 	}
 	fs := &mockFileStorage{err: errors.New("s3 error")}
 	// Should complete without panic even when storage.Delete fails.
-	PurgeDeletedAccounts(t.Context(), store, fs)
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs)
 }
 
 func TestPurgeDeletedAccounts_DeleteDataError(t *testing.T) {
@@ -91,7 +93,7 @@ func TestPurgeDeletedAccounts_DeleteDataError(t *testing.T) {
 		deleteDataErr: errors.New("db error"),
 	}
 	fs := &mockFileStorage{}
-	PurgeDeletedAccounts(t.Context(), store, fs) // logs error, does not panic
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs) // logs error, does not panic
 }
 
 func TestPurgeDeletedAccounts_AnonymizeError(t *testing.T) {
@@ -100,7 +102,7 @@ func TestPurgeDeletedAccounts_AnonymizeError(t *testing.T) {
 		anonymizeErr: errors.New("db error"),
 	}
 	fs := &mockFileStorage{}
-	PurgeDeletedAccounts(t.Context(), store, fs) // logs error, does not panic
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs) // logs error, does not panic
 }
 
 func TestPurgeDeletedAccounts_EmptyStorageKeysSkipped(t *testing.T) {
@@ -110,7 +112,7 @@ func TestPurgeDeletedAccounts_EmptyStorageKeysSkipped(t *testing.T) {
 		thumbKeys:  []string{""},
 	}
 	fs := &mockFileStorage{}
-	PurgeDeletedAccounts(t.Context(), store, fs)
+	PurgeDeletedAccounts(t.Context(), zerolog.Nop(), store, fs)
 
 	if len(fs.deleted) != 0 {
 		t.Errorf("expected no storage deletions for empty keys, got %v", fs.deleted)

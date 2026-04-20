@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/worker"
 )
 
@@ -59,7 +61,7 @@ func TestSweep_DeletesExpiredMessages(t *testing.T) {
 	var notified []string
 	cleaner := worker.NewEphemeralCleaner(store, storage, func(roomID, msgID string) {
 		notified = append(notified, roomID+":"+msgID)
-	})
+	}, zerolog.Nop())
 
 	cleaner.Sweep(context.Background())
 
@@ -80,7 +82,7 @@ func TestSweep_DeletesExpiredMessages(t *testing.T) {
 func TestSweep_NoExpiredMessages(t *testing.T) {
 	store := &fakeEphemeralStore{expiredIDs: nil}
 	storage := &fakeDeletionStorage{}
-	cleaner := worker.NewEphemeralCleaner(store, storage, nil)
+	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	cleaner.Sweep(context.Background())
 
@@ -92,7 +94,7 @@ func TestSweep_NoExpiredMessages(t *testing.T) {
 func TestSweep_ListError(t *testing.T) {
 	store := &fakeEphemeralStore{expiredErr: errors.New("db fail")}
 	storage := &fakeDeletionStorage{}
-	cleaner := worker.NewEphemeralCleaner(store, storage, nil)
+	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	// Must not panic.
 	cleaner.Sweep(context.Background())
@@ -112,7 +114,7 @@ func TestSweep_DeleteError(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 
 	notified := false
-	cleaner := worker.NewEphemeralCleaner(store, storage, func(_, _ string) { notified = true })
+	cleaner := worker.NewEphemeralCleaner(store, storage, func(_ string, _ string) { notified = true }, zerolog.Nop())
 
 	// Must not panic and must not notify on failure.
 	cleaner.Sweep(context.Background())
@@ -131,7 +133,7 @@ func TestSweep_StorageDeleteError(t *testing.T) {
 	storage := &fakeDeletionStorage{deleteErr: errors.New("s3 fail")}
 
 	notified := false
-	cleaner := worker.NewEphemeralCleaner(store, storage, func(_, _ string) { notified = true })
+	cleaner := worker.NewEphemeralCleaner(store, storage, func(_ string, _ string) { notified = true }, zerolog.Nop())
 
 	// Storage error must not prevent notification.
 	cleaner.Sweep(context.Background())
@@ -151,7 +153,7 @@ func TestSweep_NilNotify(t *testing.T) {
 		deleteKeys:  map[string][]string{"m-1": {}},
 	}
 	storage := &fakeDeletionStorage{}
-	cleaner := worker.NewEphemeralCleaner(store, storage, nil)
+	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	// Must not panic when notify is nil.
 	cleaner.Sweep(context.Background())
@@ -170,7 +172,7 @@ func TestSweep_MultipleStorageKeys(t *testing.T) {
 		},
 	}
 	storage := &fakeDeletionStorage{}
-	cleaner := worker.NewEphemeralCleaner(store, storage, nil)
+	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	cleaner.Sweep(context.Background())
 
@@ -182,7 +184,7 @@ func TestSweep_MultipleStorageKeys(t *testing.T) {
 func TestEphemeralCleaner_Start_StopsOnContextCancel(t *testing.T) {
 	store := &fakeEphemeralStore{}
 	storage := &fakeDeletionStorage{}
-	cleaner := worker.NewEphemeralCleaner(store, storage, nil)
+	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cleaner.Start(ctx)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/rs/zerolog"
 )
 
 // mockStore is a test double for Store.
@@ -54,7 +55,8 @@ func newTestService(store Store) *Service {
 		vapidPublic:  "public",
 		vapidPrivate: "private",
 		vapidSubject: "mailto:test@example.com",
-		sender:       func(_ context.Context, _ []byte, _ *webpush.Subscription, _ *webpush.Options) (*http.Response, error) {
+		log:          zerolog.Nop(),
+		sender: func(_ context.Context, _ []byte, _ *webpush.Subscription, _ *webpush.Options) (*http.Response, error) {
 			return fakeResponse(http.StatusCreated)
 		},
 	}
@@ -70,7 +72,7 @@ func TestService_Enabled_WithKeys(t *testing.T) {
 }
 
 func TestService_Enabled_WithoutKeys(t *testing.T) {
-	svc := NewService(&mockStore{}, "", "", "")
+	svc := NewService(&mockStore{}, "", "", "", zerolog.Nop())
 	if svc.Enabled() {
 		t.Error("expected Enabled()=false when VAPID keys are empty")
 	}
@@ -106,7 +108,7 @@ func TestService_Subscribe_PropagatesStoreError(t *testing.T) {
 
 func TestService_Send_Disabled(t *testing.T) {
 	store := &mockStore{listResult: []Subscription{{Endpoint: "https://ep", P256DH: "p", Auth: "a"}}}
-	svc := NewService(store, "", "", "") // disabled — no VAPID keys
+	svc := NewService(store, "", "", "", zerolog.Nop()) // disabled — no VAPID keys
 
 	called := false
 	svc.sender = func(_ context.Context, _ []byte, _ *webpush.Subscription, _ *webpush.Options) (*http.Response, error) {

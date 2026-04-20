@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Structured logging with zerolog** ([PR #55](https://github.com/mayloo89/circl/pull/55)):
+  - `github.com/rs/zerolog` replaces the standard `log` package across the entire backend (51 call sites)
+  - New `internal/logger` package: `New(env, level string) zerolog.Logger` — human-readable console output in development, JSON to stdout in production; log level configurable via `LOG_LEVEL` env var (default: `info`)
+  - New `middleware.RequestLogger(log)` middleware: assigns a unique `request_id` to every request using `xid`, attaches a request-scoped logger to the context via `zerolog.Ctx`, sets the `X-Request-ID` response header, and writes one structured access-log entry per request with `method`, `path`, `status`, `latency_ms`, and `request_id`
+  - `middleware.EnrichRequestLog(ctx, key, value)`: pointer-based context accumulator that lets downstream middleware contribute fields to the access-log entry — used by `RequireAuth` to add `user_id` and role to every authenticated request's log line
+  - `RequireAuth` middleware now enriches the context logger with `user_id` so every log line emitted inside an authenticated handler automatically carries the user identity
+  - Full traceability chain: every log line within a request shares the same `request_id`; authenticated requests additionally carry `user_id`; correlation requires only the `request_id` field
+  - All background workers receive a `zerolog.Logger` at construction and tag their log lines with a `component` field: `push`, `uploads`, `ephemeral_cleaner`, `image_worker`, `purge_worker`
+  - `asynqLogger` bridge: asynq's internal log output is routed through zerolog with `component=asynq`
+  - No PII in logs: email addresses are never logged; user IDs (internal UUIDs) are acceptable
+  - 5 new unit tests for `RequestLogger`: request_id header, access-log fields, context logger propagation, `EnrichRequestLog` accumulation, implicit 200 status
+
 - **Internationalisation — ES / EN / PT** ([PR #54](https://github.com/mayloo89/circl/pull/54)):
   - Frontend fully translated into Spanish (default), English, and Portuguese using `next-intl` with prefix-based URL routing (`/es/`, `/en/`, `/pt/`)
   - All pages translated: auth, browse, chat list, chat room, channels, contacts, profile (own + public), settings, admin

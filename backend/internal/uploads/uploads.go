@@ -5,9 +5,10 @@ package uploads
 import (
 	"context"
 	"errors"
-	"log"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/mayloo89/circl/backend/internal/storage"
 )
@@ -47,11 +48,16 @@ type Service struct {
 	store   Store
 	storage storage.Storage
 	enqueue func(ctx context.Context, uploadID, storageKey, contentType string) error
+	log     zerolog.Logger
 }
 
 // NewService returns a ready-to-use upload service.
-func NewService(store Store, st storage.Storage) *Service {
-	return &Service{store: store, storage: st}
+func NewService(store Store, st storage.Storage, log zerolog.Logger) *Service {
+	return &Service{
+		store:   store,
+		storage: st,
+		log:     log.With().Str("component", "uploads").Logger(),
+	}
 }
 
 // SetEnqueuer registers a function that enqueues a background processing task
@@ -154,7 +160,7 @@ func (s *Service) ConfirmUpload(ctx context.Context, uploadID, userID string) (*
 
 	if s.enqueue != nil && strings.HasPrefix(u.ContentType, "image/") {
 		if err := s.enqueue(ctx, u.ID, u.StorageKey, u.ContentType); err != nil {
-			log.Printf("uploads: enqueue image processing for %s: %v", u.ID, err)
+			s.log.Warn().Err(err).Str("upload_id", u.ID).Msg("enqueue image processing failed")
 		}
 	}
 

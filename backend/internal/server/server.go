@@ -3,13 +3,15 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/rs/zerolog"
+
+	"github.com/mayloo89/circl/backend/internal/middleware"
 )
 
 // DBPinger is the minimal interface required by the health handler.
@@ -32,9 +34,10 @@ type DBPinger interface {
 // adminHandler is the admin sub-router (admin.NewHandler); must run behind requireAuth.
 // localStorageHandler serves uploaded files in dev mode; nil in production.
 // requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, availableHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, adminHandler http.Handler, localStorageHandler http.Handler, testHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(db DBPinger, log zerolog.Logger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, availableHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, adminHandler http.Handler, localStorageHandler http.Handler, testHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
+	r.Use(middleware.RequestLogger(log))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   corsOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -93,7 +96,7 @@ func healthHandler(db DBPinger, env string) http.HandlerFunc {
 		defer cancel()
 
 		if err := db.Ping(ctx); err != nil {
-			log.Printf("DB health check failed: %v", err)
+			zerolog.Ctx(r.Context()).Error().Err(err).Msg("db health check failed")
 			dbStatus = "error"
 		}
 

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/token"
 )
 
@@ -57,6 +59,12 @@ func RequireAuth(jwtSecret string, checker ...UserStatusChecker) func(http.Handl
 
 			ctx := context.WithValue(r.Context(), userIDKey, claims.Subject)
 			ctx = context.WithValue(ctx, roleKey, claims.Role)
+
+			// Enrich the request-scoped logger and access log with the authenticated user.
+			enriched := zerolog.Ctx(ctx).With().Str("user_id", claims.Subject).Logger()
+			ctx = enriched.WithContext(ctx)
+			EnrichRequestLog(ctx, "user_id", claims.Subject)
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

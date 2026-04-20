@@ -2,8 +2,9 @@ package worker
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // EphemeralStore is the subset of the chat.Store interface required to sweep
@@ -27,14 +28,20 @@ type DeletionStorage interface {
 type EphemeralCleaner struct {
 	store   EphemeralStore
 	storage DeletionStorage
+	log     zerolog.Logger
 	// notify, when non-nil, is called after each deleted message so the hub
 	// can broadcast a message_deleted event to room members.
 	notify func(roomID, messageID string)
 }
 
 // NewEphemeralCleaner creates an EphemeralCleaner. notify may be nil.
-func NewEphemeralCleaner(store EphemeralStore, storage DeletionStorage, notify func(roomID, messageID string)) *EphemeralCleaner {
-	return &EphemeralCleaner{store: store, storage: storage, notify: notify}
+func NewEphemeralCleaner(store EphemeralStore, storage DeletionStorage, notify func(roomID, messageID string), log zerolog.Logger) *EphemeralCleaner {
+	return &EphemeralCleaner{
+		store:   store,
+		storage: storage,
+		notify:  notify,
+		log:     log.With().Str("component", "ephemeral_cleaner").Logger(),
+	}
 }
 
 // Start launches the background sweep goroutine. It runs until ctx is cancelled.
@@ -59,20 +66,20 @@ func (e *EphemeralCleaner) Start(ctx context.Context) {
 func (e *EphemeralCleaner) Sweep(ctx context.Context) {
 	ids, err := e.store.ListExpiredMessages(ctx)
 	if err != nil {
-		log.Printf("ephemeral cleaner: list expired: %v", err)
+		e.log.Error().Err(err).Msg("list expired messages failed")
 		return
 	}
 
 	for _, id := range ids {
 		roomID, keys, err := e.store.TombstoneMessage(ctx, id)
 		if err != nil {
-			log.Printf("ephemeral cleaner: tombstone message %s: %v", id, err)
+			e.log.Error().Err(err).Str("message_id", id).Msg("tombstone message failed")
 			continue
 		}
 
 		for _, key := range keys {
 			if err := e.storage.Delete(ctx, key); err != nil {
-				log.Printf("ephemeral cleaner: delete storage key %s: %v", key, err)
+				e.log.Error().Err(err).Str("storage_key", key).Msg("delete storage key failed")
 			}
 		}
 
