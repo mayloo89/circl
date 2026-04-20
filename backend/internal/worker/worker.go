@@ -4,8 +4,20 @@
 package worker
 
 import (
+	"fmt"
+
 	"github.com/hibiken/asynq"
+	"github.com/rs/zerolog"
 )
+
+// asynqLogger bridges asynq's Logger interface to a zerolog.Logger.
+type asynqLogger struct{ log zerolog.Logger }
+
+func (l *asynqLogger) Debug(args ...any) { l.log.Debug().Msg(fmt.Sprint(args...)) }
+func (l *asynqLogger) Info(args ...any)  { l.log.Info().Msg(fmt.Sprint(args...)) }
+func (l *asynqLogger) Warn(args ...any)  { l.log.Warn().Msg(fmt.Sprint(args...)) }
+func (l *asynqLogger) Error(args ...any) { l.log.Error().Msg(fmt.Sprint(args...)) }
+func (l *asynqLogger) Fatal(args ...any) { l.log.Fatal().Msg(fmt.Sprint(args...)) }
 
 // Client enqueues background tasks.
 type Client struct {
@@ -26,10 +38,11 @@ type Server struct {
 }
 
 // NewServer creates an asynq server that processes tasks from Redis.
-func NewServer(redisOpt asynq.RedisClientOpt, concurrency int) *Server {
+func NewServer(redisOpt asynq.RedisClientOpt, concurrency int, log zerolog.Logger) *Server {
 	srv := asynq.NewServer(redisOpt, asynq.Config{
 		Concurrency: concurrency,
 		Queues:      map[string]int{"default": 1},
+		Logger:      &asynqLogger{log: log.With().Str("component", "asynq").Logger()},
 	})
 	return &Server{s: srv}
 }

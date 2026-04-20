@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/push"
 )
@@ -37,7 +39,7 @@ func authedRequest(method, path, body string) *http.Request {
 }
 
 func newHandler(store push.Store) http.Handler {
-	svc := push.NewService(store, "pubkey", "privkey", "mailto:test@example.com")
+	svc := push.NewService(store, "pubkey", "privkey", "mailto:test@example.com", zerolog.Nop())
 	return push.NewHandler(svc)
 }
 
@@ -58,7 +60,7 @@ func TestVapidPublicKeyHandler_Enabled(t *testing.T) {
 }
 
 func TestVapidPublicKeyHandler_Disabled(t *testing.T) {
-	svc := push.NewService(&stubStore{}, "", "", "")
+	svc := push.NewService(&stubStore{}, "", "", "", zerolog.Nop())
 	h := push.NewHandler(svc)
 	req := httptest.NewRequest(http.MethodGet, "/vapid-public-key", nil)
 	rec := httptest.NewRecorder()

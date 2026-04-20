@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/storage"
 )
@@ -119,7 +121,7 @@ func chiContext(r *http.Request, key, value string) *http.Request {
 // --- Tests ---
 
 func TestRequestUpload_Success(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"avatar","filename":"photo.jpg","content_type":"image/jpeg","size_bytes":1024}`
@@ -149,7 +151,7 @@ func TestRequestUpload_Success(t *testing.T) {
 }
 
 func TestRequestUpload_NoAuth(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"avatar","filename":"photo.jpg","content_type":"image/jpeg","size_bytes":1024}`
@@ -164,7 +166,7 @@ func TestRequestUpload_NoAuth(t *testing.T) {
 }
 
 func TestRequestUpload_InvalidCategory(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"bogus","filename":"photo.jpg","content_type":"image/jpeg","size_bytes":1024}`
@@ -180,7 +182,7 @@ func TestRequestUpload_InvalidCategory(t *testing.T) {
 }
 
 func TestRequestUpload_InvalidContentType(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"avatar","filename":"script.sh","content_type":"application/x-sh","size_bytes":1024}`
@@ -196,7 +198,7 @@ func TestRequestUpload_InvalidContentType(t *testing.T) {
 }
 
 func TestRequestUpload_FileTooLarge(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"avatar","filename":"photo.jpg","content_type":"image/jpeg","size_bytes":10000000}`
@@ -213,7 +215,7 @@ func TestRequestUpload_FileTooLarge(t *testing.T) {
 
 func TestConfirmUpload_Success(t *testing.T) {
 	store := newMockStore()
-	svc := NewService(store, &mockStorage{})
+	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	// First create a pending upload via the service.
 	out, err := svc.RequestUpload(t.Context(), RequestUploadInput{
@@ -254,7 +256,7 @@ func TestConfirmUpload_Success(t *testing.T) {
 }
 
 func TestConfirmUpload_NotFound(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 
 	r := chi.NewRouter()
 	r.Post("/{id}/confirm", confirmHandler(svc))
@@ -272,7 +274,7 @@ func TestConfirmUpload_NotFound(t *testing.T) {
 
 func TestConfirmUpload_Forbidden(t *testing.T) {
 	store := newMockStore()
-	svc := NewService(store, &mockStorage{})
+	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
 		UserID:      "user-1",
@@ -298,7 +300,7 @@ func TestConfirmUpload_Forbidden(t *testing.T) {
 
 func TestConfirmUpload_AlreadyCommitted(t *testing.T) {
 	store := newMockStore()
-	svc := NewService(store, &mockStorage{})
+	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
 		UserID: "user-1", Category: "avatar", Filename: "photo.jpg",
@@ -320,7 +322,7 @@ func TestConfirmUpload_AlreadyCommitted(t *testing.T) {
 }
 
 func TestConfirmUpload_NoAuth(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	r := chi.NewRouter()
 	r.Post("/{id}/confirm", confirmHandler(svc))
 
@@ -334,7 +336,7 @@ func TestConfirmUpload_NoAuth(t *testing.T) {
 }
 
 func TestRequestUpload_InvalidJSON(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/request", bytes.NewBufferString("not json"))
@@ -350,7 +352,7 @@ func TestRequestUpload_InvalidJSON(t *testing.T) {
 
 func TestConfirmUpload_EnqueuerCalled(t *testing.T) {
 	store := newMockStore()
-	svc := NewService(store, &mockStorage{})
+	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	var enqueuedUploadID string
 	svc.SetEnqueuer(func(_ context.Context, uploadID, _, _ string) error {
@@ -377,7 +379,7 @@ func TestConfirmUpload_EnqueuerCalled(t *testing.T) {
 
 func TestConfirmUpload_EnqueuerError_DoesNotFail(t *testing.T) {
 	store := newMockStore()
-	svc := NewService(store, &mockStorage{})
+	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 	svc.SetEnqueuer(func(_ context.Context, _, _, _ string) error {
 		return errors.New("redis down")
 	})
@@ -397,7 +399,7 @@ func TestConfirmUpload_EnqueuerError_DoesNotFail(t *testing.T) {
 }
 
 func TestRequestUpload_StorageError(t *testing.T) {
-	svc := NewService(newMockStore(), &failingMockStorage{})
+	svc := NewService(newMockStore(), &failingMockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"avatar","filename":"photo.jpg","content_type":"image/jpeg","size_bytes":1024}`
@@ -414,7 +416,7 @@ func TestRequestUpload_StorageError(t *testing.T) {
 
 func TestConfirmUpload_CommitError(t *testing.T) {
 	store := &failingCommitStore{mockStore: *newMockStore()}
-	svc := NewService(&store.mockStore, &mockStorage{})
+	svc := NewService(&store.mockStore, &mockStorage{}, zerolog.Nop())
 
 	out, _ := svc.RequestUpload(t.Context(), RequestUploadInput{
 		UserID:      "user-1",
@@ -425,7 +427,7 @@ func TestConfirmUpload_CommitError(t *testing.T) {
 	})
 
 	// Use failingCommitStore directly as the store.
-	svcFail := NewService(store, &mockStorage{})
+	svcFail := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	r := chi.NewRouter()
 	r.Post("/{id}/confirm", confirmHandler(svcFail))
@@ -442,7 +444,7 @@ func TestConfirmUpload_CommitError(t *testing.T) {
 
 func TestConfirmUpload_MissingID(t *testing.T) {
 	// Call confirmHandler directly without chi URL params so id is empty.
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	req := httptest.NewRequest(http.MethodPost, "/confirm", nil)
 	req = withAuth(req, "user-1")
 	rec := httptest.NewRecorder()
@@ -454,7 +456,7 @@ func TestConfirmUpload_MissingID(t *testing.T) {
 }
 
 func TestRequestUpload_InvalidFilename(t *testing.T) {
-	svc := NewService(newMockStore(), &mockStorage{})
+	svc := NewService(newMockStore(), &mockStorage{}, zerolog.Nop())
 	handler := NewHandler(svc)
 
 	body := `{"category":"avatar","filename":"","content_type":"image/jpeg","size_bytes":1024}`
@@ -471,7 +473,7 @@ func TestRequestUpload_InvalidFilename(t *testing.T) {
 
 func TestConfirmUpload_NonImageDoesNotEnqueue(t *testing.T) {
 	store := newMockStore()
-	svc := NewService(store, &mockStorage{})
+	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	enqueued := false
 	svc.SetEnqueuer(func(_ context.Context, _, _, _ string) error {

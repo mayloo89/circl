@@ -15,12 +15,12 @@
 - Backend: Go (chi) + middlewares; WebSockets (gorilla/websocket).
 - Auth: NextAuth.js (Auth.js) v5 with credentials provider; httpOnly cookies; JWT HS256.
 - DB: PostgreSQL + golang-migrate for schema migrations; pgx/v5 connection pool.
-- Cache / real-time: Redis (presence, Pub/Sub for chat fan-out, rate limits, token blacklist).
+- Cache / real-time: Redis (presence, Pub/Sub for chat fan-out, rate limits).
 - Queues / worker: asynq for image processing and maintenance tasks.
-- Storage: S3/R2 + pre-signed URLs; image processing (bimg/imagor) in worker.
+- Storage: S3/R2 + pre-signed URLs; image processing (EXIF strip, JPEG thumbnails) in asynq worker.
 - Infra: Frontend on Vercel; backend on Fly.io/Render/AWS; Postgres (Neon/RDS), Redis (Upstash/ElastiCache).
 - Quality: ESLint/Prettier, golangci-lint, Go tests, CI via GitHub Actions.
-- Observability: structured logs (zerolog/zap), metrics/tracing (OpenTelemetry/Prometheus), error tracking (Sentry).
+- Observability: zerolog (structured JSON logs) → Loki; Prometheus (metrics) with client_golang; OpenTelemetry traces → Tempo; Grafana Alloy / OTel Collector as shipper; Grafana as unified viz layer; trace_id correlated across logs/metrics/traces; Sentry for frontend error tracking (post-launch).
 
 ## 3. Logical architecture
 - Frontend: middleware-protected routes; CSR for chat; SSR only with a valid session.
@@ -118,10 +118,17 @@
 - [x] **UX polish** (PR #53): touched-state inline validation on registration; error messages read from backend response body; 429 rate-limit differentiated from credential errors on login; change-password collapses behind button; delete-account moved to modal; gender options extended (trans male/female, non-binary, custom free-text)
 - [x] **Internationalisation** (PR #54): next-intl with prefix-based URL routing (`/es/`, `/en/`, `/pt/`); all pages and components translated into ES/EN/PT (`ChatInput`, `MessageBubble`, `GroupMembersPanel`, `CreateGroupModal`, `ConfirmDialog`, `ReportDialog`, `PushPrompt`, `ContactCard`, `SearchBar`, `PhotoGallery`); `app/[locale]/` restructure; language switcher in NavBar and Settings persists to backend; shared `apierror` package with stable machine-readable error codes across all 10 handlers; migration 000025 adds `locale` to `profile_preferences`; auth + intl middleware merged into single `middleware.ts`; Next.js pinned to 16.1.1 (16.2.2 had Turbopack memory regression)
 
-- [ ] **Phase 2 — Observability** (PR #55–56): zerolog; structured request logging (method, path, status, latency, request_id); replace all log.Printf calls; Prometheus metrics; /metrics endpoint; enhanced /health (DB + Redis ping).
-- [ ] **Phase 3 — Security hardening** (PR #57–58): CSP/HSTS headers in Next.js + backend; WebSocket origin validation; token rotation (refresh tokens, Redis blacklist); non-root Docker user; graceful shutdown.
-- [ ] **Phase 4 — Deployment** (PR #59–60): CI/CD (GitHub Actions, golangci-lint, coverage); production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets management.
-- [ ] **Phase 5 — Polish & launch** (PR #61–63): onboarding wizard; landing page for unauthenticated users; accessibility audit; final docs (README, CONTRIBUTING, OpenAPI).
+- [x] **Structured logging** (PR #55): zerolog; `internal/logger` package (dev: ConsoleWriter, prod: JSON; `LOG_LEVEL` env var); `RequestLogger` middleware (request_id via xid, `X-Request-ID` header, access log with method/path/status/latency_ms); `EnrichRequestLog` accumulator — `RequireAuth` injects `user_id` into the access log; all 51 `log.*` call sites replaced; background workers (`push`, `uploads`, `ephemeral_cleaner`, `image_worker`, `purge_worker`) receive a logger at construction; `asynqLogger` bridge routes asynq internals through zerolog; no PII in logs.
+- [ ] **Metrics + health checks** (PR #56): `prometheus/client_golang`; Go runtime + HTTP handler + WS + DB pool collectors; `/metrics` endpoint (optionally protected); enhanced `/health` (DB ping + Redis ping + version); `backend/Dockerfile` `HEALTHCHECK`; non-root USER; `frontend/Dockerfile` `HEALTHCHECK`.
+- [ ] **Distributed tracing with OpenTelemetry** (PR #57): OTel SDK init (OTLP exporter, sampling config via `OTEL_*` env); chi, pgx, go-redis, asynq and net/http instrumentation; manual spans around WebSocket handlers and Redis Pub/Sub fan-out; `trace_id`/`span_id` injected into zerolog via `zerolog.Hook` for log-trace correlation; graceful shutdown of tracer provider.
+- [ ] **Log shipping pipeline** (PR #58): Grafana Alloy (or OTel Collector) sidecar in `docker-compose.yml`; scrapes backend stdout + Postgres/Redis logs; forwards to Loki with labels (`service`, `env`, `component`); retention config; docs for structured query examples.
+- [ ] **Grafana stack + dashboards + alert rules** (PR #59): Loki, Tempo, Prometheus, Grafana added to `docker-compose.yml` (dev-only); Grafana provisioning YAML (datasources + dashboards-as-code under `ops/grafana/`); core dashboards (HTTP RED, WS active connections + fan-out, DB pool, Redis, asynq queues, business KPIs); Prometheus alert rules and SLO recording rules (error rate, p95 latency, WS drops, worker backlogs); SLI definitions wired to Section 10.
+- [ ] **Phase 3 — Security hardening** (PR #60–61): CSP/HSTS headers in Next.js + backend; WebSocket origin validation; token rotation (refresh tokens, Redis blacklist); non-root Docker user (if not completed in #56); graceful shutdown with in-flight request drain; CORS tightening; secret scanning in CI.
+- [ ] **OpenAPI spec + generated types** (PR #62): OpenAPI 3.1 spec for all ~30 endpoints under `docs/openapi.yaml`; spec-first validation in CI; optional generated TypeScript client for frontend.
+- [ ] **Phase 4 — Deployment + observability hosting** (PR #63–64): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
+- [ ] **Phase 5 — Polish & launch** (PR #65–67): onboarding wizard; landing page for unauthenticated users; accessibility audit (WCAG 2.1 AA); runbooks (`docs/runbooks/`) for common incidents; final docs (README, CONTRIBUTING, architecture diagram).
+
+> Observability PRs (#56–#59) follow the OTel convention: logs via Loki, metrics via Prometheus, traces via Tempo, all correlated by trace_id and unified in Grafana. Production hosting (managed vs self-hosted) is decided in Phase 4.
 
 ## 9. Testing strategy
 - Unit: handlers and services (auth, chat, profiles, contacts).

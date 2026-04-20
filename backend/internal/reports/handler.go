@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 )
@@ -18,6 +19,7 @@ type Manager struct {
 	svc       *Service
 	moderator AdminModerator
 	limiter   RateLimiter
+	log       zerolog.Logger
 }
 
 // WithModerator sets the admin moderator on the Manager.
@@ -30,9 +32,16 @@ func WithLimiter(l RateLimiter) func(*Manager) {
 	return func(mgr *Manager) { mgr.limiter = l }
 }
 
+// WithLogger sets the logger on the Manager.
+func WithLogger(log zerolog.Logger) func(*Manager) {
+	return func(mgr *Manager) {
+		mgr.log = log.With().Str("component", "reports").Logger()
+	}
+}
+
 // NewManager creates a Manager backed by the given service.
 func NewManager(svc *Service, opts ...func(*Manager)) *Manager {
-	mgr := &Manager{svc: svc}
+	mgr := &Manager{svc: svc, log: zerolog.Nop()}
 	for _, o := range opts {
 		o(mgr)
 	}
@@ -64,7 +73,7 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 		key := fmt.Sprintf("reports:%s:%s", reporterID, time.Now().UTC().Format("2006-01-02"))
 		allowed, err := m.limiter.Allow(r.Context(), key, 10, 24*time.Hour)
 		if err != nil {
-			log.Printf("reports: rate limiter error: %v", err)
+			zerolog.Ctx(r.Context()).Warn().Err(err).Msg("reports: rate limiter error")
 		} else if !allowed {
 			apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many reports")
 			return
@@ -177,11 +186,11 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		switch req.Action {
 		case "suspend":
 			if err := m.moderator.SuspendUser(r.Context(), report.ReportedUserID, req.Reason, req.DurationDays, reviewerID); err != nil {
-				log.Printf("reports: suspend user %s: %v", report.ReportedUserID, err)
+				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", report.ReportedUserID).Msg("reports: suspend user failed")
 			}
 		case "ban":
 			if err := m.moderator.BanUser(r.Context(), report.ReportedUserID, req.Reason, reviewerID); err != nil {
-				log.Printf("reports: ban user %s: %v", report.ReportedUserID, err)
+				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", report.ReportedUserID).Msg("reports: ban user failed")
 			}
 		}
 	}

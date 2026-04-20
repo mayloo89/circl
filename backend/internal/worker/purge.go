@@ -2,8 +2,9 @@ package worker
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const deletionGracePeriod = 30 * 24 * time.Hour
@@ -23,24 +24,25 @@ type FileStorage interface {
 
 // PurgeDeletedAccounts removes all data for accounts that have been soft-deleted
 // past the 30-day grace period. Intended to be called on a daily schedule.
-func PurgeDeletedAccounts(ctx context.Context, store AccountPurger, storage FileStorage) {
+func PurgeDeletedAccounts(ctx context.Context, log zerolog.Logger, store AccountPurger, storage FileStorage) {
+	log = log.With().Str("component", "purge_worker").Logger()
 	cutoff := time.Now().Add(-deletionGracePeriod)
 	ids, err := store.GetExpiredDeletedUserIDs(ctx, cutoff)
 	if err != nil {
-		log.Printf("worker: purge: get expired user IDs: %v", err)
+		log.Error().Err(err).Msg("get expired user IDs failed")
 		return
 	}
 	for _, userID := range ids {
-		if err := purgeUser(ctx, store, storage, userID); err != nil {
-			log.Printf("worker: purge: user %s: %v", userID, err)
+		if err := purgeUser(ctx, log, store, storage, userID); err != nil {
+			log.Error().Err(err).Str("user_id", userID).Msg("purge user failed")
 		}
 	}
 	if len(ids) > 0 {
-		log.Printf("worker: purged %d expired deleted account(s)", len(ids))
+		log.Info().Int("count", len(ids)).Msg("purged expired deleted accounts")
 	}
 }
 
-func purgeUser(ctx context.Context, store AccountPurger, storage FileStorage, userID string) error {
+func purgeUser(ctx context.Context, log zerolog.Logger, store AccountPurger, storage FileStorage, userID string) error {
 	storageKeys, thumbnailKeys, err := store.GetUserUploadKeys(ctx, userID)
 	if err != nil {
 		return err
@@ -53,7 +55,7 @@ func purgeUser(ctx context.Context, store AccountPurger, storage FileStorage, us
 			continue
 		}
 		if err := storage.Delete(ctx, key); err != nil {
-			log.Printf("worker: purge: delete storage key %q: %v", key, err)
+			log.Error().Err(err).Str("storage_key", key).Msg("delete storage key failed")
 		}
 	}
 	for _, key := range thumbnailKeys {
@@ -61,7 +63,7 @@ func purgeUser(ctx context.Context, store AccountPurger, storage FileStorage, us
 			continue
 		}
 		if err := storage.Delete(ctx, key); err != nil {
-			log.Printf("worker: purge: delete thumbnail key %q: %v", key, err)
+			log.Error().Err(err).Str("storage_key", key).Msg("delete thumbnail key failed")
 		}
 	}
 

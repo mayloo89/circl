@@ -3,10 +3,10 @@ package push
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/rs/zerolog"
 )
 
 // Subscription holds a browser push subscription for one device.
@@ -44,17 +44,19 @@ type Service struct {
 	vapidPrivate string
 	vapidSubject string
 	sender       senderFunc
+	log          zerolog.Logger
 }
 
 // NewService creates a push Service. If vapidPublic or vapidPrivate are empty,
 // the service is disabled and Send becomes a no-op.
-func NewService(store Store, vapidPublic, vapidPrivate, vapidSubject string) *Service {
+func NewService(store Store, vapidPublic, vapidPrivate, vapidSubject string, log zerolog.Logger) *Service {
 	return &Service{
 		store:        store,
 		vapidPublic:  vapidPublic,
 		vapidPrivate: vapidPrivate,
 		vapidSubject: vapidSubject,
 		sender:       webpush.SendNotificationWithContext,
+		log:          log.With().Str("component", "push").Logger(),
 	}
 }
 
@@ -92,19 +94,21 @@ func (s *Service) Send(ctx context.Context, userID string, n Notification) {
 		return
 	}
 
+	log := s.log.With().Str("user_id", userID).Logger()
+
 	subs, err := s.store.ListByUser(ctx, userID)
 	if err != nil {
-		log.Printf("push: list subscriptions for user %s: %v", userID, err)
+		log.Error().Err(err).Msg("list subscriptions failed")
 		return
 	}
-	log.Printf("push: sending to user %s (%d subscriptions)", userID, len(subs))
+	log.Debug().Int("subscriptions", len(subs)).Msg("sending push notification")
 	if len(subs) == 0 {
 		return
 	}
 
 	payload, err := json.Marshal(n)
 	if err != nil {
-		log.Printf("push: marshal notification: %v", err)
+		log.Error().Err(err).Msg("marshal notification failed")
 		return
 	}
 
@@ -124,16 +128,16 @@ func (s *Service) Send(ctx context.Context, userID string, n Notification) {
 			},
 		}, opts)
 		if err != nil {
-			log.Printf("push: send to user %s: %v", userID, err)
+			log.Error().Err(err).Str("endpoint", sub.Endpoint).Msg("send failed")
 			continue
 		}
-		log.Printf("push: sent to user %s, status %d", userID, resp.StatusCode)
+		log.Debug().Int("status", resp.StatusCode).Str("endpoint", sub.Endpoint).Msg("sent")
 		resp.Body.Close()
 
 		// 404 / 410 mean the subscription is no longer valid — remove it.
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 			if err := s.store.DeleteByEndpoint(ctx, sub.Endpoint); err != nil {
-				log.Printf("push: delete stale subscription: %v", err)
+				log.Error().Err(err).Str("endpoint", sub.Endpoint).Msg("delete stale subscription failed")
 			}
 		}
 	}

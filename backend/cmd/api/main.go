@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -19,11 +18,12 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/admin"
 	"github.com/mayloo89/circl/backend/internal/auth"
-	"github.com/mayloo89/circl/backend/internal/email"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/db"
+	"github.com/mayloo89/circl/backend/internal/email"
+	"github.com/mayloo89/circl/backend/internal/logger"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
@@ -41,43 +41,45 @@ import (
 const tokenExpiry = 24 * time.Hour
 
 func main() {
+	env := config.EnvOrDefault("ENV", "development")
+	log := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
+
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment")
+		log.Debug().Msg("no .env file found, using system environment")
 	}
 
 	port := config.EnvOrDefault("PORT", "8080")
-	env := config.EnvOrDefault("ENV", "development")
 	corsOrigins := server.NormalizeCORSOrigins(config.EnvOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
 
 	databaseURL, err := config.RequireEnv("DATABASE_URL")
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Fatal().Err(err).Msg("missing required env var")
 	}
 
 	jwtSecret, err := config.RequireEnv("JWT_SECRET")
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Fatal().Err(err).Msg("missing required env var")
 	}
 
 	redisURL, err := config.RequireEnv("REDIS_URL")
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Fatal().Err(err).Msg("missing required env var")
 	}
 
 	if err := db.Migrate("migrations", databaseURL); err != nil {
-		log.Fatalf("Migrations failed: %v", err)
+		log.Fatal().Err(err).Msg("migrations failed")
 	}
-	log.Println("Migrations applied successfully")
+	log.Info().Msg("migrations applied")
 
 	initCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	pool, err := db.Open(initCtx, databaseURL)
 	if err != nil {
-		log.Fatalf("Database connection failed: %v", err)
+		log.Fatal().Err(err).Msg("database connection failed")
 	}
 	defer pool.Close()
-	log.Println("Database connection established")
+	log.Info().Msg("database connected")
 
 	frontendURL := config.EnvOrDefault("FRONTEND_URL", "http://localhost:3000")
 
@@ -92,10 +94,10 @@ func main() {
 			Password: config.EnvOrDefault("SMTP_PASS", ""),
 			From:     config.EnvOrDefault("SMTP_FROM", "noreply@circl.app"),
 		})
-		log.Printf("Email provider: SMTP (%s:%d)", config.EnvOrDefault("SMTP_HOST", "localhost"), smtpPort)
+		log.Info().Str("provider", "smtp").Str("host", config.EnvOrDefault("SMTP_HOST", "localhost")).Int("port", smtpPort).Msg("email provider")
 	default:
 		mailer = email.NewConsoleSender()
-		log.Println("Email provider: console (stdout)")
+		log.Info().Str("provider", "console").Msg("email provider")
 	}
 
 	authStore := auth.NewStore(pool)
@@ -116,16 +118,16 @@ func main() {
 
 	redisOpt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		log.Fatalf("Invalid Redis URL: %v", err)
+		log.Fatal().Err(err).Msg("invalid Redis URL")
 	}
 	rdb := redis.NewClient(redisOpt)
 	defer rdb.Close()
 
 	appCtx := context.Background()
 	if err := rdb.Ping(appCtx).Err(); err != nil {
-		log.Fatalf("Redis connection failed: %v", err)
+		log.Fatal().Err(err).Msg("redis connection failed")
 	}
-	log.Println("Redis connection established")
+	log.Info().Msg("redis connected")
 
 	limiter := ratelimit.NewRedisLimiter(rdb)
 
@@ -148,6 +150,7 @@ func main() {
 	reportMgr := reports.NewManager(reportSvc,
 		reports.WithModerator(adminSvc),
 		reports.WithLimiter(limiter),
+		reports.WithLogger(log),
 	)
 	reportsHandler := reports.NewHandler(reportMgr)
 
@@ -156,10 +159,11 @@ func main() {
 		config.EnvOrDefault("VAPID_PUBLIC_KEY", ""),
 		config.EnvOrDefault("VAPID_PRIVATE_KEY", ""),
 		config.EnvOrDefault("VAPID_SUBJECT", "mailto:admin@circl.app"),
+		log,
 	)
 	pushHandler := push.NewHandler(pushSvc)
 	if pushSvc.Enabled() {
-		log.Println("Web push notifications enabled")
+		log.Info().Msg("web push notifications enabled")
 	}
 
 	// notifyUser sends an SSE event and a web push notification (if enabled).
@@ -193,7 +197,7 @@ func main() {
 		ls := storage.NewLocalStorage("./data/uploads", fmt.Sprintf("http://localhost:%s/uploads/files", port))
 		fileStorage = ls
 		localStorageHandler = storage.NewLocalHandler(ls)
-		log.Println("Storage provider: local (./data/uploads)")
+		log.Info().Str("provider", "local").Str("path", "./data/uploads").Msg("storage provider")
 	case "s3":
 		endpoint := config.EnvOrDefault("S3_ENDPOINT", "localhost:9000")
 		useSSL := !strings.HasPrefix(endpoint, "http://")
@@ -212,12 +216,12 @@ func main() {
 			UseSSL:    useSSL,
 		})
 		if err != nil {
-			log.Fatalf("S3 storage init failed: %v", err)
+			log.Fatal().Err(err).Msg("S3 storage init failed")
 		}
 		fileStorage = s3store
-		log.Printf("Storage provider: S3-compatible (%s, bucket: %s)", endpoint, bucket)
+		log.Info().Str("provider", "s3").Str("endpoint", endpoint).Str("bucket", bucket).Msg("storage provider")
 	default:
-		log.Fatalf("Unknown storage provider: %s", storageProvider)
+		log.Fatal().Str("provider", storageProvider).Msg("unknown storage provider")
 	}
 
 	chatStore := chat.NewStore(pool, fileStorage.PublicURL)
@@ -279,7 +283,7 @@ func main() {
 		DeleteFiles: func(ctx context.Context, keys []string) {
 			for _, key := range keys {
 				if err := fileStorage.Delete(ctx, key); err != nil {
-					log.Printf("chat: delete file %s: %v", key, err)
+					log.Error().Err(err).Str("storage_key", key).Msg("chat: delete file failed")
 				}
 			}
 		},
@@ -288,7 +292,7 @@ func main() {
 	})
 
 	uploadStore := uploads.NewStore(pool)
-	uploadSvc := uploads.NewService(uploadStore, fileStorage)
+	uploadSvc := uploads.NewService(uploadStore, fileStorage, log)
 
 	redisConnOpt := asynq.RedisClientOpt{
 		Addr:     redisOpt.Addr,
@@ -305,10 +309,10 @@ func main() {
 		})
 	})
 
-	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore, config.EnvIntOrDefault("IMAGE_MAX_PX", 0))
-	workerServer := worker.NewServer(redisConnOpt, 4)
+	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore, config.EnvIntOrDefault("IMAGE_MAX_PX", 0), log)
+	workerServer := worker.NewServer(redisConnOpt, 4, log)
 	if err := workerServer.Start(imageProcessor); err != nil {
-		log.Fatalf("Worker server failed to start: %v", err)
+		log.Fatal().Err(err).Msg("worker server failed to start")
 	}
 	defer workerServer.Shutdown()
 
@@ -319,16 +323,16 @@ func main() {
 			"room_id": roomID,
 		})
 		chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
-	})
+	}, log)
 	ephemeralCleaner.Start(appCtx)
 
 	// Daily purge of accounts past the 30-day deletion grace period.
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
-		worker.PurgeDeletedAccounts(appCtx, authStore, fileStorage)
+		worker.PurgeDeletedAccounts(appCtx, log, authStore, fileStorage)
 		for range ticker.C {
-			worker.PurgeDeletedAccounts(appCtx, authStore, fileStorage)
+			worker.PurgeDeletedAccounts(appCtx, log, authStore, fileStorage)
 		}
 	}()
 
@@ -339,15 +343,15 @@ func main() {
 
 	var testHandler http.Handler
 	if config.EnvOrDefault("TEST_ENDPOINTS_ENABLED", "false") == "true" {
-		log.Println("WARNING: test endpoints enabled — do not use in production")
+		log.Warn().Msg("test endpoints enabled — do not use in production")
 		testHandler = newTestHandler(pool, authSvc, profileStore, jwtSecret, tokenExpiry)
 	}
 
-	h := server.New(pool, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, adminHandler, localStorageHandler, testHandler, requireAuth)
+	h := server.New(pool, log, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, adminHandler, localStorageHandler, testHandler, requireAuth)
 
-	log.Printf("Server running on :%s (env: %s)\n", port, env)
+	log.Info().Str("port", port).Str("env", env).Msg("server starting")
 	if err := http.ListenAndServe(":"+port, h); err != nil {
-		log.Fatalf("Server error: %v", err)
+		log.Fatal().Err(err).Msg("server error")
 	}
 }
 
