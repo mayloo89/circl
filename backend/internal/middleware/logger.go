@@ -9,6 +9,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type requestFieldsKey struct{}
@@ -64,6 +65,16 @@ func RequestLogger(log zerolog.Logger) func(http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), requestFieldsKey{}, fields)
 
 			reqLog := log.With().Str("request_id", rid).Logger()
+			// If the tracing middleware (which runs before this one) has placed
+			// a span in the context, inject trace_id and span_id into every log
+			// line for this request — enabling log-trace correlation in Grafana.
+			if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
+				sc := span.SpanContext()
+				reqLog = reqLog.With().
+					Str("trace_id", sc.TraceID().String()).
+					Str("span_id", sc.SpanID().String()).
+					Logger()
+			}
 			ctx = reqLog.WithContext(ctx)
 			r = r.WithContext(ctx)
 

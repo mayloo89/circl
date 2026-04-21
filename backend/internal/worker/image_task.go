@@ -70,12 +70,18 @@ func NewImageProcessor(st ProcessingStorage, store ThumbnailStore, imageMaxPx in
 }
 
 // EnqueueProcessImage enqueues a process-image task using the given client.
+// The current span context from ctx is embedded in the payload so the worker
+// can link its execution span to the HTTP request that triggered the upload.
 func EnqueueProcessImage(ctx context.Context, client *Client, p ImageProcessPayload) error {
-	payload, err := json.Marshal(p)
+	raw, err := json.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("worker: marshal payload: %w", err)
 	}
-	_, err = client.c.EnqueueContext(ctx, asynq.NewTask(TaskProcessImage, payload))
+	wrapped, err := InjectTraceContext(ctx, raw)
+	if err != nil {
+		return fmt.Errorf("worker: inject trace context: %w", err)
+	}
+	_, err = client.c.EnqueueContext(ctx, asynq.NewTask(TaskProcessImage, wrapped))
 	return err
 }
 
