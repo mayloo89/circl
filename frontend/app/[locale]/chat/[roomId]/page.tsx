@@ -201,7 +201,7 @@ export default function ChatRoomPage() {
     // If the room is not found there (e.g. a channel, which has no room_members row),
     // fall back to GET /chat/rooms/{id} which works for any room type.
     fetch(`${API_URL}/chat/rooms`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : []))
       .then((rooms: RoomSummary[]) => {
         const found = rooms.find((r) => r.id === roomId)
         if (found) {
@@ -227,7 +227,7 @@ export default function ChatRoomPage() {
       return
     }
     fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : []))
       .then((data: HistoryMessage[]) => {
         const reversed = [...data].reverse()
         setHistory(reversed)

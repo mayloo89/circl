@@ -75,8 +75,8 @@ export default function GroupMembersPanel({
     fetch(`${API_URL}/chat/rooms/${roomId}/members`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.json())
-      .then((data: MemberProfile[]) => setMembers(data))
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: MemberProfile[]) => setMembers(Array.isArray(data) ? data : []))
       .catch(() => setError(t("failedLoadMembers")))
       .finally(() => setLoading(false))
   }

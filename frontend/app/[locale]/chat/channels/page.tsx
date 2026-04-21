@@ -121,8 +121,8 @@ export default function ChannelsPage() {
     setLoading(true)
     setError("")
     fetch(`${API_URL}/chat/channels`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data: ChannelSummary[]) => setChannels(data))
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: ChannelSummary[]) => setChannels(Array.isArray(data) ? data : []))
       .catch(() => setError(t("failedLoad")))
       .finally(() => setLoading(false))
   }

@@ -140,7 +140,7 @@ export default function ContactsPage() {
       const res = await fetch(`${API_URL}/users/search?q=${encodeURIComponent(q)}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      setSearchResults(await res.json())
+      setSearchResults(res.ok ? await res.json() : [])
     } catch {
       setSearchResults([])
     }
