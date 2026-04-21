@@ -1,0 +1,242 @@
+{
+  "title": "Circl \u2014 DB Pool",
+  "uid": "circl-db-pool",
+  "description": "PostgreSQL connection pool metrics for the Circl backend (pgxpool).",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "graphTooltip": 1,
+  "tags": ["circl", "database"],
+  "annotations": { "list": [] },
+  "links": [],
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "gauge",
+      "title": "Pool Utilisation",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.7 },
+            { "color": "red", "value": 0.9 }
+          ]}
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_acquired_conns / circl_db_pool_max_conns",
+          "legendFormat": "utilisation",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Acquired Connections",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 0 },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_acquired_conns",
+          "legendFormat": "acquired",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Idle Connections",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 0 },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_idle_conns",
+          "legendFormat": "idle",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Max Connections",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 0 },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_max_conns",
+          "legendFormat": "max",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Total Connections",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 3 },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_total_conns",
+          "legendFormat": "total",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Connection Pool Breakdown",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 6 },
+      "options": {
+        "legend": { "calcs": ["mean", "max", "last"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 10, "showPoints": "never", "lineWidth": 1 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_max_conns",
+          "legendFormat": "max",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_total_conns",
+          "legendFormat": "total open",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_acquired_conns",
+          "legendFormat": "acquired",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_idle_conns",
+          "legendFormat": "idle",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Pool Utilisation Over Time",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 6 },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.7 },
+            { "color": "red", "value": 0.9 }
+          ]},
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 15, "showPoints": "never", "lineWidth": 2,
+            "thresholdsStyle": { "mode": "line+area" }
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "circl_db_pool_acquired_conns / circl_db_pool_max_conns",
+          "legendFormat": "utilisation",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

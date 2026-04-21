@@ -1,0 +1,59 @@
+groups:
+  - name: circl.slo
+    interval: 30s
+    rules:
+      # ── Recording rules (cheap pre-aggregations reused by alerts + dashboards) ──
+
+      - record: job:circl_http_error_rate:rate5m
+        expr: |
+          sum(rate(circl_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(circl_http_requests_total[5m]))
+
+      - record: job:circl_http_request_rate:rate5m
+        expr: sum(rate(circl_http_requests_total[5m]))
+
+      - record: job:circl_http_p95_latency:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(circl_http_request_duration_seconds_bucket[5m])) by (le)
+          )
+
+      # ── Alerts ──
+
+      - alert: HighErrorRate
+        expr: job:circl_http_error_rate:rate5m > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP 5xx error rate above 1%"
+          description: "{{ $value | humanizePercentage }} of requests are returning 5xx over the last 5 minutes."
+
+      - alert: HighLatencyP95
+        expr: job:circl_http_p95_latency:rate5m > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 HTTP latency above 1s"
+          description: "p95 latency is {{ $value | humanizeDuration }}."
+
+      - alert: DBPoolExhausted
+        expr: |
+          circl_db_pool_acquired_conns / circl_db_pool_max_conns > 0.9
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB connection pool above 90% utilisation"
+          description: "{{ $value | humanizePercentage }} of the pool is in use."
+
+      - alert: BackendDown
+        expr: up{job="circl-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "circl-backend is unreachable"
+          description: "Prometheus cannot scrape /metrics from the backend."

@@ -76,7 +76,75 @@ services:
       loki:
         condition: service_healthy
 
+  tempo:
+    image: grafana/tempo:2.7.2
+    ports:
+      - "3200:3200"   # Tempo HTTP API
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - ./ops/tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    command: -config.file=/etc/tempo/config.yaml
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3200/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:v3.3.1
+    ports:
+      - "9090:9090"   # Prometheus UI — http://localhost:9090
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-remote-write-receiver
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    ports:
+      - "3001:3000"   # Grafana UI — http://localhost:3001 (3000 is taken by Next.js)
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres_data:
   minio_data:
   loki_data:
+  tempo_data:
+  prometheus_data:
+  grafana_data:
