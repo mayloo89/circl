@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -51,7 +52,13 @@ type Hub struct {
 	// These fields are only accessed from the Run goroutine.
 	rooms   map[string]map[*Client]struct{}
 	pubsubs map[string]*redis.PubSub
+
+	activeConns atomic.Int64
 }
+
+// ActiveConns returns the number of currently connected WebSocket clients.
+// Safe to call from any goroutine; used by the Prometheus metrics collector.
+func (h *Hub) ActiveConns() int64 { return h.activeConns.Load() }
 
 // NewHub creates a Hub backed by the given Redis client.
 func NewHub(rdb *redis.Client) *Hub {
@@ -146,6 +153,7 @@ func (h *Hub) addClient(ctx context.Context, client *Client) {
 		go h.listenRedis(ctx, client.roomID, ps)
 	}
 	h.rooms[client.roomID][client] = struct{}{}
+	h.activeConns.Add(1)
 
 	if client.isChannel {
 		data, _ := json.Marshal(map[string]any{
@@ -171,6 +179,7 @@ func (h *Hub) removeClient(client *Client) {
 	}
 	delete(clients, client)
 	close(client.send)
+	h.activeConns.Add(-1)
 
 	if client.isChannel {
 		data, _ := json.Marshal(map[string]any{

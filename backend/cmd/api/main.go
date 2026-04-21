@@ -24,6 +24,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/db"
 	"github.com/mayloo89/circl/backend/internal/email"
 	"github.com/mayloo89/circl/backend/internal/logger"
+	"github.com/mayloo89/circl/backend/internal/metrics"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
@@ -347,7 +348,38 @@ func main() {
 		testHandler = newTestHandler(pool, authSvc, profileStore, jwtSecret, tokenExpiry)
 	}
 
-	h := server.New(pool, log, env, corsOrigins, authHandler, accountHandler, profileHandler, profiles.PublicAvailableHandler(profileSvc), contactsHandler, notificationsHandler, chatHandler, chatWSHandler, presenceHandler, uploadHandler, reportsHandler, pushHandler, adminHandler, localStorageHandler, testHandler, requireAuth)
+	m := metrics.New(pool)
+	m.RegisterWSHub(chatHub)
+
+	h := server.New(server.Config{
+		DB:          pool,
+		RedisPing:   func(ctx context.Context) error { return rdb.Ping(ctx).Err() },
+		Log:         log,
+		Env:         env,
+		Version:     config.EnvOrDefault("BUILD_VERSION", "dev"),
+		CORSOrigins: corsOrigins,
+
+		MetricsHandler:    m.Handler(config.EnvOrDefault("METRICS_TOKEN", "")),
+		MetricsMiddleware: m.Middleware(),
+
+		RequireAuth: requireAuth,
+
+		Auth:          authHandler,
+		Account:       accountHandler,
+		Profile:       profileHandler,
+		Available:     profiles.PublicAvailableHandler(profileSvc),
+		Contacts:      contactsHandler,
+		Notifications: notificationsHandler,
+		Chat:          chatHandler,
+		ChatWS:        chatWSHandler,
+		Presence:      presenceHandler,
+		Upload:        uploadHandler,
+		Reports:       reportsHandler,
+		Push:          pushHandler,
+		Admin:         adminHandler,
+		LocalStorage:  localStorageHandler,
+		Test:          testHandler,
+	})
 
 	log.Info().Str("port", port).Str("env", env).Msg("server starting")
 	if err := http.ListenAndServe(":"+port, h); err != nil {

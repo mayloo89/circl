@@ -20,26 +20,55 @@ type DBPinger interface {
 	Ping(ctx context.Context) error
 }
 
+// Config holds all dependencies needed to construct the HTTP server.
+type Config struct {
+	// Core
+	DB          DBPinger
+	RedisPing   func(context.Context) error // nil = skip Redis health check
+	Log         zerolog.Logger
+	Env         string
+	Version     string   // reported in /health; defaults to "dev"
+	CORSOrigins []string
+
+	// Observability — both are optional (nil disables)
+	MetricsHandler    http.Handler               // mounted at GET /metrics
+	MetricsMiddleware func(http.Handler) http.Handler
+
+	// Security
+	RequireAuth func(http.Handler) http.Handler
+
+	// Sub-routers / handlers
+	Auth          http.Handler
+	Account       http.Handler
+	Profile       http.Handler
+	Available     http.Handler
+	Contacts      http.Handler
+	Notifications http.Handler
+	Chat          http.Handler
+	ChatWS        http.Handler
+	Presence      http.Handler
+	Upload        http.Handler
+	Reports       http.Handler
+	Push          http.Handler
+	Admin         http.Handler
+	LocalStorage  http.Handler // nil in production
+	Test          http.Handler // nil unless TEST_ENDPOINTS_ENABLED
+}
+
 // New returns a configured chi router with all application routes registered.
-// authHandler is the auth sub-router (auth.NewHandler).
-// accountHandler is the user account sub-router (auth.NewAccountHandler); must run behind requireAuth.
-// profileHandler is the profiles sub-router (profiles.NewHandler).
-// contactsHandler is the contacts sub-router (contacts.NewHandler).
-// notificationsHandler is the SSE handler (notifications.NewHandler).
-// chatHandler is the REST chat sub-router (chat.NewHandler); must run behind requireAuth.
-// chatWSHandler is the WebSocket endpoint (chat.NewWSHandler); handles its own auth via ?token=.
-// presenceHandler is the presence sub-router (presence.NewHandler); must run behind requireAuth.
-// uploadHandler is the uploads sub-router (uploads.NewHandler); must run behind requireAuth.
-// reportsHandler is the reports sub-router (reports.NewManager); must run behind requireAuth.
-// adminHandler is the admin sub-router (admin.NewHandler); must run behind requireAuth.
-// localStorageHandler serves uploaded files in dev mode; nil in production.
-// requireAuth is the JWT middleware that protects authenticated routes.
-func New(db DBPinger, log zerolog.Logger, env string, corsOrigins []string, authHandler http.Handler, accountHandler http.Handler, profileHandler http.Handler, availableHandler http.Handler, contactsHandler http.Handler, notificationsHandler http.Handler, chatHandler http.Handler, chatWSHandler http.Handler, presenceHandler http.Handler, uploadHandler http.Handler, reportsHandler http.Handler, pushHandler http.Handler, adminHandler http.Handler, localStorageHandler http.Handler, testHandler http.Handler, requireAuth func(http.Handler) http.Handler) http.Handler {
+func New(cfg Config) http.Handler {
+	if cfg.Version == "" {
+		cfg.Version = "dev"
+	}
+
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestLogger(log))
+	r.Use(middleware.RequestLogger(cfg.Log))
+	if cfg.MetricsMiddleware != nil {
+		r.Use(cfg.MetricsMiddleware)
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   corsOrigins,
+		AllowedOrigins:   cfg.CORSOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -47,61 +76,74 @@ func New(db DBPinger, log zerolog.Logger, env string, corsOrigins []string, auth
 		MaxAge:           300,
 	}))
 
-	r.Get("/health", healthHandler(db, env))
-	r.Mount("/auth", authHandler)
-	r.Handle("/profiles/available", availableHandler)
+	r.Get("/health", healthHandler(cfg.DB, cfg.RedisPing, cfg.Env, cfg.Version))
+	if cfg.MetricsHandler != nil {
+		r.Get("/metrics", cfg.MetricsHandler.ServeHTTP)
+	}
+
+	r.Mount("/auth", cfg.Auth)
+	r.Handle("/profiles/available", cfg.Available)
 
 	// SSE stream — auth is handled inside the handler via ?token= query param
 	// because the browser EventSource API does not support custom headers.
-	r.Handle("/notifications/stream", notificationsHandler)
+	r.Handle("/notifications/stream", cfg.Notifications)
 
 	// WebSocket endpoint — auth is handled inside the handler via ?token=
 	// because the browser WebSocket API does not support custom headers.
-	r.Handle("/chat/rooms/{id}/ws", chatWSHandler)
+	r.Handle("/chat/rooms/{id}/ws", cfg.ChatWS)
 
-	// Protected routes — requireAuth validates the Bearer JWT before forwarding.
+	// Protected routes — RequireAuth validates the Bearer JWT before forwarding.
 	r.Group(func(g chi.Router) {
-		g.Use(requireAuth)
-		g.Mount("/users/me", accountHandler)
-		g.Mount("/profiles", profileHandler)
-		g.Mount("/", contactsHandler)
-		g.Mount("/chat", chatHandler)
-		g.Mount("/presence", presenceHandler)
-		g.Mount("/uploads", uploadHandler)
-		g.Mount("/reports", reportsHandler)
-		g.Mount("/push", pushHandler)
-		g.Mount("/admin", adminHandler)
+		g.Use(cfg.RequireAuth)
+		g.Mount("/users/me", cfg.Account)
+		g.Mount("/profiles", cfg.Profile)
+		g.Mount("/", cfg.Contacts)
+		g.Mount("/chat", cfg.Chat)
+		g.Mount("/presence", cfg.Presence)
+		g.Mount("/uploads", cfg.Upload)
+		g.Mount("/reports", cfg.Reports)
+		g.Mount("/push", cfg.Push)
+		g.Mount("/admin", cfg.Admin)
 	})
 
-	// Local file serving — only mounted when localStorageHandler is not nil
+	// Local file serving — only mounted when LocalStorage is not nil
 	// (i.e. when STORAGE_PROVIDER=local for development).
-	if localStorageHandler != nil {
-		r.Mount("/uploads/files", localStorageHandler)
+	if cfg.LocalStorage != nil {
+		r.Mount("/uploads/files", cfg.LocalStorage)
 	}
 
 	// Test endpoints — only mounted when TEST_ENDPOINTS_ENABLED=true.
 	// Never set this in production.
-	if testHandler != nil {
-		r.Mount("/test", testHandler)
+	if cfg.Test != nil {
+		r.Mount("/test", cfg.Test)
 	}
 
 	return r
 }
 
-// healthHandler reports server and database status.
-func healthHandler(db DBPinger, env string) http.HandlerFunc {
+// healthHandler reports server, database, and Redis status.
+func healthHandler(db DBPinger, redisPing func(context.Context) error, env, version string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		dbStatus := "ok"
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
+		dbStatus := "ok"
 		if err := db.Ping(ctx); err != nil {
 			zerolog.Ctx(r.Context()).Error().Err(err).Msg("db health check failed")
 			dbStatus = "error"
 		}
 
+		redisStatus := "ok"
+		if redisPing != nil {
+			if err := redisPing(ctx); err != nil {
+				zerolog.Ctx(r.Context()).Error().Err(err).Msg("redis health check failed")
+				redisStatus = "error"
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","env":"%s","db":"%s"}`, env, dbStatus)
+		fmt.Fprintf(w, `{"status":"ok","env":"%s","version":"%s","db":"%s","redis":"%s"}`,
+			env, version, dbStatus, redisStatus)
 	}
 }
 
