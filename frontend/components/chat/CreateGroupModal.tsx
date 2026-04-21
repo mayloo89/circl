@@ -47,10 +47,10 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
     setLoadingContacts(true)
     setError("")
     fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data: AcceptedContact[]) =>
         setContacts(
-          data.map((c) => ({
+          (Array.isArray(data) ? data : []).map((c) => ({
             user_id: c.user_id,
             username: c.username,
             display_name: c.display_name || c.email || c.username,

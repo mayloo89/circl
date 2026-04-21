@@ -120,8 +120,8 @@ export default function ChatPage() {
     fetch(`${API_URL}/chat/rooms`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.json())
-      .then((data) => setRooms(data))
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: RoomSummary[]) => setRooms(Array.isArray(data) ? data : []))
       .catch(() => setError("Failed to load conversations."))
       .finally(() => setLoading(false))
   }
