@@ -112,6 +112,7 @@ export default function GroupMembersPanel({
       const res = await fetch(`${API_URL}/contacts`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!res.ok) throw new Error(String(res.status))
       const data: Contact[] = await res.json()
       setContacts(data.filter((c) => !memberIds.has(c.user_id)))
     } catch {

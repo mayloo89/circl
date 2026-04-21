@@ -275,7 +275,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (status !== "authenticated" || !token) return
     fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((data: Profile) => {
         setProfile(data)
         setUsername(data.username ?? "")
