@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -56,6 +57,9 @@ func Init(ctx context.Context, serviceName, serviceVersion, env string) (func(co
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		log.Warn().Err(err).Msg("otel export error")
+	}))
 
 	return tp.Shutdown, nil
 }
