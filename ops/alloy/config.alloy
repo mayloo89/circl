@@ -1,0 +1,46 @@
+// Discover all Docker containers running on the host.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Stream log lines from every discovered container.
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.containers.targets
+  forward_to = [loki.process.enrich.receiver]
+}
+
+// Parse structured JSON logs (backend emits zerolog JSON) and attach labels.
+// Fields absent on plain-text lines (postgres, redis, mailpit) are silently skipped.
+loki.process "enrich" {
+  stage.json {
+    expressions = {
+      level     = "level",
+      component = "component",
+    }
+  }
+
+  stage.static_labels {
+    values = {
+      env = "dev",
+    }
+  }
+
+  // Promote extracted JSON fields as indexed Loki labels so they are
+  // queryable without a full-scan JSON parse at read time.
+  stage.labels {
+    values = {
+      level     = "",
+      component = "",
+    }
+  }
+
+  forward_to = [loki.write.loki.receiver]
+}
+
+// Deliver log streams to the local Loki instance.
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

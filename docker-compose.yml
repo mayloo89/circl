@@ -50,6 +50,33 @@ services:
     environment:
       MP_MAX_MESSAGES: 500
 
+  loki:
+    image: grafana/loki:3.4.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./ops/loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  alloy:
+    image: grafana/alloy:v1.7.5
+    ports:
+      - "12345:12345"   # Alloy UI — http://localhost:12345
+    volumes:
+      - ./ops/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    depends_on:
+      loki:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   minio_data:
+  loki_data:
