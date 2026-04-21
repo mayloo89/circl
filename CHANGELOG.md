@@ -9,6 +9,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Log shipping pipeline** ([PR #58](https://github.com/mayloo89/circl/pull/58)):
+  - `grafana/loki:3.4.2` added to `docker-compose.yml` — single-binary mode, filesystem storage, 7-day retention via compactor, healthcheck on `/ready`
+  - `grafana/alloy:v1.7.5` sidecar collects all container stdout via Docker socket (read-only mount); Alloy UI on `http://localhost:12345`
+  - `ops/alloy/config.alloy`: River pipeline — `discovery.docker` → `loki.source.docker` → `loki.process` (JSON stage extracts `level`/`component` as indexed labels, adds static `env=dev`) → `loki.write`
+  - `ops/loki/config.yaml`: single-binary config (inmemory ring, tsdb schema v13, filesystem chunks), `limits_config.retention_period: 168h`, compactor with `retention_enabled: true`
+  - `ops/loki/logql-examples.md`: query cookbook — all-backend, error filter by label, component filter, HTTP path regex, slow requests, log-trace correlation via `trace_id`, error-rate metric, infrastructure (postgres/redis)
+
+- **OpenTelemetry distributed tracing** ([PR #57](https://github.com/mayloo89/circl/pull/57)):
+  - New `internal/tracing` package: `Init()` configures TracerProvider with OTLP HTTP exporter; falls back to a no-op exporter when `OTEL_EXPORTER_OTLP_ENDPOINT` is not set so the app starts without a collector
+  - `tracing.HTTPMiddleware`: chi-compatible middleware using W3C TraceContext propagation; reads `chi.RouteContext` after `next.ServeHTTP` for low-cardinality route-pattern span names (e.g. `HTTP GET /chat/rooms/{id}`)
+  - `tracing.NewPgxTracer`: implements `pgx.QueryTracer` — one span per DB query with `db.statement` and `db.rows_affected` attributes; zero new external dependencies
+  - `internal/worker/otel.go`: `taskEnvelope` wraps asynq payloads with W3C trace headers; `otelMiddleware` extracts context and creates a `worker.<task>` consumer span; backward-compatible with old-format tasks
+  - `chat/handler.go`: WebSocket session span (detached context via `trace.ContextWithRemoteSpanContext`) survives beyond HTTP handler return; per-message spans use inline closure pattern so `defer span.End()` fires on all exit paths
+  - `middleware/logger.go`: injects `trace_id` and `span_id` from the active span into zerolog access-log entries for log-trace correlation
+  - `cmd/api/main.go`: `signal.NotifyContext` replaces bare `context.Background()` for graceful shutdown; `http.Server.Shutdown(30s)` + `tp.Shutdown()` called on SIGINT/SIGTERM
+  - `db/db.go`: `Option func(*pgxpool.Config)` variadic pattern allows attaching the pgx tracer at startup without changing the `Open` signature
+
+- **Prometheus metrics + health checks** ([PR #56](https://github.com/mayloo89/circl/pull/56)):
+  - `prometheus/client_golang`: Go runtime collector, HTTP handler collector (per-route latency histograms, status code counters), active WebSocket gauge, DB pool metrics
+  - `/metrics` endpoint (protected by `METRICS_TOKEN` env var when set)
+  - Enhanced `/health`: DB ping + Redis ping + `version` field (injected at build time via `-ldflags`)
+  - `backend/Dockerfile`: `HEALTHCHECK` on `/health`; runs as non-root `USER`
+  - `frontend/Dockerfile`: `HEALTHCHECK` on `/api/health`; runs as non-root `USER`
+
+### Fixed
+- **Frontend fetch hardening + auto sign-out** ([PR #59](https://github.com/mayloo89/circl/pull/59)):
+  - Six fetch chains (`chat/page.tsx`, `chat/channels/page.tsx`, `chat/[roomId]/page.tsx`, `contacts/page.tsx`, `GroupMembersPanel.tsx`, `CreateGroupModal.tsx`) now check `r.ok` before calling `.json()` — prevents TypeError crashes (`rooms.map is not a function`, `channels.filter is not a function`) when the backend returns an error object instead of an array
+  - `profile/page.tsx` and `GroupMembersPanel.tsx` (`loadContacts`) also hardened
+  - `lib/auth.ts` jwt callback decodes the `exp` claim of the backend JWT on every session refresh; sets `token.error = "TokenExpired"` when expired
+  - `SessionGuard` component (mounted in root `providers.tsx`) calls `signOut({ callbackUrl: "/login" })` when `session.error === "TokenExpired"` — eliminates the "logged-in but everything is 401" broken state
+  - `types/next-auth.d.ts`: `error?: string` added to `Session` and `JWT` interfaces
+
+### Added
 - **Structured logging with zerolog** ([PR #55](https://github.com/mayloo89/circl/pull/55)):
   - `github.com/rs/zerolog` replaces the standard `log` package across the entire backend (51 call sites)
   - New `internal/logger` package: `New(env, level string) zerolog.Logger` — human-readable console output in development, JSON to stdout in production; log level configurable via `LOG_LEVEL` env var (default: `info`)
