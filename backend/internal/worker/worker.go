@@ -50,6 +50,7 @@ func NewServer(redisOpt asynq.RedisClientOpt, concurrency int, log zerolog.Logge
 // Start registers task handlers and begins processing. It is non-blocking.
 func (s *Server) Start(processor *ImageProcessor) error {
 	mux := asynq.NewServeMux()
+	mux.Use(otelMiddleware)
 	mux.HandleFunc(TaskProcessImage, processor.Handle)
 	return s.s.Start(mux)
 }

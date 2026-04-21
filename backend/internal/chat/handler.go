@@ -14,6 +14,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
@@ -47,6 +50,9 @@ type Client struct {
 	avatarURL       string
 	isChannel       bool
 	isBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
+	// ctx carries the OpenTelemetry session span for this connection.
+	// The span is ended in readPump's defer when the connection closes.
+	ctx context.Context
 }
 
 // typingFrame is the WS frame broadcast to room members when a user is typing.
@@ -735,6 +741,22 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 		avatarURL, _ := svc.GetAvatarURL(r.Context(), userID)
 		username, _ := svc.GetUsername(r.Context(), userID)
 
+		// Start a session span that lives for the lifetime of this WebSocket
+		// connection. Use a detached context (not r.Context()) so the span is
+		// not cancelled when the HTTP handler returns after launching goroutines.
+		// Link it to the HTTP request's trace via a remote span context so the
+		// WS session appears as a child of the HTTP upgrade request in Tempo.
+		sc := trace.SpanContextFromContext(r.Context())
+		sessCtx := trace.ContextWithRemoteSpanContext(context.Background(), sc)
+		sessCtx, _ = otel.Tracer("circl/chat").Start(sessCtx, "ws.session",
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(
+				attribute.String("user.id", userID),
+				attribute.String("room.id", roomID),
+				attribute.Bool("chat.is_channel", isChannel),
+			),
+		)
+
 		client := &Client{
 			hub:             hub,
 			conn:            conn,
@@ -746,6 +768,7 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 			avatarURL:       avatarURL,
 			isChannel:       isChannel,
 			isBlockedInRoom: cfg.IsBlockedInRoom,
+			ctx:             sessCtx,
 		}
 
 		hub.register <- client
@@ -759,6 +782,7 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 // It runs in a dedicated goroutine per connection.
 func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID string)) {
 	defer func() {
+		trace.SpanFromContext(c.ctx).End()
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
@@ -825,54 +849,65 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			params.ExpiresAt = &t
 		}
 
-		ctx := context.Background()
+		// Closure lets us defer span.End() and exit early with return instead of
+		// continue, ensuring every code path ends the span correctly.
+		func() {
+			msgCtx, span := otel.Tracer("circl/chat").Start(c.ctx, "ws.message",
+				trace.WithAttributes(
+					attribute.String("room.id", c.roomID),
+					attribute.String("message.type", in.Type),
+				),
+			)
+			defer span.End()
 
-		if c.isBlockedInRoom != nil && c.isBlockedInRoom(ctx, c.userID, c.roomID) {
-			continue
-		}
+			if c.isBlockedInRoom != nil && c.isBlockedInRoom(msgCtx, c.userID, c.roomID) {
+				return
+			}
 
-		msg, err := svc.SaveMessage(ctx, params)
-		if err != nil {
-			continue
-		}
+			msg, err := svc.SaveMessage(msgCtx, params)
+			if err != nil {
+				span.RecordError(err)
+				return
+			}
 
-		// View-once messages are broadcast with masked content; the recipient
-		// must call POST /rooms/{id}/messages/{msgID}/view to read them.
-		content := msg.Content
-		if msg.ViewOnce {
-			content = ""
-		}
+			// View-once messages are broadcast with masked content; the recipient
+			// must call POST /rooms/{id}/messages/{msgID}/view to read them.
+			content := msg.Content
+			if msg.ViewOnce {
+				content = ""
+			}
 
-		data, err := json.Marshal(serverMessage{
-			Event:           "new_message",
-			Type:            msg.Type,
-			ID:              msg.ID,
-			RoomID:          msg.RoomID,
-			SenderID:        msg.SenderID,
-			SenderName:      msg.SenderName,
-			SenderAvatarURL: msg.SenderAvatarURL,
-			Content:         content,
-			ThumbnailURL:    msg.ThumbnailURL,
-			ViewOnce:        msg.ViewOnce,
-			ExpiresAt:       msg.ExpiresAt,
-			CreatedAt:       msg.CreatedAt,
-		})
-		if err != nil {
-			continue
-		}
+			data, err := json.Marshal(serverMessage{
+				Event:           "new_message",
+				Type:            msg.Type,
+				ID:              msg.ID,
+				RoomID:          msg.RoomID,
+				SenderID:        msg.SenderID,
+				SenderName:      msg.SenderName,
+				SenderAvatarURL: msg.SenderAvatarURL,
+				Content:         content,
+				ThumbnailURL:    msg.ThumbnailURL,
+				ViewOnce:        msg.ViewOnce,
+				ExpiresAt:       msg.ExpiresAt,
+				CreatedAt:       msg.CreatedAt,
+			})
+			if err != nil {
+				return
+			}
 
-		_ = c.hub.Publish(ctx, c.roomID, data)
+			_ = c.hub.Publish(msgCtx, c.roomID, data)
 
-		// Notify non-sender members so they can show an unread badge.
-		if notifyNewMessage != nil {
-			if members, err := svc.ListMembers(ctx, c.roomID); err == nil {
-				for _, uid := range members {
-					if uid != c.userID {
-						notifyNewMessage(uid, c.roomID)
+			// Notify non-sender members so they can show an unread badge.
+			if notifyNewMessage != nil {
+				if members, err := svc.ListMembers(msgCtx, c.roomID); err == nil {
+					for _, uid := range members {
+						if uid != c.userID {
+							notifyNewMessage(uid, c.roomID)
+						}
 					}
 				}
 			}
-		}
+		}()
 	}
 }
 

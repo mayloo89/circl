@@ -225,6 +225,36 @@ func TestMetricsHandler_NotMountedWhenNil(t *testing.T) {
 	}
 }
 
+func TestTracingMiddleware_Invoked(t *testing.T) {
+	called := false
+	cfg := minimalConfig(&mockPinger{})
+	cfg.TracingMiddleware = func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			next.ServeHTTP(w, r)
+		})
+	}
+	h := server.New(cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("expected TracingMiddleware to be called")
+	}
+}
+
+func TestTracingMiddleware_NilDoesNotPanic(t *testing.T) {
+	h := server.New(minimalConfig(&mockPinger{}))
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req) // must not panic when TracingMiddleware is nil
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+}
+
 func TestNormalizeCORSOrigins(t *testing.T) {
 	tests := []struct {
 		name  string

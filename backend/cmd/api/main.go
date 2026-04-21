@@ -3,18 +3,21 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/hibiken/asynq"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mayloo89/circl/backend/internal/admin"
 	"github.com/mayloo89/circl/backend/internal/auth"
@@ -35,6 +38,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/server"
 	"github.com/mayloo89/circl/backend/internal/storage"
 	"github.com/mayloo89/circl/backend/internal/token"
+	"github.com/mayloo89/circl/backend/internal/tracing"
 	"github.com/mayloo89/circl/backend/internal/uploads"
 	"github.com/mayloo89/circl/backend/internal/worker"
 )
@@ -44,6 +48,12 @@ const tokenExpiry = 24 * time.Hour
 func main() {
 	env := config.EnvOrDefault("ENV", "development")
 	log := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
+
+	// appCtx is cancelled when the process receives SIGINT or SIGTERM.
+	// All long-running goroutines (hub, workers, cleaners) use this context
+	// so they stop cleanly when the application shuts down.
+	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	if err := godotenv.Load(); err != nil {
 		log.Debug().Msg("no .env file found, using system environment")
@@ -67,6 +77,13 @@ func main() {
 		log.Fatal().Err(err).Msg("missing required env var")
 	}
 
+	// Initialise OpenTelemetry tracing. When OTEL_EXPORTER_OTLP_ENDPOINT is
+	// unset a no-op exporter is used so the app starts without a collector.
+	tracerShutdown, err := tracing.Init(appCtx, "circl-api", config.EnvOrDefault("BUILD_VERSION", "dev"), env)
+	if err != nil {
+		log.Fatal().Err(err).Msg("tracing init failed")
+	}
+
 	if err := db.Migrate("migrations", databaseURL); err != nil {
 		log.Fatal().Err(err).Msg("migrations failed")
 	}
@@ -75,7 +92,9 @@ func main() {
 	initCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := db.Open(initCtx, databaseURL)
+	pool, err := db.Open(initCtx, databaseURL, func(cfg *pgxpool.Config) {
+		cfg.ConnConfig.Tracer = tracing.NewPgxTracer()
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("database connection failed")
 	}
@@ -124,7 +143,6 @@ func main() {
 	rdb := redis.NewClient(redisOpt)
 	defer rdb.Close()
 
-	appCtx := context.Background()
 	if err := rdb.Ping(appCtx).Err(); err != nil {
 		log.Fatal().Err(err).Msg("redis connection failed")
 	}
@@ -359,6 +377,7 @@ func main() {
 		Version:     config.EnvOrDefault("BUILD_VERSION", "dev"),
 		CORSOrigins: corsOrigins,
 
+		TracingMiddleware: tracing.HTTPMiddleware("circl-api"),
 		MetricsHandler:    m.Handler(config.EnvOrDefault("METRICS_TOKEN", "")),
 		MetricsMiddleware: m.Middleware(),
 
@@ -381,10 +400,42 @@ func main() {
 		Test:          testHandler,
 	})
 
-	log.Info().Str("port", port).Str("env", env).Msg("server starting")
-	if err := http.ListenAndServe(":"+port, h); err != nil {
-		log.Fatal().Err(err).Msg("server error")
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      h,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	log.Info().Str("port", port).Str("env", env).Msg("server starting")
+
+	srvErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			srvErr <- err
+		}
+	}()
+
+	select {
+	case err := <-srvErr:
+		log.Fatal().Err(err).Msg("server error")
+	case <-appCtx.Done():
+	}
+
+	stop() // release signal watcher resources
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	log.Info().Msg("shutting down")
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("server shutdown error")
+	}
+	if err := tracerShutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("tracer shutdown error")
+	}
+	log.Info().Msg("server stopped")
 }
 
 // newTestHandler returns a handler for test-only endpoints.

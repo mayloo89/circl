@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/token"
 )
@@ -28,6 +31,13 @@ func NewHandler(hub *Hub, jwtSecret string) http.HandlerFunc {
 			return
 		}
 		userID := claims.Subject
+
+		// Enrich the span created by the HTTP tracing middleware with SSE-specific
+		// attributes so it's easy to filter SSE connections in Tempo.
+		trace.SpanFromContext(r.Context()).SetAttributes(
+			attribute.String("user.id", userID),
+			attribute.String("sse.type", "notifications"),
+		)
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {

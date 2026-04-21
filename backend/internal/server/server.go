@@ -30,7 +30,10 @@ type Config struct {
 	Version     string   // reported in /health; defaults to "dev"
 	CORSOrigins []string
 
-	// Observability — both are optional (nil disables)
+	// Observability — all are optional (nil disables)
+	// TracingMiddleware is inserted before RequestLogger so trace_id/span_id
+	// are available to the logger for log-trace correlation.
+	TracingMiddleware func(http.Handler) http.Handler
 	MetricsHandler    http.Handler               // mounted at GET /metrics
 	MetricsMiddleware func(http.Handler) http.Handler
 
@@ -63,6 +66,9 @@ func New(cfg Config) http.Handler {
 
 	r := chi.NewRouter()
 
+	if cfg.TracingMiddleware != nil {
+		r.Use(cfg.TracingMiddleware)
+	}
 	r.Use(middleware.RequestLogger(cfg.Log))
 	if cfg.MetricsMiddleware != nil {
 		r.Use(cfg.MetricsMiddleware)

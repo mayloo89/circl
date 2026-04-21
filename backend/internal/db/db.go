@@ -23,18 +23,27 @@ var newMigrateFn func(sourceURL, databaseURL string) (migrator, error) = func(s,
 	return migrate.New(s, d)
 }
 
+// Option configures the pgx connection pool before it is created.
+type Option func(*pgxpool.Config)
+
 // Open creates a pgx connection pool and verifies connectivity.
-func Open(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+// Pass functional options (e.g. attaching a query tracer) via opts.
+func Open(ctx context.Context, databaseURL string, opts ...Option) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse db config: %w", err)
+	}
+	for _, o := range opts {
+		o(cfg)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
 	}
-
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
-
 	return pool, nil
 }
 
