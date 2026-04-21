@@ -60,6 +60,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.accessToken = user.accessToken
         token.role = user.role
         token.reactivated = user.reactivated
+        token.error = undefined
+        return token
+      }
+      // On every session refresh, check whether the backend JWT has expired.
+      if (token.accessToken) {
+        try {
+          const [, payload] = (token.accessToken as string).split(".")
+          const { exp } = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")))
+          if (typeof exp === "number" && exp * 1000 < Date.now()) {
+            token.error = "TokenExpired"
+          }
+        } catch { /* malformed token — let the backend reject it */ }
       }
       return token
     },
@@ -70,6 +82,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.accessToken = token.accessToken
       session.role = token.role as string | undefined
       session.reactivated = token.reactivated as boolean | undefined
+      session.error = token.error as string | undefined
       return session
     },
   },

@@ -6,6 +6,7 @@ declare module "next-auth" {
     accessToken?: string
     role?: string
     reactivated?: boolean
+    error?: string
   }
   interface User {
     accessToken?: string
@@ -19,5 +20,6 @@ declare module "next-auth/jwt" {
     accessToken?: string
     role?: string
     reactivated?: boolean
+    error?: string
   }
 }
