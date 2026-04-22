@@ -47,7 +47,7 @@ const tokenExpiry = 24 * time.Hour
 
 func main() {
 	env := config.EnvOrDefault("ENV", "development")
-	log := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
+	log, flushLogs := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
 
 	// appCtx is cancelled when the process receives SIGINT or SIGTERM.
 	// All long-running goroutines (hub, workers, cleaners) use this context
@@ -435,6 +435,7 @@ func main() {
 	if err := tracerShutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("tracer shutdown error")
 	}
+	flushLogs()
 	log.Info().Msg("server stopped")
 }
 
