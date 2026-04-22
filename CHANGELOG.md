@@ -18,7 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `ops/grafana/provisioning/datasources/datasources.yaml`: Prometheus (default, exemplar→Tempo), Loki (derived field `trace_id`→Tempo), Tempo (traces-to-logs via Loki, service map, node graph)
   - `ops/grafana/provisioning/dashboards/dashboards.yaml`: file provider pointing to `/var/lib/grafana/dashboards`
   - 4 dashboards-as-code: `http-red.json` (request rate, error rate, p95/p99 latency, top routes by rate and latency), `websocket.json` (active connections over time), `db-pool.json` (utilisation gauge, connection breakdown, utilisation time series), `infrastructure.json` (goroutines, heap memory, GC pauses, CPU, open FDs)
-  - `backend/.env.example`: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_SAMPLE_RATE` documented
+  - `backend/.env.example`: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_SAMPLE_RATE`, `LOKI_URL` documented
+  - `internal/logger/loki.go`: batching `lokiWriter` — groups zerolog JSON lines by `level`, flushes every 2s or at 100 entries, pushes directly to Loki's HTTP push API; no extra dependencies; activated when `LOKI_URL` is set
+  - `logger.New` returns `(zerolog.Logger, func())` — flush function drains the Loki buffer on graceful shutdown; no-op when Loki is not configured
+  - OTel export errors routed through zerolog at `warn` level via `otel.SetErrorHandler` — respects `LOG_LEVEL`, shows up in Loki, no more raw stdlib log spam on startup
+  - `godotenv.Load()` moved to top of `main()` so `LOKI_URL`, `LOG_LEVEL`, and all other env vars from `.env` are visible before the logger (and every other component) initialises
 
 - **Log shipping pipeline** ([PR #58](https://github.com/mayloo89/circl/pull/58)):
   - `grafana/loki:3.4.2` added to `docker-compose.yml` — single-binary mode, filesystem storage, 7-day retention via compactor, healthcheck on `/ready`
