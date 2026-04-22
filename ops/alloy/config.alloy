@@ -1,12 +1,3 @@
-// Tail the backend log file written by the host process.
-// Run the backend with: go run ./cmd/api/... 2>&1 | tee /tmp/circl-logs/backend.log
-loki.source.file "backend" {
-  targets = [
-    {__path__ = "/tmp/circl-logs/backend.log", service = "circl-backend", env = "dev"},
-  ]
-  forward_to = [loki.process.enrich.receiver]
-}
-
 // Discover all Docker containers running on the host.
 discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
@@ -19,7 +10,7 @@ loki.source.docker "containers" {
   forward_to = [loki.process.enrich.receiver]
 }
 
-// Parse structured JSON logs (backend emits zerolog JSON) and attach labels.
+// Parse structured JSON logs and attach labels.
 // Fields absent on plain-text lines (postgres, redis, mailpit) are silently skipped.
 loki.process "enrich" {
   stage.json {
