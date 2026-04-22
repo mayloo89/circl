@@ -46,18 +46,18 @@ import (
 const tokenExpiry = 24 * time.Hour
 
 func main() {
+	// Load .env before anything reads env vars so LOKI_URL, LOG_LEVEL, etc. are available.
+	_ = godotenv.Load()
+
 	env := config.EnvOrDefault("ENV", "development")
 	log, flushLogs := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
+	log.Debug().Msg("env loaded")
 
 	// appCtx is cancelled when the process receives SIGINT or SIGTERM.
 	// All long-running goroutines (hub, workers, cleaners) use this context
 	// so they stop cleanly when the application shuts down.
 	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
-	if err := godotenv.Load(); err != nil {
-		log.Debug().Msg("no .env file found, using system environment")
-	}
 
 	port := config.EnvOrDefault("PORT", "8080")
 	corsOrigins := server.NormalizeCORSOrigins(config.EnvOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
