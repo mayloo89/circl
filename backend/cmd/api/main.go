@@ -81,7 +81,7 @@ func main() {
 
 	// Initialise OpenTelemetry tracing. When OTEL_EXPORTER_OTLP_ENDPOINT is
 	// unset a no-op exporter is used so the app starts without a collector.
-	tracerShutdown, err := tracing.Init(appCtx, "circl-api", config.EnvOrDefault("BUILD_VERSION", "dev"), env)
+	tracerShutdown, err := tracing.Init(appCtx, log, "circl-api", config.EnvOrDefault("BUILD_VERSION", "dev"), env)
 	if err != nil {
 		log.Fatal().Err(err).Msg("tracing init failed")
 	}

@@ -2,8 +2,12 @@ package logger
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -20,8 +24,8 @@ type lokiWriter struct {
 	service string
 	env     string
 
-	mu      sync.Mutex
-	buf     map[string][]lokiEntry // keyed by level
+	mu  sync.Mutex
+	buf map[string][]lokiEntry // keyed by level
 
 	flushCh chan struct{}
 	done    chan struct{}
@@ -41,8 +45,7 @@ func newLokiWriter(url, service, env string) *lokiWriter {
 		done:    make(chan struct{}),
 		client:  &http.Client{Timeout: 5 * time.Second},
 	}
-	w.wg.Add(1)
-	go w.run()
+	w.wg.Go(w.run)
 	return w
 }
 
@@ -70,7 +73,6 @@ func (w *lokiWriter) Close() {
 }
 
 func (w *lokiWriter) run() {
-	defer w.wg.Done()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -121,7 +123,7 @@ func (w *lokiWriter) flush() {
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, w.url+"/loki/api/v1/push", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, w.url+"/loki/api/v1/push", bytes.NewReader(body))
 	if err != nil {
 		return
 	}
@@ -131,7 +133,14 @@ func (w *lokiWriter) flush() {
 	if err != nil {
 		return
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() {
+		io.Copy(io.Discard, resp.Body) //nolint:errcheck
+		resp.Body.Close()              //nolint:errcheck
+	}()
+
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "loki: push failed with status %d\n", resp.StatusCode)
+	}
 }
 
 // extractLevel returns the value of the "level" key in a zerolog JSON line.
@@ -145,3 +154,4 @@ func extractLevel(p []byte) string {
 	}
 	return v.Level
 }
+

@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"cmp"
 	"io"
 	"os"
 	"time"
@@ -33,12 +34,7 @@ func New(env, level string) (zerolog.Logger, func()) {
 		return zerolog.New(baseWriter).Level(lvl).With().Timestamp().Logger(), func() {}
 	}
 
-	serviceName := os.Getenv("OTEL_SERVICE_NAME")
-	if serviceName == "" {
-		serviceName = "circl-backend"
-	}
-
-	lw := newLokiWriter(lokiURL, serviceName, env)
+	lw := newLokiWriter(lokiURL, cmp.Or(os.Getenv("OTEL_SERVICE_NAME"), "circl-backend"), env)
 	multi := zerolog.MultiLevelWriter(baseWriter, lw)
 	return zerolog.New(multi).Level(lvl).With().Timestamp().Logger(), lw.Close
 }
