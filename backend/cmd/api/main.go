@@ -279,6 +279,7 @@ func main() {
 		})
 	}, chat.HandlerConfig{
 		IsBlockedInRoom: isBlockedInRoom,
+		AllowedOrigins:  corsOrigins,
 	})
 
 	notifyDeleted := func(roomID, messageID string) {

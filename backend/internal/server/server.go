@@ -70,6 +70,7 @@ func New(cfg Config) http.Handler {
 		r.Use(cfg.TracingMiddleware)
 	}
 	r.Use(middleware.RequestLogger(cfg.Log))
+	r.Use(middleware.SecurityHeaders(cfg.Env))
 	if cfg.MetricsMiddleware != nil {
 		r.Use(cfg.MetricsMiddleware)
 	}
@@ -77,7 +78,7 @@ func New(cfg Config) http.Handler {
 		AllowedOrigins:   cfg.CORSOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
+		ExposedHeaders:   []string{"Link", "X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
