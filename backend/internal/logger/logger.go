@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"cmp"
+	"io"
 	"os"
 	"time"
 
@@ -8,21 +10,31 @@ import (
 )
 
 // New creates a zerolog.Logger for the given environment and log level.
-// Development: human-readable console output. Production: JSON to stdout.
+// Development: human-readable console output on stdout. Production: JSON.
 // Unknown level strings default to info.
-func New(env, level string) zerolog.Logger {
+//
+// When LOKI_URL is set, log lines are also shipped to Loki in batches. The
+// returned flush function must be called on shutdown to deliver any buffered
+// entries; it is safe to call even when Loki is not configured.
+func New(env, level string) (zerolog.Logger, func()) {
 	lvl, err := zerolog.ParseLevel(level)
 	if err != nil {
 		lvl = zerolog.InfoLevel
 	}
 
+	var baseWriter io.Writer
 	if env == "development" {
-		return zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}).
-			Level(lvl).
-			With().
-			Timestamp().
-			Logger()
+		baseWriter = zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+	} else {
+		baseWriter = os.Stdout
 	}
 
-	return zerolog.New(os.Stdout).Level(lvl).With().Timestamp().Logger()
+	lokiURL := os.Getenv("LOKI_URL")
+	if lokiURL == "" {
+		return zerolog.New(baseWriter).Level(lvl).With().Timestamp().Logger(), func() {}
+	}
+
+	lw := newLokiWriter(lokiURL, cmp.Or(os.Getenv("OTEL_SERVICE_NAME"), "circl-backend"), env)
+	multi := zerolog.MultiLevelWriter(baseWriter, lw)
+	return zerolog.New(multi).Level(lvl).With().Timestamp().Logger(), lw.Close
 }

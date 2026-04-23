@@ -10,7 +10,7 @@ loki.source.docker "containers" {
   forward_to = [loki.process.enrich.receiver]
 }
 
-// Parse structured JSON logs (backend emits zerolog JSON) and attach labels.
+// Parse structured JSON logs and attach labels.
 // Fields absent on plain-text lines (postgres, redis, mailpit) are silently skipped.
 loki.process "enrich" {
   stage.json {

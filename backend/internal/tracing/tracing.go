@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -26,7 +27,7 @@ import (
 //
 // The returned shutdown function must be called on application exit to flush
 // and close the exporter. It is safe to call even if Init returns an error.
-func Init(ctx context.Context, serviceName, serviceVersion, env string) (func(context.Context) error, error) {
+func Init(ctx context.Context, log zerolog.Logger, serviceName, serviceVersion, env string) (func(context.Context) error, error) {
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
@@ -56,6 +57,9 @@ func Init(ctx context.Context, serviceName, serviceVersion, env string) (func(co
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		log.Warn().Err(err).Msg("otel export error")
+	}))
 
 	return tp.Shutdown, nil
 }

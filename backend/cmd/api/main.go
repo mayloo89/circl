@@ -46,18 +46,20 @@ import (
 const tokenExpiry = 24 * time.Hour
 
 func main() {
+	// Load .env first so every subsequent os.Getenv call (LOKI_URL, LOG_LEVEL, etc.) sees it.
+	dotenvErr := godotenv.Load()
+
 	env := config.EnvOrDefault("ENV", "development")
-	log := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
+	log, flushLogs := logger.New(env, config.EnvOrDefault("LOG_LEVEL", "info"))
+	if dotenvErr != nil {
+		log.Debug().Msg("no .env file found, using system environment")
+	}
 
 	// appCtx is cancelled when the process receives SIGINT or SIGTERM.
 	// All long-running goroutines (hub, workers, cleaners) use this context
 	// so they stop cleanly when the application shuts down.
 	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
-	if err := godotenv.Load(); err != nil {
-		log.Debug().Msg("no .env file found, using system environment")
-	}
 
 	port := config.EnvOrDefault("PORT", "8080")
 	corsOrigins := server.NormalizeCORSOrigins(config.EnvOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
@@ -79,7 +81,7 @@ func main() {
 
 	// Initialise OpenTelemetry tracing. When OTEL_EXPORTER_OTLP_ENDPOINT is
 	// unset a no-op exporter is used so the app starts without a collector.
-	tracerShutdown, err := tracing.Init(appCtx, "circl-api", config.EnvOrDefault("BUILD_VERSION", "dev"), env)
+	tracerShutdown, err := tracing.Init(appCtx, log, "circl-api", config.EnvOrDefault("BUILD_VERSION", "dev"), env)
 	if err != nil {
 		log.Fatal().Err(err).Msg("tracing init failed")
 	}
@@ -435,6 +437,7 @@ func main() {
 	if err := tracerShutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("tracer shutdown error")
 	}
+	flushLogs()
 	log.Info().Msg("server stopped")
 }
 
