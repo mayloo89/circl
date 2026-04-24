@@ -10,25 +10,33 @@ import (
 )
 
 const (
-	refreshTokenTTL  = 7 * 24 * time.Hour
-	revocationKeyTTL = refreshTokenTTL + time.Hour
+	// RefreshTokenTTLRemember is the refresh token lifetime when the user
+	// checks "keep me signed in" (persistent session across browser restarts).
+	RefreshTokenTTLRemember = 30 * 24 * time.Hour
 
-	rtKeyPrefix      = "rt:"
-	rtRevokedPrefix  = "rt:revoked_at:"
+	// RefreshTokenTTLSession is the refresh token lifetime for a non-persistent
+	// session (expires when the browser is closed / after a short idle period).
+	RefreshTokenTTLSession = 30 * time.Minute
+
+	revocationKeyTTL = RefreshTokenTTLRemember + time.Hour
+
+	rtKeyPrefix     = "rt:"
+	rtRevokedPrefix = "rt:revoked_at:"
 )
 
 // RefreshTokenStore manages opaque refresh tokens backed by Redis.
 type RefreshTokenStore interface {
-	Create(ctx context.Context, hash, userID, role string, issuedAt time.Time) error
+	Create(ctx context.Context, hash, userID, role string, issuedAt time.Time, ttl time.Duration) error
 	Get(ctx context.Context, hash string) (*refreshTokenRecord, error)
 	Delete(ctx context.Context, hash string) error
 	RevokeAllForUser(ctx context.Context, userID string) error
 }
 
 type refreshTokenRecord struct {
-	UserID   string    `json:"user_id"`
-	Role     string    `json:"role"`
-	IssuedAt time.Time `json:"issued_at"`
+	UserID   string        `json:"user_id"`
+	Role     string        `json:"role"`
+	IssuedAt time.Time     `json:"issued_at"`
+	TTL      time.Duration `json:"ttl"`
 }
 
 type redisRefreshStore struct {
@@ -40,12 +48,12 @@ func NewRedisRefreshStore(rdb *redis.Client) RefreshTokenStore {
 	return &redisRefreshStore{rdb: rdb}
 }
 
-func (s *redisRefreshStore) Create(ctx context.Context, hash, userID, role string, issuedAt time.Time) error {
-	val, err := json.Marshal(refreshTokenRecord{UserID: userID, Role: role, IssuedAt: issuedAt})
+func (s *redisRefreshStore) Create(ctx context.Context, hash, userID, role string, issuedAt time.Time, ttl time.Duration) error {
+	val, err := json.Marshal(refreshTokenRecord{UserID: userID, Role: role, IssuedAt: issuedAt, TTL: ttl})
 	if err != nil {
 		return err
 	}
-	return s.rdb.Set(ctx, rtKeyPrefix+hash, val, refreshTokenTTL).Err()
+	return s.rdb.Set(ctx, rtKeyPrefix+hash, val, ttl).Err()
 }
 
 // Get retrieves the token record and validates it against any pending revocation.

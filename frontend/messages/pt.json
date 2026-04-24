@@ -47,7 +47,8 @@
     "verificationSent": "E-mail de verificação enviado — verifique sua caixa de entrada.",
     "accountReactivated": "Conta reativada",
     "accountReactivatedDesc": "Bem-vindo de volta! Sua conta foi restaurada. Todos os seus dados estão intactos.",
-    "goToHome": "Ir para o início"
+    "goToHome": "Ir para o início",
+    "rememberMe": "Manter-me conectado"
   },
   "register": {
     "title": "Criar conta",

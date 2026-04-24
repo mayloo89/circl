@@ -85,8 +85,9 @@ func WithProfileStore(s profiles.Store) HandlerOption {
 }
 
 type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	RememberMe bool   `json:"remember_me"`
 }
 
 type registerRequest struct {
@@ -211,10 +212,16 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			plain, hash, err := generateSecureToken()
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: generate refresh token failed")
-			} else if err := cfg.refreshStore.Create(r.Context(), hash, user.ID, user.Role, time.Now()); err != nil {
-				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: store refresh token failed")
 			} else {
-				resp.RefreshToken = plain
+				ttl := RefreshTokenTTLSession
+				if req.RememberMe {
+					ttl = RefreshTokenTTLRemember
+				}
+				if err := cfg.refreshStore.Create(r.Context(), hash, user.ID, user.Role, time.Now(), ttl); err != nil {
+					zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: store refresh token failed")
+				} else {
+					resp.RefreshToken = plain
+				}
 			}
 		}
 
@@ -266,7 +273,11 @@ func refreshHandler(jwtSecret string, tokenExpiry time.Duration, cfg *handlerCon
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		if err := cfg.refreshStore.Create(r.Context(), newHash, rt.UserID, rt.Role, time.Now()); err != nil {
+		newTTL := rt.TTL
+		if newTTL == 0 {
+			newTTL = RefreshTokenTTLSession
+		}
+		if err := cfg.refreshStore.Create(r.Context(), newHash, rt.UserID, rt.Role, time.Now(), newTTL); err != nil {
 			zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: store new refresh token failed")
 		}
 

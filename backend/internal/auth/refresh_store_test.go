@@ -19,8 +19,8 @@ func newStubRefreshStore() *stubRefreshStore {
 	}
 }
 
-func (s *stubRefreshStore) Create(_ context.Context, hash, userID, role string, issuedAt time.Time) error {
-	s.tokens[hash] = &refreshTokenRecord{UserID: userID, Role: role, IssuedAt: issuedAt}
+func (s *stubRefreshStore) Create(_ context.Context, hash, userID, role string, issuedAt time.Time, ttl time.Duration) error {
+	s.tokens[hash] = &refreshTokenRecord{UserID: userID, Role: role, IssuedAt: issuedAt, TTL: ttl}
 	return nil
 }
 
@@ -50,7 +50,7 @@ func TestStubRefreshStore_CreateGet(t *testing.T) {
 	ctx := t.Context()
 	store := newStubRefreshStore()
 
-	if err := store.Create(ctx, "hash1", "user1", "user", time.Now()); err != nil {
+	if err := store.Create(ctx, "hash1", "user1", "user", time.Now(), RefreshTokenTTLRemember); err != nil {
 		t.Fatal(err)
 	}
 	rt, err := store.Get(ctx, "hash1")
@@ -72,7 +72,7 @@ func TestStubRefreshStore_NotFound(t *testing.T) {
 func TestStubRefreshStore_Delete(t *testing.T) {
 	ctx := t.Context()
 	store := newStubRefreshStore()
-	_ = store.Create(ctx, "hash1", "user1", "user", time.Now())
+	_ = store.Create(ctx, "hash1", "user1", "user", time.Now(), RefreshTokenTTLRemember)
 	_ = store.Delete(ctx, "hash1")
 	if _, err := store.Get(ctx, "hash1"); err != ErrInvalidToken {
 		t.Error("expected token to be gone after Delete")
@@ -84,7 +84,7 @@ func TestStubRefreshStore_RevokeAllForUser(t *testing.T) {
 	store := newStubRefreshStore()
 
 	issuedAt := time.Now().Add(-time.Minute)
-	_ = store.Create(ctx, "old", "user1", "user", issuedAt)
+	_ = store.Create(ctx, "old", "user1", "user", issuedAt, RefreshTokenTTLRemember)
 
 	_ = store.RevokeAllForUser(ctx, "user1")
 
@@ -94,7 +94,7 @@ func TestStubRefreshStore_RevokeAllForUser(t *testing.T) {
 	}
 
 	// Token issued after revocation must be accepted.
-	_ = store.Create(ctx, "new", "user1", "user", time.Now())
+	_ = store.Create(ctx, "new", "user1", "user", time.Now(), RefreshTokenTTLRemember)
 	if _, err := store.Get(ctx, "new"); err != nil {
 		t.Errorf("new token should be valid: %v", err)
 	}

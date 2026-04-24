@@ -47,7 +47,8 @@
     "verificationSent": "Correo de verificación enviado — revisa tu bandeja de entrada.",
     "accountReactivated": "Cuenta reactivada",
     "accountReactivatedDesc": "¡Bienvenido de vuelta! Tu cuenta ha sido restaurada. Todos tus datos están intactos.",
-    "goToHome": "Ir al inicio"
+    "goToHome": "Ir al inicio",
+    "rememberMe": "Mantener sesión iniciada"
   },
   "register": {
     "title": "Crear cuenta",
