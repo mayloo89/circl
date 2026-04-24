@@ -47,7 +47,8 @@
     "verificationSent": "Verification email sent — check your inbox.",
     "accountReactivated": "Account reactivated",
     "accountReactivatedDesc": "Welcome back! Your account has been restored. All your data is intact.",
-    "goToHome": "Go to home"
+    "goToHome": "Go to home",
+    "rememberMe": "Keep me signed in"
   },
   "register": {
     "title": "Create account",

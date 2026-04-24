@@ -98,6 +98,17 @@ export default function NavBar() {
         // non-critical
       }
     }
+    if (session?.refreshToken) {
+      try {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: session.refreshToken }),
+        })
+      } catch {
+        // non-critical
+      }
+    }
     await signOut()
   }
 

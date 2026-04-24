@@ -9,6 +9,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Refresh token rotation + Redis blacklist** ([PR #62](https://github.com/mayloo89/circl/pull/62)):
+  - Access token TTL reduced from 24 h to 15 min; new opaque refresh tokens (32 random bytes, hex-encoded) with 7-day TTL issued at login alongside the access token
+  - `POST /auth/refresh` — validates the refresh token against Redis, deletes it (rotation), issues a new access token + refresh token pair; returns `401` on unknown/revoked tokens
+  - `POST /auth/logout` — deletes the refresh token from Redis; always returns `204` to prevent enumeration
+  - `PUT /users/me/password` and `DELETE /users/me` now call `RevokeAllForUser` — stores a `rt:revoked_at:<userID>` timestamp in Redis; any token issued before that timestamp is rejected on next use
+  - `RedisRefreshStore` — tokens stored as `rt:<sha256(plaintext)>` with TTL; revocation checked on every `Get` call
+  - `WithRefreshTokenStore` / `WithAccountRefreshStore` options keep the store injected rather than global
+  - Frontend `lib/auth.ts` — JWT callback checks access-token expiry and calls `/auth/refresh` silently; stores `refreshToken` in the NextAuth session
+  - `SessionGuard` — also signs out on `RefreshFailed` (expired refresh token or network error during silent refresh)
+  - `NavBar` and `SignOutButton` — send `POST /auth/logout` with the refresh token before calling `signOut()`
+
 - **Security hardening — headers, WS origin, CORS, secret scan** ([PR #61](https://github.com/mayloo89/circl/pull/61)):
   - `SecurityHeaders` middleware added to the chi middleware stack — sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cache-Control: no-store` on every response; `Strict-Transport-Security` (1 year, includeSubDomains) added in production only
   - WebSocket `CheckOrigin` in `internal/chat/handler.go` replaced `return true` with an exact-match check against `CORS_ALLOWED_ORIGINS`; when the list is empty all origins are accepted (dev convenience only); the upgrader is now created per-handler rather than as a package-level variable
