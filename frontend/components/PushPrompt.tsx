@@ -1,15 +1,17 @@
 "use client"
 
 import { useState } from "react"
+import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { usePushContext } from "@/contexts/PushContext"
 
 export default function PushPrompt() {
   const t = useTranslations("pushPrompt")
+  const { status } = useSession()
   const { permission, supported, enable } = usePushContext()
   const [dismissed, setDismissed] = useState(false)
 
-  if (!supported || permission !== "default" || dismissed) return null
+  if (status !== "authenticated" || !supported || permission !== "default" || dismissed) return null
 
   return (
     <div className="flex items-center justify-between bg-indigo-600 px-6 py-2 text-sm text-white">
