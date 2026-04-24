@@ -1,11 +1,13 @@
 title = "Gitleaks configuration for Circl"
 
 [allowlist]
-description = "Allowlist for known test-only secrets in CI configuration"
-# These are placeholder values used exclusively in CI test environments.
-# They are not real credentials and have no access to any system.
-regexes = [
-  "integration-test-jwt-secret-32chars!!",
-  "e2e-test-jwt-secret-minimum-32characters!",
-  "e2e-test-secret-for-playwright-32chars!",
+description = "Files that intentionally contain non-production placeholder credentials"
+paths = [
+  # CI workflow: JWT/NextAuth values are ephemeral test-only secrets.
+  '''.github/workflows/ci\.yml''',
+  # Example env files: placeholders, never real credentials.
+  '''backend/\.env\.example''',
+  '''frontend/\.env\.example''',
+  # docker-compose: local dev passwords (circl_password, minioadmin, etc.).
+  '''docker-compose\.yml''',
 ]
