@@ -30,13 +30,6 @@ const (
 	maxMsgSize = 4096
 )
 
-// upgrader accepts WebSocket connections from any origin.
-// Origin validation is handled at the CORS middleware level.
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(_ *http.Request) bool { return true },
-}
 
 // Client represents a single WebSocket connection from an authenticated user.
 type Client struct {
@@ -118,6 +111,9 @@ type HandlerConfig struct {
 	// Returns true if the sender is blocked by any room member, suppressing
 	// the message silently.
 	IsBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
+	// AllowedOrigins is the list of origins permitted to open WebSocket
+	// connections. When empty, all origins are allowed (development only).
+	AllowedOrigins []string
 }
 
 // resolveMessageType maps a client-supplied frame type and MIME type to the
@@ -698,6 +694,21 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 //
 // GET /chat/rooms/{id}/ws?token=<jwt>
 func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string), cfg HandlerConfig) http.HandlerFunc {
+	allowed := make(map[string]struct{}, len(cfg.AllowedOrigins))
+	for _, o := range cfg.AllowedOrigins {
+		allowed[o] = struct{}{}
+	}
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			if len(allowed) == 0 {
+				return true
+			}
+			_, ok := allowed[r.Header.Get("Origin")]
+			return ok
+		},
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		tok := r.URL.Query().Get("token")
 		if tok == "" {

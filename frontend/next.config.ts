@@ -20,12 +20,43 @@ if (process.env.NEXT_PUBLIC_IMAGE_HOSTNAME) {
   });
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
+// CSP and HSTS are production-only: in dev, cross-origin API calls to
+// localhost:8080 and Next.js hydration scripts would break under a strict policy.
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  ...(isProd
+    ? [
+        {
+          key: "Content-Security-Policy",
+          value: [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:",
+            "font-src 'self'",
+            "connect-src 'self' wss:",
+            "frame-ancestors 'none'",
+          ].join("; "),
+        },
+        { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+      ]
+    : []),
+];
+
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
   images: {
     remotePatterns,
     dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
+  },
+  async headers() {
+    return [{ source: "/(.*)", headers: securityHeaders }];
   },
 };
 

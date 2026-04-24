@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Security hardening — headers, WS origin, CORS, secret scan** ([PR #61](https://github.com/mayloo89/circl/pull/61)):
+  - `SecurityHeaders` middleware added to the chi middleware stack — sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cache-Control: no-store` on every response; `Strict-Transport-Security` (1 year, includeSubDomains) added in production only
+  - WebSocket `CheckOrigin` in `internal/chat/handler.go` replaced `return true` with an exact-match check against `CORS_ALLOWED_ORIGINS`; when the list is empty all origins are accepted (dev convenience only); the upgrader is now created per-handler rather than as a package-level variable
+  - `AllowedOrigins []string` field added to `chat.HandlerConfig`; `main.go` passes `corsOrigins` into the WS handler
+  - `X-Request-ID` added to CORS `ExposedHeaders` so browser clients can read the request ID for support/debugging
+  - `next.config.ts` gains a `headers()` export applying CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy` to all Next.js routes; `script-src` allows `unsafe-eval` in development only (Next.js HMR requirement)
+  - Gitleaks secret-scanning job (`gitleaks/gitleaks-action@v2`, full-history checkout) added as the first CI job — blocks the pipeline on real leaked credentials
+  - `.gitleaks.toml` allowlist added for the three known test-only secrets in `ci.yml` (integration and e2e JWT secrets, Playwright NEXTAUTH_SECRET)
+
 - **Grafana observability stack** ([PR #60](https://github.com/mayloo89/circl/pull/60)):
   - `grafana/tempo:2.7.2` added to `docker-compose.yml` — OTLP HTTP (4318) + gRPC (4317) receivers; metrics_generator forwards service-graph and span-metrics to Prometheus via remote-write; 7-day trace retention; local filesystem storage
   - `prom/prometheus:v3.3.1` added to `docker-compose.yml` — scrapes backend at `host.docker.internal:8080/metrics`; remote-write receiver enabled for Tempo metrics_generator; `ops/prometheus/prometheus.yml` + `ops/prometheus/alerts.yml`
