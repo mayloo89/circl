@@ -43,7 +43,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/worker"
 )
 
-const tokenExpiry = 24 * time.Hour
+const tokenExpiry = 15 * time.Minute
 
 func main() {
 	// Load .env first so every subsequent os.Getenv call (LOKI_URL, LOG_LEVEL, etc.) sees it.
@@ -157,7 +157,11 @@ func main() {
 
 	loginIPLimit := config.EnvIntOrDefault("LOGIN_IP_LIMIT", 20)
 	registerIPLimit := config.EnvIntOrDefault("REGISTER_IP_LIMIT", 10)
-	accountHandler := auth.NewAccountHandler(authSvc)
+	refreshStore := auth.NewRedisRefreshStore(rdb)
+
+	accountHandler := auth.NewAccountHandler(authSvc,
+		auth.WithAccountRefreshStore(refreshStore),
+	)
 
 	authHandler := auth.NewHandler(authSvc, jwtSecret, tokenExpiry,
 		auth.WithLocker(limiter),
@@ -166,6 +170,7 @@ func main() {
 		auth.WithRegisterIPLimit(registerIPLimit, time.Hour),
 		auth.WithEmailFlow(authSvc, frontendURL),
 		auth.WithProfileStore(profileStore),
+		auth.WithRefreshTokenStore(refreshStore),
 	)
 
 	reportMgr := reports.NewManager(reportSvc,

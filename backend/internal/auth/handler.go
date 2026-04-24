@@ -53,9 +53,14 @@ type handlerConfig struct {
 	emailFlow        EmailFlowService
 	frontendURL      string
 	profileStore     profiles.Store
+	refreshStore     RefreshTokenStore
 }
 
 func WithLocker(l LoginLocker) HandlerOption { return func(c *handlerConfig) { c.locker = l } }
+
+func WithRefreshTokenStore(s RefreshTokenStore) HandlerOption {
+	return func(c *handlerConfig) { c.refreshStore = s }
+}
 func WithLimiter(l RequestLimiter) HandlerOption {
 	return func(c *handlerConfig) { c.limiter = l }
 }
@@ -92,10 +97,11 @@ type registerRequest struct {
 }
 
 type userResponse struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	Token       string `json:"token"`
-	Reactivated bool   `json:"reactivated,omitempty"`
+	ID           string `json:"id,omitempty"`
+	Email        string `json:"email,omitempty"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	Reactivated  bool   `json:"reactivated,omitempty"`
 }
 
 // generateTokenFn is a variable so tests can inject a failing implementation.
@@ -115,6 +121,8 @@ func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration,
 	r := chi.NewRouter()
 	r.Post("/login", loginHandler(auth, jwtSecret, tokenExpiry, cfg))
 	r.Post("/register", registerHandler(auth, cfg))
+	r.Post("/refresh", refreshHandler(jwtSecret, tokenExpiry, cfg))
+	r.Post("/logout", logoutHandler(cfg))
 	if cfg.emailFlow != nil {
 		r.Post("/forgot-password", forgotPasswordHandler(cfg.emailFlow, cfg.frontendURL))
 		r.Post("/reset-password", resetPasswordHandler(cfg.emailFlow))
@@ -197,7 +205,90 @@ func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duratio
 			return
 		}
 
-		apierror.WriteJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email, Token: tok, Reactivated: user.Reactivated})
+		resp := userResponse{ID: user.ID, Email: user.Email, Token: tok, Reactivated: user.Reactivated}
+
+		if cfg.refreshStore != nil {
+			plain, hash, err := generateSecureToken()
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: generate refresh token failed")
+			} else if err := cfg.refreshStore.Create(r.Context(), hash, user.ID, user.Role, time.Now()); err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: store refresh token failed")
+			} else {
+				resp.RefreshToken = plain
+			}
+		}
+
+		apierror.WriteJSON(w, http.StatusOK, resp)
+	}
+}
+
+// refreshHandler validates a refresh token, rotates it, and returns a new
+// access token + refresh token pair. The old refresh token is deleted atomically
+// before the new one is stored so it cannot be reused.
+func refreshHandler(jwtSecret string, tokenExpiry time.Duration, cfg *handlerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.refreshStore == nil {
+			apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "not found")
+			return
+		}
+		var req struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "refresh_token is required")
+			return
+		}
+
+		hash := hashToken(req.RefreshToken)
+		rt, err := cfg.refreshStore.Get(r.Context(), hash)
+		if errors.Is(err, ErrInvalidToken) {
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeInvalidToken, "invalid or expired refresh token")
+			return
+		}
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+
+		// Rotate: delete old token before issuing new one.
+		if err := cfg.refreshStore.Delete(r.Context(), hash); err != nil {
+			zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: delete old refresh token failed")
+		}
+
+		newAccessToken, err := generateTokenFn(rt.UserID, rt.Role, jwtSecret, tokenExpiry)
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+
+		newPlain, newHash, err := generateSecureToken()
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+		if err := cfg.refreshStore.Create(r.Context(), newHash, rt.UserID, rt.Role, time.Now()); err != nil {
+			zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: store new refresh token failed")
+		}
+
+		apierror.WriteJSON(w, http.StatusOK, userResponse{Token: newAccessToken, RefreshToken: newPlain})
+	}
+}
+
+// logoutHandler invalidates the supplied refresh token.
+// Always returns 204 — even if the token is absent or already expired — to
+// prevent token enumeration.
+func logoutHandler(cfg *handlerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.refreshStore != nil {
+			var req struct {
+				RefreshToken string `json:"refresh_token"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			if req.RefreshToken != "" {
+				_ = cfg.refreshStore.Delete(r.Context(), hashToken(req.RefreshToken))
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -378,21 +469,34 @@ func clientIP(r *http.Request) string {
 // AccountHandlerOption configures optional features on the account handler.
 type AccountHandlerOption func(*accountHandlerConfig)
 
-type accountHandlerConfig struct{}
+type accountHandlerConfig struct {
+	refreshStore RefreshTokenStore
+}
+
+// WithAccountRefreshStore wires a RefreshTokenStore into the account handler so
+// that all refresh tokens are revoked when a user changes their password or
+// deletes their account.
+func WithAccountRefreshStore(s RefreshTokenStore) AccountHandlerOption {
+	return func(c *accountHandlerConfig) { c.refreshStore = s }
+}
 
 // NewAccountHandler returns an http.Handler for user account management routes.
 // Routes are expected to be mounted at /users/me and run behind RequireAuth.
 //
 //	PUT    /password  — change password
 //	DELETE /          — delete (soft) account
-func NewAccountHandler(svc AccountManager, _ ...AccountHandlerOption) http.Handler {
+func NewAccountHandler(svc AccountManager, opts ...AccountHandlerOption) http.Handler {
+	cfg := &accountHandlerConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
 	r := chi.NewRouter()
-	r.Put("/password", changePasswordHandler(svc))
-	r.Delete("/", deleteAccountHandler(svc))
+	r.Put("/password", changePasswordHandler(svc, cfg))
+	r.Delete("/", deleteAccountHandler(svc, cfg))
 	return r
 }
 
-func changePasswordHandler(svc AccountManager) http.HandlerFunc {
+func changePasswordHandler(svc AccountManager, cfg *accountHandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -425,11 +529,17 @@ func changePasswordHandler(svc AccountManager) http.HandlerFunc {
 			return
 		}
 
+		if cfg.refreshStore != nil {
+			if err := cfg.refreshStore.RevokeAllForUser(r.Context(), userID); err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: revoke refresh tokens on password change failed")
+			}
+		}
+
 		apierror.WriteJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
 	}
 }
 
-func deleteAccountHandler(svc AccountManager) http.HandlerFunc {
+func deleteAccountHandler(svc AccountManager, cfg *accountHandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -456,6 +566,12 @@ func deleteAccountHandler(svc AccountManager) http.HandlerFunc {
 			}
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
+		}
+
+		if cfg.refreshStore != nil {
+			if err := cfg.refreshStore.RevokeAllForUser(r.Context(), userID); err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: revoke refresh tokens on account deletion failed")
+			}
 		}
 
 		w.WriteHeader(http.StatusNoContent)

@@ -3,6 +3,16 @@ import CredentialsProvider from "next-auth/providers/credentials"
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8080"
 
+function jwtExp(accessToken: string): number | null {
+  try {
+    const [, payload] = accessToken.split(".")
+    const { exp } = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")))
+    return typeof exp === "number" ? exp : null
+  } catch {
+    return null
+  }
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     CredentialsProvider({
@@ -35,16 +45,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const user = await res.json()
           let role = "user"
+          const exp = jwtExp(user.token)
           try {
             const payload = JSON.parse(atob(user.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
             if (typeof payload.role === "string") role = payload.role
           } catch { /* ignore malformed token */ }
-          return { id: user.id, email: user.email, name: user.email, accessToken: user.token, role, reactivated: user.reactivated ?? false }
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.email,
+            accessToken: user.token,
+            refreshToken: user.refresh_token ?? undefined,
+            role,
+            reactivated: user.reactivated ?? false,
+            exp,
+          }
         } catch (err) {
           if (err instanceof Error && ["AccountLocked", "RateLimited", "EmailNotVerified"].includes(err.message)) {
             throw err
           }
-          // Backend unavailable — fail closed (do not grant access)
           return null
         }
       },
@@ -55,24 +74,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
+      // Fresh login — populate token from the user object returned by authorize().
       if (user) {
         token.id = user.id
         token.accessToken = user.accessToken
+        token.refreshToken = user.refreshToken
         token.role = user.role
         token.reactivated = user.reactivated
         token.error = undefined
         return token
       }
-      // On every session refresh, check whether the backend JWT has expired.
+
+      // Access token still valid — nothing to do.
       if (token.accessToken) {
-        try {
-          const [, payload] = (token.accessToken as string).split(".")
-          const { exp } = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")))
-          if (typeof exp === "number" && exp * 1000 < Date.now()) {
-            token.error = "TokenExpired"
-          }
-        } catch { /* malformed token — let the backend reject it */ }
+        const exp = jwtExp(token.accessToken as string)
+        if (exp !== null && exp * 1000 > Date.now()) {
+          return token
+        }
       }
+
+      // Access token expired — attempt silent refresh.
+      if (token.refreshToken) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: token.refreshToken }),
+          })
+          if (!res.ok) {
+            token.error = "RefreshFailed"
+            return token
+          }
+          const data = await res.json()
+          token.accessToken = data.token
+          token.refreshToken = data.refresh_token ?? token.refreshToken
+          token.error = undefined
+          return token
+        } catch {
+          token.error = "RefreshFailed"
+          return token
+        }
+      }
+
+      token.error = "TokenExpired"
       return token
     },
     async session({ session, token }) {
@@ -80,6 +124,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string
       }
       session.accessToken = token.accessToken
+      session.refreshToken = token.refreshToken
       session.role = token.role as string | undefined
       session.reactivated = token.reactivated as boolean | undefined
       session.error = token.error as string | undefined
