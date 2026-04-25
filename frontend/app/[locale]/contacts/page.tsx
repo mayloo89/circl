@@ -269,7 +269,7 @@ export default function ContactsPage() {
     <ConfirmDialog
       open={unblockConfirm !== null}
       title={t("unblock")}
-      message={tc("unknownError")}
+      message={t("unblockConfirmMessage", { name: unblockConfirm?.display_name || "" })}
       confirmLabel={t("unblock")}
       onConfirm={() => unblockConfirm && unblock(unblockConfirm.user_id)}
       onCancel={() => setUnblockConfirm(null)}
@@ -278,7 +278,7 @@ export default function ContactsPage() {
       <div className="w-full max-w-lg space-y-8 px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
-          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>←</Button>
+          <Button variant="ghost" aria-label={tc("back")} onClick={() => router.back()} className="p-2">←</Button>
         </div>
 
         {error && (
@@ -343,7 +343,11 @@ export default function ContactsPage() {
             <p className="text-sm text-gray-500">{t("noContacts")}</p>
           ) : (
             <ul className="divide-y divide-gray-700">
-              {contacts.map((c) => (
+              {[...contacts].sort((a, b) => {
+                const aOnline = presence[a.user_id]?.online ? 1 : 0
+                const bOnline = presence[b.user_id]?.online ? 1 : 0
+                return bOnline - aOnline
+              }).map((c) => (
                 <ContactCard
                   key={c.contact_id}
                   userId={c.user_id}

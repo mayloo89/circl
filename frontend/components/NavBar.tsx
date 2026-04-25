@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 
 import { Link, useRouter, usePathname } from "@/i18n/navigation"
 import { routing, type Locale } from "@/i18n/routing"
+import { useLocale } from "next-intl"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { usePushContext } from "@/contexts/PushContext"
 import Avatar from "@/components/ui/Avatar"
@@ -58,6 +59,7 @@ export default function NavBar() {
   const { permission, supported, enable, disable } = usePushContext()
   const router = useRouter()
   const pathname = usePathname()
+  const currentLocale = useLocale() as Locale
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.accessToken) return
@@ -228,8 +230,13 @@ export default function NavBar() {
                     <button
                       key={locale}
                       role="menuitem"
+                      aria-current={locale === currentLocale ? "true" : undefined}
                       onClick={() => handleLocaleChange(locale)}
-                      className="rounded px-2 py-1 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                        locale === currentLocale
+                          ? "bg-indigo-600 text-white"
+                          : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                      }`}
                     >
                       {LOCALE_SHORT[locale]}
                     </button>

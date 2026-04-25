@@ -403,8 +403,8 @@ export default function ChatRoomPage() {
 
   if (status === "loading") {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-950">
-        <p className="text-gray-400">{t("loading")}</p>
+      <div className="flex h-full flex-col bg-gray-950">
+        <MessageSkeletons />
       </div>
     )
   }

@@ -2,7 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react"
 import { useState } from "react"
-import { useTranslations } from "next-intl"
+import { useTranslations, useLocale } from "next-intl"
 import { useRouter, usePathname } from "@/i18n/navigation"
 import { routing, type Locale } from "@/i18n/routing"
 
@@ -215,6 +215,7 @@ function LanguageSection({ token }: { token: string | undefined }) {
   const t = useTranslations("settings")
   const router = useRouter()
   const pathname = usePathname()
+  const currentLocale = useLocale()
   const [saving, setSaving] = useState(false)
 
   async function handleChange(locale: Locale) {
@@ -254,7 +255,12 @@ function LanguageSection({ token }: { token: string | undefined }) {
                 key={locale}
                 onClick={() => handleChange(locale)}
                 disabled={saving}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-pressed={locale === currentLocale}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  locale === currentLocale
+                    ? "bg-indigo-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
               >
                 {t(LOCALE_LABEL_KEYS[locale])}
               </button>

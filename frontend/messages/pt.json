@@ -186,7 +186,8 @@
     "loading": "Carregando…",
     "add": "Adicionar",
     "addContactTitle": "Adicionar Contato",
-    "searchByEmail": "Buscar por nome ou e-mail…"
+    "searchByEmail": "Buscar por nome ou e-mail…",
+    "unblockConfirmMessage": "Desbloquear {name}? Eles poderão enviar mensagens novamente."
   },
   "profile": {
     "title": "Meu Perfil",
@@ -220,6 +221,7 @@
   },
   "browse": {
     "title": "Explorar",
+    "subtitle": "Descubra pessoas perto de você",
     "loading": "Carregando…",
     "noResults": "Nenhum perfil encontrado.",
     "loadMore": "Carregar mais",
