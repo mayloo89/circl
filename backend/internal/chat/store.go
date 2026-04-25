@@ -108,13 +108,13 @@ func (s *pgStore) CreateGroup(ctx context.Context, creatorID, name string, membe
 		}
 	}
 
-	for _, uid := range members {
-		if _, err = tx.Exec(ctx,
-			`INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-			room.ID, uid,
-		); err != nil {
-			return nil, fmt.Errorf("create group: add member %s: %w", uid, err)
-		}
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO room_members (room_id, user_id)
+		 SELECT $1::uuid, unnest($2::uuid[])
+		 ON CONFLICT DO NOTHING`,
+		room.ID, members,
+	); err != nil {
+		return nil, fmt.Errorf("create group: add members: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

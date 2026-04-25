@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -186,11 +185,6 @@ func TestEphemeralCleaner_Start_StopsOnContextCancel(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cleaner.Start(ctx)
-	cancel()
-
-	// Allow the goroutine to exit.
-	time.Sleep(20 * time.Millisecond)
-	// No deadlock or panic is the assertion.
+	cleaner.Start(t.Context())
+	// context is canceled when the test returns; goroutine exits cleanly
 }

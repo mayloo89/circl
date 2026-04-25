@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"maps"
+	"slices"
 
 	"github.com/hibiken/asynq"
 	"go.opentelemetry.io/otel"
@@ -16,13 +18,7 @@ type traceCarrier map[string]string
 
 func (c traceCarrier) Get(key string) string { return c[key] }
 func (c traceCarrier) Set(key, val string)   { c[key] = val }
-func (c traceCarrier) Keys() []string {
-	keys := make([]string, 0, len(c))
-	for k := range c {
-		keys = append(keys, k)
-	}
-	return keys
-}
+func (c traceCarrier) Keys() []string { return slices.Collect(maps.Keys(c)) }
 
 // taskEnvelope wraps any asynq task payload with W3C trace context headers so
 // that task execution can be correlated with the HTTP request that enqueued it.

@@ -70,7 +70,7 @@ type serverMessage struct {
 	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
 	ViewOnce        bool       `json:"view_once,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at,omitzero"`
 }
 
 // clientMessage is the JSON envelope received from a connected client.

@@ -736,7 +736,7 @@ func newTestHubForHandler(t *testing.T) *chat.Hub {
 	t.Cleanup(func() { rdb.Close() })
 
 	hub := chat.NewHub(rdb)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	go hub.Run(ctx)
 	return hub
@@ -841,7 +841,8 @@ func TestWSHandler_HubShutdownSendsCloseFrame(t *testing.T) {
 	t.Cleanup(func() { rdb.Close() })
 
 	hub := chat.NewHub(rdb)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
 	go hub.Run(ctx)
 
 	mgr := &mockManager{isMember: true}

@@ -14,6 +14,12 @@ import Skeleton from "@/components/ui/Skeleton"
 import PhotoGallery from "@/components/profile/PhotoGallery"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+
+interface PhotonFeature {
+  geometry: { coordinates: [number, number] }
+  properties: { name?: string; city?: string; state?: string; country?: string }
+}
+
 const MAX_BIO = 280
 const MAX_PHOTOS = 6
 const MAX_INTERESTS = 20
@@ -81,8 +87,7 @@ function useLocationSearch(query: string, enabled: boolean) {
       if (!res.ok) return
       const data = await res.json()
       const seen = new Set<string>()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const results = data.features.flatMap((f: any) => {
+      const results = (data.features as PhotonFeature[]).flatMap((f) => {
         const p = f.properties
         const parts = [p.name, p.city ?? p.state, p.country].filter(Boolean)
         const label = parts.join(", ")

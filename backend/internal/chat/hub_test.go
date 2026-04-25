@@ -16,9 +16,28 @@ func newTestHub(t *testing.T) (*Hub, context.CancelFunc) {
 	t.Cleanup(func() { rdb.Close() })
 
 	hub := NewHub(rdb)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go hub.Run(ctx)
 	return hub, cancel
+}
+
+// mustRegister sends client to hub.register and polls RoomParticipants until
+// the registration is confirmed, replacing fragile time.Sleep calls.
+func mustRegister(t *testing.T, hub *Hub, client *Client) {
+	t.Helper()
+	hub.register <- client
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	for {
+		for _, p := range hub.RoomParticipants(ctx, client.roomID) {
+			if p.UserID == client.userID {
+				return
+			}
+		}
+		if ctx.Err() != nil {
+			t.Fatal("timeout waiting for client to be registered in hub")
+		}
+	}
 }
 
 func receiveWithTimeout(t *testing.T, ch <-chan []byte, timeout time.Duration) []byte {
@@ -43,8 +62,7 @@ func TestHub_LocalDelivery(t *testing.T) {
 		roomID: "room-delivery",
 	}
 
-	hub.register <- client
-	time.Sleep(20 * time.Millisecond) // allow Run to process
+	mustRegister(t, hub, client)
 
 	payload := []byte(`{"type":"message","content":"hello"}`)
 	if err := hub.Publish(context.Background(), "room-delivery", payload); err != nil {
@@ -64,9 +82,8 @@ func TestHub_MultipleClientsInRoom(t *testing.T) {
 	c1 := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-1", roomID: "room-multi"}
 	c2 := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-2", roomID: "room-multi"}
 
-	hub.register <- c1
-	hub.register <- c2
-	time.Sleep(20 * time.Millisecond)
+	mustRegister(t, hub, c1)
+	mustRegister(t, hub, c2)
 
 	payload := []byte(`{"type":"message"}`)
 	if err := hub.Publish(context.Background(), "room-multi", payload); err != nil {
@@ -88,11 +105,9 @@ func TestHub_UnregisterStopsDelivery(t *testing.T) {
 		roomID: "room-unsub",
 	}
 
-	hub.register <- client
-	time.Sleep(20 * time.Millisecond)
+	mustRegister(t, hub, client)
 
 	hub.unregister <- client
-	time.Sleep(20 * time.Millisecond)
 
 	// send channel should be closed by Run
 	select {
@@ -112,9 +127,8 @@ func TestHub_ClientsInDifferentRoomsAreIsolated(t *testing.T) {
 	c1 := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-1", roomID: "room-A"}
 	c2 := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-2", roomID: "room-B"}
 
-	hub.register <- c1
-	hub.register <- c2
-	time.Sleep(20 * time.Millisecond)
+	mustRegister(t, hub, c1)
+	mustRegister(t, hub, c2)
 
 	// Publish only to room-A.
 	if err := hub.Publish(context.Background(), "room-A", []byte(`{"room":"A"}`)); err != nil {
@@ -144,31 +158,39 @@ func TestHub_SlowClientIsEvicted(t *testing.T) {
 		roomID: "room-slow",
 	}
 
-	hub.register <- client
-	time.Sleep(20 * time.Millisecond)
+	mustRegister(t, hub, client)
 
 	// Pre-fill the buffer so the next delivery has no room.
 	client.send <- []byte("pre-fill")
 
-	// Directly inject a broadcast without going through Redis to avoid
-	// timing non-determinism in the pub/sub pipeline.
+	// Inject a broadcast directly (no Redis round-trip).
 	hub.broadcast <- broadcastMsg{roomID: "room-slow", data: []byte(`{"type":"msg"}`)}
 
-	// Wait for the Run loop to process the broadcast and call deliver.
-	// deliver will find the buffer full and close the send channel.
-	time.Sleep(50 * time.Millisecond)
-
-	// The channel has at most one buffered item ("pre-fill") and is closed.
-	// Reading it should return (value, true) for any buffered items, then
-	// (nil, false) once empty.
-	for i := 0; i < 2; i++ {
-		select {
-		case _, open := <-client.send:
-			if !open {
-				return // channel closed — eviction confirmed
+	// Poll RoomParticipants until the client disappears from the room —
+	// that is the deterministic signal that deliver() closed the send channel.
+	evictCtx, evictCancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer evictCancel()
+	for {
+		evicted := true
+		for _, p := range hub.RoomParticipants(evictCtx, client.roomID) {
+			if p.UserID == client.userID {
+				evicted = false
+				break
 			}
-		case <-time.After(200 * time.Millisecond):
-			t.Fatal("timeout reading from send channel")
+		}
+		if evicted {
+			break
+		}
+		if evictCtx.Err() != nil {
+			t.Fatal("timeout waiting for slow-client eviction")
+		}
+	}
+
+	// Drain the pre-fill item, then confirm the channel is closed.
+	for range 2 {
+		_, open := <-client.send
+		if !open {
+			return // channel closed — eviction confirmed
 		}
 	}
 	t.Error("send channel was not closed after slow-client eviction")
@@ -184,8 +206,7 @@ func TestHub_CancelStopsRun(t *testing.T) {
 		userID: "u-1",
 		roomID: "room-cancel",
 	}
-	hub.register <- client
-	time.Sleep(20 * time.Millisecond)
+	mustRegister(t, hub, client)
 
 	cancel()
 
