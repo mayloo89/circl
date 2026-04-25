@@ -10,7 +10,8 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - **Cache / real-time**: Redis 7+ (presence, Pub/Sub, rate limits)
 - **Queues**: asynq (image processing, maintenance tasks)
 - **Storage**: S3/R2 + CDN
-- **CI/CD**: GitHub Actions
+- **Observability**: zerolog → Loki (logs); Prometheus (metrics); OpenTelemetry → Tempo (traces); Grafana (unified dashboards + alerts)
+- **CI/CD**: GitHub Actions (secret-scan, lint, unit, integration, e2e)
 
 ## Documentation
 - [Implementation plan](docs/implementation-plan.md)
@@ -60,9 +61,9 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Log shipping pipeline** ([PR #58](https://github.com/mayloo89/circl/pull/58)): Loki 3.4.2 + Grafana Alloy v1.7.5 in `docker-compose.yml`; Alloy collects all container stdout via Docker socket; JSON stage indexes `level` and `component` as Loki labels; 7-day retention; `ops/loki/logql-examples.md` query cookbook
 - ✅ **Frontend fetch hardening + auto sign-out** ([PR #59](https://github.com/mayloo89/circl/pull/59)): all API fetch chains check `r.ok` before `.json()` — prevents TypeError crashes when the backend returns an error object; `SessionGuard` detects expired backend JWT via `exp` claim and calls `signOut()` automatically
 - ✅ **Grafana observability stack** ([PR #60](https://github.com/mayloo89/circl/pull/60)): Tempo 2.7.2, Prometheus v3.3.1, and Grafana 11.5.2 added to `docker-compose.yml`; Grafana auto-provisioned with Prometheus + Loki + Tempo datasources (cross-datasource exemplar/trace-to-log links); 4 dashboards-as-code (HTTP RED, WebSocket, DB pool, Go runtime); Prometheus recording rules + 4 alert rules (HighErrorRate, HighLatencyP95, DBPoolExhausted, BackendDown); `internal/logger/loki.go` batching writer ships backend logs directly to Loki over HTTP (no file tailing); OTel export errors routed through zerolog at warn level
-- ✅ **OpenAPI spec** ([PR #63](https://github.com/mayloo89/circl/pull/63)): `docs/openapi.yaml` — OpenAPI 3.1.0 spec covering all ~40 endpoints across 12 tag groups; reusable schemas, responses, and `bearerAuth` security scheme; `@redocly/cli lint` CI job
-- ✅ **Refresh token rotation + Redis blacklist** ([PR #62](https://github.com/mayloo89/circl/pull/62)): access tokens reduced to 15-min TTL; opaque 7-day refresh tokens stored hashed in Redis; `POST /auth/refresh` rotates (delete-before-issue); `POST /auth/logout` invalidates server-side; password change and account deletion revoke all tokens via timestamp-based `rt:revoked_at:<userID>` key; frontend silently refreshes on expiry via NextAuth JWT callback
 - ✅ **Security hardening** ([PR #61](https://github.com/mayloo89/circl/pull/61)): `SecurityHeaders` middleware sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cache-Control`, and HSTS (production only) on every response; WebSocket `CheckOrigin` validates against `CORS_ALLOWED_ORIGINS` instead of accepting all origins; `X-Request-ID` added to CORS exposed headers; `next.config.ts` applies CSP, HSTS, and `Permissions-Policy` via Next.js `headers()`; gitleaks secret-scanning job added to CI
+- ✅ **Refresh token rotation + Redis blacklist** ([PR #62](https://github.com/mayloo89/circl/pull/62)): access tokens reduced to 15-min TTL; opaque 7-day refresh tokens stored hashed in Redis; `POST /auth/refresh` rotates (delete-before-issue); `POST /auth/logout` invalidates server-side; password change and account deletion revoke all tokens via timestamp-based `rt:revoked_at:<userID>` key; frontend silently refreshes on expiry via NextAuth JWT callback
+- ✅ **OpenAPI spec** ([PR #63](https://github.com/mayloo89/circl/pull/63)): `docs/openapi.yaml` — OpenAPI 3.1.0 spec covering all ~40 endpoints across 12 tag groups; reusable schemas, responses, and `bearerAuth` security scheme; `@redocly/cli lint` CI job
 
 ## Local setup
 
@@ -96,7 +97,7 @@ API available at [http://localhost:8080](http://localhost:8080).
 
 ```bash
 curl http://localhost:8080/health
-# → {"status":"ok","env":"development","db":"ok"}
+# → {"status":"ok","env":"development","db":"ok","redis":"ok","version":"dev"}
 ```
 
 ### 3. Seed a test user
@@ -165,53 +166,9 @@ go vet ./...               # Static analysis
 
 ## API reference
 
-All protected routes require `Authorization: Bearer <token>`.
+The full API reference is in [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.1.0, ~40 endpoints).
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/health` | — | Server and DB status |
-| `POST` | `/auth/register` | — | Create account (sends verification email) |
-| `POST` | `/auth/login` | — | Login, returns JWT (requires verified email) |
-| `POST` | `/auth/forgot-password` | — | Send password reset email |
-| `POST` | `/auth/reset-password` | — | Reset password with token |
-| `POST` | `/auth/verify-email` | — | Verify email address with token |
-| `POST` | `/auth/resend-verification` | — | Resend verification email |
-| `POST` | `/auth/reactivate` | — | Reactivate a deleted account within the 30-day grace period |
-| `GET` | `/profiles/me` | ✅ | Get own profile (auto-created) |
-| `PUT` | `/profiles/me` | ✅ | Update display name and bio |
-| `PUT` | `/profiles/me/avatar` | ✅ | Update avatar URL independently |
-| `GET` | `/profiles/{ref}` | ✅ | Get any user's public profile + gallery (ref = UUID or username) |
-| `GET` | `/profiles/available?username=` | ✅ | Check username availability |
-| `POST` | `/profiles/me/photos` | ✅ | Add a gallery photo (max 6) |
-| `DELETE` | `/profiles/me/photos/{id}` | ✅ | Delete a gallery photo |
-| `GET` | `/users/search?q=` | ✅ | Search users by email, display name, or username |
-| `GET` | `/profiles/interests?q=` | ✅ | Autocomplete interests from existing tags |
-| `POST` | `/contacts` | ✅ | Send a contact request |
-| `GET` | `/contacts` | ✅ | List accepted contacts |
-| `GET` | `/contacts/pending` | ✅ | List incoming pending requests |
-| `GET` | `/contacts/sent` | ✅ | List outgoing pending requests |
-| `PUT` | `/contacts/{id}/accept` | ✅ | Accept a pending request |
-| `DELETE` | `/contacts/{id}` | ✅ | Remove or decline a contact |
-| `POST` | `/contacts/{id}/block` | ✅ | Block a user (removes contact if exists) |
-| `DELETE` | `/contacts/{id}/block` | ✅ | Unblock a user |
-| `GET` | `/contacts/blocked` | ✅ | List blocked users |
-| `GET` | `/notifications/stream?token=` | — | SSE stream for real-time events |
-| `POST` | `/chat/rooms/dm` | ✅ | Get or create a DM room |
-| `POST` | `/chat/rooms` | ✅ | Create a named group room |
-| `GET` | `/chat/rooms` | ✅ | List rooms with last message and unread count |
-| `GET` | `/chat/rooms/{id}/messages` | ✅ | Paginated message history |
-| `PUT` | `/chat/rooms/{id}/read` | ✅ | Mark room as read |
-| `GET` | `/chat/rooms/{id}/ws?token=` | — | WebSocket connection for real-time chat |
-| `POST` | `/presence/heartbeat` | ✅ | Mark self as online (send every ~20s) |
-| `DELETE` | `/presence/heartbeat` | ✅ | Mark self as offline immediately (on logout) |
-| `GET` | `/presence?ids=` | ✅ | Batch presence query (online + last seen) |
-| `POST` | `/uploads/request` | ✅ | Request an upload URL (validates type/size) |
-| `POST` | `/uploads/{id}/confirm` | ✅ | Confirm upload completed |
-| `GET` | `/profiles/me/preferences` | ✅ | Get search preferences and locale |
-| `PUT` | `/profiles/me/preferences` | ✅ | Update search preferences and locale |
-| `POST` | `/push/subscribe` | ✅ | Subscribe to web push notifications |
-| `DELETE` | `/push/unsubscribe` | ✅ | Unsubscribe from push notifications |
-| `GET` | `/push/vapid-public-key` | ✅ | Get VAPID public key for subscription |
+All protected routes require `Authorization: Bearer <token>`. Short-lived access tokens (15 min) are refreshed silently via `POST /auth/refresh` using the opaque refresh token returned at login.
 
 ## Repository structure
 
@@ -243,28 +200,44 @@ circl/
 │   ├── cmd/api/           # Server entry point (main.go)
 │   ├── internal/          # Business logic (clean architecture)
 │   │   ├── apierror/      # Shared error writer + stable error code constants
-│   │   ├── auth/          # Register/login handler, service, store
+│   │   ├── auth/          # Register/login/refresh handler, service, store
 │   │   ├── admin/         # Admin moderation handler, service, store
-│   │   ├── contacts/      # Contacts handler, service, store
-│   │   ├── config/        # Env helpers
-│   │   ├── db/            # Connection pool, migrations runner
-│   │   ├── middleware/    # JWT RequireAuth, RequireAdmin middleware
 │   │   ├── chat/          # Chat rooms, Hub (WebSocket fan-out), store, handler
+│   │   ├── config/        # Env helpers
+│   │   ├── contacts/      # Contacts handler, service, store
+│   │   ├── db/            # Connection pool, migrations runner
+│   │   ├── email/         # Sender interface, ConsoleSender, SMTPSender
+│   │   ├── logger/        # zerolog setup (dev: console, prod: JSON) + Loki writer
+│   │   ├── metrics/       # Prometheus collectors (HTTP, WS, DB pool, runtime)
+│   │   ├── middleware/    # RequireAuth, RequireAdmin, SecurityHeaders, RequestLogger
 │   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
 │   │   ├── presence/      # Redis heartbeat, offline, batch presence query
-│   │   ├── storage/       # Storage interface, LocalStorage, S3Storage
-│   │   ├── uploads/       # Upload lifecycle (request → confirm), Postgres tracking
 │   │   ├── profiles/      # Profile handler, service, store; preferences (locale)
 │   │   ├── push/          # Web Push (VAPID) handler, service, store
+│   │   ├── ratelimit/     # Redis-backed rate limiter (per-IP and per-user)
 │   │   ├── reports/       # User report handler, service, store
-│   │   ├── server/        # Chi router, CORS, health handler
-│   │   └── token/         # JWT generate/validate
+│   │   ├── server/        # Chi router, CORS, /health, /metrics endpoints
+│   │   ├── storage/       # Storage interface, LocalStorage, S3Storage
+│   │   ├── testutil/      # Integration test helpers (OpenDB, CreateUser, NewRedis)
+│   │   ├── token/         # JWT generate/validate
+│   │   ├── tracing/       # OTel SDK init, chi middleware, pgx tracer
+│   │   ├── uploads/       # Upload lifecycle (request → confirm), Postgres tracking
+│   │   └── worker/        # asynq tasks: image processing, ephemeral cleanup, purge
 │   ├── migrations/        # SQL migrations (up + down), currently at 000025
 │   └── go.mod
+├── ops/                   # Local observability stack (dev only)
+│   ├── alloy/             # Grafana Alloy config — scrapes container stdout → Loki
+│   ├── grafana/           # Provisioning YAML (datasources + dashboards-as-code)
+│   ├── loki/              # Loki single-binary config, 7-day retention
+│   ├── prometheus/        # prometheus.yml + alert rules
+│   └── tempo/             # Tempo config (OTLP receivers, 7-day trace retention)
 ├── docs/
 │   ├── implementation-plan.md
+│   ├── openapi.yaml       # OpenAPI 3.1.0 spec (~40 endpoints)
 │   └── production-readiness.md
-├── .github/workflows/     # CI/CD (frontend, backend, backend-integration, e2e)
+├── .github/workflows/     # CI: secret-scan, frontend, backend, backend-integration, e2e, openapi-lint
+├── .gitleaks.toml         # Gitleaks allowlist for known test-only secrets
+├── docker-compose.yml     # Full dev stack (API, Postgres, Redis, MinIO, Mailpit, observability)
 ├── CHANGELOG.md
 └── README.md
 ```
