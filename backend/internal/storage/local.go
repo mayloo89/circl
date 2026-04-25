@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -114,12 +115,12 @@ func (ls *LocalStorage) ConsumePendingUpload(token string) (UploadParams, error)
 
 	p, ok := ls.pending[token]
 	if !ok {
-		return UploadParams{}, fmt.Errorf("local storage: unknown or expired upload token")
+		return UploadParams{}, errors.New("local storage: unknown or expired upload token")
 	}
 	delete(ls.pending, token)
 
 	if time.Now().After(p.expiresAt) {
-		return UploadParams{}, fmt.Errorf("local storage: upload token expired")
+		return UploadParams{}, errors.New("local storage: upload token expired")
 	}
 	return p.params, nil
 }

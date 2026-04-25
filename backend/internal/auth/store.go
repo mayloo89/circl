@@ -65,7 +65,7 @@ func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord
 	var u userRecord
 	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.Role, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("user not found")
+			return nil, errors.New("user not found")
 		}
 		return nil, fmt.Errorf("query user: %w", err)
 	}
@@ -83,7 +83,7 @@ func (s *pgStore) GetUserByID(ctx context.Context, userID string) (*userRecord, 
 	var u userRecord
 	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.Role, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("user not found")
+			return nil, errors.New("user not found")
 		}
 		return nil, fmt.Errorf("query user by id: %w", err)
 	}
@@ -251,7 +251,7 @@ func (s *pgStore) GetPasswordReset(ctx context.Context, tokenHash string) (*pass
 	var r passwordResetRecord
 	if err := row.Scan(&r.ID, &r.UserID, &r.TokenHash, &r.ExpiresAt, &r.UsedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("reset token not found")
+			return nil, errors.New("reset token not found")
 		}
 		return nil, fmt.Errorf("query password reset: %w", err)
 	}
@@ -294,7 +294,7 @@ func (s *pgStore) GetEmailVerification(ctx context.Context, tokenHash string) (*
 	var r emailVerificationRecord
 	if err := row.Scan(&r.ID, &r.UserID, &r.TokenHash, &r.ExpiresAt, &r.VerifiedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("verification token not found")
+			return nil, errors.New("verification token not found")
 		}
 		return nil, fmt.Errorf("query email verification: %w", err)
 	}

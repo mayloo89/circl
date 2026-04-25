@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/gif"
@@ -172,7 +173,7 @@ func decodeImage(contentType string, data []byte) (image.Image, error) {
 			return nil, err
 		}
 		if len(g.Image) == 0 {
-			return nil, fmt.Errorf("gif has no frames")
+			return nil, errors.New("gif has no frames")
 		}
 		return g.Image[0], nil
 	default:
