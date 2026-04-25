@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **OpenAPI 3.1.0 spec** ([PR #63](https://github.com/mayloo89/circl/pull/63)):
+  - `docs/openapi.yaml` documents all ~40 backend endpoints across 12 tag groups: System, Auth, Account, Profiles, Contacts, Chat, Notifications, Presence, Uploads, Reports, Push, Admin
+  - Reusable `components/schemas`: Error, User, TokenPair, Profile, Room, Message, Contact, UploadRequest, Report, AdminUser, Channel
+  - Reusable `components/responses`: Unauthorized, Forbidden, NotFound, BadRequest, TooManyRequests
+  - `bearerAuth` security scheme; global `security: [{bearerAuth: []}]` with per-endpoint overrides for public routes
+  - WebSocket (`GET /chat/ws`) and SSE (`GET /notifications/stream`) endpoints documented with protocol upgrade and streaming notes
+  - `@redocly/cli lint` CI job added — blocks the pipeline on spec violations
+
 - **Refresh token rotation + Redis blacklist** ([PR #62](https://github.com/mayloo89/circl/pull/62)):
   - Access token TTL reduced from 24 h to 15 min; new opaque refresh tokens (32 random bytes, hex-encoded) with 7-day TTL issued at login alongside the access token
   - `POST /auth/refresh` — validates the refresh token against Redis, deletes it (rotation), issues a new access token + refresh token pair; returns `401` on unknown/revoked tokens

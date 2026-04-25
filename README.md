@@ -14,6 +14,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 
 ## Documentation
 - [Implementation plan](docs/implementation-plan.md)
+- [API reference (OpenAPI 3.1.0)](docs/openapi.yaml)
 - [Production readiness checklist](docs/production-readiness.md)
 
 ## Project status
@@ -59,6 +60,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Log shipping pipeline** ([PR #58](https://github.com/mayloo89/circl/pull/58)): Loki 3.4.2 + Grafana Alloy v1.7.5 in `docker-compose.yml`; Alloy collects all container stdout via Docker socket; JSON stage indexes `level` and `component` as Loki labels; 7-day retention; `ops/loki/logql-examples.md` query cookbook
 - ✅ **Frontend fetch hardening + auto sign-out** ([PR #59](https://github.com/mayloo89/circl/pull/59)): all API fetch chains check `r.ok` before `.json()` — prevents TypeError crashes when the backend returns an error object; `SessionGuard` detects expired backend JWT via `exp` claim and calls `signOut()` automatically
 - ✅ **Grafana observability stack** ([PR #60](https://github.com/mayloo89/circl/pull/60)): Tempo 2.7.2, Prometheus v3.3.1, and Grafana 11.5.2 added to `docker-compose.yml`; Grafana auto-provisioned with Prometheus + Loki + Tempo datasources (cross-datasource exemplar/trace-to-log links); 4 dashboards-as-code (HTTP RED, WebSocket, DB pool, Go runtime); Prometheus recording rules + 4 alert rules (HighErrorRate, HighLatencyP95, DBPoolExhausted, BackendDown); `internal/logger/loki.go` batching writer ships backend logs directly to Loki over HTTP (no file tailing); OTel export errors routed through zerolog at warn level
+- ✅ **OpenAPI spec** ([PR #63](https://github.com/mayloo89/circl/pull/63)): `docs/openapi.yaml` — OpenAPI 3.1.0 spec covering all ~40 endpoints across 12 tag groups; reusable schemas, responses, and `bearerAuth` security scheme; `@redocly/cli lint` CI job
 - ✅ **Refresh token rotation + Redis blacklist** ([PR #62](https://github.com/mayloo89/circl/pull/62)): access tokens reduced to 15-min TTL; opaque 7-day refresh tokens stored hashed in Redis; `POST /auth/refresh` rotates (delete-before-issue); `POST /auth/logout` invalidates server-side; password change and account deletion revoke all tokens via timestamp-based `rt:revoked_at:<userID>` key; frontend silently refreshes on expiry via NextAuth JWT callback
 - ✅ **Security hardening** ([PR #61](https://github.com/mayloo89/circl/pull/61)): `SecurityHeaders` middleware sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cache-Control`, and HSTS (production only) on every response; WebSocket `CheckOrigin` validates against `CORS_ALLOWED_ORIGINS` instead of accepting all origins; `X-Request-ID` added to CORS exposed headers; `next.config.ts` applies CSP, HSTS, and `Permissions-Policy` via Next.js `headers()`; gitleaks secret-scanning job added to CI
 

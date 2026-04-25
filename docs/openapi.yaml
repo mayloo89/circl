@@ -1,0 +1,1572 @@
+openapi: "3.1.0"
+
+info:
+  title: Circl API
+  version: "3.0.0"
+  description: |
+    REST + WebSocket API for the Circl real-time chat platform.
+
+    **Authentication**: All protected endpoints require a Bearer JWT in the
+    `Authorization` header obtained via `POST /auth/login`. Short-lived access
+    tokens (15 min) are refreshed silently via `POST /auth/refresh` using the
+    opaque refresh token returned at login.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          example: invalid_credentials
+        error:
+          type: string
+          description: Human-readable message.
+          example: invalid credentials
+
+    User:
+      type: object
+      required: [id, email, token]
+      properties:
+        id:          { type: string, format: uuid }
+        email:       { type: string, format: email }
+        token:       { type: string, description: Short-lived JWT (15 min). }
+        refresh_token:
+          type: string
+          description: Opaque 7-day (remember_me) or 30-min refresh token.
+        reactivated:
+          type: boolean
+          description: True when a previously soft-deleted account was restored.
+
+    TokenPair:
+      type: object
+      required: [token, refresh_token]
+      properties:
+        token:         { type: string, description: New access JWT. }
+        refresh_token: { type: string, description: New refresh token (rotated). }
+
+    Profile:
+      type: object
+      properties:
+        user_id:      { type: string, format: uuid }
+        username:     { type: string }
+        display_name: { type: string }
+        bio:          { type: string }
+        avatar_url:   { type: string, format: uri }
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        gender:       { type: string }
+        interests:    { type: array, items: { type: string } }
+        photos:
+          type: array
+          items:
+            type: object
+            properties:
+              id:  { type: string, format: uuid }
+              url: { type: string, format: uri }
+        locale:       { type: string, example: en }
+        push_enabled: { type: boolean }
+
+    Room:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        type:         { type: string, enum: [dm, group, channel] }
+        name:         { type: string, nullable: true }
+        description:  { type: string, nullable: true }
+        avatar_url:   { type: string, format: uri, nullable: true }
+        unread_count: { type: integer }
+        last_message:
+          type: object
+          nullable: true
+          properties:
+            content:    { type: string }
+            created_at: { type: string, format: date-time }
+
+    Message:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        room_id:      { type: string, format: uuid }
+        sender_id:    { type: string, format: uuid }
+        type:
+          type: string
+          enum: [text, image, video, file]
+        content:      { type: string }
+        file_url:     { type: string, format: uri, nullable: true }
+        thumbnail_url:{ type: string, format: uri, nullable: true }
+        view_once:    { type: boolean }
+        expires_at:   { type: string, format: date-time, nullable: true }
+        created_at:   { type: string, format: date-time }
+
+    Contact:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        user_id:      { type: string, format: uuid }
+        username:     { type: string }
+        display_name: { type: string }
+        avatar_url:   { type: string, format: uri, nullable: true }
+        status:       { type: string, enum: [pending, accepted, blocked] }
+
+    UploadRequest:
+      type: object
+      required: [upload_id, upload_url]
+      properties:
+        upload_id:  { type: string, format: uuid }
+        upload_url: { type: string, format: uri, description: Pre-signed PUT URL. }
+
+    Report:
+      type: object
+      properties:
+        id:          { type: string, format: uuid }
+        reporter_id: { type: string, format: uuid }
+        target_id:   { type: string, format: uuid }
+        target_type: { type: string, enum: [user, message] }
+        reason:      { type: string }
+        status:      { type: string, enum: [pending, reviewed, dismissed] }
+        created_at:  { type: string, format: date-time }
+
+    AdminUser:
+      type: object
+      properties:
+        id:       { type: string, format: uuid }
+        email:    { type: string, format: email }
+        username: { type: string }
+        role:     { type: string, enum: [user, admin, super_admin] }
+        status:   { type: string, enum: [active, suspended, deleted, purged] }
+        created_at: { type: string, format: date-time }
+
+    Channel:
+      type: object
+      properties:
+        id:          { type: string, format: uuid }
+        name:        { type: string }
+        description: { type: string, nullable: true }
+        avatar_url:  { type: string, format: uri, nullable: true }
+        created_at:  { type: string, format: date-time }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but not authorised.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadRequest:
+      description: Validation error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: Rate limit or account lockout.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+tags:
+  - name: System
+  - name: Auth
+  - name: Account
+  - name: Profiles
+  - name: Contacts
+  - name: Chat
+  - name: Notifications
+  - name: Presence
+  - name: Uploads
+  - name: Reports
+  - name: Push
+  - name: Admin
+
+paths:
+
+  # ── System ──────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:  { type: string, example: ok }
+                  env:     { type: string }
+                  version: { type: string }
+                  db:      { type: string, enum: [ok, error] }
+                  redis:   { type: string, enum: [ok, error] }
+
+  # ── Auth ─────────────────────────────────────────────────────────────────────
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:       { type: string, format: email }
+                password:    { type: string }
+                remember_me:
+                  type: boolean
+                  default: false
+                  description: |
+                    When true the refresh token TTL is 30 days; when false it is 30 minutes.
+      responses:
+        "200":
+          description: Successful login.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Email not verified.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:         { type: string, format: email }
+                password:      { type: string, minLength: 8, maxLength: 128 }
+                username:      { type: string }
+                date_of_birth: { type: string, format: date }
+      responses:
+        "201":
+          description: Account created. Verification email sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: Email or username already taken.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200":
+          description: New token pair. The old refresh token is invalidated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (invalidate refresh token)
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "204":
+          description: Logged out. Always succeeds even if token was already expired.
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200":
+          description: Always 200 to prevent email enumeration.
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using token from email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:    { type: string }
+                password: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200":
+          description: Password reset successfully.
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Verify email address
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200":
+          description: Email verified.
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Resend verification email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200":
+          description: Always 200 to prevent email enumeration.
+
+  # ── Account ──────────────────────────────────────────────────────────────────
+
+  /users/me/password:
+    put:
+      tags: [Account]
+      summary: Change password
+      description: Revokes all refresh tokens for the user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password:     { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200":
+          description: Password updated.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /users/me:
+    delete:
+      tags: [Account]
+      summary: Delete account (soft, 30-day grace period)
+      description: |
+        Marks the account as deleted. The user has 30 days to log back in and
+        restore it. After that the account is permanently purged. Revokes all
+        refresh tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "204":
+          description: Account scheduled for deletion.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ── Profiles ─────────────────────────────────────────────────────────────────
+
+  /profiles/available:
+    get:
+      tags: [Profiles]
+      summary: Check username availability
+      security: []
+      parameters:
+        - in: query
+          name: username
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Availability result.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+
+  /profiles/me:
+    get:
+      tags: [Profiles]
+      summary: Get my profile
+      responses:
+        "200":
+          description: Current user's full profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [Profiles]
+      summary: Update my profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:      { type: string }
+                display_name:  { type: string }
+                bio:           { type: string }
+                date_of_birth: { type: string, format: date }
+                gender:        { type: string }
+                interests:     { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Updated profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /profiles/me/avatar:
+    put:
+      tags: [Profiles]
+      summary: Update avatar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [upload_id]
+              properties:
+                upload_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Avatar updated.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /profiles/me/preferences:
+    get:
+      tags: [Profiles]
+      summary: Get my preferences
+      responses:
+        "200":
+          description: User preferences.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  locale:       { type: string }
+                  push_enabled: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [Profiles]
+      summary: Update my preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                locale:       { type: string, enum: [en, es, pt] }
+                push_enabled: { type: boolean }
+      responses:
+        "200":
+          description: Preferences updated.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /profiles/me/photos:
+    post:
+      tags: [Profiles]
+      summary: Add profile photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [upload_id]
+              properties:
+                upload_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Photo added.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /profiles/me/photos/{photoID}:
+    delete:
+      tags: [Profiles]
+      summary: Delete profile photo
+      parameters:
+        - in: path
+          name: photoID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Photo deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /profiles/browse:
+    get:
+      tags: [Profiles]
+      summary: Browse profiles
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated profile list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items: { $ref: "#/components/schemas/Profile" }
+                  next_cursor: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /profiles/interests:
+    get:
+      tags: [Profiles]
+      summary: Search interests (autocomplete)
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching interest strings.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  interests: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /profiles/{ref}:
+    get:
+      tags: [Profiles]
+      summary: Get public profile by username or ID
+      parameters:
+        - in: path
+          name: ref
+          required: true
+          schema: { type: string }
+          description: Username or UUID.
+      responses:
+        "200":
+          description: Public profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Contacts ─────────────────────────────────────────────────────────────────
+
+  /users/search:
+    get:
+      tags: [Contacts]
+      summary: Search users
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: List accepted contacts
+      responses:
+        "200":
+          description: Accepted contacts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Contacts]
+      summary: Send contact request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addressee_id]
+              properties:
+                addressee_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Request sent.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: Request already exists.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /contacts/pending:
+    get:
+      tags: [Contacts]
+      summary: List incoming pending requests
+      responses:
+        "200":
+          description: Pending incoming requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /contacts/sent:
+    get:
+      tags: [Contacts]
+      summary: List sent pending requests
+      responses:
+        "200":
+          description: Sent pending requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /contacts/blocked:
+    get:
+      tags: [Contacts]
+      summary: List blocked users
+      responses:
+        "200":
+          description: Blocked users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /contacts/{id}/accept:
+    put:
+      tags: [Contacts]
+      summary: Accept contact request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Request accepted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /contacts/{id}:
+    delete:
+      tags: [Contacts]
+      summary: Remove contact or decline request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Contact removed.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /contacts/{id}/block:
+    post:
+      tags: [Contacts]
+      summary: Block user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: User blocked.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [Contacts]
+      summary: Unblock user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: User unblocked.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Chat ─────────────────────────────────────────────────────────────────────
+
+  /chat/rooms/dm:
+    post:
+      tags: [Chat]
+      summary: Get or create DM room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peer_id]
+              properties:
+                peer_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Existing or newly created DM room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /chat/rooms:
+    get:
+      tags: [Chat]
+      summary: List rooms (DMs + groups the user is a member of)
+      responses:
+        "200":
+          description: Room list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Room" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Chat]
+      summary: Create group room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:        { type: string }
+                description: { type: string }
+                member_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Created group room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /chat/rooms/{id}:
+    get:
+      tags: [Chat]
+      summary: Get room details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Room details.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Chat]
+      summary: Update group room (name / description / avatar)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:        { type: string }
+                description: { type: string }
+                upload_id:   { type: string, format: uuid }
+      responses:
+        "200":
+          description: Updated room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/rooms/{id}/members:
+    get:
+      tags: [Chat]
+      summary: List room members
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Member list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    user_id:      { type: string, format: uuid }
+                    username:     { type: string }
+                    display_name: { type: string }
+                    avatar_url:   { type: string, format: uri, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Chat]
+      summary: Add member to group room
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Member added.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/rooms/{id}/members/{userID}:
+    delete:
+      tags: [Chat]
+      summary: Remove member from group room
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: userID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Member removed.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/rooms/{id}/messages:
+    get:
+      tags: [Chat]
+      summary: List room messages (paginated, newest first)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: before
+          schema: { type: string, format: date-time }
+          description: Cursor — return messages older than this timestamp.
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Message page.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/rooms/{id}/read:
+    put:
+      tags: [Chat]
+      summary: Mark room as read
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Read receipt recorded.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /chat/rooms/{id}/messages/{msgID}/view:
+    post:
+      tags: [Chat]
+      summary: View a view-once message (streams content then deletes it)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: msgID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: File content streamed; message deleted after response.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/rooms/{id}/ws:
+    get:
+      tags: [Chat]
+      summary: WebSocket — real-time chat
+      description: |
+        Upgrades the connection to WebSocket. Authentication is via `?token=<jwt>`
+        query parameter (the browser WebSocket API does not support custom headers).
+
+        **Client → server frames**
+        ```json
+        { "type": "message", "content": "hello" }
+        { "type": "attachment", "content": "caption", "mime_type": "image/jpeg", "upload_id": "<uuid>" }
+        { "type": "typing" }
+        { "type": "ping" }
+        ```
+
+        **Server → client frames**
+        ```json
+        { "event": "message", ... }
+        { "event": "typing", "user_id": "...", "username": "..." }
+        { "event": "read_receipt", "room_id": "...", "user_id": "...", "read_at": "..." }
+        { "event": "message_deleted", "id": "...", "room_id": "..." }
+        { "event": "pong" }
+        ```
+      security: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: token
+          required: true
+          schema: { type: string }
+          description: Valid access JWT.
+      responses:
+        "101":
+          description: Switching protocols — WebSocket connection established.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/channels:
+    get:
+      tags: [Chat]
+      summary: List public channels
+      responses:
+        "200":
+          description: Channel list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Chat]
+      summary: Create channel (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:        { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Channel created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Channel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # ── Notifications ─────────────────────────────────────────────────────────────
+
+  /notifications/stream:
+    get:
+      tags: [Notifications]
+      summary: SSE stream — real-time notifications
+      description: |
+        Server-Sent Events stream. Authentication via `?token=<jwt>` query
+        parameter (the browser `EventSource` API does not support custom headers).
+
+        **Event types**
+        - `new_message` — new chat message in a room the user is a member of
+        - `contact_request` — incoming contact request
+        - `contact_accepted` — a sent request was accepted
+        - `presence` — a contact came online or went offline
+      security: []
+      parameters:
+        - in: query
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: SSE stream (text/event-stream).
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ── Presence ──────────────────────────────────────────────────────────────────
+
+  /presence/heartbeat:
+    post:
+      tags: [Presence]
+      summary: Mark user as online
+      description: Should be called every 30 s. Sets TTL 60 s in Redis.
+      responses:
+        "204":
+          description: Heartbeat recorded.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [Presence]
+      summary: Mark user as offline immediately
+      responses:
+        "204":
+          description: Presence cleared.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /presence:
+    get:
+      tags: [Presence]
+      summary: Get presence for a list of users
+      parameters:
+        - in: query
+          name: user_ids
+          required: true
+          schema:
+            type: array
+            items: { type: string, format: uuid }
+          style: form
+          explode: false
+      responses:
+        "200":
+          description: Presence map.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    online:    { type: boolean }
+                    last_seen: { type: string, format: date-time, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ── Uploads ───────────────────────────────────────────────────────────────────
+
+  /uploads/request:
+    post:
+      tags: [Uploads]
+      summary: Request a pre-signed upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_type]
+              properties:
+                content_type: { type: string, example: image/jpeg }
+                filename:     { type: string }
+      responses:
+        "201":
+          description: Pre-signed upload URL and upload ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /uploads/{id}/confirm:
+    post:
+      tags: [Uploads]
+      summary: Confirm upload completed
+      description: Marks the upload as committed and triggers image processing.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Upload confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Reports ───────────────────────────────────────────────────────────────────
+
+  /reports:
+    get:
+      tags: [Reports]
+      summary: List reports (admin only)
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, reviewed, dismissed] }
+      responses:
+        "200":
+          description: Report list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Report" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Reports]
+      summary: Submit a report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_id, target_type, reason]
+              properties:
+                target_id:   { type: string, format: uuid }
+                target_type: { type: string, enum: [user, message] }
+                reason:      { type: string }
+      responses:
+        "201":
+          description: Report submitted.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /reports/{id}/status:
+    put:
+      tags: [Reports]
+      summary: Update report status (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [reviewed, dismissed] }
+      responses:
+        "200":
+          description: Status updated.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Push notifications ────────────────────────────────────────────────────────
+
+  /push/vapid-public-key:
+    get:
+      tags: [Push]
+      summary: Get VAPID public key
+      responses:
+        "200":
+          description: VAPID public key for Web Push subscription.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  public_key: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /push/subscribe:
+    post:
+      tags: [Push]
+      summary: Register push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string, format: uri }
+                keys:
+                  type: object
+                  properties:
+                    p256dh: { type: string }
+                    auth:   { type: string }
+      responses:
+        "204":
+          description: Subscription registered.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [Push]
+      summary: Unregister push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: { type: string, format: uri }
+      responses:
+        "204":
+          description: Subscription removed.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ── Admin ─────────────────────────────────────────────────────────────────────
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Platform statistics (admin only)
+      responses:
+        "200":
+          description: Aggregated stats.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_users:   { type: integer }
+                  active_users:  { type: integer }
+                  total_rooms:   { type: integer }
+                  total_messages:{ type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List users (admin only)
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, suspended, deleted, purged] }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: User list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/users/{id}/status:
+    put:
+      tags: [Admin]
+      summary: Update user status (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, suspended] }
+      responses:
+        "200":
+          description: Status updated.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/users/{id}:
+    delete:
+      tags: [Admin]
+      summary: Hard-delete user (super_admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: User permanently deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/users/{id}/role:
+    put:
+      tags: [Admin]
+      summary: Set user role (super_admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [user, admin] }
+      responses:
+        "200":
+          description: Role updated.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/channels:
+    get:
+      tags: [Admin]
+      summary: List all channels (admin only)
+      responses:
+        "200":
+          description: Channel list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Admin]
+      summary: Create channel (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:        { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Channel created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Channel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Channel name already taken.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /admin/channels/{id}:
+    put:
+      tags: [Admin]
+      summary: Update channel (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:        { type: string }
+                description: { type: string }
+      responses:
+        "200":
+          description: Channel updated.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Admin]
+      summary: Delete channel (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Channel deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
