@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Browse overhaul** ([PR #70](https://github.com/mayloo89/circl/pull/70)):
+  - `RangeSlider` UI primitive — single-thumb slider with filled track and active-scale thumb; used for age and distance filters
+  - `BottomSheet` UI primitive — slides up from bottom on mobile with backdrop + Escape key + body scroll lock; renders nothing on desktop (`lg:hidden`)
+  - Mobile filter panel replaced: `<details>` removed, new "Filters" pill button with active-filter count badge opens the BottomSheet
+  - Age min/max and max-distance number inputs replaced by `RangeSlider`; 500 km = "Any" (maps to `null` in preferences)
+  - "Clear filters" button shown on the empty state when at least one filter is active
+  - Desktop filter sidebar widened to `w-64`, made `sticky top-6`; filter labels use uppercase tracking style
+  - All filter panel strings translated in EN / ES / PT
+
+### Fixed
+- **Browse distance filter** ([PR #70](https://github.com/mayloo89/circl/pull/70)): profiles with no coordinates previously bypassed the `max_distance_km` filter. The SQL `WHERE` clause now requires both the requester's and the candidate's coordinates to be present when the filter is active.
+
+### Added
 - **Home dashboard** ([PR #69](https://github.com/mayloo89/circl/pull/69)):
   - `PendingRequestsWidget` — fetches `/contacts/pending` and renders inline Accept / Decline buttons; hidden when empty; reacts to `contact_request` and `contact_removed` SSE events
   - `NearbyProfilesWidget` — fetches `/profiles/browse?limit=8`; horizontal-scroll chip row on mobile; skeleton loading state; "Browse all" link to `/browse`

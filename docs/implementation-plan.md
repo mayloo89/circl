@@ -135,7 +135,7 @@
 
 - [x] **UX overhaul — home dashboard** (PR #69): replaced 3-button placeholder with `PendingRequestsWidget` + `NearbyProfilesWidget` (horizontal scroll) + `RecentConversationsWidget`; `ProfileCompletenessBanner` with progress bar (sessionStorage dismiss); `lib/profileCompleteness.ts` pure utility.
 
-- [ ] **UX overhaul — browse** (PR #70): `RangeSlider` + `BottomSheet` primitives; replace `<details>` filter with BottomSheet; age/distance inputs → RangeSlider; "Clear filters" CTA on empty state; card action conflict resolved.
+- [x] **UX overhaul — browse** (PR #70): `RangeSlider` (single-thumb, fill track) + `BottomSheet` (slide-up mobile sheet, inline on desktop) primitives; `<details>` filter replaced by BottomSheet with active-filter badge; age min/max and distance inputs replaced by RangeSliders (500 km = "Any"); "Clear filters" CTA on empty state; i18n for all filter labels in EN/ES/PT; profiles with unknown distance excluded when max_distance_km is set (backend fix).
 
 - [ ] **UX overhaul — public profile hero** (PR #71): `<h1>` shows person's name; 55vh hero photo with gradient overlay + overflow menu; sticky bottom action bar; "Preview as visitor" on own profile.
 
