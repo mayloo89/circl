@@ -35,9 +35,9 @@ export default function Avatar({ src, name, size = "md", color = "gray", classNa
     )
   }
 
-  const bgClass      = color === "indigo" ? "bg-indigo-700"   : "bg-gray-700"
+  const bgClass      = color === "indigo" ? "bg-brand-strong"   : "bg-gray-700"
   const textClass    = color === "indigo" ? "text-white"      : "text-gray-300"
-  const ringOverride = color === "indigo" ? "ring-1 ring-indigo-600" : fallbackRing
+  const ringOverride = color === "indigo" ? "ring-1 ring-brand-primary" : fallbackRing
 
   return (
     <span

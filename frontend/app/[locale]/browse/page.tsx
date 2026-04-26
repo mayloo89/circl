@@ -44,7 +44,7 @@ const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
 
 function ProfileCardSkeleton() {
   return (
-    <div className="rounded-xl bg-gray-900 shadow-xl ring-1 ring-gray-800 overflow-hidden">
+    <div className="rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 overflow-hidden">
       <Skeleton className="aspect-[4/5] w-full rounded-none" />
       <div className="p-4 space-y-2">
         <Skeleton className="h-4 w-28" />
@@ -82,12 +82,12 @@ function SendRequestButton({ userID, token }: { userID: string; token: string })
   }
 
   if (status === "sent") {
-    return <span className="text-xs text-indigo-400 font-medium">Request sent</span>
+    return <span className="text-xs text-brand-muted font-medium">Request sent</span>
   }
 
   return (
     <Button
-      variant="primary"
+      variant="accent"
       size="sm"
       onClick={(e) => { e.preventDefault(); handleSend() }}
       disabled={status === "loading"}
@@ -104,7 +104,7 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
   return (
     <Link
       href={`/profile/${profile.username}`}
-      className="group rounded-xl bg-gray-900 shadow-xl ring-1 ring-gray-800 overflow-hidden flex flex-col hover:ring-indigo-700 transition-shadow"
+      className="group rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 overflow-hidden flex flex-col hover:shadow-card-hover hover:ring-brand-strong transition-shadow"
     >
       {heroURL ? (
         <div className="relative aspect-[4/5] w-full overflow-hidden bg-gray-800">
@@ -146,7 +146,7 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
             {profile.interests.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-indigo-900/50 px-2 py-0.5 text-xs text-indigo-300 ring-1 ring-indigo-700/60"
+                className="rounded-full bg-brand-wash/50 px-2 py-0.5 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
               >
                 {tag}
               </span>
@@ -243,7 +243,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             placeholder="Min"
             value={draft.min_age ?? ""}
             onChange={(e) => setInt("min_age", e.target.value)}
-            className="w-20 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-indigo-500"
+            className="w-20 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
           <span className="text-gray-500 text-sm">–</span>
           <input
@@ -253,7 +253,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             placeholder="Max"
             value={draft.max_age ?? ""}
             onChange={(e) => setInt("max_age", e.target.value)}
-            className="w-20 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-indigo-500"
+            className="w-20 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
         </div>
       </div>
@@ -267,7 +267,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
           placeholder="Any"
           value={draft.max_distance_km ?? ""}
           onChange={(e) => setInt("max_distance_km", e.target.value)}
-          className="w-28 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-indigo-500"
+          className="w-28 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
         />
       </div>
 
@@ -284,7 +284,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
                 onClick={() => toggleGender(g)}
                 className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
                   active
-                    ? "bg-indigo-600 text-white ring-indigo-500"
+                    ? "bg-brand-primary text-white ring-brand-hover"
                     : "bg-gray-800 text-gray-400 ring-gray-700 hover:text-gray-200"
                 }`}
               >
@@ -304,7 +304,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             value={interestQuery}
             onChange={(e) => setInterestQuery(e.target.value)}
             placeholder="Search…"
-            className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-indigo-500"
+            className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
           {interestSuggestions.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
@@ -327,7 +327,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             {draftInterests.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1 rounded-full bg-indigo-900/50 px-2 py-0.5 text-xs text-indigo-300 ring-1 ring-indigo-700/60"
+                className="flex items-center gap-1 rounded-full bg-brand-wash/50 px-2 py-0.5 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
               >
                 {tag}
                 <button type="button" onClick={() => removeInterest(tag)} className="hover:text-white">×</button>
@@ -343,7 +343,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
           type="checkbox"
           checked={draftSort}
           onChange={(e) => setDraftSort(e.target.checked)}
-          className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-indigo-500"
+          className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-brand-hover"
         />
         <span className="text-xs text-gray-300">Sort by distance</span>
       </label>
@@ -507,7 +507,7 @@ export default function BrowsePage() {
         <div className="flex-1">
           {/* Mobile filter row */}
           <details className="mb-4 lg:hidden">
-            <summary className="cursor-pointer text-sm text-indigo-400 hover:text-indigo-300 select-none">
+            <summary className="cursor-pointer text-sm text-brand-muted hover:text-brand-subtle select-none">
               Filters
             </summary>
             <div className="mt-3">

@@ -178,7 +178,7 @@ export default function NavBar() {
         <div ref={menuRef} className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="rounded-full focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
             aria-label={t("openUserMenu")}
             aria-haspopup="true"
             aria-expanded={menuOpen}
@@ -232,9 +232,9 @@ export default function NavBar() {
                       role="menuitem"
                       aria-current={locale === currentLocale ? "true" : undefined}
                       onClick={() => handleLocaleChange(locale)}
-                      className={`rounded px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-brand-hover ${
                         locale === currentLocale
-                          ? "bg-indigo-600 text-white"
+                          ? "bg-brand-primary text-white"
                           : "text-gray-300 hover:bg-gray-700 hover:text-white"
                       }`}
                     >

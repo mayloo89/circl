@@ -29,7 +29,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 const ROLE_BADGE: Record<string, string> = {
   super_admin: "text-yellow-400",
-  admin: "text-indigo-400",
+  admin: "text-brand-muted",
 }
 
 // Modal for suspend action (needs duration + reason)
@@ -209,7 +209,7 @@ function RoleModal({
               onClick={() => setRole(r)}
               className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
                 role === r
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-brand-primary text-white"
                   : "bg-gray-800 text-gray-300 hover:bg-gray-700"
               }`}
             >
@@ -360,7 +360,7 @@ export default function AdminUsersPage() {
                     {u.username ? (
                       <Link
                         href={`/profile/${u.username}`}
-                        className="text-gray-100 font-medium hover:text-indigo-400 transition-colors"
+                        className="text-gray-100 font-medium hover:text-brand-muted transition-colors"
                       >
                         {u.display_name || u.username}
                       </Link>

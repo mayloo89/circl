@@ -22,7 +22,7 @@ export default function Input({
 }: InputProps) {
   const borderClass = dirty
     ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
-    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+    : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
 
   return (
     <div>

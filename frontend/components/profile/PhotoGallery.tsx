@@ -121,7 +121,7 @@ export default function PhotoGallery({
                   type="button"
                   onClick={onAdd}
                   disabled={uploading}
-                  className="flex h-full w-full items-center justify-center text-gray-600 transition-colors hover:border-indigo-600 hover:text-indigo-500"
+                  className="flex h-full w-full items-center justify-center text-gray-600 transition-colors hover:border-brand-primary hover:text-brand-hover"
                 >
                   {uploading ? (
                     <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">

@@ -147,7 +147,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
                       <button
                         type="button"
                         onClick={() => toggle(c.user_id)}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-800/60 ${checked ? "bg-indigo-950/40" : ""}`}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-800/60 ${checked ? "bg-brand-deep/40" : ""}`}
                       >
                         <Avatar src={c.avatar_url} name={c.display_name || "?"} size="sm" />
                         <span className="flex-1 truncate text-sm text-white">
@@ -156,7 +156,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
                         <span
                           className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
                             checked
-                              ? "border-indigo-500 bg-indigo-600 text-white"
+                              ? "border-brand-hover bg-brand-primary text-white"
                               : "border-gray-600 text-transparent"
                           }`}
                           aria-hidden="true"

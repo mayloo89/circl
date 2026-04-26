@@ -360,7 +360,7 @@ export default function PublicProfilePage() {
                   {profile.interests.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full bg-indigo-900/50 px-3 py-1 text-xs text-indigo-300 ring-1 ring-indigo-700/60"
+                      className="rounded-full bg-brand-wash/50 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
                     >
                       {tag}
                     </span>

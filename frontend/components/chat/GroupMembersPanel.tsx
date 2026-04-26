@@ -249,7 +249,7 @@ export default function GroupMembersPanel({
                 <button
                   type="button"
                   onClick={() => { setNewName(roomName); setRenaming(true) }}
-                  className="text-xs text-indigo-400 hover:text-indigo-300"
+                  className="text-xs text-brand-muted hover:text-brand-subtle"
                   aria-label={t("renameGroup")}
                 >
                   {tc("edit")}
@@ -273,7 +273,7 @@ export default function GroupMembersPanel({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-white">{m.display_name || m.username}</p>
                   {m.is_admin && (
-                    <p className="text-xs text-indigo-400">{t("admin")}</p>
+                    <p className="text-xs text-brand-muted">{t("admin")}</p>
                   )}
                 </div>
                 {/* Groups only: admin removes non-admin others */}
