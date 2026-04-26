@@ -149,6 +149,16 @@ func (h *Hub) addClient(ctx context.Context, client *Client) {
 	if h.rooms[client.roomID] == nil {
 		h.rooms[client.roomID] = make(map[*Client]struct{})
 		ps := h.rdb.Subscribe(ctx, redisChannelPrefix+client.roomID)
+		// Wait for the SUBSCRIBE acknowledgment from Redis before storing the
+		// pubsub and returning.  Without this there is a race: mustRegister
+		// (in tests) or a caller can publish before listenRedis has called
+		// ps.Channel(), dropping the message.  After Receive returns the
+		// subscription is live in Redis; go-redis buffers any messages that
+		// arrive before Channel() is called, so nothing is lost.
+		if _, err := ps.Receive(ctx); err != nil {
+			_ = ps.Close()
+			return
+		}
 		h.pubsubs[client.roomID] = ps
 		go h.listenRedis(ctx, client.roomID, ps)
 	}
