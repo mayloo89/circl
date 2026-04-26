@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Home dashboard** ([PR #69](https://github.com/mayloo89/circl/pull/69)):
+  - `PendingRequestsWidget` — fetches `/contacts/pending` and renders inline Accept / Decline buttons; hidden when empty; reacts to `contact_request` and `contact_removed` SSE events
+  - `NearbyProfilesWidget` — fetches `/profiles/browse?limit=8`; horizontal-scroll chip row on mobile; skeleton loading state; "Browse all" link to `/browse`
+  - `RecentConversationsWidget` — fetches `/chat/rooms?limit=5`; shows avatar, room name, last-message preview (text / photo / video / file), relative time, and unread badge; skeleton loading state; "See all" link to `/chat`
+  - `ProfileCompletenessBanner` — sticky banner with progress bar (avatar 30 %, bio 20 %, interests 20 %, birthdate 10 %, location 20 %); lists missing fields; dismissed via `sessionStorage`; hidden once profile is complete
+  - `lib/profileCompleteness.ts` — pure `computeCompleteness` function, reusable by the profile page in future PRs
+  - Home page (`app/[locale]/page.tsx`) replaced: old 3-button placeholder → real dashboard with widgets
+  - i18n keys added in EN / ES / PT: pending requests, nearby, recent conversations, profile completeness labels
+
+### Added
 - **Navigation overhaul — mobile bottom nav + desktop sidebar** ([PR #68](https://github.com/mayloo89/circl/pull/68)):
   - `BottomNav` — fixed 5-tab bar (Home / Browse / Messages / Contacts / Profile) for mobile (`lg:hidden`), with live unread/pending badges and iOS safe-area padding
   - `Sidebar` — fixed left sidebar for desktop (`lg:flex hidden`), same 5 items with icons + labels, language switcher, settings, and a user row with avatar + sign-out; admin link surfaced automatically for admin/super_admin roles

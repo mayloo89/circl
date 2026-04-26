@@ -133,7 +133,7 @@
 
 - [x] **UX overhaul — navigation** (PR #68): `BottomNav` (mobile, 5 slots SVG icons + badges) + `Sidebar` (desktop ≥1024px) + `TopBar` (minimal mobile header); `ProfileContext` (single `/profiles/me` fetch per session); layout shell per breakpoint.
 
-- [ ] **UX overhaul — home dashboard** (PR #69): replace 3-button home with `PendingRequestsWidget` + `NearbyProfilesWidget` + `RecentConversationsWidget`; `ProfileCompletenessBanner` (% complete, CTA to onboarding); `lib/profileCompleteness.ts`.
+- [x] **UX overhaul — home dashboard** (PR #69): replaced 3-button placeholder with `PendingRequestsWidget` + `NearbyProfilesWidget` (horizontal scroll) + `RecentConversationsWidget`; `ProfileCompletenessBanner` with progress bar (sessionStorage dismiss); `lib/profileCompleteness.ts` pure utility.
 
 - [ ] **UX overhaul — browse** (PR #70): `RangeSlider` + `BottomSheet` primitives; replace `<details>` filter with BottomSheet; age/distance inputs → RangeSlider; "Clear filters" CTA on empty state; card action conflict resolved.
 

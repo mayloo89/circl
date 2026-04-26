@@ -357,13 +357,15 @@ candidates AS (
            OR COALESCE(p.gender, '') = ANY(prefs.gender_preference))
       AND (
           prefs.max_distance_km IS NULL
-          OR r.lat IS NULL OR r.lng IS NULL
-          OR p.latitude IS NULL OR p.longitude IS NULL
-          OR 6371.0 * 2.0 * ASIN(SQRT(
-              POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
-              COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
-              POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
-          )) <= prefs.max_distance_km
+          OR (
+              r.lat IS NOT NULL AND r.lng IS NOT NULL
+              AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+              AND 6371.0 * 2.0 * ASIN(SQRT(
+                  POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
+                  COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
+                  POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
+              )) <= prefs.max_distance_km
+          )
       )
       AND (
           cardinality($2::text[]) = 0
