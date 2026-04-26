@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Public profile hero redesign** ([PR #71](https://github.com/mayloo89/circl/pull/71)):
+  - 55 vh hero section: avatar photo as full-bleed `<Image>` with `object-cover`; gradient-fade overlay blending into the page background
+  - Initials fallback when no avatar: brand-gradient background with a large translucent initial
+  - Back button and ⋯ overflow menu float over the hero via absolute positioning with `backdrop-blur`
+  - Overflow menu houses Block / Unblock / Report; removed inline "Block user" and "Report" text links
+  - `<h1>` now displays the person's display name (previously showed generic "Profile" string)
+  - Name, age · gender, location, bio, interests and photo gallery are laid out below the hero
+  - **Sticky mobile action bar** fixed above the bottom nav (`bottom-16`), containing context-aware CTA (Message / Add contact / Request sent / Accept request)
+  - **Desktop inline actions** shown below the interests section (`hidden lg:block`)
+  - **"Preview as visitor"** button on own profile page (`/profile`) opens `/profile/{username}`
+  - All new strings translated in EN / ES / PT
+
+### Fixed
 - **Browse overhaul** ([PR #70](https://github.com/mayloo89/circl/pull/70)):
   - `RangeSlider` UI primitive — single-thumb slider with filled track and active-scale thumb; used for age and distance filters
   - `BottomSheet` UI primitive — slides up from bottom on mobile with backdrop + Escape key + body scroll lock; renders nothing on desktop (`lg:hidden`)

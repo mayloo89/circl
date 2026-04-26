@@ -423,7 +423,14 @@ export default function ProfilePage() {
 
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
-          <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>←</Button>
+          <div className="flex items-center gap-2">
+            {profile?.username && (
+              <Button variant="ghost" size="sm" onClick={() => router.push(`/profile/${profile.username}`)}>
+                {t("previewAsVisitor")}
+              </Button>
+            )}
+            <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>←</Button>
+          </div>
         </div>
 
         {profileIncomplete && (

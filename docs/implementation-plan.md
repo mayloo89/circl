@@ -137,7 +137,7 @@
 
 - [x] **UX overhaul — browse** (PR #70): `RangeSlider` (single-thumb, fill track) + `BottomSheet` (slide-up mobile sheet, inline on desktop) primitives; `<details>` filter replaced by BottomSheet with active-filter badge; age min/max and distance inputs replaced by RangeSliders (500 km = "Any"); "Clear filters" CTA on empty state; i18n for all filter labels in EN/ES/PT; profiles with unknown distance excluded when max_distance_km is set (backend fix).
 
-- [ ] **UX overhaul — public profile hero** (PR #71): `<h1>` shows person's name; 55vh hero photo with gradient overlay + overflow menu; sticky bottom action bar; "Preview as visitor" on own profile.
+- [x] **UX overhaul — public profile hero** (PR #71): `<h1>` shows person's name; 55vh hero photo with gradient overlay + overflow menu (Block / Report / Unblock); sticky mobile action bar above bottom nav; inline desktop actions; "Preview as visitor" button on own profile page; Block/Report moved from inline links to overflow menu.
 
 - [ ] **UX overhaul — onboarding wizard** (PR #72): `/onboarding/{photo,bio,interests,location}` routes; `ProfileCompletenessCard` on own profile; `onboarded_at` backend field; post-verify redirect for new users.
 

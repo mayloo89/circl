@@ -241,7 +241,8 @@
     "addContact": "Add contact",
     "gallery": "Gallery",
     "deletePhoto": "Delete photo?",
-    "photosCount": "{current}/{max}"
+    "photosCount": "{current}/{max}",
+    "previewAsVisitor": "Preview"
   },
   "browse": {
     "title": "Browse",
@@ -408,7 +409,17 @@
     "ageYearsOld": "{age} years old",
     "blockUserTitle": "Block user",
     "blockUserMessage": "Block {name}? They will not be able to message you and will be hidden from your results.",
-    "block": "Block"
+    "block": "Block",
+    "requestSent": "Request sent",
+    "acceptRequest": "Accept request",
+    "moreOptions": "More options",
+    "actions": {
+      "message": "Message",
+      "addContact": "Add contact",
+      "block": "Block user",
+      "report": "Report",
+      "unblock": "Unblock"
+    }
   },
   "report": {
     "title": "Report user",

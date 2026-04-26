@@ -241,7 +241,8 @@
     "addContact": "Agregar contacto",
     "gallery": "Galería",
     "deletePhoto": "¿Eliminar foto?",
-    "photosCount": "{current}/{max}"
+    "photosCount": "{current}/{max}",
+    "previewAsVisitor": "Vista previa"
   },
   "browse": {
     "title": "Explorar",
@@ -408,7 +409,17 @@
     "ageYearsOld": "{age} años",
     "blockUserTitle": "Bloquear usuario",
     "blockUserMessage": "¿Bloquear a {name}? No podrá enviarte mensajes y será ocultado de tus resultados.",
-    "block": "Bloquear"
+    "block": "Bloquear",
+    "requestSent": "Solicitud enviada",
+    "acceptRequest": "Aceptar solicitud",
+    "moreOptions": "Más opciones",
+    "actions": {
+      "message": "Mensaje",
+      "addContact": "Agregar contacto",
+      "block": "Bloquear usuario",
+      "report": "Reportar",
+      "unblock": "Desbloquear"
+    }
   },
   "report": {
     "title": "Reportar usuario",
