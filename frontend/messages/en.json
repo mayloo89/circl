@@ -413,6 +413,7 @@
     "requestSent": "Request sent",
     "acceptRequest": "Accept request",
     "moreOptions": "More options",
+    "viewPhoto": "View profile photo",
     "actions": {
       "message": "Message",
       "addContact": "Add contact",

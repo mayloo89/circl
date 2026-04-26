@@ -355,14 +355,21 @@ export default function PublicProfilePage() {
       {/* ── Hero ── */}
       <div className="relative min-h-[55vh] overflow-hidden bg-gray-900">
         {profile.avatar_url ? (
-          <Image
-            src={profile.avatar_url}
-            alt={profile.display_name}
-            fill
-            sizes="100vw"
-            className="object-cover object-center"
-            priority
-          />
+          <button
+            type="button"
+            className="absolute inset-0 cursor-zoom-in"
+            aria-label={t("viewPhoto")}
+            onClick={() => setLightbox(profile.avatar_url)}
+          >
+            <Image
+              src={profile.avatar_url}
+              alt={profile.display_name}
+              fill
+              sizes="100vw"
+              className="object-cover object-center"
+              priority
+            />
+          </button>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-950 via-brand-primary/40 to-gray-900">
             <span className="select-none text-[8rem] font-black text-white/20">
