@@ -186,7 +186,8 @@
     "loading": "Loading…",
     "add": "Add",
     "addContactTitle": "Add Contact",
-    "searchByEmail": "Search by name or email…"
+    "searchByEmail": "Search by name or email…",
+    "unblockConfirmMessage": "Unblock {name}? They will be able to message you again."
   },
   "profile": {
     "title": "My Profile",
@@ -220,6 +221,7 @@
   },
   "browse": {
     "title": "Browse",
+    "subtitle": "Discover people near you",
     "loading": "Loading…",
     "noResults": "No profiles found.",
     "loadMore": "Load more",

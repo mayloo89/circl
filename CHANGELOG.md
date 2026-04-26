@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **UX bugfixes and quick wins** ([PR #66](https://github.com/mayloo89/circl/pull/66)):
+  - Browse page subtitle always showed "No profiles found" regardless of results — replaced with `t("subtitle")` ("Discover people near you") in EN/ES/PT
+  - Unblock confirmation dialog displayed the generic "Something went wrong" message instead of the user's name — replaced with `t("unblockConfirmMessage", { name })` in all locales
+  - Back buttons in chat list and contacts used `router.push("/")`, destroying browser history — changed to `router.back()`; touch target enlarged with `p-2`
+  - Login page used Tailwind `blue-*` colors while all other pages use `indigo-*` — all `blue-600/500/400` classes replaced with `indigo-*` equivalents
+  - Register success screen used the `✉` emoji as a structural icon — replaced with an inline SVG envelope using the same visual pattern as `NavBar`
+  - "Block user" and "Report" action buttons on `ProfileHeader` had `text-gray-600` (contrast ratio ~2.5:1, fails WCAG AA) — bumped to `text-gray-400`
+  - Chat room loading state showed a plain `<p>` text string instead of the existing `<MessageSkeletons />` component
+
+### Changed
+- **Active locale indicator** ([PR #66](https://github.com/mayloo89/circl/pull/66)): language buttons in Settings and the NavBar dropdown now highlight the currently active locale (`bg-indigo-600 text-white`) so users know which language is selected
+- **Contacts list sorted online-first** ([PR #66](https://github.com/mayloo89/circl/pull/66)): accepted contacts are sorted so online users appear at the top, using the existing `presence` map — no extra API call required
+
 ### Added
 - **OpenAPI 3.1.0 spec** ([PR #63](https://github.com/mayloo89/circl/pull/63)):
   - `docs/openapi.yaml` documents all ~40 backend endpoints across 12 tag groups: System, Auth, Account, Profiles, Contacts, Chat, Notifications, Presence, Uploads, Reports, Push, Admin

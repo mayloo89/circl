@@ -103,7 +103,7 @@ export default function ProfileHeader({
                   type="button"
                   onClick={onBlock}
                   disabled={actionLoading}
-                  className="text-xs text-gray-600 hover:text-red-400 disabled:cursor-not-allowed"
+                  className="text-xs text-gray-400 hover:text-red-400 disabled:cursor-not-allowed"
                 >
                   Block user
                 </button>
@@ -112,7 +112,7 @@ export default function ProfileHeader({
                     type="button"
                     onClick={onReport}
                     disabled={actionLoading}
-                    className="text-xs text-gray-600 hover:text-orange-400 disabled:cursor-not-allowed"
+                    className="text-xs text-gray-400 hover:text-orange-400 disabled:cursor-not-allowed"
                   >
                     Report
                   </button>
