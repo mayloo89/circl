@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Navigation overhaul — mobile bottom nav + desktop sidebar** ([PR #68](https://github.com/mayloo89/circl/pull/68)):
+  - `BottomNav` — fixed 5-tab bar (Home / Browse / Messages / Contacts / Profile) for mobile (`lg:hidden`), with live unread/pending badges and iOS safe-area padding
+  - `Sidebar` — fixed left sidebar for desktop (`lg:flex hidden`), same 5 items with icons + labels, language switcher, settings, and a user row with avatar + sign-out; admin link surfaced automatically for admin/super_admin roles
+  - `TopBar` — minimal mobile-only header (`lg:hidden`) with logo, active-route label, push-notification toggle, and avatar shortcut to profile
+  - `ProfileContext` — fetches `/profiles/me` once per authenticated session; shared by Sidebar, TopBar, and home dashboard (UX-4); eliminates per-mount profile fetches
+  - Old monolithic `NavBar.tsx` removed; sign-out and locale-change logic moved into `Sidebar`
+
 ### Changed
 - **UX visual rebrand foundation** ([PR #67](https://github.com/mayloo89/circl/pull/67)):
   - Fonts replaced: Geist → **Nunito** (display/headings) + **DM Sans** (body), loaded via `next/font/google` with `display: swap`

@@ -5,12 +5,13 @@ import { SessionProvider, signOut, useSession } from "next-auth/react"
 
 import { NotificationsProvider } from "@/contexts/NotificationsContext"
 import { PushProvider } from "@/contexts/PushContext"
-import NavBar from "@/components/NavBar"
+import { ProfileProvider } from "@/contexts/ProfileContext"
+import Sidebar from "@/components/nav/Sidebar"
+import TopBar from "@/components/nav/TopBar"
+import BottomNav from "@/components/nav/BottomNav"
 import PushPrompt from "@/components/PushPrompt"
 import { ToastProvider } from "@/components/ui/Toast"
 
-// Signs out automatically when the backend JWT has expired so the user is
-// redirected to login instead of seeing a broken app full of 401 errors.
 function SessionGuard() {
   const { data: session } = useSession()
   useEffect(() => {
@@ -27,15 +28,21 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <SessionGuard />
       <NotificationsProvider>
         <PushProvider>
-        <ToastProvider>
-          <div className="flex h-screen flex-col overflow-hidden">
-            <NavBar />
-            <PushPrompt />
-            <div className="flex-1 overflow-auto min-h-0">
-              {children}
-            </div>
-          </div>
-        </ToastProvider>
+          <ProfileProvider>
+            <ToastProvider>
+              {/* Desktop sidebar (lg+) */}
+              <Sidebar />
+              {/* Mobile top bar */}
+              <TopBar />
+              {/* Main content — clears fixed bars */}
+              <div className="min-h-dvh pt-14 pb-16 lg:ml-64 lg:pt-0 lg:pb-0">
+                <PushPrompt />
+                {children}
+              </div>
+              {/* Mobile bottom nav */}
+              <BottomNav />
+            </ToastProvider>
+          </ProfileProvider>
         </PushProvider>
       </NotificationsProvider>
     </SessionProvider>

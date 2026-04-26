@@ -28,7 +28,9 @@
     "enablePush": "Ativar notificações push",
     "disablePush": "Desativar notificações push",
     "openUserMenu": "Abrir menu do usuário",
-    "language": "Idioma"
+    "language": "Idioma",
+    "home": "Início",
+    "mainNav": "Navegação principal"
   },
   "login": {
     "title": "Entrar na sua conta",
