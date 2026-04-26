@@ -26,7 +26,7 @@ describe("Avatar", () => {
 
   it("applies indigo background when color is indigo", () => {
     const { container } = render(<Avatar name="Dave" color="indigo" />)
-    expect(container.firstChild).toHaveClass("bg-indigo-700")
+    expect(container.firstChild).toHaveClass("bg-brand-strong")
   })
 
   it("applies gray background by default", () => {

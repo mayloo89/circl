@@ -45,10 +45,10 @@ export default function MessageBubble({
   const bubbleClass = hasMedia
     ? "overflow-hidden p-0"
     : isViewOnce && isOwn
-    ? "relative overflow-hidden rounded-br-sm border-2 border-dashed border-white/30 bg-gradient-to-br from-indigo-600 to-purple-700 px-4 py-3 text-white"
+    ? "relative overflow-hidden rounded-br-sm border-2 border-dashed border-white/30 bg-gradient-to-br from-brand-primary to-purple-700 px-4 py-3 text-white"
     : msg.expires_at || isViewOnce
-    ? `px-4 py-2 border-2 border-dashed ${isOwn ? "rounded-br-sm bg-indigo-600 text-white border-white/30" : "rounded-bl-sm bg-gray-800 text-gray-100 border-gray-600"}`
-    : `px-4 py-2 ${isOwn ? "bg-indigo-600 text-white rounded-br-sm" : "bg-gray-800 text-gray-100 rounded-bl-sm"}`
+    ? `px-4 py-2 border-2 border-dashed ${isOwn ? "rounded-br-sm bg-brand-primary text-white border-white/30" : "rounded-bl-sm bg-gray-800 text-gray-100 border-gray-600"}`
+    : `px-4 py-2 ${isOwn ? "bg-brand-primary text-white rounded-br-sm" : "bg-gray-800 text-gray-100 rounded-bl-sm"}`
 
   return (
     <div
@@ -99,19 +99,19 @@ export default function MessageBubble({
                     className="flex w-44 flex-col items-center gap-3 py-3 transition-transform active:scale-95"
                   >
                     <div className="relative">
-                      <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/30" />
-                      <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/20">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-brand-muted/30" />
+                      <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-brand-hover/20">
                         {msg.type === "image" ? (
-                          <svg className="h-6 w-6 text-indigo-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                          <svg className="h-6 w-6 text-brand-subtle" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
                           </svg>
                         ) : msg.type === "video" ? (
-                          <svg className="h-6 w-6 text-indigo-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                          <svg className="h-6 w-6 text-brand-subtle" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
                           </svg>
                         ) : (
-                          <svg className="h-6 w-6 text-indigo-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                          <svg className="h-6 w-6 text-brand-subtle" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
                           </svg>
                         )}
@@ -128,9 +128,9 @@ export default function MessageBubble({
                     className="flex items-center gap-2 px-1 py-0.5 transition-transform active:scale-95"
                   >
                     <div className="relative flex-none">
-                      <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/30" />
-                      <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/20">
-                        <svg className="h-3.5 w-3.5 text-indigo-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-brand-muted/30" />
+                      <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-brand-hover/20">
+                        <svg className="h-3.5 w-3.5 text-brand-subtle" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
                         </svg>
                       </span>
@@ -165,7 +165,7 @@ export default function MessageBubble({
               ) : msg.type === "video" && msg.content ? (
                 <button
                   onClick={() => onOpenMedia(msg.content, "video")}
-                  className={`flex items-center gap-2 px-4 py-2 transition-transform active:scale-95 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
+                  className={`flex items-center gap-2 px-4 py-2 transition-transform active:scale-95 ${isOwn ? "text-brand-light hover:text-white" : "text-brand-muted hover:text-brand-subtle"}`}
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
@@ -177,7 +177,7 @@ export default function MessageBubble({
                   href={msg.content}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex items-center gap-2 ${isOwn ? "text-indigo-200 hover:text-white" : "text-indigo-400 hover:text-indigo-300"}`}
+                  className={`flex items-center gap-2 ${isOwn ? "text-brand-light hover:text-white" : "text-brand-muted hover:text-brand-subtle"}`}
                 >
                   <span>📎</span>
                   <span className="truncate underline">{msg.content.split("/").pop() ?? "attachment"}</span>
@@ -207,7 +207,7 @@ export default function MessageBubble({
               )}
             </div>
             {isLastSeenOwn && (
-              <span className="mt-0.5 text-xs text-indigo-400">{t("seen")}</span>
+              <span className="mt-0.5 text-xs text-brand-muted">{t("seen")}</span>
             )}
           </>
         )}

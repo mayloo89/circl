@@ -57,7 +57,7 @@ export default function ReportDialog({
               id="reason"
               name="reason"
               required
-              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
             >
               <option value="">{t("reasonPlaceholder")}</option>
               {REASON_VALUES.map((r) => (
@@ -75,7 +75,7 @@ export default function ReportDialog({
               id="description"
               name="description"
               rows={3}
-              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
               placeholder={t("descriptionPlaceholder")}
             />
           </div>

@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - New `accent` Button variant (CTA orange `#F97316`) for conversion actions — distinct from `primary` (indigo, neutral) and `warning` (form-level orange)
   - `SendRequestButton` in browse and "Add contact" / "Message" buttons in `ProfileHeader` migrated to `variant="accent"`
   - Browse profile cards upgraded to `rounded-card` / `shadow-card` / `shadow-card-hover` tokens
+  - All hardcoded `indigo-*` Tailwind classes replaced with `brand-*` semantic tokens across every frontend component and page — palette swaps now require a single CSS variable change in `globals.css`
 
 ### Fixed
 - **UX bugfixes and quick wins** ([PR #66](https://github.com/mayloo89/circl/pull/66)):

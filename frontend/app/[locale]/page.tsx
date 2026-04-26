@@ -20,14 +20,14 @@ export default async function Home() {
 
         <Link
           href="/profile"
-          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          className="block w-full rounded-md bg-brand-primary px-4 py-2 text-center text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
         >
           {t("myProfile")}
         </Link>
 
         <Link
           href="/contacts"
-          className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          className="block w-full rounded-md bg-brand-primary px-4 py-2 text-center text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
         >
           {t("contacts")}
         </Link>

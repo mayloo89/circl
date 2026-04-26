@@ -122,7 +122,7 @@ function ReviewModal({
                 onClick={() => setNewStatus(s)}
                 className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
                   newStatus === s
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-brand-primary text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                 }`}
               >
@@ -142,7 +142,7 @@ function ReviewModal({
                   onClick={() => setAction(a)}
                   className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
                     action === a
-                      ? "bg-indigo-600 text-white"
+                      ? "bg-brand-primary text-white"
                       : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                   }`}
                 >
@@ -230,7 +230,7 @@ export default function AdminReportsPage() {
             onClick={() => setStatusFilter(s)}
             className={`rounded px-4 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === s
-                ? "bg-indigo-600 text-white"
+                ? "bg-brand-primary text-white"
                 : "text-gray-400 hover:text-gray-200"
             }`}
           >

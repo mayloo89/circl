@@ -22,7 +22,7 @@ export default async function AdminLayout({
           <Link href="/" className="text-base font-bold text-white hover:text-gray-300">
             Circl
           </Link>
-          <p className="mt-0.5 text-xs font-medium text-indigo-400 uppercase tracking-wider">Admin</p>
+          <p className="mt-0.5 text-xs font-medium text-brand-muted uppercase tracking-wider">Admin</p>
         </div>
         <nav className="mt-2 px-2 py-2 flex flex-col gap-0.5">
           <SidebarLink href="/admin">Dashboard</SidebarLink>

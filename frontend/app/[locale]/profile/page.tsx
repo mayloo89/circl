@@ -452,7 +452,7 @@ export default function ProfilePage() {
               aria-label="Change avatar"
               onClick={() => avatarInputRef.current?.click()}
               disabled={uploadingAvatar}
-              className="group relative h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-indigo-500 focus:outline-none focus:ring-indigo-500"
+              className="group relative h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-brand-hover focus:outline-none focus:ring-brand-hover"
             >
               {avatarURL ? (
                 <Image src={avatarURL} alt="" width={96} height={96} className="h-full w-full object-cover" />
@@ -510,7 +510,7 @@ export default function ProfilePage() {
                       ? "border-gray-700 text-gray-400 cursor-not-allowed"
                       : username !== (profile?.username ?? "")
                       ? "border-orange-500 text-white focus:border-orange-400 focus:ring-orange-400"
-                      : "border-gray-700 text-white focus:border-indigo-500 focus:ring-indigo-500"
+                      : "border-gray-700 text-white focus:border-brand-hover focus:ring-brand-hover"
                   }`}
                 />
               </div>
@@ -545,7 +545,7 @@ export default function ProfilePage() {
                 className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
                   bio !== (profile?.bio ?? "")
                     ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
-                    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                    : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
                 }`}
               />
             </div>
@@ -569,7 +569,7 @@ export default function ProfilePage() {
                 className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white shadow-sm focus:outline-none focus:ring-1 ${
                   effectiveGender(gender, genderOther) !== (profile?.gender ?? "")
                     ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
-                    : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                    : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
                 }`}
               >
                 <option value="">Prefer not to say</option>
@@ -584,7 +584,7 @@ export default function ProfilePage() {
                   onChange={(e) => setGenderOther(e.target.value)}
                   placeholder="Describe your gender…"
                   maxLength={50}
-                  className="mt-2 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-2 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
                 />
               )}
             </div>
@@ -602,7 +602,7 @@ export default function ProfilePage() {
                   className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
                     locationText !== (profile?.location_text ?? "")
                       ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
-                      : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                      : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
                   }`}
                 />
                 {locationSearching && (
@@ -651,7 +651,7 @@ export default function ProfilePage() {
                 placeholder="Type and press Enter to add"
                 disabled={interests.length >= MAX_INTERESTS}
                 autoComplete="off"
-                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
               />
               {interestSuggestions.length > 0 && (
                 <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
@@ -676,14 +676,14 @@ export default function ProfilePage() {
                   {interests.map((tag) => (
                     <span
                       key={tag}
-                      className="flex items-center gap-1 rounded-full bg-indigo-900/60 px-3 py-1 text-xs text-indigo-300 ring-1 ring-indigo-700"
+                      className="flex items-center gap-1 rounded-full bg-brand-wash/60 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong"
                     >
                       {tag}
                       <button
                         type="button"
                         onClick={() => handleRemoveInterest(tag)}
                         aria-label={`Remove ${tag}`}
-                        className="ml-1 text-indigo-400 hover:text-white"
+                        className="ml-1 text-brand-muted hover:text-white"
                       >
                         ×
                       </button>

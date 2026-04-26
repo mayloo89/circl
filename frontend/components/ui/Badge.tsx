@@ -14,7 +14,7 @@ interface BadgeProps {
 export default function Badge({ count, max, variant = "count", className = "" }: BadgeProps) {
   const effective = max !== undefined && count > max ? `${max}+` : String(count)
 
-  const base = "rounded-full bg-indigo-600 font-semibold text-white"
+  const base = "rounded-full bg-brand-primary font-semibold text-white"
 
   if (variant === "dot") {
     return (

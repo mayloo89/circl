@@ -60,14 +60,14 @@ function MessageSkeletons() {
         </div>
       </div>
       <div className="flex justify-end">
-        <Skeleton className="h-9 w-36 rounded-2xl bg-indigo-900/50" />
+        <Skeleton className="h-9 w-36 rounded-2xl bg-brand-wash/50" />
       </div>
       <div className="flex items-end gap-2">
         <Skeleton className="h-7 w-7 flex-none rounded-full" />
         <Skeleton className="h-9 w-64 rounded-2xl" />
       </div>
       <div className="flex justify-end">
-        <Skeleton className="h-9 w-52 rounded-2xl bg-indigo-900/50" />
+        <Skeleton className="h-9 w-52 rounded-2xl bg-brand-wash/50" />
       </div>
     </div>
   )
@@ -626,7 +626,7 @@ export default function ChatRoomPage() {
                   value={memberQuery}
                   onChange={(e) => setMemberQuery(e.target.value)}
                   placeholder={t("filterMembers")}
-                  className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
                 />
               )}
             </div>
@@ -671,7 +671,7 @@ export default function ChatRoomPage() {
                           </p>
                         )}
                         {m.is_admin && (
-                          <p className="text-[10px] text-indigo-400">{t("admin")}</p>
+                          <p className="text-[10px] text-brand-muted">{t("admin")}</p>
                         )}
                       </div>
                     </li>

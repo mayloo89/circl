@@ -18,7 +18,7 @@ type FieldErrors = {
 }
 
 function fieldClass(error?: string) {
-  return `mt-1 block w-full rounded-md border ${error ? "border-red-500" : "border-gray-700"} bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${error ? "focus:border-red-400 focus:ring-red-400" : "focus:border-indigo-500 focus:ring-indigo-500"}`
+  return `mt-1 block w-full rounded-md border ${error ? "border-red-500" : "border-gray-700"} bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${error ? "focus:border-red-400 focus:ring-red-400" : "focus:border-brand-hover focus:ring-brand-hover"}`
 }
 
 export default function RegisterPage() {
@@ -153,8 +153,8 @@ export default function RegisterPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
         <div className="w-full max-w-md space-y-6 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-900/50 ring-1 ring-indigo-700/60">
-            <svg className="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-wash/50 ring-1 ring-brand-strong/60">
+            <svg className="h-8 w-8 text-brand-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
             </svg>
           </div>
@@ -166,7 +166,7 @@ export default function RegisterPage() {
             {t("didntReceive")}{" "}
             <button
               type="button"
-              className="text-indigo-400 hover:text-indigo-300 underline"
+              className="text-brand-muted hover:text-brand-subtle underline"
               onClick={async () => {
                 await fetch(`${API_URL}/auth/resend-verification`, {
                   method: "POST",
@@ -178,7 +178,7 @@ export default function RegisterPage() {
               {t("resendVerification")}
             </button>
           </p>
-          <Link href="/login" className="block text-sm text-indigo-400 hover:text-indigo-300">
+          <Link href="/login" className="block text-sm text-brand-muted hover:text-brand-subtle">
             {t("backToSignIn")}
           </Link>
         </div>
@@ -317,7 +317,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading || !allRulesMet || usernameAvailable === false}
-            className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="w-full rounded-md bg-brand-primary px-4 py-2 text-white hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             {loading ? t("submitting") : t("submit")}
           </button>
@@ -325,7 +325,7 @@ export default function RegisterPage() {
 
         <p className="text-center text-sm text-gray-400">
           {t("alreadyHaveAccount")}{" "}
-          <Link href="/login" className="font-medium text-indigo-400 hover:text-indigo-300">
+          <Link href="/login" className="font-medium text-brand-muted hover:text-brand-subtle">
             {t("signIn")}
           </Link>
         </p>

@@ -256,9 +256,9 @@ function LanguageSection({ token }: { token: string | undefined }) {
                 onClick={() => handleChange(locale)}
                 disabled={saving}
                 aria-pressed={locale === currentLocale}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover ${
                   locale === currentLocale
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-brand-primary text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >

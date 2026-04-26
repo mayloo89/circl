@@ -177,12 +177,12 @@ export default function ChatInput({
             }
           }}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          className="flex-1 rounded-full border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="flex-1 rounded-full border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
         />
         <button
           onClick={handleSend}
           disabled={!connected || !input.trim()}
-          className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+          className="rounded-full bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-40"
         >
           {t("send")}
         </button>

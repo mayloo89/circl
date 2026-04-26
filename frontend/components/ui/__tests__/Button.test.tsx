@@ -38,7 +38,7 @@ describe("Button", () => {
 
   it("applies primary variant classes by default", () => {
     const { container } = render(<Button>Primary</Button>)
-    expect(container.firstChild).toHaveClass("bg-indigo-600")
+    expect(container.firstChild).toHaveClass("bg-brand-primary")
   })
 
   it("applies danger variant classes", () => {
