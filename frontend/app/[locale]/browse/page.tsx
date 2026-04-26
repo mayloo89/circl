@@ -8,11 +8,16 @@ import { useTranslations } from "next-intl"
 import { Link } from "@/i18n/navigation"
 
 import Avatar from "@/components/ui/Avatar"
+import BottomSheet from "@/components/ui/BottomSheet"
 import Button from "@/components/ui/Button"
+import RangeSlider from "@/components/ui/RangeSlider"
 import Skeleton from "@/components/ui/Skeleton"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const PAGE_SIZE = 12
+const AGE_MIN = 18
+const AGE_MAX = 99
+const DIST_MAX = 500
 
 interface BrowseProfile {
   id: string
@@ -61,9 +66,12 @@ function formatDistance(km: number | null): string | null {
 }
 
 function SendRequestButton({ userID, token }: { userID: string; token: string }) {
+  const t = useTranslations("browse")
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle")
 
-  async function handleSend() {
+  async function handleSend(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
     setStatus("loading")
     try {
       const res = await fetch(`${API_URL}/contacts`, {
@@ -71,28 +79,24 @@ function SendRequestButton({ userID, token }: { userID: string; token: string })
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ addressee_id: userID }),
       })
-      if (res.ok || res.status === 409) {
-        setStatus("sent")
-      } else {
-        setStatus("error")
-      }
+      setStatus(res.ok || res.status === 409 ? "sent" : "error")
     } catch {
       setStatus("error")
     }
   }
 
   if (status === "sent") {
-    return <span className="text-xs text-brand-muted font-medium">Request sent</span>
+    return <span className="text-xs text-brand-muted font-medium">{t("requestSent")}</span>
   }
 
   return (
     <Button
       variant="accent"
       size="sm"
-      onClick={(e) => { e.preventDefault(); handleSend() }}
-      disabled={status === "loading"}
+      onClick={handleSend}
+      loading={status === "loading"}
     >
-      {status === "loading" ? "Sending…" : status === "error" ? "Retry" : "Add contact"}
+      {status === "error" ? t("retry") : t("addContact")}
     </Button>
   )
 }
@@ -159,6 +163,7 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
           </div>
         )}
 
+        {/* Stop propagation so clicking the button doesn't navigate */}
         <div className="mt-auto pt-1" onClick={(e) => e.preventDefault()}>
           <SendRequestButton userID={profile.user_id} token={token} />
         </div>
@@ -177,6 +182,7 @@ interface FilterPanelProps {
 }
 
 function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply, saving }: FilterPanelProps) {
+  const t = useTranslations("browse")
   const [draft, setDraft] = useState<Preferences>(prefs)
   const [draftSort, setDraftSort] = useState(sortByDistance)
   const [draftInterests, setDraftInterests] = useState<string[]>(selectedInterests)
@@ -223,57 +229,50 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
     })
   }
 
-  function setInt(key: keyof Preferences, raw: string) {
-    const n = parseInt(raw, 10)
-    setDraft((d) => ({ ...d, [key]: isNaN(n) ? null : n }))
-  }
+  const minAge = draft.min_age ?? AGE_MIN
+  const maxAge = draft.max_age ?? AGE_MAX
+  const maxDist = draft.max_distance_km ?? DIST_MAX
 
   return (
-    <div className="rounded-xl bg-gray-900 ring-1 ring-gray-800 p-5 space-y-5">
-      <p className="text-sm font-semibold text-white">Filters</p>
-
+    <div className="space-y-6">
       {/* Age range */}
-      <div className="space-y-2">
-        <p className="text-xs text-gray-400 font-medium">Age range</p>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            min={18}
-            max={120}
-            placeholder="Min"
-            value={draft.min_age ?? ""}
-            onChange={(e) => setInt("min_age", e.target.value)}
-            className="w-20 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t("ageRange")}</p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+            <span>{t("ageMin")}</span>
+            <span>{t("ageMax")}</span>
+          </div>
+          <RangeSlider
+            min={AGE_MIN}
+            max={maxAge}
+            value={minAge}
+            onChange={(v) => setDraft((d) => ({ ...d, min_age: v === AGE_MIN ? null : v }))}
           />
-          <span className="text-gray-500 text-sm">–</span>
-          <input
-            type="number"
-            min={18}
-            max={120}
-            placeholder="Max"
-            value={draft.max_age ?? ""}
-            onChange={(e) => setInt("max_age", e.target.value)}
-            className="w-20 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
+          <RangeSlider
+            min={minAge}
+            max={AGE_MAX}
+            value={maxAge}
+            onChange={(v) => setDraft((d) => ({ ...d, max_age: v === AGE_MAX ? null : v }))}
           />
         </div>
       </div>
 
       {/* Max distance */}
-      <div className="space-y-2">
-        <p className="text-xs text-gray-400 font-medium">Max distance (km)</p>
-        <input
-          type="number"
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t("maxDistance")}</p>
+        <RangeSlider
           min={1}
-          placeholder="Any"
-          value={draft.max_distance_km ?? ""}
-          onChange={(e) => setInt("max_distance_km", e.target.value)}
-          className="w-28 rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
+          max={DIST_MAX}
+          value={maxDist}
+          onChange={(v) => setDraft((d) => ({ ...d, max_distance_km: v === DIST_MAX ? null : v }))}
+          formatValue={(v) => v === DIST_MAX ? t("anyDistance") : `${v} km`}
         />
       </div>
 
       {/* Gender */}
-      <div className="space-y-2">
-        <p className="text-xs text-gray-400 font-medium">Show me</p>
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t("showMe")}</p>
         <div className="flex flex-wrap gap-2">
           {GENDER_OPTIONS.map((g) => {
             const active = draft.gender_preference.includes(g)
@@ -296,14 +295,14 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
       </div>
 
       {/* Interests */}
-      <div className="space-y-2">
-        <p className="text-xs text-gray-400 font-medium">Interests</p>
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t("filterInterests")}</p>
         <div className="relative">
           <input
             type="text"
             value={interestQuery}
             onChange={(e) => setInterestQuery(e.target.value)}
-            placeholder="Search…"
+            placeholder={t("searchInterests")}
             className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
           {interestSuggestions.length > 0 && (
@@ -345,7 +344,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
           onChange={(e) => setDraftSort(e.target.checked)}
           className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-brand-hover"
         />
-        <span className="text-xs text-gray-300">Sort by distance</span>
+        <span className="text-xs text-gray-300">{t("sortByDistance")}</span>
       </label>
 
       <Button
@@ -355,10 +354,19 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
         onClick={() => onApply(draft, draftSort, draftInterests)}
         className="w-full"
       >
-        Apply
+        {t("apply")}
       </Button>
     </div>
   )
+}
+
+function activeFilterCount(prefs: Preferences, interests: string[]): number {
+  return [
+    prefs.min_age !== null || prefs.max_age !== null,
+    prefs.max_distance_km !== null,
+    prefs.gender_preference.length > 0,
+    interests.length > 0,
+  ].filter(Boolean).length
 }
 
 export default function BrowsePage() {
@@ -371,6 +379,7 @@ export default function BrowsePage() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState("")
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const [prefs, setPrefs] = useState<Preferences>({
     min_age: null,
@@ -416,7 +425,6 @@ export default function BrowsePage() {
     [token]
   )
 
-  // Load preferences + first page in parallel
   useEffect(() => {
     if (status !== "authenticated" || !token) return
 
@@ -424,15 +432,12 @@ export default function BrowsePage() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: Preferences | null) => {
-        if (data) setPrefs(data)
-      })
+      .then((data: Preferences | null) => { if (data) setPrefs(data) })
       .catch(() => {})
 
     loadProfiles(null, false, false, [])
   }, [status, token, loadProfiles])
 
-  // IntersectionObserver: auto-load next page when sentinel enters viewport
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -448,7 +453,7 @@ export default function BrowsePage() {
     return () => observer.disconnect()
   }, [nextCursor, sortByDistance, filterInterests, loadProfiles])
 
-  async function handleApplyFilters(updated: Preferences, newSortByDistance: boolean, newInterests: string[]) {
+  async function handleApplyFilters(updated: Preferences, newSort: boolean, newInterests: string[]) {
     if (!token) return
     setSavingPrefs(true)
     try {
@@ -457,17 +462,21 @@ export default function BrowsePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(updated),
       })
-      if (res.ok) {
-        const saved: Preferences = await res.json()
-        setPrefs(saved)
-      }
+      if (res.ok) setPrefs(await res.json())
     } finally {
       setSavingPrefs(false)
     }
-    setSortByDistance(newSortByDistance)
+    setSortByDistance(newSort)
     setFilterInterests(newInterests)
-    loadProfiles(null, false, newSortByDistance, newInterests)
+    loadProfiles(null, false, newSort, newInterests)
   }
+
+  async function handleClearFilters() {
+    const empty: Preferences = { min_age: null, max_age: null, max_distance_km: null, gender_preference: [] }
+    await handleApplyFilters(empty, false, [])
+  }
+
+  const filterCount = activeFilterCount(prefs, filterInterests)
 
   if (status === "loading" || initialLoading) {
     return (
@@ -477,8 +486,8 @@ export default function BrowsePage() {
           <Skeleton className="mt-2 h-4 w-56" />
         </div>
         <div className="flex gap-6">
-          <div className="hidden w-56 shrink-0 lg:block">
-            <Skeleton className="h-64 w-full rounded-xl" />
+          <div className="hidden w-64 shrink-0 lg:block">
+            <Skeleton className="h-96 w-full rounded-xl" />
           </div>
           <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-3">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
@@ -492,29 +501,61 @@ export default function BrowsePage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
-        <p className="mt-1 text-sm text-gray-400">{t("subtitle")}</p>
+      <div className="mb-8 flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+          <p className="mt-1 text-sm text-gray-400">{t("subtitle")}</p>
+        </div>
+
+        {/* Mobile: Filters button */}
+        <button
+          onClick={() => setSheetOpen(true)}
+          className="lg:hidden flex items-center gap-2 rounded-full bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 ring-1 ring-gray-700 hover:bg-gray-700 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+            <line x1="11" y1="18" x2="13" y2="18" />
+          </svg>
+          {t("filters")}
+          {filterCount > 0 && (
+            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-primary px-1 text-[10px] font-semibold text-white">
+              {filterCount}
+            </span>
+          )}
+        </button>
       </div>
 
+      {/* Mobile BottomSheet */}
+      <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t("filters")}>
+        <FilterPanel
+          prefs={prefs}
+          sortByDistance={sortByDistance}
+          selectedInterests={filterInterests}
+          token={token!}
+          saving={savingPrefs}
+          onApply={(p, s, i) => { handleApplyFilters(p, s, i); setSheetOpen(false) }}
+        />
+      </BottomSheet>
+
       <div className="flex gap-6">
-        {/* Filter sidebar */}
-        <aside className="hidden w-56 shrink-0 lg:block">
-          <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} token={token!} onApply={handleApplyFilters} saving={savingPrefs} />
+        {/* Desktop filter sidebar */}
+        <aside className="hidden w-64 shrink-0 lg:block">
+          <div className="sticky top-6 rounded-xl bg-gray-900 ring-1 ring-gray-800 p-5">
+            <p className="mb-5 text-sm font-semibold text-white">{t("filters")}</p>
+            <FilterPanel
+              prefs={prefs}
+              sortByDistance={sortByDistance}
+              selectedInterests={filterInterests}
+              token={token!}
+              saving={savingPrefs}
+              onApply={handleApplyFilters}
+            />
+          </div>
         </aside>
 
         {/* Results */}
         <div className="flex-1">
-          {/* Mobile filter row */}
-          <details className="mb-4 lg:hidden">
-            <summary className="cursor-pointer text-sm text-brand-muted hover:text-brand-subtle select-none">
-              Filters
-            </summary>
-            <div className="mt-3">
-              <FilterPanel prefs={prefs} sortByDistance={sortByDistance} selectedInterests={filterInterests} token={token!} onApply={handleApplyFilters} saving={savingPrefs} />
-            </div>
-          </details>
-
           {error && (
             <p className="mb-6 rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">
               {error}
@@ -522,8 +563,13 @@ export default function BrowsePage() {
           )}
 
           {profiles.length === 0 && !error ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
               <p className="text-lg font-semibold text-gray-300">{t("noResults")}</p>
+              {filterCount > 0 && (
+                <Button variant="secondary" size="sm" onClick={handleClearFilters} loading={savingPrefs}>
+                  {t("clearFilters")}
+                </Button>
+              )}
             </div>
           ) : (
             <>
@@ -536,8 +582,6 @@ export default function BrowsePage() {
                     <ProfileCardSkeleton key={`skel-${i}`} />
                   ))}
               </div>
-
-              {/* Sentinel: triggers next page load via IntersectionObserver */}
               <div ref={sentinelRef} className="h-px" />
             </>
           )}

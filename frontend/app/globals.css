@@ -48,6 +48,19 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-nunito, ui-sans-serif, system-ui, sans-serif);
 }
 
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up { animation: none; }
+}
+
 @keyframes message-in {
   from {
     opacity: 0;
