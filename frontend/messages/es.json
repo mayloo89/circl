@@ -32,7 +32,8 @@
     "home": "Inicio",
     "mainNav": "Navegación principal",
     "collapseSidebar": "Colapsar menú",
-    "expandSidebar": "Expandir menú"
+    "expandSidebar": "Expandir menú",
+    "notifications": "Notificaciones"
   },
   "login": {
     "title": "Iniciar sesión",

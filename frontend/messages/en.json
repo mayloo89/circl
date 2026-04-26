@@ -32,7 +32,8 @@
     "home": "Home",
     "mainNav": "Main navigation",
     "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar"
+    "expandSidebar": "Expand sidebar",
+    "notifications": "Notifications"
   },
   "login": {
     "title": "Sign in to your account",
