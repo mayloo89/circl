@@ -10,12 +10,14 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-// Minimal root layout — the [locale] layout provides <html> and <body>
-// so we just pass through children here.
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return (
+    <html>
+      <body>{children}</body>
+    </html>
+  )
 }
