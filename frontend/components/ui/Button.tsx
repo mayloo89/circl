@@ -1,6 +1,6 @@
 import React from "react"
 
-type Variant = "primary" | "secondary" | "danger" | "success" | "ghost" | "warning"
+type Variant = "primary" | "secondary" | "danger" | "success" | "ghost" | "warning" | "accent"
 type Size    = "sm" | "md" | "lg"
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -19,6 +19,8 @@ const variantClasses: Record<Variant, string> = {
   success:   "bg-green-700 hover:bg-green-600 text-white focus:ring-green-500",
   ghost:     "text-gray-400 hover:text-gray-200 focus:ring-gray-500",
   warning:   "bg-orange-600 hover:bg-orange-500 text-white focus:ring-orange-500",
+  // Conversion CTA — orange brand accent (#F97316). Use for send-request, add-contact, message actions.
+  accent:    "bg-orange-500 hover:bg-orange-400 text-white focus:ring-orange-500 shadow-sm",
 }
 
 const sizeClasses: Record<Size, string> = {

@@ -8,14 +8,36 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-nunito);
+  --font-sans: var(--font-dm-sans);
+}
+
+@theme {
+  /* Brand palette */
+  --color-brand-primary: #4f46e5;
+  --color-brand-accent: #f97316;
+  --color-brand-success: #16a34a;
+  --color-brand-danger: #dc2626;
+  --color-brand-surface: #111827;
+  --color-brand-surface-elevated: #1f2937;
+
+  /* Card radii */
+  --radius-card: 1rem;
+  --radius-pill: 9999px;
+
+  /* Elevation */
+  --shadow-card: 0 4px 16px -4px rgb(0 0 0 / 0.4);
+  --shadow-card-hover: 0 8px 24px -4px rgb(0 0 0 / 0.5);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-dm-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-nunito, ui-sans-serif, system-ui, sans-serif);
 }
 
 @keyframes message-in {

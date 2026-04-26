@@ -44,7 +44,7 @@ const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
 
 function ProfileCardSkeleton() {
   return (
-    <div className="rounded-xl bg-gray-900 shadow-xl ring-1 ring-gray-800 overflow-hidden">
+    <div className="rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 overflow-hidden">
       <Skeleton className="aspect-[4/5] w-full rounded-none" />
       <div className="p-4 space-y-2">
         <Skeleton className="h-4 w-28" />
@@ -87,7 +87,7 @@ function SendRequestButton({ userID, token }: { userID: string; token: string })
 
   return (
     <Button
-      variant="primary"
+      variant="accent"
       size="sm"
       onClick={(e) => { e.preventDefault(); handleSend() }}
       disabled={status === "loading"}
@@ -104,7 +104,7 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
   return (
     <Link
       href={`/profile/${profile.username}`}
-      className="group rounded-xl bg-gray-900 shadow-xl ring-1 ring-gray-800 overflow-hidden flex flex-col hover:ring-indigo-700 transition-shadow"
+      className="group rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 overflow-hidden flex flex-col hover:shadow-card-hover hover:ring-indigo-700 transition-shadow"
     >
       {heroURL ? (
         <div className="relative aspect-[4/5] w-full overflow-hidden bg-gray-800">

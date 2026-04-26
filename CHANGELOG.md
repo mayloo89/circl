@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **UX visual rebrand foundation** ([PR #67](https://github.com/mayloo89/circl/pull/67)):
+  - Fonts replaced: Geist → **Nunito** (display/headings) + **DM Sans** (body), loaded via `next/font/google` with `display: swap`
+  - Tailwind v4 brand tokens added to `globals.css` via `@theme`: `--color-brand-primary` (indigo-600), `--color-brand-accent` (#F97316 orange), `--color-brand-success/danger/surface/surface-elevated`; `--radius-card` (1rem), `--radius-pill` (9999px); `--shadow-card` / `--shadow-card-hover` elevation scale
+  - New `accent` Button variant (CTA orange `#F97316`) for conversion actions — distinct from `primary` (indigo, neutral) and `warning` (form-level orange)
+  - `SendRequestButton` in browse and "Add contact" / "Message" buttons in `ProfileHeader` migrated to `variant="accent"`
+  - Browse profile cards upgraded to `rounded-card` / `shadow-card` / `shadow-card-hover` tokens
+
 ### Fixed
 - **UX bugfixes and quick wins** ([PR #66](https://github.com/mayloo89/circl/pull/66)):
   - Browse page subtitle always showed "No profiles found" regardless of results — replaced with `t("subtitle")` ("Discover people near you") in EN/ES/PT

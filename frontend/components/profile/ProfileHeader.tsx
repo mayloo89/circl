@@ -68,7 +68,7 @@ export default function ProfileHeader({
           <>
             {contactStatus === "loading" && <Skeleton className="h-10 w-32 rounded-full" />}
             {contactStatus === "contact" && (
-              <Button variant="primary" size="md" pill onClick={onStartDM} disabled={actionLoading}>
+              <Button variant="accent" size="md" pill onClick={onStartDM} disabled={actionLoading}>
                 Message
               </Button>
             )}
@@ -84,7 +84,7 @@ export default function ProfileHeader({
             )}
             {contactStatus === "none" && (
               <Button
-                variant="primary"
+                variant="accent"
                 size="md"
                 pill
                 onClick={onAddContact}
