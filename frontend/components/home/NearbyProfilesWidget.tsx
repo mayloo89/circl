@@ -16,13 +16,23 @@ interface NearbyProfile {
   display_name: string
   avatar_url: string
   distance_km: number | null
+  location_text: string
+}
+
+function formatDistance(km: number | null): string | null {
+  if (km === null) return null
+  if (km < 1) return "< 1 km"
+  return `${Math.round(km)} km`
 }
 
 function ProfileChip({ profile }: { profile: NearbyProfile }) {
+  const distanceLabel = formatDistance(profile.distance_km)
+  const subtitle = distanceLabel ?? (profile.location_text || null)
+
   return (
     <Link
       href={`/profile/${profile.username}`}
-      className="group flex-none w-24 flex flex-col items-center gap-1.5 rounded-card bg-gray-900 p-2.5 ring-1 ring-gray-800 hover:ring-brand-strong transition-all"
+      className="group flex-none w-28 flex flex-col items-center gap-1.5 rounded-card bg-gray-900 p-3 ring-1 ring-gray-800 hover:ring-brand-strong transition-all"
     >
       <div className="relative h-14 w-14 flex-none rounded-full overflow-hidden ring-1 ring-gray-700">
         {profile.avatar_url ? (
@@ -37,12 +47,12 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
           <Avatar src="" name={profile.display_name || "?"} size="lg" className="!h-full !w-full !rounded-full" />
         )}
       </div>
-      <p className="w-full text-center text-xs font-medium text-white truncate">
+      <p className="w-full text-center text-xs font-medium text-white truncate leading-tight">
         {profile.display_name}
       </p>
-      {profile.distance_km !== null && (
-        <p className="text-[10px] text-gray-500">
-          {profile.distance_km < 1 ? "< 1 km" : `${Math.round(profile.distance_km)} km`}
+      {subtitle && (
+        <p className="w-full text-center text-[11px] text-gray-500 truncate leading-tight">
+          {subtitle}
         </p>
       )}
     </Link>
@@ -51,7 +61,7 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
 
 function SkeletonChip() {
   return (
-    <div className="flex-none w-24 flex flex-col items-center gap-1.5 rounded-card bg-gray-900 p-2.5 ring-1 ring-gray-800">
+    <div className="flex-none w-28 flex flex-col items-center gap-1.5 rounded-card bg-gray-900 p-3 ring-1 ring-gray-800">
       <Skeleton className="h-14 w-14 rounded-full" />
       <Skeleton className="h-3 w-16" />
     </div>
@@ -91,7 +101,7 @@ export default function NearbyProfilesWidget() {
         </Link>
       </div>
 
-      <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory">
+      <div className="flex gap-2.5 overflow-x-auto py-1.5 scrollbar-hide snap-x snap-mandatory">
         {loading
           ? Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} />)
           : profiles.length > 0
