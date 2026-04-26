@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next"
+import { Nunito, DM_Sans } from "next/font/google"
+import { getLocale } from "next-intl/server"
+import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Circl",
@@ -10,12 +13,29 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-// Minimal root layout — the [locale] layout provides <html> and <body>
-// so we just pass through children here.
-export default function RootLayout({
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin"],
+  display: "swap",
+})
+
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
+  subsets: ["latin"],
+  display: "swap",
+})
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return children
+  const locale = await getLocale()
+  return (
+    <html lang={locale}>
+      <body className={`${nunito.variable} ${dmSans.variable} antialiased`}>
+        {children}
+      </body>
+    </html>
+  )
 }

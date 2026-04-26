@@ -28,7 +28,12 @@
     "enablePush": "Enable push notifications",
     "disablePush": "Disable push notifications",
     "openUserMenu": "Open user menu",
-    "language": "Language"
+    "language": "Language",
+    "home": "Home",
+    "mainNav": "Main navigation",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "notifications": "Notifications"
   },
   "login": {
     "title": "Sign in to your account",

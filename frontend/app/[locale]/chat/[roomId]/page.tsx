@@ -157,7 +157,9 @@ export default function ChatRoomPage() {
 
       e.preventDefault()
       e.stopPropagation()
-      setPendingNav(() => () => router.push(href))
+      // href is the already locale-prefixed rendered href (e.g. "/es/browse").
+      // Using next-intl's router.push would double-prefix it to "/es/es/browse".
+      setPendingNav(() => () => { window.location.assign(href) })
       setLeaveConfirmOpen(true)
     }
 

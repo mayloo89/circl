@@ -28,7 +28,12 @@
     "enablePush": "Activar notificaciones push",
     "disablePush": "Desactivar notificaciones push",
     "openUserMenu": "Abrir menú de usuario",
-    "language": "Idioma"
+    "language": "Idioma",
+    "home": "Inicio",
+    "mainNav": "Navegación principal",
+    "collapseSidebar": "Colapsar menú",
+    "expandSidebar": "Expandir menú",
+    "notifications": "Notificaciones"
   },
   "login": {
     "title": "Iniciar sesión",
