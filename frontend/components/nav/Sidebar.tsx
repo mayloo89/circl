@@ -60,6 +60,16 @@ function PersonIcon() {
   )
 }
 
+function ChannelsIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <line x1="9" y1="10" x2="15" y2="10" />
+      <line x1="9" y1="13" x2="13" y2="13" />
+    </svg>
+  )
+}
+
 function SettingsIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -92,6 +102,7 @@ export default function Sidebar() {
     { href: "/", label: t("home"), icon: <HomeIcon /> },
     { href: "/browse", label: t("browse"), icon: <CompassIcon /> },
     { href: "/chat", label: t("messages"), icon: <ChatIcon />, badge: unreadChatCount },
+    { href: "/chat/channels", label: t("channels"), icon: <ChannelsIcon /> },
     { href: "/contacts", label: t("contacts"), icon: <UsersIcon />, badge: pendingCount },
     { href: "/profile", label: t("profile"), icon: <PersonIcon /> },
   ]
@@ -152,7 +163,7 @@ export default function Sidebar() {
       {/* Nav items */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label={t("mainNav")}>
         {navItems.map(({ href, label, icon, badge }) => {
-          const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href)
+          const isActive = href === "/" ? pathname === "/" : href === "/chat" ? pathname === "/chat" || pathname.startsWith("/chat/") && !pathname.startsWith("/chat/channels") : pathname === href || pathname.startsWith(href + "/")
           return (
             <Link
               key={href}
