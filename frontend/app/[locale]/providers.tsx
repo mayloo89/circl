@@ -22,6 +22,23 @@ function SessionGuard() {
   return null
 }
 
+function AppShell({ children }: { children: React.ReactNode }) {
+  const { status } = useSession()
+  const authenticated = status === "authenticated"
+
+  return (
+    <>
+      {authenticated && <Sidebar />}
+      {authenticated && <TopBar />}
+      <div className={authenticated ? "min-h-dvh pt-14 pb-16 lg:ml-64 lg:pt-0 lg:pb-0" : "min-h-dvh"}>
+        <PushPrompt />
+        {children}
+      </div>
+      {authenticated && <BottomNav />}
+    </>
+  )
+}
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
@@ -30,17 +47,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <PushProvider>
           <ProfileProvider>
             <ToastProvider>
-              {/* Desktop sidebar (lg+) */}
-              <Sidebar />
-              {/* Mobile top bar */}
-              <TopBar />
-              {/* Main content — clears fixed bars */}
-              <div className="min-h-dvh pt-14 pb-16 lg:ml-64 lg:pt-0 lg:pb-0">
-                <PushPrompt />
-                {children}
-              </div>
-              {/* Mobile bottom nav */}
-              <BottomNav />
+              <AppShell>{children}</AppShell>
             </ToastProvider>
           </ProfileProvider>
         </PushProvider>
