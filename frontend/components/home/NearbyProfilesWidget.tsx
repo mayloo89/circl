@@ -83,7 +83,10 @@ export default function NearbyProfilesWidget() {
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
-        if (!cancelled) setProfiles(data.profiles ?? [])
+        if (!cancelled) {
+          const all: NearbyProfile[] = data.profiles ?? []
+          setProfiles(all.filter((p) => p.distance_km !== null))
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -107,7 +110,12 @@ export default function NearbyProfilesWidget() {
           : profiles.length > 0
             ? profiles.map((p) => <ProfileChip key={p.user_id} profile={p} />)
             : (
-              <p className="text-sm text-gray-500 py-2">{t("nearbyEmpty")}</p>
+              <div className="flex flex-col gap-1.5 py-2">
+                <p className="text-sm text-gray-500">{t("nearbyEmpty")}</p>
+                <Link href="/profile" className="text-xs text-brand-subtle hover:text-white transition-colors">
+                  {t("nearbySetLocation")} →
+                </Link>
+              </div>
             )}
       </div>
     </section>
