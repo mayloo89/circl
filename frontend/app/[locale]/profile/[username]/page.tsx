@@ -379,7 +379,7 @@ export default function PublicProfilePage() {
         )}
 
         {/* bottom-fade overlay so content below blends in */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-gray-950" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-gray-950" />
 
         {/* Back */}
         <button
