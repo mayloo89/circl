@@ -30,7 +30,9 @@
     "openUserMenu": "Abrir menú de usuario",
     "language": "Idioma",
     "home": "Inicio",
-    "mainNav": "Navegación principal"
+    "mainNav": "Navegación principal",
+    "collapseSidebar": "Colapsar menú",
+    "expandSidebar": "Expandir menú"
   },
   "login": {
     "title": "Iniciar sesión",

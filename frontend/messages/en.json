@@ -30,7 +30,9 @@
     "openUserMenu": "Open user menu",
     "language": "Language",
     "home": "Home",
-    "mainNav": "Main navigation"
+    "mainNav": "Main navigation",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar"
   },
   "login": {
     "title": "Sign in to your account",

@@ -8,6 +8,7 @@ import { usePathname, useRouter, Link } from "@/i18n/navigation"
 import { routing, type Locale } from "@/i18n/routing"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useProfileContext } from "@/contexts/ProfileContext"
+import { useSidebar } from "@/contexts/SidebarContext"
 import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
 
@@ -89,11 +90,20 @@ function LogOutIcon() {
   )
 }
 
+function CollapseIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`}>
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+
 export default function Sidebar() {
   const t = useTranslations("nav")
   const { data: session } = useSession()
   const { pendingCount, unreadChatCount } = useNotificationsContext()
   const { profile } = useProfileContext()
+  const { collapsed, toggle } = useSidebar()
   const pathname = usePathname()
   const router = useRouter()
   const currentLocale = useLocale() as Locale
@@ -151,17 +161,29 @@ export default function Sidebar() {
     router.replace(pathname, { locale })
   }
 
+  const w = collapsed ? "w-16" : "w-64"
+  const contentMargin = collapsed ? "lg:ml-16" : "lg:ml-64"
+
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-gray-800 bg-gray-900 lg:flex">
-      {/* Logo */}
-      <div className="flex h-16 items-center px-6">
-        <Link href="/" className="text-xl font-bold text-white hover:text-gray-200">
-          Circl
-        </Link>
+    <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-gray-800 bg-gray-900 transition-all duration-200 lg:flex ${w}`}>
+      {/* Logo + collapse toggle */}
+      <div className={`flex h-16 items-center border-b border-gray-800 ${collapsed ? "justify-center px-0" : "justify-between px-4"}`}>
+        {!collapsed && (
+          <Link href="/" className="text-xl font-bold text-white hover:text-gray-200">
+            Circl
+          </Link>
+        )}
+        <button
+          onClick={toggle}
+          aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
+          className={`rounded-md p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors ${collapsed ? "" : ""}`}
+        >
+          <CollapseIcon collapsed={collapsed} />
+        </button>
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label={t("mainNav")}>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2" aria-label={t("mainNav")}>
         {navItems.map(({ href, label, icon, badge }) => {
           const isActive = href === "/" ? pathname === "/" : href === "/chat" ? pathname === "/chat" || pathname.startsWith("/chat/") && !pathname.startsWith("/chat/channels") : pathname === href || pathname.startsWith(href + "/")
           return (
@@ -169,7 +191,8 @@ export default function Sidebar() {
               key={href}
               href={href}
               aria-current={isActive ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              title={collapsed ? label : undefined}
+              className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
                 isActive
                   ? "bg-brand-primary/10 text-brand-primary"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
@@ -181,7 +204,7 @@ export default function Sidebar() {
                   <Badge count={badge} max={9} variant="dot" className="absolute -right-2 -top-1" />
                 )}
               </span>
-              {label}
+              {!collapsed && label}
             </Link>
           )
         })}
@@ -192,73 +215,88 @@ export default function Sidebar() {
             <Link
               href="/admin"
               aria-current={pathname.startsWith("/admin") ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              title={collapsed ? t("adminPanel") : undefined}
+              className={`flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
                 pathname.startsWith("/admin")
                   ? "bg-amber-500/10 text-amber-400"
                   : "text-amber-500 hover:bg-gray-800 hover:text-amber-400"
               }`}
             >
-              {t("adminPanel")}
+              {collapsed ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              ) : t("adminPanel")}
             </Link>
           </>
         )}
       </nav>
 
       {/* Bottom section */}
-      <div className="border-t border-gray-800 px-3 py-3 space-y-0.5">
+      <div className="border-t border-gray-800 px-2 py-3 space-y-0.5">
         <Link
           href="/settings"
           aria-current={pathname === "/settings" ? "page" : undefined}
-          className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+          title={collapsed ? t("settings") : undefined}
+          className={`flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
             pathname === "/settings"
               ? "bg-brand-primary/10 text-brand-primary"
               : "text-gray-300 hover:bg-gray-800 hover:text-white"
           }`}
         >
           <SettingsIcon />
-          {t("settings")}
+          {!collapsed && t("settings")}
         </Link>
 
-        {/* Language switcher */}
-        <div className="flex items-center gap-2 px-3 py-2">
-          <span className="text-xs font-medium text-gray-500 flex-shrink-0">{t("language")}</span>
-          <div className="flex gap-1">
-            {routing.locales.map((locale) => (
-              <button
-                key={locale}
-                aria-current={locale === currentLocale ? "true" : undefined}
-                onClick={() => handleLocaleChange(locale)}
-                className={`rounded px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-brand-hover ${
-                  locale === currentLocale
-                    ? "bg-brand-primary text-white"
-                    : "text-gray-400 hover:bg-gray-700 hover:text-white"
-                }`}
-              >
-                {LOCALE_SHORT[locale]}
-              </button>
-            ))}
+        {/* Language switcher — only when expanded */}
+        {!collapsed && (
+          <div className="flex items-center gap-2 px-3 py-2">
+            <span className="text-xs font-medium text-gray-500 flex-shrink-0">{t("language")}</span>
+            <div className="flex gap-1">
+              {routing.locales.map((locale) => (
+                <button
+                  key={locale}
+                  aria-current={locale === currentLocale ? "true" : undefined}
+                  onClick={() => handleLocaleChange(locale)}
+                  className={`rounded px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-brand-hover ${
+                    locale === currentLocale
+                      ? "bg-brand-primary text-white"
+                      : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                  }`}
+                >
+                  {LOCALE_SHORT[locale]}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* User row + sign out */}
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-          <Avatar
-            src={profile?.avatar_url ?? ""}
-            name={profile?.display_name || "?"}
-            size="xs"
-          />
-          <span className="flex-1 truncate text-sm text-gray-300">
-            {profile?.display_name}
-          </span>
-          <button
-            onClick={handleSignOut}
-            aria-label={t("logOut")}
-            className="text-gray-500 hover:text-red-400 transition-colors"
-          >
-            <LogOutIcon />
-          </button>
+        <div className={`flex items-center rounded-lg py-2.5 ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}>
+          <Link href="/profile" aria-label={t("profile")} title={collapsed ? (profile?.display_name ?? t("profile")) : undefined}>
+            <Avatar
+              src={profile?.avatar_url ?? ""}
+              name={profile?.display_name || "?"}
+              size="xs"
+            />
+          </Link>
+          {!collapsed && (
+            <>
+              <span className="flex-1 truncate text-sm text-gray-300">
+                {profile?.display_name}
+              </span>
+              <button
+                onClick={handleSignOut}
+                aria-label={t("logOut")}
+                className="text-gray-500 hover:text-red-400 transition-colors"
+              >
+                <LogOutIcon />
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Invisible element to push content margin — consumed by AppShell via context */}
+      <span data-sidebar-width={contentMargin} className="hidden" />
     </aside>
   )
 }
