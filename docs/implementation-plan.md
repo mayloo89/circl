@@ -127,8 +127,25 @@
 - [x] **Security hardening — headers, WS origin, CORS, secret scan** (PR #61): `SecurityHeaders` middleware (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Cache-Control; HSTS in production only); WebSocket `CheckOrigin` validates against `CORS_ALLOWED_ORIGINS` instead of accepting all origins; `X-Request-ID` added to CORS `ExposedHeaders`; CSP + HSTS + Permissions-Policy via Next.js `headers()` in `next.config.ts`; gitleaks secret-scan job added to CI; `.gitleaks.toml` allowlists known test-only secrets.
 - [x] **Refresh token rotation + Redis blacklist** (PR #62): opaque 32-byte refresh tokens stored hashed in Redis with 7-day TTL; `POST /auth/refresh` validates, rotates (old token deleted before new one issued), and returns new access + refresh token pair; `POST /auth/logout` deletes the refresh token; password change and account deletion call `RevokeAllForUser` (timestamp-based invalidation via `rt:revoked_at:<userID>` key); access token TTL reduced from 24h to 15min; frontend `auth.ts` auto-refreshes silently on expiry; `SessionGuard` signs out on `RefreshFailed`; logout from navbar/settings also invalidates the refresh token server-side.
 - [x] **OpenAPI spec** (PR #63): OpenAPI 3.1.0 spec for all ~40 endpoints under `docs/openapi.yaml`; covers 12 tag groups (System, Auth, Account, Profiles, Contacts, Chat, Notifications, Presence, Uploads, Reports, Push, Admin); reusable components (schemas, responses, securitySchemes); `@redocly/cli lint` job added to CI.
-- [ ] **Phase 4 — Deployment + observability hosting** (PR #64–65): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
-- [ ] **Phase 5 — Polish & launch** (PR #66–68): onboarding wizard; landing page for unauthenticated users; accessibility audit (WCAG 2.1 AA); runbooks (`docs/runbooks/`) for common incidents; final docs (README, CONTRIBUTING, architecture diagram).
+- [x] **UX overhaul — critical bugfixes** (PR #66): browse subtitle always showed "No profiles found" → `t("subtitle")`; unblock dialog showed generic error → `t("unblockConfirmMessage", { name })`; back buttons used `router.push("/")` → `router.back()`; login used `blue-*` colors → `indigo-*`; register success screen used `✉` emoji → inline SVG; "Block/Report" buttons had contrast ~2.5:1 (WCAG fail) → `text-gray-400`; chat room loading showed text → `<MessageSkeletons />`; active locale highlighted in Settings and NavBar; accepted contacts sorted online-first.
+
+- [ ] **UX overhaul — visual rebrand** (PR #67): `next/font/google` Nunito (display) + DM Sans (body); Tailwind theme extension (`colors.brand`, `borderRadius.card`/`.pill`, `boxShadow.card`/`.cardHover`); CSS custom properties; `accent` Button variant for CTA orange (#F97316).
+
+- [ ] **UX overhaul — navigation** (PR #68): `BottomNav` (mobile, 5 slots SVG icons + badges) + `Sidebar` (desktop ≥1024px) + `TopBar` (minimal mobile header); `ProfileContext` (single `/profiles/me` fetch per session); layout shell per breakpoint.
+
+- [ ] **UX overhaul — home dashboard** (PR #69): replace 3-button home with `PendingRequestsWidget` + `NearbyProfilesWidget` + `RecentConversationsWidget`; `ProfileCompletenessBanner` (% complete, CTA to onboarding); `lib/profileCompleteness.ts`.
+
+- [ ] **UX overhaul — browse** (PR #70): `RangeSlider` + `BottomSheet` primitives; replace `<details>` filter with BottomSheet; age/distance inputs → RangeSlider; "Clear filters" CTA on empty state; card action conflict resolved.
+
+- [ ] **UX overhaul — public profile hero** (PR #71): `<h1>` shows person's name; 55vh hero photo with gradient overlay + overflow menu; sticky bottom action bar; "Preview as visitor" on own profile.
+
+- [ ] **UX overhaul — onboarding wizard** (PR #72): `/onboarding/{photo,bio,interests,location}` routes; `ProfileCompletenessCard` on own profile; `onboarded_at` backend field; post-verify redirect for new users.
+
+- [ ] **UX overhaul — chat polish + auth UX** (PR #73): scroll-to-bottom FAB; chat list search + real-time refresh; `PasswordField` with show/hide toggle; `DateOfBirthPicker` (three selects, replaces `<input type="date">`).
+
+- [ ] **Phase 4 — Deployment + observability hosting** (PR #74–75): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
+
+- [ ] **Phase 5 — Final polish & launch** (PR #76–78): accessibility audit (WCAG 2.1 AA); runbooks (`docs/runbooks/`); final docs (README, CONTRIBUTING, architecture diagram).
 
 > Observability PRs (#56–#60) follow the OTel convention: logs via Loki, metrics via Prometheus, traces via Tempo, all correlated by trace_id and unified in Grafana. Production hosting (managed vs self-hosted) is decided in Phase 4.
 
