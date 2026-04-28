@@ -222,9 +222,6 @@ func (s *Service) IsUsernameAvailable(ctx context.Context, username string) (boo
 
 // UpdateMyProfile validates and updates the profile for the given user.
 func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
-	if in.DisplayName == "" {
-		return nil, fmt.Errorf("%w: display name is required", ErrInvalidInput)
-	}
 	if in.Username != "" && !usernameRe.MatchString(in.Username) {
 		return nil, fmt.Errorf("%w: username must be 3–30 characters, lowercase letters, digits, or underscores", ErrInvalidInput)
 	}

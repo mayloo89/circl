@@ -108,7 +108,7 @@ func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*
 		         $11)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET username      = COALESCE(NULLIF(EXCLUDED.username, ''), profiles.username),
-		        display_name  = EXCLUDED.display_name,
+		        display_name  = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
 		        bio           = EXCLUDED.bio,
 		        avatar_url    = EXCLUDED.avatar_url,
 		        date_of_birth = EXCLUDED.date_of_birth,
