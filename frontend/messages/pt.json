@@ -241,7 +241,8 @@
     "addContact": "Adicionar contato",
     "gallery": "Galeria",
     "deletePhoto": "Excluir foto?",
-    "photosCount": "{current}/{max}"
+    "photosCount": "{current}/{max}",
+    "previewAsVisitor": "Pré-visualizar"
   },
   "browse": {
     "title": "Explorar",
@@ -408,7 +409,18 @@
     "ageYearsOld": "{age} anos",
     "blockUserTitle": "Bloquear usuário",
     "blockUserMessage": "Bloquear {name}? Ele não poderá enviar mensagens e ficará oculto nos seus resultados.",
-    "block": "Bloquear"
+    "block": "Bloquear",
+    "requestSent": "Solicitação enviada",
+    "acceptRequest": "Aceitar solicitação",
+    "moreOptions": "Mais opções",
+    "viewPhoto": "Ver foto de perfil",
+    "actions": {
+      "message": "Mensagem",
+      "addContact": "Adicionar contato",
+      "block": "Bloquear usuário",
+      "report": "Denunciar",
+      "unblock": "Desbloquear"
+    }
   },
   "report": {
     "title": "Denunciar usuário",
