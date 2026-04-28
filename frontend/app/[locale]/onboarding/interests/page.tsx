@@ -90,6 +90,12 @@ export default function OnboardingInterestsPage() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== ",") return
+            e.preventDefault()
+            const tag = query.trim().toLowerCase().replace(/,/g, "")
+            if (tag) addInterest(tag)
+          }}
           placeholder={t("interests.placeholder")}
           disabled={interests.length >= MAX_INTERESTS}
           className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
