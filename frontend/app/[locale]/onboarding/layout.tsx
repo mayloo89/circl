@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useSession } from "next-auth/react"
+import { useProfileContext } from "@/contexts/ProfileContext"
 
 const STEPS = ["photo", "bio", "interests", "location"] as const
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -20,6 +21,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   const router = useRouter()
   const { data: session } = useSession()
   const t = useTranslations("onboarding")
+  const { refresh } = useProfileContext()
 
   const currentStep = stepFromPathname(pathname)
   const total = STEPS.length
@@ -33,6 +35,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
         body: JSON.stringify({ mark_onboarded: true }),
       }).catch(() => {})
     }
+    await refresh()
     router.replace("/")
   }
 

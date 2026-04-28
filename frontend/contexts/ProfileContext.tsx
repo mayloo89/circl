@@ -14,12 +14,12 @@ export interface MyProfile {
 
 interface ProfileContextValue {
   profile: MyProfile | null
-  refresh: () => void
+  refresh: () => Promise<void>
 }
 
 const ProfileContext = createContext<ProfileContextValue>({
   profile: null,
-  refresh: () => {},
+  refresh: () => Promise.resolve(),
 })
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
@@ -70,9 +70,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [status, session?.accessToken])
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((): Promise<void> => {
     const token = tokenRef.current
-    if (token) doFetch(token)
+    if (!token) return Promise.resolve()
+    return doFetch(token)
   }, [])
 
   return (

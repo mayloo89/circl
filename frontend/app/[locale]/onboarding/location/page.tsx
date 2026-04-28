@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
+import { useProfileContext } from "@/contexts/ProfileContext"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -24,6 +25,7 @@ export default function OnboardingLocationPage() {
   const router = useRouter()
   const t = useTranslations("onboarding")
   const token = session?.accessToken
+  const { refresh } = useProfileContext()
 
   const [locationText, setLocationText] = useState("")
   const [locationLat, setLocationLat] = useState<number | null>(null)
@@ -130,6 +132,7 @@ export default function OnboardingLocationPage() {
         body: JSON.stringify(body),
       })
       if (!res.ok) { setError(t("saveError")); return }
+      await refresh()
       router.replace("/")
     } finally {
       setSaving(false)
