@@ -45,6 +45,7 @@ type Profile struct {
 	Longitude    *float64
 	Interests    []string
 	Photos       []ProfilePhoto
+	OnboardedAt  *time.Time
 }
 
 // ProfileInput holds the editable fields for profile create/update.
@@ -59,6 +60,7 @@ type ProfileInput struct {
 	Latitude     *float64
 	Longitude    *float64
 	Interests    []string
+	OnboardedAt  *time.Time
 }
 
 // ProfilePreferences holds discovery preferences for a user.

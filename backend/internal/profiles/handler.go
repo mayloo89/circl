@@ -47,19 +47,21 @@ type profileResponse struct {
 	Longitude    *float64        `json:"longitude,omitempty"`
 	Interests    []string        `json:"interests"`
 	Photos       []photoResponse `json:"photos"`
+	OnboardedAt  *string         `json:"onboarded_at,omitempty"`
 }
 
 type updateRequest struct {
-	Username     string   `json:"username"`
-	DisplayName  string   `json:"display_name"`
-	Bio          string   `json:"bio"`
-	AvatarURL    string   `json:"avatar_url"`
-	DateOfBirth  *string  `json:"date_of_birth"`
-	Gender       string   `json:"gender"`
-	LocationText string   `json:"location_text"`
-	Latitude     *float64 `json:"latitude"`
-	Longitude    *float64 `json:"longitude"`
-	Interests    []string `json:"interests"`
+	Username      string   `json:"username"`
+	DisplayName   string   `json:"display_name"`
+	Bio           string   `json:"bio"`
+	AvatarURL     string   `json:"avatar_url"`
+	DateOfBirth   *string  `json:"date_of_birth"`
+	Gender        string   `json:"gender"`
+	LocationText  string   `json:"location_text"`
+	Latitude      *float64 `json:"latitude"`
+	Longitude     *float64 `json:"longitude"`
+	Interests     []string `json:"interests"`
+	MarkOnboarded bool     `json:"mark_onboarded"`
 }
 
 type preferencesResponse struct {
@@ -142,6 +144,10 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 			Latitude:     req.Latitude,
 			Longitude:    req.Longitude,
 			Interests:    req.Interests,
+		}
+		if req.MarkOnboarded {
+			now := time.Now()
+			in.OnboardedAt = &now
 		}
 		if req.DateOfBirth != nil {
 			t, err := time.Parse("2006-01-02", *req.DateOfBirth)
@@ -426,6 +432,10 @@ func toResponse(p *Profile) profileResponse {
 	if p.DateOfBirth != nil {
 		s := p.DateOfBirth.Format("2006-01-02")
 		resp.DateOfBirth = &s
+	}
+	if p.OnboardedAt != nil {
+		s := p.OnboardedAt.Format(time.RFC3339)
+		resp.OnboardedAt = &s
 	}
 	return resp
 }

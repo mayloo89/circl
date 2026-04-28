@@ -242,7 +242,15 @@
     "gallery": "Gallery",
     "deletePhoto": "Delete photo?",
     "photosCount": "{current}/{max}",
-    "previewAsVisitor": "Preview"
+    "previewAsVisitor": "Preview",
+    "completeness": {
+      "title": "Complete your profile",
+      "avatar": "Add a profile photo",
+      "bio": "Write a bio",
+      "interests": "Add your interests",
+      "birthdate": "Set your date of birth",
+      "location": "Add your location"
+    }
   },
   "browse": {
     "title": "Browse",
@@ -442,5 +450,40 @@
     "message": "Enable notifications to stay updated on messages and contacts.",
     "enable": "Enable",
     "dismiss": "Dismiss"
+  },
+  "onboarding": {
+    "skipAll": "Skip",
+    "continue": "Continue",
+    "skip": "Skip for now",
+    "finish": "Finish",
+    "finishSkip": "Skip & finish",
+    "uploading": "Uploading…",
+    "saveError": "Could not save. Please try again.",
+    "stepIndicator": "Step {current} of {total}",
+    "photo": {
+      "title": "Add a profile photo",
+      "subtitle": "Help others recognize you. You can change this anytime.",
+      "tapToAdd": "Tap to add photo",
+      "choosePhoto": "Choose profile photo",
+      "changePhoto": "Change photo"
+    },
+    "bio": {
+      "title": "Tell us about yourself",
+      "subtitle": "Write a short bio so others know who you are.",
+      "label": "Bio",
+      "placeholder": "I love hiking, coffee, and meeting new people…"
+    },
+    "interests": {
+      "title": "What are you into?",
+      "subtitle": "Add interests to find people who share your passions.",
+      "placeholder": "Search interests…"
+    },
+    "location": {
+      "title": "Where are you based?",
+      "subtitle": "Your location helps you discover people nearby.",
+      "placeholder": "e.g. Buenos Aires, Argentina",
+      "useMyLocation": "Use my location",
+      "detecting": "Detecting…"
+    }
   }
 }

@@ -9,6 +9,7 @@ export interface MyProfile {
   username: string
   display_name: string
   avatar_url: string
+  onboarded_at: string | null
 }
 
 interface ProfileContextValue {
@@ -41,6 +42,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           username: data.username ?? "",
           display_name: data.display_name ?? "",
           avatar_url: data.avatar_url ?? "",
+          onboarded_at: data.onboarded_at ?? null,
         })
       }
     } catch {
@@ -60,6 +62,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             username: data.username ?? "",
             display_name: data.display_name ?? "",
             avatar_url: data.avatar_url ?? "",
+            onboarded_at: data.onboarded_at ?? null,
           })
         }
       })
