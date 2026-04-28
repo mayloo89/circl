@@ -114,6 +114,27 @@ export default function OnboardingLocationPage() {
     setSaving(true)
     setError("")
     try {
+      // If the user typed a location but never selected from autocomplete,
+      // geocode it now so we get coordinates for distance calculations.
+      let finalLat = locationLat
+      let finalLng = locationLng
+      if (locationText.trim() && (finalLat === null || finalLng === null)) {
+        try {
+          const geo = await fetch(
+            `https://photon.komoot.io/api/?q=${encodeURIComponent(locationText)}&limit=1`,
+            { headers: { "Accept-Language": navigator.language ?? "en" } },
+          )
+          if (geo.ok) {
+            const data = await geo.json()
+            const f: PhotonFeature | undefined = data.features?.[0]
+            if (f) {
+              finalLat = f.geometry.coordinates[1]
+              finalLng = f.geometry.coordinates[0]
+            }
+          }
+        } catch { /* proceed without coordinates */ }
+      }
+
       const profileRes = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
       if (!profileRes.ok) { setError(t("saveError")); return }
       const current = await profileRes.json()
@@ -123,8 +144,8 @@ export default function OnboardingLocationPage() {
       }
       if (locationText) {
         body.location_text = locationText
-        body.latitude = locationLat
-        body.longitude = locationLng
+        body.latitude = finalLat
+        body.longitude = finalLng
       }
       const res = await fetch(`${API_URL}/profiles/me`, {
         method: "PUT",
