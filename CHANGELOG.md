@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Chat polish + auth UX + onboarding smart steps** ([PR #74](https://github.com/mayloo89/circl/pull/74)):
+  - `PasswordField` component with show/hide toggle; replaces `<input type="password">` on registration, login, settings, and reset-password pages
+  - `DateOfBirthPicker` component with three equal-width numeric selects (DD / MM / YYYY); replaces `<input type="date">`; uses local state so partial selections are preserved across React re-renders
+  - Scroll-to-bottom FAB in chat room: auto-hides when user is at the bottom, appears on new messages when scrolled up
+  - Chat list search: full-text client-side filter across room names and participants; empty-state message when no match
+  - 10-second polling on chat list: silently refreshes unread counts and last-message previews without disrupting the search UI
+  - Onboarding smart steps: `incompleteSteps(profile)` / `nextStepAfter` skip already-complete fields; `OnboardingRedirect` redirects directly to the first incomplete step instead of always starting at photo
+  - `lib/onboardingSteps.ts`: `ONBOARDING_STEPS`, `incompleteSteps`, `firstIncompleteStep`, `nextStepAfter`
+  - E2E tests updated to use `selectOption` on `DateOfBirthPicker` selects
+  - All new strings added to EN / ES / PT locale files
+
+### Added
 - **Onboarding wizard** ([PR #72](https://github.com/mayloo89/circl/pull/72)):
   - 4-step wizard at `/onboarding/{photo,bio,interests,location}` — minimal shell (no nav), step-dot progress bar, "Skip" button on every step, "Skip all" header link
   - Photo step: avatar upload with live preview reusing the existing 3-step upload flow
