@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useUpload } from "@/hooks/useUpload"
 import Button from "@/components/ui/Button"
-import { useOnboardingContext } from "../layout"
+import { useOnboardingContext } from "../context"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 

@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
-import { useOnboardingContext } from "../layout"
+import { useOnboardingContext } from "../context"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const MAX_INTERESTS = 20

@@ -1,26 +1,15 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useSession } from "next-auth/react"
 import { useProfileContext } from "@/contexts/ProfileContext"
+import { OnboardingContext } from "./context"
 
 const STEPS = ["photo", "bio", "interests", "location"] as const
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
-
-interface OnboardingContextValue {
-  skipStep: (nextPath: string) => Promise<void>
-}
-
-const OnboardingContext = createContext<OnboardingContextValue>({
-  skipStep: () => Promise.resolve(),
-})
-
-export function useOnboardingContext() {
-  return useContext(OnboardingContext)
-}
 
 function stepFromPathname(pathname: string): number {
   for (let i = 0; i < STEPS.length; i++) {
