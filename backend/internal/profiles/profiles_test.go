@@ -239,12 +239,14 @@ func TestUpdateMyProfile_WithNewFields(t *testing.T) {
 	}
 }
 
-func TestUpdateMyProfile_EmptyDisplayName(t *testing.T) {
+func TestUpdateMyProfile_EmptyDisplayNameAllowed(t *testing.T) {
+	// display_name is optional on the service layer; the store preserves the
+	// existing value when an empty string is sent (COALESCE logic).
 	svc := NewService(&mockStore{})
 
 	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{Bio: "Bio", DateOfBirth: validDOB()})
-	if err == nil {
-		t.Fatal("expected error for empty display name")
+	if err != nil {
+		t.Fatalf("expected no error for empty display name, got %v", err)
 	}
 }
 

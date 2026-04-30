@@ -45,6 +45,7 @@ type Profile struct {
 	Longitude    *float64
 	Interests    []string
 	Photos       []ProfilePhoto
+	OnboardedAt  *time.Time
 }
 
 // ProfileInput holds the editable fields for profile create/update.
@@ -59,6 +60,7 @@ type ProfileInput struct {
 	Latitude     *float64
 	Longitude    *float64
 	Interests    []string
+	OnboardedAt  *time.Time
 }
 
 // ProfilePreferences holds discovery preferences for a user.
@@ -220,9 +222,6 @@ func (s *Service) IsUsernameAvailable(ctx context.Context, username string) (boo
 
 // UpdateMyProfile validates and updates the profile for the given user.
 func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
-	if in.DisplayName == "" {
-		return nil, fmt.Errorf("%w: display name is required", ErrInvalidInput)
-	}
 	if in.Username != "" && !usernameRe.MatchString(in.Username) {
 		return nil, fmt.Errorf("%w: username must be 3–30 characters, lowercase letters, digits, or underscores", ErrInvalidInput)
 	}

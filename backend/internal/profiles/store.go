@@ -44,7 +44,8 @@ const profileSelectSQL = `
 	             JOIN interests i ON i.id = pi.interest_id
 	            WHERE pi.user_id = p.user_id
 	            ORDER BY i.name
-	       ) AS interests
+	       ) AS interests,
+	       p.onboarded_at
 	  FROM profiles p`
 
 func scanProfile(row rowScanner) (*Profile, error) {
@@ -52,7 +53,7 @@ func scanProfile(row rowScanner) (*Profile, error) {
 	if err := row.Scan(
 		&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
-		&p.Latitude, &p.Longitude, &p.Interests,
+		&p.Latitude, &p.Longitude, &p.Interests, &p.OnboardedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -100,12 +101,14 @@ func (s *pgStore) IsUsernameAvailable(ctx context.Context, username string) (boo
 func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO profiles (user_id, username, display_name, bio, avatar_url,
-		                       date_of_birth, gender, location_text, latitude, longitude)
+		                       date_of_birth, gender, location_text, latitude, longitude,
+		                       onboarded_at)
 		 VALUES ($1, NULLIF($2, ''), $3, $4, NULLIF($5, ''),
-		         $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10)
+		         $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10,
+		         $11)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET username      = COALESCE(NULLIF(EXCLUDED.username, ''), profiles.username),
-		        display_name  = EXCLUDED.display_name,
+		        display_name  = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
 		        bio           = EXCLUDED.bio,
 		        avatar_url    = EXCLUDED.avatar_url,
 		        date_of_birth = EXCLUDED.date_of_birth,
@@ -113,19 +116,21 @@ func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*
 		        location_text = EXCLUDED.location_text,
 		        latitude      = EXCLUDED.latitude,
 		        longitude     = EXCLUDED.longitude,
+		        onboarded_at  = COALESCE(profiles.onboarded_at, EXCLUDED.onboarded_at),
 		        updated_at    = now()
 		 RETURNING id, user_id, COALESCE(username, ''), display_name, bio, COALESCE(avatar_url, ''),
 		           date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
-		           latitude, longitude`,
+		           latitude, longitude, onboarded_at`,
 		userID, in.Username, in.DisplayName, in.Bio, in.AvatarURL,
 		in.DateOfBirth, in.Gender, in.LocationText, in.Latitude, in.Longitude,
+		in.OnboardedAt,
 	)
 
 	var p Profile
 	if err := row.Scan(
 		&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
-		&p.Latitude, &p.Longitude,
+		&p.Latitude, &p.Longitude, &p.OnboardedAt,
 	); err != nil {
 		if isUniqueViolation(err, "profiles_username_key") {
 			return nil, ErrUsernameTaken

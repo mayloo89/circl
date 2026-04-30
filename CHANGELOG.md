@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Onboarding wizard** ([PR #72](https://github.com/mayloo89/circl/pull/72)):
+  - 4-step wizard at `/onboarding/{photo,bio,interests,location}` — minimal shell (no nav), step-dot progress bar, "Skip" button on every step, "Skip all" header link
+  - Photo step: avatar upload with live preview reusing the existing 3-step upload flow
+  - Bio step: textarea with character counter; pre-filled from existing profile
+  - Interests step: search-as-you-type chip selector; pre-filled from existing profile
+  - Location step: city search (Photon/OSM) + "Use my location" geolocation button; last step marks profile as onboarded via `mark_onboarded: true`
+  - `AppShell` redirects authenticated users without `onboarded_at` to `/onboarding/photo` (skips own-profile and onboarding pages); suppresses Sidebar / TopBar / BottomNav on onboarding pages
+  - `ProfileCompletenessCard` on own profile page (`/profile`): progress bar, percentage, per-field links to the relevant onboarding step
+  - Backend migration `000026`: `onboarded_at TIMESTAMPTZ NULL` column on `profiles`; `mark_onboarded: true` in `PUT /profiles/me` sets it once (write-once via `COALESCE`)
+  - `onboarded_at` included in `ProfileContext.MyProfile` and in all three locale files (EN / ES / PT)
+
+### Added
 - **Public profile hero redesign** ([PR #71](https://github.com/mayloo89/circl/pull/71)):
   - 55 vh hero section: avatar photo as full-bleed `<Image>` with `object-cover`; gradient-fade overlay blending into the page background
   - Initials fallback when no avatar: brand-gradient background with a large translucent initial

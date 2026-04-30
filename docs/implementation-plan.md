@@ -139,7 +139,7 @@
 
 - [x] **UX overhaul — public profile hero** (PR #71): `<h1>` shows person's name; 55vh hero photo with gradient overlay + overflow menu (Block / Report / Unblock); sticky mobile action bar above bottom nav; inline desktop actions; "Preview as visitor" button on own profile page; Block/Report moved from inline links to overflow menu.
 
-- [ ] **UX overhaul — onboarding wizard** (PR #72): `/onboarding/{photo,bio,interests,location}` routes; `ProfileCompletenessCard` on own profile; `onboarded_at` backend field; post-verify redirect for new users.
+- [x] **UX overhaul — onboarding wizard** (PR #72): `/onboarding/{photo,bio,interests,location}` 4-step wizard; step-dot progress indicator + "Skip all"; `ProfileCompletenessCard` on own profile with progress bar + per-field links; `onboarded_at TIMESTAMPTZ` backend migration; `mark_onboarded` flag in `PUT /profiles/me`; `AppShell` redirects unonboarded users to wizard and suppresses nav on onboarding pages.
 
 - [ ] **UX overhaul — chat polish + auth UX** (PR #73): scroll-to-bottom FAB; chat list search + real-time refresh; `PasswordField` with show/hide toggle; `DateOfBirthPicker` (three selects, replaces `<input type="date">`).
 

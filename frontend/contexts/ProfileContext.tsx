@@ -9,16 +9,17 @@ export interface MyProfile {
   username: string
   display_name: string
   avatar_url: string
+  onboarded_at: string | null
 }
 
 interface ProfileContextValue {
   profile: MyProfile | null
-  refresh: () => void
+  refresh: () => Promise<void>
 }
 
 const ProfileContext = createContext<ProfileContextValue>({
   profile: null,
-  refresh: () => {},
+  refresh: () => Promise.resolve(),
 })
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           username: data.username ?? "",
           display_name: data.display_name ?? "",
           avatar_url: data.avatar_url ?? "",
+          onboarded_at: data.onboarded_at ?? null,
         })
       }
     } catch {
@@ -60,6 +62,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             username: data.username ?? "",
             display_name: data.display_name ?? "",
             avatar_url: data.avatar_url ?? "",
+            onboarded_at: data.onboarded_at ?? null,
           })
         }
       })
@@ -67,9 +70,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [status, session?.accessToken])
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((): Promise<void> => {
     const token = tokenRef.current
-    if (token) doFetch(token)
+    if (!token) return Promise.resolve()
+    return doFetch(token)
   }, [])
 
   return (

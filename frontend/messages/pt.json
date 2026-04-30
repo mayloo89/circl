@@ -242,7 +242,15 @@
     "gallery": "Galeria",
     "deletePhoto": "Excluir foto?",
     "photosCount": "{current}/{max}",
-    "previewAsVisitor": "Pré-visualizar"
+    "previewAsVisitor": "Pré-visualizar",
+    "completeness": {
+      "title": "Complete seu perfil",
+      "avatar": "Adicione uma foto de perfil",
+      "bio": "Escreva uma bio",
+      "interests": "Adicione seus interesses",
+      "birthdate": "Defina sua data de nascimento",
+      "location": "Adicione sua localização"
+    }
   },
   "browse": {
     "title": "Explorar",
@@ -442,5 +450,41 @@
     "message": "Ative as notificações para ficar por dentro de mensagens e contatos.",
     "enable": "Ativar",
     "dismiss": "Fechar"
+  },
+  "onboarding": {
+    "skipAll": "Pular",
+    "continue": "Continuar",
+    "skip": "Pular por agora",
+    "finish": "Finalizar",
+    "finishSkip": "Pular e finalizar",
+    "uploading": "Enviando…",
+    "saveError": "Não foi possível salvar. Tente novamente.",
+    "stepIndicator": "Passo {current} de {total}",
+    "photo": {
+      "title": "Adicione uma foto de perfil",
+      "subtitle": "Ajude outros a reconhecê-lo. Você pode mudar isso a qualquer momento.",
+      "tapToAdd": "Toque para adicionar foto",
+      "choosePhoto": "Escolher foto de perfil",
+      "changePhoto": "Trocar foto"
+    },
+    "bio": {
+      "title": "Conte-nos sobre você",
+      "subtitle": "Escreva uma breve bio para que outros possam te conhecer.",
+      "label": "Bio",
+      "placeholder": "Adoro trilhas, café e conhecer pessoas novas…"
+    },
+    "interests": {
+      "title": "O que você curte?",
+      "subtitle": "Adicione interesses para encontrar pessoas com as mesmas paixões.",
+      "placeholder": "Buscar interesses…"
+    },
+    "location": {
+      "title": "Onde você está?",
+      "subtitle": "Sua localização ajuda a descobrir pessoas próximas.",
+      "placeholder": "ex. São Paulo, Brasil",
+      "useMyLocation": "Usar minha localização",
+      "detecting": "Detectando…"
+    },
+    "neverShow": "Não mostrar novamente"
   }
 }

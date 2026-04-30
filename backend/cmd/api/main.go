@@ -477,12 +477,14 @@ func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore prof
 		// Mark email as verified directly in the database.
 		pool.Exec(r.Context(), `UPDATE users SET email_verified_at = now() WHERE id = $1`, user.ID) //nolint:errcheck,exhaustruct
 
-		// Seed profile.
+		// Seed profile — mark as onboarded so tests skip the wizard.
 		dob := time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
+		now := time.Now()
 		profileStore.Upsert(r.Context(), user.ID, profiles.ProfileInput{ //nolint:errcheck
 			Username:    req.Username,
 			DisplayName: req.Username,
 			DateOfBirth: &dob,
+			OnboardedAt: &now,
 		})
 
 		tok, err := token.Generate(user.ID, user.Role, jwtSecret, tokenExpiry)

@@ -12,6 +12,7 @@ import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
 import PhotoGallery from "@/components/profile/PhotoGallery"
+import { computeCompleteness, type MissingField } from "@/lib/profileCompleteness"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -417,6 +418,22 @@ export default function ProfilePage() {
 
   const profileIncomplete = profile !== null && (!profile.username || !profile.date_of_birth)
 
+  const completeness = profile ? computeCompleteness({
+    avatar_url: profile.avatar_url,
+    bio: profile.bio,
+    interests: profile.interests,
+    date_of_birth: profile.date_of_birth,
+    location_text: profile.location_text,
+  }) : null
+
+  const ONBOARDING_STEP: Record<MissingField, string> = {
+    avatar: "/onboarding/photo",
+    bio: "/onboarding/bio",
+    interests: "/onboarding/interests",
+    birthdate: "/profile",
+    location: "/onboarding/location",
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-lg space-y-6 px-4">
@@ -443,6 +460,36 @@ export default function ProfilePage() {
                 ? "Set your username below."
                 : "Set your date of birth below."}
             </p>
+          </div>
+        )}
+
+        {/* Profile completeness card */}
+        {completeness && completeness.percent < 100 && (
+          <div className="rounded-lg bg-gray-900 p-5 ring-1 ring-gray-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">{t("completeness.title")}</p>
+              <span className="text-sm font-bold text-brand-accent">{completeness.percent}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+              <div
+                className="h-full rounded-full bg-brand-accent transition-all duration-500"
+                style={{ width: `${completeness.percent}%` }}
+              />
+            </div>
+            <ul className="space-y-2">
+              {completeness.missing.map((field) => (
+                <li key={field}>
+                  <button
+                    type="button"
+                    onClick={() => router.push(ONBOARDING_STEP[field])}
+                    className="flex w-full items-center gap-2 text-left text-sm text-gray-400 hover:text-white"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-600 shrink-0" />
+                    {t(`completeness.${field}`)}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
