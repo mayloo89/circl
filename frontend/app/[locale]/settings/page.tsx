@@ -9,8 +9,8 @@ import { routing, type Locale } from "@/i18n/routing"
 import { usePushContext } from "@/contexts/PushContext"
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
-import Input from "@/components/ui/Input"
 import Modal from "@/components/ui/Modal"
+import PasswordField from "@/components/ui/PasswordField"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -142,10 +142,9 @@ function PasswordSection({ token }: { token: string | undefined }) {
         {expanded && (
           <div className="border-t border-gray-700 px-5 pb-5 pt-4">
             <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-              <Input
+              <PasswordField
                 id="current-password"
                 label={t("currentPassword")}
-                type="password"
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -153,10 +152,9 @@ function PasswordSection({ token }: { token: string | undefined }) {
                 autoFocus
               />
               <div className="flex flex-col gap-2">
-                <Input
+                <PasswordField
                   id="new-password"
                   label={t("newPassword")}
-                  type="password"
                   autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -164,10 +162,9 @@ function PasswordSection({ token }: { token: string | undefined }) {
                 />
                 <PasswordRequirements password={newPassword} />
               </div>
-              <Input
+              <PasswordField
                 id="confirm-password"
                 label={t("confirmNewPassword")}
-                type="password"
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -359,10 +356,9 @@ function DeleteAccountSection({ token }: { token: string | undefined }) {
           </div>
           <div className="space-y-4 p-5">
             <p className="text-sm text-gray-400">{t("deleteModalDesc")}</p>
-            <Input
+            <PasswordField
               id="delete-password"
               label={t("deletePassword")}
-              type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

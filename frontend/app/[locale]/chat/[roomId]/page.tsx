@@ -121,6 +121,9 @@ export default function ChatRoomPage() {
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const isAtBottomRef = useRef(true)
+  const didInitialScrollRef = useRef(false)
+  const [showFab, setShowFab] = useState(false)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
   const { upload, uploading } = useUpload(token)
@@ -262,9 +265,40 @@ export default function ChatRoomPage() {
     return () => document.removeEventListener("visibilitychange", markRead)
   }, [liveMessages, roomId, token, userID])
 
+  // Track scroll position to drive FAB visibility and smart auto-scroll.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [history, liveMessages])
+    const container = scrollContainerRef.current
+    if (!container) return
+    function onScroll() {
+      const { scrollTop, scrollHeight, clientHeight } = container!
+      const atBottom = scrollHeight - scrollTop - clientHeight < 80
+      isAtBottomRef.current = atBottom
+      setShowFab(!atBottom)
+    }
+    container.addEventListener("scroll", onScroll, { passive: true })
+    return () => container.removeEventListener("scroll", onScroll)
+  }, [])
+
+  // Scroll to bottom once when history first finishes loading.
+  useEffect(() => {
+    if (historyLoading || didInitialScrollRef.current) return
+    didInitialScrollRef.current = true
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView()
+      isAtBottomRef.current = true
+      setShowFab(false)
+    })
+  }, [historyLoading])
+
+  // Auto-scroll on new live messages — only when already at bottom.
+  useEffect(() => {
+    if (!didInitialScrollRef.current || liveMessages.length === 0) return
+    if (isAtBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    } else {
+      setShowFab(true)
+    }
+  }, [liveMessages])
 
   // Focus input when entering the chat room
   useEffect(() => {
@@ -386,6 +420,12 @@ export default function ChatRoomPage() {
   async function handleAttach(file: File) {
     const result = await upload(file, "chat-attachment")
     if (result) sendAttachment(result.upload_id, result.url, file.type, buildOpts())
+  }
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    isAtBottomRef.current = true
+    setShowFab(false)
   }
 
   async function handleBlock() {
@@ -542,7 +582,7 @@ export default function ChatRoomPage() {
       {/* Body: message area + optional members sidebar */}
       <div className="flex flex-1 overflow-hidden">
         {/* Message column */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="relative flex flex-1 flex-col overflow-hidden">
           {/* Message list */}
           <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-4">
             {historyLoading ? (
@@ -599,6 +639,17 @@ export default function ChatRoomPage() {
             )}
           </div>
 
+          {showFab && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-24 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary shadow-lg transition-colors hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-950"
+              aria-label={t("scrollToBottom")}
+            >
+              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
           <TypingIndicator typers={typers} />
 
           <ChatInput

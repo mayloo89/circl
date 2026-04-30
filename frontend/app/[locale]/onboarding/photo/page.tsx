@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useUpload } from "@/hooks/useUpload"
+import { useProfileContext } from "@/contexts/ProfileContext"
+import { nextStepAfter } from "@/lib/onboardingSteps"
 import Button from "@/components/ui/Button"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -15,9 +17,11 @@ export default function OnboardingPhotoPage() {
   const router = useRouter()
   const t = useTranslations("onboarding")
   const fileRef = useRef<HTMLInputElement>(null)
+  const { profile, refresh } = useProfileContext()
 
-  const [preview, setPreview] = useState<string | null>(null)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const existing = profile?.avatar_url ?? ""
+  const [preview, setPreview] = useState<string | null>(existing || null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(existing || null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
@@ -35,21 +39,43 @@ export default function OnboardingPhotoPage() {
   }
 
   async function handleContinue() {
-    if (!avatarUrl || !token) { router.push("/onboarding/bio"); return }
-    setSaving(true)
-    setError("")
-    try {
-      const res = await fetch(`${API_URL}/profiles/me/avatar`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ avatar_url: avatarUrl }),
-      })
-      if (!res.ok) { setError(t("saveError")); return }
-      router.push("/onboarding/bio")
-    } finally {
-      setSaving(false)
+    if (!token) return
+    const next = nextStepAfter(profile!, "photo")
+
+    if (avatarUrl && avatarUrl !== existing) {
+      setSaving(true)
+      setError("")
+      try {
+        const res = await fetch(`${API_URL}/profiles/me/avatar`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ avatar_url: avatarUrl }),
+        })
+        if (!res.ok) { setError(t("saveError")); return }
+      } finally {
+        setSaving(false)
+      }
+    }
+
+    if (next === "/") {
+      setSaving(true)
+      try {
+        await fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mark_onboarded: true }),
+        })
+        await refresh()
+        router.replace("/")
+      } finally {
+        setSaving(false)
+      }
+    } else {
+      router.push(next)
     }
   }
+
+  const hasNewPhoto = !!avatarUrl && avatarUrl !== existing
 
   return (
     <div className="flex flex-col gap-8">
@@ -105,7 +131,7 @@ export default function OnboardingPhotoPage() {
           loading={saving || uploading}
           disabled={saving || uploading}
         >
-          {avatarUrl ? t("continue") : t("skip")}
+          {hasNewPhoto || existing ? t("continue") : t("skip")}
         </Button>
       </div>
     </div>

@@ -101,6 +101,7 @@ export default function ChatPage() {
   const [rooms, setRooms] = useState<RoomSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [query, setQuery] = useState("")
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [now, setNow] = useState(0)
   useEffect(() => {
@@ -127,11 +128,36 @@ export default function ChatPage() {
       .finally(() => setLoading(false))
   }
 
+  function silentRefresh() {
+    if (!token) return
+    fetch(`${API_URL}/chat/rooms`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: RoomSummary[]) => setRooms(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }
+
   useEffect(() => {
     if (status !== "authenticated" || !token) return
     loadRooms()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, token])
+
+  useEffect(() => {
+    if (status !== "authenticated" || !token) return
+    const id = setInterval(silentRefresh, 10_000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, token])
+
+  const needle = query.trim().toLowerCase()
+  const filteredRooms = needle
+    ? rooms.filter((r) => {
+        const name = r.type === "dm" ? (r.peer_name || "") : (r.name || "")
+        return name.toLowerCase().includes(needle)
+      })
+    : rooms
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
@@ -161,6 +187,20 @@ export default function ChatPage() {
           </Button>
         </div>
 
+        <div className="relative">
+          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("search")}
+            aria-label={t("search")}
+            className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-4 text-sm text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+          />
+        </div>
+
         {error && (
           <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
             <p className="text-sm text-red-400">{error}</p>
@@ -185,12 +225,16 @@ export default function ChatPage() {
                 <p className="mt-1 text-xs text-gray-500">{t("noConversationsDesc")}</p>
               </div>
               <Button variant="primary" size="sm" pill onClick={() => router.push("/contacts")} className="mt-1">
-                Go to contacts
+                {t("goToContacts")}
               </Button>
+            </div>
+          ) : filteredRooms.length === 0 ? (
+            <div className="px-6 py-10 text-center text-sm text-gray-500">
+              {t("noResults")}
             </div>
           ) : (
             <ul className="divide-y divide-gray-800">
-              {rooms.map((room) => (
+              {filteredRooms.map((room) => (
                 <li key={room.id}>
                   <Link
                     href={`/chat/${room.id}`}

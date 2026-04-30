@@ -5,6 +5,7 @@ import { SessionProvider, signOut, useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
 import { useLocale } from "next-intl"
 
+import { firstIncompleteStep } from "@/lib/onboardingSteps"
 import { NotificationsProvider } from "@/contexts/NotificationsContext"
 import { PushProvider } from "@/contexts/PushContext"
 import { ProfileProvider, useProfileContext } from "@/contexts/ProfileContext"
@@ -42,21 +43,22 @@ function OnboardingRedirect() {
     if (markingRef.current) return
     markingRef.current = true
 
-    async function markAndRedirect() {
+    const first = firstIncompleteStep(profile)
+    if (!first) {
+      // All fields already filled — mark onboarded silently and stay on home
       const token = session?.accessToken
       if (token) {
-        try {
-          await fetch(`${API_URL}/profiles/me`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ mark_onboarded: true }),
-          })
-          await refresh()
-        } catch {}
+        fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mark_onboarded: true }),
+        })
+          .then(() => refresh())
+          .catch(() => {})
       }
-      router.replace(`/${locale}/onboarding/photo`)
+    } else {
+      router.replace(`/${locale}/onboarding/${first}`)
     }
-    markAndRedirect()
   }, [status, profile, pathname, router, locale, session, refresh])
 
   return null

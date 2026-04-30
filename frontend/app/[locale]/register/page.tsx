@@ -6,6 +6,8 @@ import { Link } from "@/i18n/navigation"
 
 import { registerSchema } from "@/lib/validation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
+import PasswordField from "@/components/ui/PasswordField"
+import DateOfBirthPicker from "@/components/ui/DateOfBirthPicker"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -253,41 +255,28 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <div>
-              <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-300">
-                {t("dateOfBirth")}
-              </label>
-              <input
-                id="date_of_birth"
-                type="date"
-                required
-                value={dateOfBirth}
-                onChange={(e) => handleChange("date_of_birth", e.target.value)}
-                onBlur={(e) => { touchField("date_of_birth"); validateField("date_of_birth", e.target.value) }}
-                className={fieldClass(fieldErrors.date_of_birth)}
-              />
-              {fieldErrors.date_of_birth && (
-                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.date_of_birth}</p>
-              )}
-            </div>
+            <DateOfBirthPicker
+              id="date_of_birth"
+              label={t("dateOfBirth")}
+              value={dateOfBirth}
+              onChange={(v) => { handleChange("date_of_birth", v) }}
+              onBlur={() => { touchField("date_of_birth"); validateField("date_of_birth", dateOfBirth) }}
+              error={fieldErrors.date_of_birth}
+              labels={{ month: t("dobMonth"), day: t("dobDay"), year: t("dobYear") }}
+            />
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                {t("password")}
-              </label>
-              <input
+              <PasswordField
                 id="password"
-                type="password"
+                label={t("password")}
                 required
                 value={password}
                 onChange={(e) => handleChange("password", e.target.value)}
                 onBlur={(e) => { touchField("password"); validateField("password", e.target.value); setPasswordFocused(false) }}
                 onFocus={() => setPasswordFocused(true)}
-                className={fieldClass(fieldErrors.password)}
+                error={fieldErrors.password}
+                autoComplete="new-password"
               />
-              {fieldErrors.password && (
-                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.password}</p>
-              )}
               {(passwordFocused || password) && (
                 <div className="mt-2">
                   <PasswordRequirements password={password} />
@@ -295,23 +284,16 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <div>
-              <label htmlFor="confirm" className="block text-sm font-medium text-gray-300">
-                {t("confirmPassword")}
-              </label>
-              <input
-                id="confirm"
-                type="password"
-                required
-                value={confirm}
-                onChange={(e) => handleChange("confirm", e.target.value)}
-                onBlur={(e) => { touchField("confirm"); validateField("confirm", e.target.value) }}
-                className={fieldClass(fieldErrors.confirm)}
-              />
-              {fieldErrors.confirm && (
-                <p className="mt-1 text-xs text-red-400" role="alert">{fieldErrors.confirm}</p>
-              )}
-            </div>
+            <PasswordField
+              id="confirm"
+              label={t("confirmPassword")}
+              required
+              value={confirm}
+              onChange={(e) => handleChange("confirm", e.target.value)}
+              onBlur={(e) => { touchField("confirm"); validateField("confirm", e.target.value) }}
+              error={fieldErrors.confirm}
+              autoComplete="new-password"
+            />
           </div>
 
           <button

@@ -77,7 +77,10 @@
     "checkEmailDesc": "Enviamos un enlace de verificación a {email}. Haz clic en él para activar tu cuenta antes de iniciar sesión.",
     "didntReceive": "¿No lo recibiste?",
     "resendVerification": "Reenviar correo de verificación",
-    "backToSignIn": "Volver al inicio de sesión"
+    "backToSignIn": "Volver al inicio de sesión",
+    "dobMonth": "MM",
+    "dobDay": "DD",
+    "dobYear": "AAAA"
   },
   "forgotPassword": {
     "title": "Restablecer contraseña",
@@ -187,7 +190,10 @@
     "noConversationsDesc": "Inicia un chat desde el perfil de un contacto.",
     "newGroup": "Nuevo grupo",
     "loading": "Cargando...",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "search": "Buscar conversaciones…",
+    "noResults": "Ninguna conversación coincide con tu búsqueda.",
+    "goToContacts": "Ir a contactos"
   },
   "contacts": {
     "title": "Contactos",
@@ -401,7 +407,8 @@
     "ephemeral1h": "1 hora",
     "ephemeral6h": "6 horas",
     "ephemeral12h": "12 horas",
-    "ephemeral24h": "24 horas"
+    "ephemeral24h": "24 horas",
+    "scrollToBottom": "Ir al final"
   },
   "publicProfile": {
     "title": "Perfil",
