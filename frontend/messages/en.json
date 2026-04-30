@@ -77,7 +77,10 @@
     "checkEmailDesc": "We sent a verification link to {email}. Click it to activate your account before signing in.",
     "didntReceive": "Didn't receive it?",
     "resendVerification": "Resend verification email",
-    "backToSignIn": "Back to sign in"
+    "backToSignIn": "Back to sign in",
+    "dobMonth": "Month",
+    "dobDay": "Day",
+    "dobYear": "Year"
   },
   "forgotPassword": {
     "title": "Reset password",
@@ -187,7 +190,10 @@
     "noConversationsDesc": "Start a chat from a contact's profile.",
     "newGroup": "New group",
     "loading": "Loading...",
-    "retry": "Retry"
+    "retry": "Retry",
+    "search": "Search conversations…",
+    "noResults": "No conversations match your search.",
+    "goToContacts": "Go to contacts"
   },
   "contacts": {
     "title": "Contacts",
@@ -401,7 +407,8 @@
     "ephemeral1h": "1 hour",
     "ephemeral6h": "6 hours",
     "ephemeral12h": "12 hours",
-    "ephemeral24h": "24 hours"
+    "ephemeral24h": "24 hours",
+    "scrollToBottom": "Scroll to bottom"
   },
   "publicProfile": {
     "title": "Profile",

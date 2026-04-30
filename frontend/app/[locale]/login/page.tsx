@@ -6,6 +6,7 @@ import { useState } from "react"
 import { Link, useRouter } from "@/i18n/navigation"
 
 import { loginSchema } from "@/lib/validation"
+import PasswordField from "@/components/ui/PasswordField"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -157,16 +158,13 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                {t("password")}
-              </label>
-              <input
+              <PasswordField
                 id="password"
-                type="password"
+                label={t("password")}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-brand-hover"
+                autoComplete="current-password"
               />
               <div className="mt-1 text-right">
                 <Link href="/forgot-password" className="text-xs text-brand-muted hover:text-brand-subtle">
