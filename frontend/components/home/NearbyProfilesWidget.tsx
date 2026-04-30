@@ -84,8 +84,7 @@ export default function NearbyProfilesWidget() {
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!cancelled) {
-          const all: NearbyProfile[] = data.profiles ?? []
-          setProfiles(all.filter((p) => p.distance_km !== null))
+          setProfiles(data.profiles ?? [])
         }
       })
       .catch(() => {})

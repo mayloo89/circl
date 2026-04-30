@@ -51,6 +51,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
+  devIndicators: false,
   images: {
     remotePatterns,
     dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
