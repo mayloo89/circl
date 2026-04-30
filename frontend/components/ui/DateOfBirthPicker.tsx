@@ -1,8 +1,5 @@
 "use client"
 
-import { useMemo } from "react"
-import { useLocale } from "next-intl"
-
 function daysInMonth(month: number, year: number): number {
   if (!month) return 31
   return new Date(year || 2000, month, 0).getDate()
@@ -25,16 +22,6 @@ interface Props {
 }
 
 export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, error, labels }: Props) {
-  const locale = useLocale()
-
-  const monthNames = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) =>
-        new Intl.DateTimeFormat(locale, { month: "long" }).format(new Date(2000, i, 1))
-      ),
-    [locale]
-  )
-
   const parts  = value.split("-")
   const year   = parts[0] ? parseInt(parts[0], 10) : 0
   const month  = parts[1] ? parseInt(parts[1], 10) : 0
@@ -43,7 +30,7 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
   const now       = new Date()
   const maxYear   = now.getFullYear() - 18
   const minYear   = now.getFullYear() - 100
-  const totalDays = useMemo(() => daysInMonth(month, year), [month, year])
+  const totalDays = daysInMonth(month, year)
 
   function emit(y: number, m: number, d: number) {
     if (!y || !m || !d) { onChange(""); return }
@@ -55,12 +42,12 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
   }
 
   const baseSelect =
-    "min-w-0 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm " +
+    "min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm " +
     "focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
 
-  const monthLabel = labels?.month ?? "Month"
-  const dayLabel   = labels?.day   ?? "Day"
-  const yearLabel  = labels?.year  ?? "Year"
+  const dayLabel   = labels?.day   ?? "DD"
+  const monthLabel = labels?.month ?? "MM"
+  const yearLabel  = labels?.year  ?? "AAAA"
 
   return (
     <div>
@@ -69,28 +56,28 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
       )}
       <div className={`flex gap-2${label ? " mt-1" : ""}`}>
         <select
-          aria-label={monthLabel}
-          value={month || ""}
-          onChange={(e) => emit(year, parseInt(e.target.value, 10) || 0, day)}
-          onBlur={onBlur}
-          className={`${baseSelect} flex-1`}
-        >
-          <option value="">{monthLabel}</option>
-          {monthNames.map((name, i) => (
-            <option key={i} value={i + 1}>{name}</option>
-          ))}
-        </select>
-
-        <select
           aria-label={dayLabel}
           value={day || ""}
           onChange={(e) => emit(year, month, parseInt(e.target.value, 10) || 0)}
           onBlur={onBlur}
-          className={`${baseSelect} w-20 flex-none`}
+          className={baseSelect}
         >
           <option value="">{dayLabel}</option>
           {Array.from({ length: totalDays }, (_, i) => i + 1).map((d) => (
-            <option key={d} value={d}>{d}</option>
+            <option key={d} value={d}>{String(d).padStart(2, "0")}</option>
+          ))}
+        </select>
+
+        <select
+          aria-label={monthLabel}
+          value={month || ""}
+          onChange={(e) => emit(year, parseInt(e.target.value, 10) || 0, day)}
+          onBlur={onBlur}
+          className={baseSelect}
+        >
+          <option value="">{monthLabel}</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
           ))}
         </select>
 
@@ -100,7 +87,7 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
           value={year || ""}
           onChange={(e) => emit(parseInt(e.target.value, 10) || 0, month, day)}
           onBlur={onBlur}
-          className={`${baseSelect} w-24 flex-none`}
+          className={baseSelect}
         >
           <option value="">{yearLabel}</option>
           {Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i).map((y) => (

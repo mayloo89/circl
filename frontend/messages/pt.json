@@ -78,9 +78,9 @@
     "didntReceive": "Não recebeu?",
     "resendVerification": "Reenviar e-mail de verificação",
     "backToSignIn": "Voltar ao login",
-    "dobMonth": "Mês",
-    "dobDay": "Dia",
-    "dobYear": "Ano"
+    "dobMonth": "MM",
+    "dobDay": "DD",
+    "dobYear": "AAAA"
   },
   "forgotPassword": {
     "title": "Redefinir senha",

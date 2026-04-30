@@ -78,9 +78,9 @@
     "didntReceive": "Didn't receive it?",
     "resendVerification": "Resend verification email",
     "backToSignIn": "Back to sign in",
-    "dobMonth": "Month",
-    "dobDay": "Day",
-    "dobYear": "Year"
+    "dobMonth": "MM",
+    "dobDay": "DD",
+    "dobYear": "YYYY"
   },
   "forgotPassword": {
     "title": "Reset password",
