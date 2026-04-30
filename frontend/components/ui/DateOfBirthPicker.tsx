@@ -54,8 +54,8 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
     )
   }
 
-  const selectClass =
-    "block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm " +
+  const baseSelect =
+    "min-w-0 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm " +
     "focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
 
   const monthLabel = labels?.month ?? "Month"
@@ -73,7 +73,7 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
           value={month || ""}
           onChange={(e) => emit(year, parseInt(e.target.value, 10) || 0, day)}
           onBlur={onBlur}
-          className={selectClass}
+          className={`${baseSelect} flex-1`}
         >
           <option value="">{monthLabel}</option>
           {monthNames.map((name, i) => (
@@ -86,7 +86,7 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
           value={day || ""}
           onChange={(e) => emit(year, month, parseInt(e.target.value, 10) || 0)}
           onBlur={onBlur}
-          className={`${selectClass} w-24 flex-none`}
+          className={`${baseSelect} w-20 flex-none`}
         >
           <option value="">{dayLabel}</option>
           {Array.from({ length: totalDays }, (_, i) => i + 1).map((d) => (
@@ -100,7 +100,7 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
           value={year || ""}
           onChange={(e) => emit(parseInt(e.target.value, 10) || 0, month, day)}
           onBlur={onBlur}
-          className={`${selectClass} w-28 flex-none`}
+          className={`${baseSelect} w-24 flex-none`}
         >
           <option value="">{yearLabel}</option>
           {Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i).map((y) => (
