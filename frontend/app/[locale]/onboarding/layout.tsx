@@ -6,23 +6,16 @@ import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useSession } from "next-auth/react"
 import { useProfileContext } from "@/contexts/ProfileContext"
+import { ONBOARDING_STEPS, incompleteSteps } from "@/lib/onboardingSteps"
 
-const STEPS = ["photo", "bio", "interests", "location"] as const
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
-
-function stepFromPathname(pathname: string): number {
-  for (let i = 0; i < STEPS.length; i++) {
-    if (pathname.includes(`/onboarding/${STEPS[i]}`)) return i
-  }
-  return 0
-}
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
   const t = useTranslations("onboarding")
-  const { refresh } = useProfileContext()
+  const { profile, refresh } = useProfileContext()
   const [skipping, setSkipping] = useState(false)
 
   async function handleSkipAll() {
@@ -42,14 +35,22 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
     router.replace("/")
   }
 
-  const currentStep = stepFromPathname(pathname)
-  const total = STEPS.length
+  // Pending steps = what was incomplete when the user entered the wizard.
+  // We fall back to all steps if profile hasn't loaded yet to avoid flicker.
+  const pending = profile ? incompleteSteps(profile) : ONBOARDING_STEPS
+  const currentStepName = ONBOARDING_STEPS.find((s) => pathname.includes(`/onboarding/${s}`))
+  const currentIdx = currentStepName ? pending.indexOf(currentStepName) : 0
+  const total = pending.length || 1
+  const current = currentIdx >= 0 ? currentIdx + 1 : 1
 
   return (
     <div className="flex min-h-dvh flex-col bg-gray-950">
       <header className="flex items-center justify-between px-5 py-4">
-        <span className="text-sm font-medium text-gray-400" aria-label={t("stepIndicator", { current: currentStep + 1, total })}>
-          {currentStep + 1} / {total}
+        <span
+          className="text-sm font-medium text-gray-400"
+          aria-label={t("stepIndicator", { current, total })}
+        >
+          {current} / {total}
         </span>
 
         <button

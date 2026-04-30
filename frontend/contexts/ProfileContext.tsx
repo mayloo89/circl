@@ -9,6 +9,9 @@ export interface MyProfile {
   username: string
   display_name: string
   avatar_url: string
+  bio: string
+  interests: string[]
+  location_text: string
   onboarded_at: string | null
 }
 
@@ -42,6 +45,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           username: data.username ?? "",
           display_name: data.display_name ?? "",
           avatar_url: data.avatar_url ?? "",
+          bio: data.bio ?? "",
+          interests: Array.isArray(data.interests) ? data.interests : [],
+          location_text: data.location_text ?? "",
           onboarded_at: data.onboarded_at ?? null,
         })
       }
@@ -62,6 +68,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             username: data.username ?? "",
             display_name: data.display_name ?? "",
             avatar_url: data.avatar_url ?? "",
+            bio: data.bio ?? "",
+            interests: Array.isArray(data.interests) ? data.interests : [],
+            location_text: data.location_text ?? "",
             onboarded_at: data.onboarded_at ?? null,
           })
         }

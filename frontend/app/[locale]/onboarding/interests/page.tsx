@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
+import { useProfileContext } from "@/contexts/ProfileContext"
+import { nextStepAfter } from "@/lib/onboardingSteps"
 import Button from "@/components/ui/Button"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -14,20 +16,13 @@ export default function OnboardingInterestsPage() {
   const router = useRouter()
   const t = useTranslations("onboarding")
   const token = session?.accessToken
+  const { profile, refresh } = useProfileContext()
 
-  const [interests, setInterests] = useState<string[]>([])
+  const [interests, setInterests] = useState<string[]>(profile?.interests ?? [])
   const [query, setQuery] = useState("")
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-
-  useEffect(() => {
-    if (!token) return
-    fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.interests?.length) setInterests(d.interests) })
-      .catch(() => {})
-  }, [token])
 
   useEffect(() => {
     if (!query.trim() || !token) { setSuggestions([]); return }
@@ -57,22 +52,42 @@ export default function OnboardingInterestsPage() {
   }
 
   async function handleContinue() {
-    if (!token || !interests.length) { router.push("/onboarding/location"); return }
-    setSaving(true)
-    setError("")
-    try {
-      const profileRes = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!profileRes.ok) { setError(t("saveError")); return }
-      const current = await profileRes.json()
-      const res = await fetch(`${API_URL}/profiles/me`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...current, interests }),
-      })
-      if (!res.ok) { setError(t("saveError")); return }
-      router.push("/onboarding/location")
-    } finally {
-      setSaving(false)
+    if (!token) return
+    const next = nextStepAfter(profile!, "interests")
+
+    if (interests.length > 0) {
+      setSaving(true)
+      setError("")
+      try {
+        const profileRes = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!profileRes.ok) { setError(t("saveError")); return }
+        const current = await profileRes.json()
+        const res = await fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ...current, interests }),
+        })
+        if (!res.ok) { setError(t("saveError")); return }
+      } finally {
+        setSaving(false)
+      }
+    }
+
+    if (next === "/") {
+      setSaving(true)
+      try {
+        await fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mark_onboarded: true }),
+        })
+        await refresh()
+        router.replace("/")
+      } finally {
+        setSaving(false)
+      }
+    } else {
+      router.push(next)
     }
   }
 

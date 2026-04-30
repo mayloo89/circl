@@ -25,30 +25,29 @@ export default function OnboardingLocationPage() {
   const router = useRouter()
   const t = useTranslations("onboarding")
   const token = session?.accessToken
-  const { refresh } = useProfileContext()
+  const { profile, refresh } = useProfileContext()
 
-  const [locationText, setLocationText] = useState("")
+  const existingText = profile?.location_text ?? ""
+  const [locationText, setLocationText] = useState(existingText)
   const [locationLat, setLocationLat] = useState<number | null>(null)
   const [locationLng, setLocationLng] = useState<number | null>(null)
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState(existingText)
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
   const [locating, setLocating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
+  // Fetch coordinates for the pre-existing location (text comes from context, coords need API)
   useEffect(() => {
-    if (!token) return
+    if (!token || !existingText) return
     fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
-        if (d?.location_text) {
-          setLocationText(d.location_text)
-          setQuery(d.location_text)
-          setLocationLat(d.latitude ?? null)
-          setLocationLng(d.longitude ?? null)
-        }
+        if (d?.latitude != null) setLocationLat(d.latitude)
+        if (d?.longitude != null) setLocationLng(d.longitude)
       })
       .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
   useEffect(() => {

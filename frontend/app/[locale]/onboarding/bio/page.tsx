@@ -1,9 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
+import { useProfileContext } from "@/contexts/ProfileContext"
+import { nextStepAfter } from "@/lib/onboardingSteps"
 import Button from "@/components/ui/Button"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -14,36 +16,49 @@ export default function OnboardingBioPage() {
   const router = useRouter()
   const t = useTranslations("onboarding")
   const token = session?.accessToken
+  const { profile, refresh } = useProfileContext()
 
-  const [bio, setBio] = useState("")
+  const [bio, setBio] = useState(profile?.bio ?? "")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  useEffect(() => {
-    if (!token) return
-    fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.bio) setBio(d.bio) })
-      .catch(() => {})
-  }, [token])
-
   async function handleContinue() {
-    if (!token || !bio.trim()) { router.push("/onboarding/interests"); return }
-    setSaving(true)
-    setError("")
-    try {
-      const profileRes = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!profileRes.ok) { setError(t("saveError")); return }
-      const current = await profileRes.json()
-      const res = await fetch(`${API_URL}/profiles/me`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...current, bio }),
-      })
-      if (!res.ok) { setError(t("saveError")); return }
-      router.push("/onboarding/interests")
-    } finally {
-      setSaving(false)
+    if (!token) return
+    const next = nextStepAfter(profile!, "bio")
+
+    if (bio.trim()) {
+      setSaving(true)
+      setError("")
+      try {
+        const profileRes = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!profileRes.ok) { setError(t("saveError")); return }
+        const current = await profileRes.json()
+        const res = await fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ...current, bio }),
+        })
+        if (!res.ok) { setError(t("saveError")); return }
+      } finally {
+        setSaving(false)
+      }
+    }
+
+    if (next === "/") {
+      setSaving(true)
+      try {
+        await fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mark_onboarded: true }),
+        })
+        await refresh()
+        router.replace("/")
+      } finally {
+        setSaving(false)
+      }
+    } else {
+      router.push(next)
     }
   }
 
