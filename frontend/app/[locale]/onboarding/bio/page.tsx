@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
-import { useOnboardingContext } from "../context"
+import { useOnboardingSkip } from "@/hooks/useOnboardingSkip"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const MAX_BIO = 280
@@ -19,7 +19,7 @@ export default function OnboardingBioPage() {
   const [bio, setBio] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const { skipStep } = useOnboardingContext()
+  const skipStep = useOnboardingSkip()
 
   useEffect(() => {
     if (!token) return
@@ -30,8 +30,8 @@ export default function OnboardingBioPage() {
   }, [token])
 
   async function handleContinue() {
-    if (!token) { await skipStep("/onboarding/interests"); return }
-    if (!bio.trim()) { await skipStep("/onboarding/interests"); return }
+    if (!token) { await skipStep(); return }
+    if (!bio.trim()) { await skipStep(); return }
     setSaving(true)
     setError("")
     try {
