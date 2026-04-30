@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useState } from "react"
 import { usePathname } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
@@ -23,21 +23,24 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   const { data: session } = useSession()
   const t = useTranslations("onboarding")
   const { refresh } = useProfileContext()
+  const [skipping, setSkipping] = useState(false)
 
-  // Mark onboarded as soon as the user enters the wizard so OnboardingRedirect
-  // never fires again, regardless of how many steps they complete or skip.
-  useEffect(() => {
+  async function handleSkipAll() {
+    if (skipping) return
+    setSkipping(true)
     const token = session?.accessToken
-    if (!token) return
-    fetch(`${API_URL}/profiles/me`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ mark_onboarded: true }),
-    })
-      .then(() => refresh())
-      .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken])
+    if (token) {
+      try {
+        await fetch(`${API_URL}/profiles/me`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mark_onboarded: true }),
+        })
+        await refresh()
+      } catch {}
+    }
+    router.replace("/")
+  }
 
   const currentStep = stepFromPathname(pathname)
   const total = STEPS.length
@@ -45,25 +48,15 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   return (
     <div className="flex min-h-dvh flex-col bg-gray-950">
       <header className="flex items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-2" aria-label={t("stepIndicator", { current: currentStep + 1, total })}>
-          {STEPS.map((_, i) => (
-            <span
-              key={i}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                i === currentStep
-                  ? "w-6 bg-brand-accent"
-                  : i < currentStep
-                  ? "w-2 bg-brand-primary"
-                  : "w-2 bg-gray-700"
-              }`}
-            />
-          ))}
-        </div>
+        <span className="text-sm font-medium text-gray-400" aria-label={t("stepIndicator", { current: currentStep + 1, total })}>
+          {currentStep + 1} / {total}
+        </span>
 
         <button
           type="button"
-          onClick={() => router.replace("/")}
-          className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
+          onClick={handleSkipAll}
+          disabled={skipping}
+          className="text-sm text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
         >
           {t("skipAll")}
         </button>

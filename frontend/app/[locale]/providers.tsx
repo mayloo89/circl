@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { SessionProvider, signOut, useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
 import { useLocale } from "next-intl"
@@ -25,19 +25,39 @@ function SessionGuard() {
   return null
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+
 function OnboardingRedirect() {
-  const { status } = useSession()
-  const { profile } = useProfileContext()
+  const { data: session, status } = useSession()
+  const { profile, refresh } = useProfileContext()
   const pathname = usePathname()
   const router = useRouter()
   const locale = useLocale()
+  const markingRef = useRef(false)
 
   useEffect(() => {
     if (status !== "authenticated" || profile === null) return
     if (profile.onboarded_at !== null) return
     if (pathname.includes("/onboarding") || pathname.includes("/profile")) return
-    router.replace(`/${locale}/onboarding/photo`)
-  }, [status, profile, pathname, router, locale])
+    if (markingRef.current) return
+    markingRef.current = true
+
+    async function markAndRedirect() {
+      const token = session?.accessToken
+      if (token) {
+        try {
+          await fetch(`${API_URL}/profiles/me`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ mark_onboarded: true }),
+          })
+          await refresh()
+        } catch {}
+      }
+      router.replace(`/${locale}/onboarding/photo`)
+    }
+    markAndRedirect()
+  }, [status, profile, pathname, router, locale, session, refresh])
 
   return null
 }
