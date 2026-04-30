@@ -484,6 +484,7 @@
       "placeholder": "ex. São Paulo, Brasil",
       "useMyLocation": "Usar minha localização",
       "detecting": "Detectando…"
-    }
+    },
+    "neverShow": "Não mostrar novamente"
   }
 }

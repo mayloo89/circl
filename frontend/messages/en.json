@@ -484,6 +484,7 @@
       "placeholder": "e.g. Buenos Aires, Argentina",
       "useMyLocation": "Use my location",
       "detecting": "Detecting…"
-    }
+    },
+    "neverShow": "Don't show this again"
   }
 }
