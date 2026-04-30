@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
@@ -23,27 +24,27 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   const t = useTranslations("onboarding")
   const { refresh } = useProfileContext()
 
+  // Mark onboarded as soon as the user enters the wizard so OnboardingRedirect
+  // never fires again, regardless of how many steps they complete or skip.
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token) return
+    fetch(`${API_URL}/profiles/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ mark_onboarded: true }),
+    })
+      .then(() => refresh())
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.accessToken])
+
   const currentStep = stepFromPathname(pathname)
   const total = STEPS.length
 
-  async function handleSkipAll() {
-    const token = session?.accessToken
-    if (token) {
-      await fetch(`${API_URL}/profiles/me`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mark_onboarded: true }),
-      }).catch(() => {})
-    }
-    await refresh()
-    router.replace("/")
-  }
-
   return (
     <div className="flex min-h-dvh flex-col bg-gray-950">
-      {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
-        {/* Step dots */}
         <div className="flex items-center gap-2" aria-label={t("stepIndicator", { current: currentStep + 1, total })}>
           {STEPS.map((_, i) => (
             <span
@@ -61,14 +62,13 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
 
         <button
           type="button"
-          onClick={handleSkipAll}
+          onClick={() => router.replace("/")}
           className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
         >
           {t("skipAll")}
         </button>
       </header>
 
-      {/* Step content */}
       <main className="flex flex-1 flex-col items-center px-5 pb-10 pt-6">
         <div className="w-full max-w-md">
           {children}

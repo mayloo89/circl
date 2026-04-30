@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useUpload } from "@/hooks/useUpload"
-import { useOnboardingSkip } from "@/hooks/useOnboardingSkip"
 import Button from "@/components/ui/Button"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -24,7 +23,6 @@ export default function OnboardingPhotoPage() {
 
   const { upload, uploading } = useUpload(session?.accessToken)
   const token = session?.accessToken
-  const skipStep = useOnboardingSkip()
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -37,7 +35,7 @@ export default function OnboardingPhotoPage() {
   }
 
   async function handleContinue() {
-    if (!avatarUrl || !token) { await skipStep(); return }
+    if (!avatarUrl || !token) { router.push("/onboarding/bio"); return }
     setSaving(true)
     setError("")
     try {
@@ -60,7 +58,6 @@ export default function OnboardingPhotoPage() {
         <p className="text-sm text-gray-400">{t("photo.subtitle")}</p>
       </div>
 
-      {/* Avatar picker */}
       <div className="flex flex-col items-center gap-4">
         <button
           type="button"

@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
-import { useOnboardingSkip } from "@/hooks/useOnboardingSkip"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const MAX_INTERESTS = 20
@@ -21,7 +20,6 @@ export default function OnboardingInterestsPage() {
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const skipStep = useOnboardingSkip()
 
   useEffect(() => {
     if (!token) return
@@ -59,8 +57,7 @@ export default function OnboardingInterestsPage() {
   }
 
   async function handleContinue() {
-    if (!token) { await skipStep(); return }
-    if (!interests.length) { await skipStep(); return }
+    if (!token || !interests.length) { router.push("/onboarding/location"); return }
     setSaving(true)
     setError("")
     try {
@@ -86,7 +83,6 @@ export default function OnboardingInterestsPage() {
         <p className="text-sm text-gray-400">{t("interests.subtitle")}</p>
       </div>
 
-      {/* Search input */}
       <div className="relative">
         <input
           type="text"
@@ -119,7 +115,6 @@ export default function OnboardingInterestsPage() {
         )}
       </div>
 
-      {/* Tags */}
       {interests.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {interests.map((tag) => (
