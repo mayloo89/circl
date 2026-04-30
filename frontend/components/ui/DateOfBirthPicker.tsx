@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 
 function daysInMonth(month: number, year: number): number {
   if (!month) return 31
@@ -37,17 +37,6 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
   const [localYear,  setLocalYear]  = useState(y0)
   const [localMonth, setLocalMonth] = useState(m0)
   const [localDay,   setLocalDay]   = useState(d0)
-
-  // Sync local state only when the parent-controlled value changes externally
-  const prevValue = useRef(value)
-  useEffect(() => {
-    if (value === prevValue.current) return
-    prevValue.current = value
-    const [y, m, d] = parseParts(value)
-    setLocalYear(y)
-    setLocalMonth(m)
-    setLocalDay(d)
-  }, [value])
 
   function emit(y: number, m: number, d: number) {
     if (!y || !m || !d) { onChange(""); return }
