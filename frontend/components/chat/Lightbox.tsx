@@ -11,7 +11,7 @@ export default function Lightbox({ url, type, onClose }: LightboxProps) {
     <Modal open onClose={onClose}>
       <button
         aria-label="Close"
-        className="absolute right-4 top-4 rounded-full p-2 text-white/70 hover:text-white"
+        className="absolute right-4 top-4 cursor-pointer rounded-full p-2 text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50"
         onClick={onClose}
       >
         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

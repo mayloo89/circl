@@ -60,7 +60,7 @@ export default function PasswordField({
           onClick={() => setVisible((v) => !v)}
           tabIndex={-1}
           aria-label={visible ? "Hide password" : "Show password"}
-          className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-200 focus:outline-none"
+          className="absolute inset-y-0 right-0 flex cursor-pointer items-center px-3 text-gray-400 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover"
         >
           {visible
             ? <EyeSlashIcon className="h-4 w-4" />

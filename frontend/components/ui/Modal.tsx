@@ -75,6 +75,8 @@ export default function Modal({ open, onClose, children }: ModalProps) {
   return (
     <div
       ref={backdropRef}
+      role="dialog"
+      aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
       onClick={onClose}
     >

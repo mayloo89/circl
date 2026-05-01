@@ -446,7 +446,9 @@ export default function ProfilePage() {
                 {t("previewAsVisitor")}
               </Button>
             )}
-            <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>←</Button>
+            <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </Button>
           </div>
         </div>
 
@@ -542,8 +544,8 @@ export default function ProfilePage() {
                     "text-gray-500"
                   }`}>
                     {usernameStatus === "checking" ? "Checking…" :
-                     usernameStatus === "available" ? "✓ Available" :
-                     usernameStatus === "taken" ? "✗ Taken" :
+                     usernameStatus === "available" ? <><svg className="mr-0.5 inline h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>Available</> :
+                     usernameStatus === "taken" ? <><svg className="mr-0.5 inline h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>Taken</> :
                      usernameStatus === "invalid" ? "3–30 chars, lowercase, digits, _" : ""}
                   </span>
                 )}

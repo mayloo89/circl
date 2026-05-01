@@ -8,7 +8,7 @@ import Avatar from "@/components/ui/Avatar"
 
 function BellIcon({ muted }: { muted?: boolean }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {muted ? (
         <>
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -62,7 +62,7 @@ export default function TopBar() {
           <button
             onClick={enable}
             aria-label={t("enablePush")}
-            className="p-1.5 text-gray-400 hover:text-white transition-colors"
+            className="cursor-pointer rounded p-1.5 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
           >
             <BellIcon muted />
           </button>
@@ -71,7 +71,7 @@ export default function TopBar() {
           <button
             onClick={disable}
             aria-label={t("disablePush")}
-            className="p-1.5 text-green-400 hover:text-gray-400 transition-colors"
+            className="cursor-pointer rounded p-1.5 text-green-400 transition-colors hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
           >
             <BellIcon />
           </button>

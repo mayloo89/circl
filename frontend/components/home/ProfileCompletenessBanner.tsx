@@ -94,9 +94,9 @@ export default function ProfileCompletenessBanner() {
         <button
           onClick={dismiss}
           aria-label={t("dismiss")}
-          className="flex-none text-gray-600 hover:text-gray-400 transition-colors p-1"
+          className="flex-none cursor-pointer rounded p-1 text-gray-600 transition-colors hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
@@ -109,7 +109,7 @@ export default function ProfileCompletenessBanner() {
           className="inline-flex items-center gap-1 rounded bg-brand-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover transition-colors"
         >
           {t("continueSetup")}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </Link>
