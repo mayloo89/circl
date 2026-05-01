@@ -241,10 +241,18 @@ export default function RegisterPage() {
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">…</span>
                 )}
                 {!usernameChecking && usernameAvailable === true && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-sm">✓</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400" aria-label="Available">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </span>
                 )}
                 {!usernameChecking && usernameAvailable === false && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 text-sm">✗</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400" aria-label="Unavailable">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </span>
                 )}
               </div>
               {fieldErrors.username && (

@@ -96,7 +96,7 @@ export default function MessageBubble({
                   /* View-once media — tap to reveal */
                   <button
                     onClick={() => onViewOnce(msg.id)}
-                    className="flex w-44 flex-col items-center gap-3 py-3 transition-transform active:scale-95"
+                    className="flex w-44 cursor-pointer flex-col items-center gap-3 py-3 transition-opacity active:opacity-70 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded-lg"
                   >
                     <div className="relative">
                       <span className="absolute inset-0 animate-ping rounded-full bg-brand-muted/30" />
@@ -125,7 +125,7 @@ export default function MessageBubble({
                   /* View-once text — tap to reveal */
                   <button
                     onClick={() => onViewOnce(msg.id)}
-                    className="flex items-center gap-2 px-1 py-0.5 transition-transform active:scale-95"
+                    className="flex cursor-pointer items-center gap-2 px-1 py-0.5 transition-opacity active:opacity-70 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded"
                   >
                     <div className="relative flex-none">
                       <span className="absolute inset-0 animate-ping rounded-full bg-brand-muted/30" />
@@ -152,7 +152,7 @@ export default function MessageBubble({
               ) : msg.type === "image" && msg.content ? (
                 <button
                   onClick={() => onOpenMedia(msg.content, "image")}
-                  className="block overflow-hidden rounded-2xl transition-transform active:scale-95"
+                  className="block cursor-pointer overflow-hidden rounded-2xl transition-opacity active:opacity-70 focus:outline-none focus:ring-2 focus:ring-brand-hover"
                 >
                   <Image
                     src={"thumbnail_url" in msg && msg.thumbnail_url ? msg.thumbnail_url : msg.content}
@@ -165,7 +165,7 @@ export default function MessageBubble({
               ) : msg.type === "video" && msg.content ? (
                 <button
                   onClick={() => onOpenMedia(msg.content, "video")}
-                  className={`flex items-center gap-2 px-4 py-2 transition-transform active:scale-95 ${isOwn ? "text-brand-light hover:text-white" : "text-brand-muted hover:text-brand-subtle"}`}
+                  className={`flex cursor-pointer items-center gap-2 px-4 py-2 transition-opacity active:opacity-70 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded ${isOwn ? "text-brand-light hover:text-white" : "text-brand-muted hover:text-brand-subtle"}`}
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
@@ -179,7 +179,9 @@ export default function MessageBubble({
                   rel="noopener noreferrer"
                   className={`flex items-center gap-2 ${isOwn ? "text-brand-light hover:text-white" : "text-brand-muted hover:text-brand-subtle"}`}
                 >
-                  <span>📎</span>
+                  <svg className="h-4 w-4 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                  </svg>
                   <span className="truncate underline">{msg.content.split("/").pop() ?? "attachment"}</span>
                 </a>
               ) : (

@@ -93,7 +93,7 @@ export default function OnboardingPhotoPage() {
           aria-label={t("photo.choosePhoto")}
         >
           {preview ? (
-            <Image src={preview} alt="" fill className="object-cover" />
+            <Image src={preview} alt="Profile photo preview" fill className="object-cover" />
           ) : (
             <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-gray-500 group-hover:text-gray-300">
               <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">

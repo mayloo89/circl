@@ -31,7 +31,7 @@ type Upload struct {
 	Status       string     `json:"status"` // "pending" or "committed"
 	ThumbnailKey *string    `json:"thumbnail_key,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
-	CommittedAt  *time.Time `json:"committed_at,omitempty"`
+	CommittedAt  *time.Time `json:"committed_at,omitzero"`
 }
 
 // Store is the persistence contract for uploads.
@@ -81,7 +81,7 @@ type RequestUploadOutput struct {
 	UploadID   string     `json:"upload_id"`
 	UploadURL  string     `json:"upload_url"`
 	StorageKey string     `json:"storage_key"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitzero"`
 }
 
 // RequestUpload validates the upload, creates a pending record, and returns

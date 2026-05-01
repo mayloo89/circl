@@ -46,7 +46,7 @@ export default function PhotoGallery({
             <button
               key={photo.id}
               onClick={() => onPhotoClick?.(photo.url)}
-              className="relative aspect-square overflow-hidden rounded-lg bg-gray-800 transition-transform active:scale-95"
+              className="relative aspect-square overflow-hidden rounded-lg bg-gray-800 cursor-pointer transition-opacity hover:opacity-90 active:opacity-70 focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               <Image
                 src={photo.url}
@@ -79,7 +79,7 @@ export default function PhotoGallery({
               <div key={photo.id} className="relative aspect-square overflow-hidden rounded-lg bg-gray-800">
                 <Image
                   src={photo.url}
-                  alt=""
+                  alt="Profile photo"
                   fill
                   className="object-cover"
                   sizes="(max-width: 512px) 33vw, 170px"
@@ -102,7 +102,7 @@ export default function PhotoGallery({
                   <button
                     aria-label={t("deletePhoto")}
                     onClick={() => setConfirmDeleteId(photo.id)}
-                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-red-600"
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
@@ -121,7 +121,7 @@ export default function PhotoGallery({
                   type="button"
                   onClick={onAdd}
                   disabled={uploading}
-                  className="flex h-full w-full items-center justify-center text-gray-600 transition-colors hover:border-brand-primary hover:text-brand-hover"
+                  className="flex h-full w-full cursor-pointer items-center justify-center text-gray-600 transition-colors hover:border-brand-primary hover:text-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover"
                 >
                   {uploading ? (
                     <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">

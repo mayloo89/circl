@@ -9,7 +9,13 @@ interface PresenceDotProps {
 }
 
 export default function PresenceDot({ online, size = "md", className = "" }: PresenceDotProps) {
-  const sizeClass  = size === "sm" ? "h-1.5 w-1.5" : "h-2.5 w-2.5"
+  const sizeClass = size === "sm" ? "h-1.5 w-1.5" : "h-2.5 w-2.5"
   const colorClass = online ? "bg-green-400" : "bg-gray-600"
-  return <span className={`${sizeClass} rounded-full ${colorClass} ${className}`} />
+  return (
+    <span
+      className={`${sizeClass} rounded-full ${colorClass} ${className}`}
+      role="status"
+      aria-label={online ? "Online" : "Offline"}
+    />
+  )
 }

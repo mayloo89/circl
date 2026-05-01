@@ -69,7 +69,7 @@ type serverMessage struct {
 	Content         string     `json:"content,omitempty"`
 	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
 	ViewOnce        bool       `json:"view_once,omitempty"`
-	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	ExpiresAt       *time.Time `json:"expires_at,omitzero"`
 	CreatedAt       time.Time  `json:"created_at,omitzero"`
 }
 

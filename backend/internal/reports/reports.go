@@ -51,7 +51,7 @@ type Report struct {
 	Description    string     `json:"description"`
 	Status         string     `json:"status"`
 	CreatedAt      time.Time  `json:"created_at"`
-	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
+	ReviewedAt     *time.Time `json:"reviewed_at,omitzero"`
 	ReviewedBy     *string    `json:"reviewed_by,omitempty"`
 }
 
@@ -67,7 +67,7 @@ type ReportWithUserInfo struct {
 	Description    string     `json:"description"`
 	Status         string     `json:"status"`
 	CreatedAt      time.Time  `json:"created_at"`
-	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
+	ReviewedAt     *time.Time `json:"reviewed_at,omitzero"`
 	ReviewedBy     *string    `json:"reviewed_by,omitempty"`
 }
 

@@ -506,13 +506,15 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button aria-label={t("backToMessages")} onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="text-gray-400 hover:text-gray-200">
-          ←
+        <button aria-label={t("backToMessages")} onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="cursor-pointer text-gray-400 transition-colors hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
         {room ? (
           room.type === "dm" ? (
             <>
-              <button onClick={() => router.push(`/profile/${room.peer_username || room.peer_id}`)} className="flex flex-1 items-center gap-3 hover:opacity-80">
+              <button onClick={() => router.push(`/profile/${room.peer_username || room.peer_id}`)} className="flex flex-1 cursor-pointer items-center gap-3 transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded">
                 <Avatar src={room.peer_avatar_url} name={room.peer_name || "?"} size="md" />
                 <div className="flex flex-col text-left">
                   <span className="text-sm font-medium text-white">{room.peer_name}</span>
@@ -534,7 +536,7 @@ export default function ChatRoomPage() {
                 type="button"
                 aria-label={t("blockUserTitle")}
                 onClick={() => setBlockConfirmOpen(true)}
-                className="shrink-0 text-xs text-gray-600 hover:text-red-400"
+                className="shrink-0 cursor-pointer text-xs text-gray-600 transition-colors hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-400 rounded"
               >
                 {t("block")}
               </button>
@@ -544,7 +546,7 @@ export default function ChatRoomPage() {
               <button
                 type="button"
                 onClick={() => setGroupPanelOpen(true)}
-                className="flex flex-1 items-center gap-3 hover:opacity-80 text-left"
+                className="flex flex-1 cursor-pointer items-center gap-3 text-left transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded"
                 aria-label={room.type === "channel" ? t("channelSettings") : t("groupSettings")}
               >
                 <Avatar name={groupName || room.name || "G"} size="md" color="indigo" />

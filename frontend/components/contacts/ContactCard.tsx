@@ -39,7 +39,7 @@ export default function ContactCard({
         <span className="text-sm text-gray-200">{label}</span>
       </div>
     ) : (
-      <button onClick={onNavigate} className="flex items-center gap-3 text-left hover:opacity-80">
+      <button onClick={onNavigate} className="flex items-center gap-3 text-left cursor-pointer hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-brand-hover rounded">
         <div className="relative flex-none">
           <Avatar src={avatarUrl} name={label} size="md" />
           {variant === "contact" && (

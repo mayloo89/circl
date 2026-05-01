@@ -84,7 +84,11 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
           <h2 className="text-base font-semibold text-white">{t("modalTitle")}</h2>
-          <button type="button" onClick={handleClose} className="text-gray-500 hover:text-gray-300" aria-label="Close">✕</button>
+          <button type="button" onClick={handleClose} className="cursor-pointer text-gray-500 transition-colors hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
         <div className="space-y-4 p-5">
           <Input label={t("channelNameLabel")} placeholder={t("channelNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} autoFocus />

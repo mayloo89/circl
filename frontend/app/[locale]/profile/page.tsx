@@ -509,7 +509,7 @@ export default function ProfilePage() {
               className="group relative h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-brand-hover focus:outline-none focus:ring-brand-hover"
             >
               {avatarURL ? (
-                <Image src={avatarURL} alt="" width={96} height={96} className="h-full w-full object-cover" />
+                <Image src={avatarURL} alt="Your avatar" width={96} height={96} className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-3xl text-gray-500 group-hover:text-gray-300">
                   {displayName ? displayName[0].toUpperCase() : "?"}

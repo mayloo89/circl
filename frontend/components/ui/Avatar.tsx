@@ -27,7 +27,7 @@ export default function Avatar({ src, name, size = "md", color = "gray", classNa
     return (
       <Image
         src={src}
-        alt=""
+        alt={name ?? "User avatar"}
         width={px}
         height={px}
         className={`${box} flex-none rounded-full object-cover ${ring} ${className}`}

@@ -38,9 +38,9 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
-            alt=""
+            alt={profile.display_name ?? "Nearby user"}
             fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            className="object-cover transition-opacity duration-300 group-hover:opacity-80"
             sizes="56px"
           />
         ) : (

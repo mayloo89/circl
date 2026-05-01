@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -29,7 +30,7 @@ func (s *stubRefreshStore) Get(_ context.Context, hash string) (*refreshTokenRec
 	if !ok {
 		return nil, ErrInvalidToken
 	}
-	if ts, revoked := s.revoked[rt.UserID]; revoked && rt.IssuedAt.UnixNano() <= ts {
+	if ts, revoked := s.revoked[rt.UserID]; revoked && rt.IssuedAt.UnixNano() < ts {
 		delete(s.tokens, hash)
 		return nil, ErrInvalidToken
 	}
@@ -64,7 +65,7 @@ func TestStubRefreshStore_CreateGet(t *testing.T) {
 
 func TestStubRefreshStore_NotFound(t *testing.T) {
 	_, err := newStubRefreshStore().Get(t.Context(), "nonexistent")
-	if err != ErrInvalidToken {
+	if !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("expected ErrInvalidToken, got %v", err)
 	}
 }
@@ -74,7 +75,7 @@ func TestStubRefreshStore_Delete(t *testing.T) {
 	store := newStubRefreshStore()
 	_ = store.Create(ctx, "hash1", "user1", "user", time.Now(), RefreshTokenTTLRemember)
 	_ = store.Delete(ctx, "hash1")
-	if _, err := store.Get(ctx, "hash1"); err != ErrInvalidToken {
+	if _, err := store.Get(ctx, "hash1"); !errors.Is(err, ErrInvalidToken) {
 		t.Error("expected token to be gone after Delete")
 	}
 }
@@ -89,7 +90,7 @@ func TestStubRefreshStore_RevokeAllForUser(t *testing.T) {
 	_ = store.RevokeAllForUser(ctx, "user1")
 
 	// Token issued before revocation must be rejected.
-	if _, err := store.Get(ctx, "old"); err != ErrInvalidToken {
+	if _, err := store.Get(ctx, "old"); !errors.Is(err, ErrInvalidToken) {
 		t.Error("expected old token to be revoked")
 	}
 

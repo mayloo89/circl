@@ -30,7 +30,7 @@ export default function Lightbox({ url, type, onClose }: LightboxProps) {
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
-          alt=""
+          alt="Full size image"
           className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
           onClick={(e) => e.stopPropagation()}
         />
