@@ -23,8 +23,7 @@ export default function PasswordRequirements({ password }: { password: string })
             className={`flex items-center gap-2 text-xs ${met ? "text-green-400" : "text-gray-500"}`}
           >
             <svg
-              width="12"
-              height="12"
+              className="h-3 w-3"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

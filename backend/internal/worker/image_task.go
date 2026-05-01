@@ -215,12 +215,8 @@ func resizeToFit(src image.Image, maxPx int) image.Image {
 		dh = maxPx
 		dw = w * maxPx / h
 	}
-	if dw < 1 {
-		dw = 1
-	}
-	if dh < 1 {
-		dh = 1
-	}
+	dw = max(dw, 1)
+	dh = max(dh, 1)
 	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
 	draw.BiLinear.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
 	return dst

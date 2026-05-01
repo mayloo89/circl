@@ -464,7 +464,8 @@ func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore prof
 			return
 		}
 		if req.Username == "" {
-			req.Username = "u_" + strings.ReplaceAll(req.Email[:strings.Index(req.Email, "@")], ".", "_")
+			local, _, _ := strings.Cut(req.Email, "@")
+			req.Username = "u_" + strings.ReplaceAll(local, ".", "_")
 		}
 
 		user, err := authSvc.Register(r.Context(), req.Email, req.Password)

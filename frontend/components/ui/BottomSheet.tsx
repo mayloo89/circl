@@ -15,8 +15,8 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
     }
-    window.addEventListener("keydown", handleKey)
-    return () => window.removeEventListener("keydown", handleKey)
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
   }, [open, onClose])
 
   useEffect(() => {
@@ -47,10 +47,10 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
           {title && <p className="text-sm font-semibold text-white">{title}</p>}
           <button
             onClick={onClose}
-            className="ml-auto rounded p-1.5 text-gray-400 hover:text-white transition-colors"
+            className="ml-auto cursor-pointer rounded p-1.5 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
             aria-label="Close"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>

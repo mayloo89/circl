@@ -31,5 +31,11 @@ backend/data/
 .idea/
 .vscode/
 
+# AI agent configs (local, not project-specific)
+.claude/
+.agents/
+.opencode/
+skills-lock.json
+
 # Local CI script
 run-ci-local.sh

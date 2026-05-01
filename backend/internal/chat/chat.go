@@ -107,7 +107,7 @@ type RoomSummary struct {
 	PeerAvatarURL string          `json:"peer_avatar_url,omitempty"`
 	// PeerLastReadAt is the peer's last_read_at timestamp for DM rooms.
 	// Used to seed the initial read-receipt state without a round-trip.
-	PeerLastReadAt *time.Time      `json:"peer_last_read_at,omitempty"`
+	PeerLastReadAt *time.Time      `json:"peer_last_read_at,omitzero"`
 	LastMessage    *MessageSummary `json:"last_message"`
 	UnreadCount    int             `json:"unread_count"`
 	CreatedAt      time.Time       `json:"created_at"`
@@ -125,7 +125,7 @@ type Message struct {
 	// ThumbnailURL is the public URL of the image thumbnail, generated
 	// asynchronously after upload. Empty for non-image messages.
 	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
-	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	ExpiresAt       *time.Time `json:"expires_at,omitzero"`
 	ViewOnce        bool       `json:"view_once"`
 	// Tombstone is true when the message content has been permanently erased
 	// (view-once viewed or TTL expired). The record is kept so the chat

@@ -120,7 +120,7 @@ function ReviewModal({
               <button
                 key={s}
                 onClick={() => setNewStatus(s)}
-                className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
                   newStatus === s
                     ? "bg-brand-primary text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
@@ -140,7 +140,7 @@ function ReviewModal({
                 <button
                   key={a}
                   onClick={() => setAction(a)}
-                  className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
                     action === a
                       ? "bg-brand-primary text-white"
                       : "bg-gray-800 text-gray-300 hover:bg-gray-700"

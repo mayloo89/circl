@@ -37,13 +37,13 @@ func RequireAuth(jwtSecret string, checker ...UserStatusChecker) func(http.Handl
 				return
 			}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || parts[0] != "Bearer" {
+			scheme, tok, ok := strings.Cut(authHeader, " ")
+			if !ok || scheme != "Bearer" {
 				writeUnauthorized(w)
 				return
 			}
 
-			claims, err := token.Validate(parts[1], jwtSecret)
+			claims, err := token.Validate(tok, jwtSecret)
 			if err != nil {
 				writeUnauthorized(w)
 				return

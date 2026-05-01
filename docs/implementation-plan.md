@@ -143,7 +143,9 @@
 
 - [x] **UX overhaul — chat polish + auth UX + onboarding smart steps** ([PR #74](https://github.com/mayloo89/circl/pull/74)): `PasswordField` (show/hide toggle) on registration, login, settings, and reset-password pages; `DateOfBirthPicker` (three equal-width numeric selects DD/MM/YYYY, local state preserves partial selections); scroll-to-bottom FAB in chat room; chat list search (client-side filter) + 10s silent polling; onboarding smart steps via `lib/onboardingSteps.ts` (`incompleteSteps`, `nextStepAfter`) — skips already-complete steps and redirects to first incomplete on entry; E2E tests updated for new date picker.
 
-- [ ] **Phase 4 — Deployment + observability hosting** (PR #75–76): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
+- [x] **Modern Go + UX/UI audit fixes** ([PR #75](https://github.com/mayloo89/circl/pull/75)): 19 Go modernizations — `errors.Is()` (6 sites), `omitzero` (8 sites), `max()` builtin (2 sites), `for range n` (1 site), `strings.Cut` (1 site); frontend accessibility/usability pass — `cursor-pointer` global in `Button.tsx` + 20+ raw buttons; `prefers-reduced-motion` + `scroll-padding-top` + `scrollbar-hide` in `globals.css`; focus rings on all raw `<button>` elements; 5 emoji icons → accessible SVGs; descriptive `alt` text on 6 images; layout shift fixes (`scale-*` → `opacity-*`); BottomNav icon size unified to `h-5 w-5`.
+
+- [ ] **Phase 4 — Deployment + observability hosting** (PR #76–77): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
 
 - [ ] **Phase 5 — Final polish & launch** (PR #76–78): accessibility audit (WCAG 2.1 AA); runbooks (`docs/runbooks/`); final docs (README, CONTRIBUTING, architecture diagram).
 

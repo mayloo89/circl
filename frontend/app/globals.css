@@ -86,3 +86,23 @@ h1, h2, h3, h4, h5, h6 {
     animation: none;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+html {
+  scroll-padding-top: 3.5rem;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

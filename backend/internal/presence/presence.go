@@ -2,6 +2,7 @@ package presence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,7 +43,7 @@ func (s *Store) Heartbeat(ctx context.Context, userID string) (justOnline bool, 
 
 	// SET key 1 EX 35 NX — only sets if not exists.
 	result, err := s.rdb.SetArgs(ctx, key, 1, redis.SetArgs{TTL: onlineTTL, Mode: "NX"}).Result()
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		return false, fmt.Errorf("presence heartbeat: redis set nx: %w", err)
 	}
 
@@ -87,7 +88,7 @@ func (s *Store) GetPresence(ctx context.Context, userIDs []string) ([]Info, erro
 	for i, id := range userIDs {
 		cmds[i] = pipe.Exists(ctx, keyPrefix+id)
 	}
-	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 		return nil, fmt.Errorf("get presence: redis pipeline: %w", err)
 	}
 

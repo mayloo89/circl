@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Modern Go + UX/UI audit fixes** ([PR #75](https://github.com/mayloo89/circl/pull/75)):
+  - **Go backend — 19 modernizations:** `errors.Is()` replaces `==` / `!=` comparisons on sentinel errors in `presence.go`, `db.go`, and `refresh_store_test.go` (6 sites); `omitzero` replaces `omitempty` on all `*time.Time` and map fields across `chat/handler.go`, `chat/chat.go`, `uploads/uploads.go`, `reports/reports.go`, and `worker/otel.go` (8 sites); `max()` builtin replaces explicit clamp blocks in `worker/image_task.go` (2 sites); `for range n` replaces `for i := 0; i < n; i++` in `ratelimit/redis_test.go`; `strings.Cut` replaces `[:strings.Index()]` slice in `cmd/api/main.go`
+  - **Frontend — cursor-pointer global:** `cursor-pointer` added to `Button.tsx` base class, fixing all 23+ `<Button>` instances; `cursor-pointer` also added to every raw `<button>` across `ContactCard`, `PushPrompt`, `ChatInput`, `PhotoGallery`, `MessageBubble`, `chat/[roomId]/page`, `admin/reports`, `channels/page`, and `browse/page`
+  - **Focus rings on raw `<button>` elements:** `focus:outline-none focus:ring-2 focus:ring-brand-hover` (or `focus:ring-red-500` for destructive actions) added to every interactive `<button>` not using the `<Button>` component (20+ sites)
+  - **`prefers-reduced-motion` global rule:** added to `globals.css` — `*::before/after` rule sets all `transition-duration` and `animation-duration` to `0.01ms !important`, covering the 59 component-level transitions that were previously un-reduced
+  - **`scroll-padding-top`:** `html { scroll-padding-top: 3.5rem }` added to `globals.css` for correct anchor navigation with fixed header
+  - **`scrollbar-hide` utility:** defined in `globals.css` (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`) for `NearbyProfilesWidget`
+  - **Emojis → SVG icons:** replaced 5 emoji icons with accessible SVGs — username availability indicators (✓ → checkmark SVG, ✗ → X SVG) in `register/page.tsx`, close button (✕ → X SVG) in `channels/page.tsx`, back arrow (← → chevron-left SVG) in `chat/[roomId]/page.tsx`, paperclip (📎 → paperclip SVG) in `MessageBubble.tsx`
+  - **Alt text:** descriptive `alt` attributes added to 6 previously-empty images — `Avatar.tsx` (`alt={name ?? "User avatar"}`), `PhotoGallery.tsx` (`alt="Profile photo"` × 2), `Lightbox.tsx` (`alt="Full size image"`), `onboarding/photo/page.tsx` (`alt="Profile photo preview"`), `profile/page.tsx` (`alt="Your avatar"`), `NearbyProfilesWidget.tsx` (`alt={profile.display_name ?? "Nearby user"}`)
+  - **Layout shift fixes:** `active:scale-95` → `active:opacity-70` on view-once and media buttons in `MessageBubble.tsx`; `group-hover:scale-105` → `group-hover:opacity-80` on profile avatar images in `browse/page.tsx` and `NearbyProfilesWidget.tsx`; `active:scale-95` → `hover:opacity-90 active:opacity-70` on photo grid in `PhotoGallery.tsx`
+  - **BottomNav icon consistency:** all 6 SVG icon functions changed from hardcoded `width="22" height="22"` to `className="h-5 w-5"` (aligns with the rest of the icon system)
+  - **`aria-label` on unlabeled inputs:** added `aria-label` to the interests search input in `browse/page.tsx`; `transition-colors` / `transition-opacity` added alongside hover states that were missing transitions (7 sites)
+
 - **Chat polish + auth UX + onboarding smart steps** ([PR #74](https://github.com/mayloo89/circl/pull/74)):
   - `PasswordField` component with show/hide toggle; replaces `<input type="password">` on registration, login, settings, and reset-password pages
   - `DateOfBirthPicker` component with three equal-width numeric selects (DD / MM / YYYY); replaces `<input type="date">`; uses local state so partial selections are preserved across React re-renders

@@ -99,7 +99,7 @@ export default function ChatInput({
               disabled={!connected || uploading}
               aria-label={t("attachFile")}
               title={t("attachFile")}
-              className="flex-none rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
+              className="flex-none cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               {uploading ? (
                 <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -122,7 +122,7 @@ export default function ChatInput({
             disabled={!connected}
             aria-label={t("ephemeralMessage")}
             title={t("ephemeralMessage")}
-            className={`rounded-full p-2 transition-colors disabled:opacity-40 ${
+            className={`cursor-pointer rounded-full p-2 transition-colors disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover ${
               ephemeral !== "off"
                 ? "text-amber-400 hover:bg-amber-400/10"
                 : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
@@ -149,7 +149,7 @@ export default function ChatInput({
                 <button
                   key={mode}
                   onClick={() => { onEphemeralChange(mode); setShowEphemeralMenu(false) }}
-                  className={`flex w-full items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-gray-800 ${
+                  className={`flex w-full cursor-pointer items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover ${
                     ephemeral === mode ? "text-amber-400" : "text-gray-300"
                   }`}
                 >
@@ -182,7 +182,7 @@ export default function ChatInput({
         <button
           onClick={handleSend}
           disabled={!connected || !input.trim()}
-          className="rounded-full bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-40"
+          className="cursor-pointer rounded-full bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover"
         >
           {t("send")}
         </button>

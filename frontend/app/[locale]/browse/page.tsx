@@ -116,7 +116,7 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
             src={heroURL}
             alt={profile.display_name}
             fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            className="object-cover transition-opacity duration-300 group-hover:opacity-80"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         </div>
@@ -303,6 +303,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             value={interestQuery}
             onChange={(e) => setInterestQuery(e.target.value)}
             placeholder={t("searchInterests")}
+            aria-label={t("searchInterests")}
             className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
           {interestSuggestions.length > 0 && (
@@ -510,9 +511,9 @@ export default function BrowsePage() {
         {/* Mobile: Filters button */}
         <button
           onClick={() => setSheetOpen(true)}
-          className="lg:hidden flex items-center gap-2 rounded-full bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 ring-1 ring-gray-700 hover:bg-gray-700 transition-colors"
+          className="lg:hidden flex cursor-pointer items-center gap-2 rounded-full bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 ring-1 ring-gray-700 transition-colors hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-hover"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="4" y1="6" x2="20" y2="6" />
             <line x1="8" y1="12" x2="16" y2="12" />
             <line x1="11" y1="18" x2="13" y2="18" />

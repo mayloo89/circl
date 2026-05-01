@@ -75,7 +75,7 @@ func (s *redisRefreshStore) Get(ctx context.Context, hash string) (*refreshToken
 
 	// Check user-level revocation (password change, account deletion).
 	revokedAt, err := s.rdb.Get(ctx, rtRevokedPrefix+rt.UserID).Int64()
-	if err == nil && rt.IssuedAt.UnixNano() <= revokedAt {
+	if err == nil && rt.IssuedAt.UnixNano() < revokedAt {
 		_ = s.rdb.Del(ctx, rtKeyPrefix+hash)
 		return nil, ErrInvalidToken
 	}

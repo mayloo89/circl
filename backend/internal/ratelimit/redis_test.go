@@ -57,7 +57,7 @@ func TestAllow_ExceedsLimit(t *testing.T) {
 	const limit = 3
 
 	// Exhaust the limit.
-	for i := 0; i < limit; i++ {
+	for range limit {
 		limiter.Allow(ctx, "test-key", limit, time.Minute) //nolint:errcheck
 	}
 

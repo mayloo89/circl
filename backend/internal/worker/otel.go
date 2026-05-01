@@ -23,7 +23,7 @@ func (c traceCarrier) Keys() []string { return slices.Collect(maps.Keys(c)) }
 // taskEnvelope wraps any asynq task payload with W3C trace context headers so
 // that task execution can be correlated with the HTTP request that enqueued it.
 type taskEnvelope struct {
-	Trace   traceCarrier    `json:"_trace,omitempty"`
+	Trace   traceCarrier    `json:"_trace,omitzero"`
 	Payload json.RawMessage `json:"payload"`
 }
 
