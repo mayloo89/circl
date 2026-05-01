@@ -28,7 +28,7 @@ describe("Modal", () => {
         <p>Content</p>
       </Modal>
     )
-    fireEvent.keyDown(window, { key: "Escape" })
+    fireEvent.keyDown(document, { key: "Escape" })
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -51,8 +51,8 @@ describe("Modal", () => {
         <p>Content</p>
       </Modal>
     )
-    fireEvent.keyDown(window, { key: "Enter" })
-    fireEvent.keyDown(window, { key: "Tab" })
+    fireEvent.keyDown(document, { key: "Enter" })
+    fireEvent.keyDown(document, { key: "Tab" })
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -63,7 +63,7 @@ describe("Modal", () => {
         <p>Content</p>
       </Modal>
     )
-    fireEvent.keyDown(window, { key: "Escape" })
+    fireEvent.keyDown(document, { key: "Escape" })
     expect(onClose).not.toHaveBeenCalled()
   })
 })
