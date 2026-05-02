@@ -39,3 +39,7 @@ skills-lock.json
 
 # Local CI script
 run-ci-local.sh
+
+# Deployment config (Pi / YunoHost) — kept local, never committed
+deploy/
+.env.prod
