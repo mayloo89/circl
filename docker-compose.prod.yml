@@ -1,124 +1,90 @@
-# Production Docker Compose — runs all services.
-# Copy .env.prod.example to .env.prod and fill in secrets, then run:
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# Production compose — Raspberry Pi / YunoHost self-hosted deploy.
 #
-# Inter-service communication uses Docker internal hostnames (postgres, redis,
-# minio, backend). NEXT_PUBLIC_* vars must be the public-facing URLs because
-# they are called from the user's browser, not from within Docker.
+# Usage:
+#   cp deploy/.env.prod.example .env.prod   # fill in secrets
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# Architecture:
+#   - Postgres and Redis have no exposed ports (internal Docker network only).
+#   - Backend and frontend are bound to 127.0.0.1 — nginx (YunoHost) proxies them externally.
+#   - Uploaded files are stored in a named Docker volume (local storage, no S3/minio needed).
+#   - No observability stack (Grafana/Loki/Tempo/Prometheus) — too heavy for a Pi.
+#     The backend auto-falls-back to a no-op exporter when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
 
 services:
   postgres:
     image: postgres:17-alpine
-    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-circl_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-circl_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-circl_user} -d ${POSTGRES_DB:-circl_db}"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   redis:
     image: redis:7-alpine
-    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
     volumes:
       - redis_data:/data
+    restart: always
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
-
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
-    ports:
-      - "9000:9000"  # S3 API — also serves public files
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # One-shot container that creates the bucket and makes it public.
-  # Runs once on startup, then exits — backend waits for it to complete.
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-        mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY};
-        mc mb --ignore-existing local/${S3_BUCKET:-circl-media};
-        mc anonymous set public local/${S3_BUCKET:-circl-media};
-        echo 'MinIO bucket ready.';
-      "
+      retries: 5
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    restart: unless-stopped
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - uploads_data:/app/data
+    restart: always
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
-    environment:
-      PORT: 8080
-      ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-circl_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-circl_db}?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: ${JWT_SECRET}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
-      STORAGE_PROVIDER: s3
-      # minio:9000 — internal Docker hostname, no scheme
-      S3_ENDPOINT: minio:9000
-      S3_BUCKET: ${S3_BUCKET:-circl-media}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      # Public URL used in file URLs returned to the browser
-      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000/circl-media}
-    ports:
-      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # NEXT_PUBLIC_* are baked into the client bundle at build time
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8080}
-        # Image hostname parsed from S3_PUBLIC_URL (e.g. "localhost" or "cdn.example.com")
-        NEXT_PUBLIC_IMAGE_HOSTNAME: ${NEXT_PUBLIC_IMAGE_HOSTNAME:-localhost}
-        NEXT_PUBLIC_IMAGE_PORT: ${NEXT_PUBLIC_IMAGE_PORT:-9000}
-        NEXT_PUBLIC_IMAGE_PROTOCOL: ${NEXT_PUBLIC_IMAGE_PROTOCOL:-http}
-    restart: unless-stopped
-    depends_on:
-      - backend
+        # NEXT_PUBLIC_* are baked into the browser bundle at build time.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+        NEXT_PUBLIC_WS_URL: wss://${DOMAIN}/api
+        NEXT_PUBLIC_IMAGE_HOSTNAME: ${DOMAIN}
+        NEXT_PUBLIC_IMAGE_PROTOCOL: https
     environment:
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      # Server-side backend URL (internal Docker network)
+      # Server-side only — not exposed to browser.
       BACKEND_URL: http://backend:8080
+      AUTH_URL: https://${DOMAIN}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NODE_ENV: production
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   redis_data:
-  minio_data:
+  uploads_data:

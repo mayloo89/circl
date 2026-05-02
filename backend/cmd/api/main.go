@@ -220,10 +220,11 @@ func main() {
 
 	switch storageProvider {
 	case "local":
-		ls := storage.NewLocalStorage("./data/uploads", fmt.Sprintf("http://localhost:%s/uploads/files", port))
+		baseURL := config.EnvOrDefault("LOCAL_STORAGE_BASE_URL", fmt.Sprintf("http://localhost:%s/uploads/files", port))
+		ls := storage.NewLocalStorage("./data/uploads", baseURL)
 		fileStorage = ls
 		localStorageHandler = storage.NewLocalHandler(ls)
-		log.Info().Str("provider", "local").Str("path", "./data/uploads").Msg("storage provider")
+		log.Info().Str("provider", "local").Str("base_url", baseURL).Msg("storage provider")
 	case "s3":
 		endpoint := config.EnvOrDefault("S3_ENDPOINT", "localhost:9000")
 		useSSL := !strings.HasPrefix(endpoint, "http://")
