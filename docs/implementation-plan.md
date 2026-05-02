@@ -145,6 +145,12 @@
 
 - [x] **Modern Go + UX/UI audit fixes** ([PR #75](https://github.com/mayloo89/circl/pull/75)): 19 Go modernizations — `errors.Is()` (6 sites), `omitzero` (8 sites), `max()` builtin (2 sites), `for range n` (1 site), `strings.Cut` (1 site); frontend accessibility/usability pass — `cursor-pointer` global in `Button.tsx` + 20+ raw buttons; `prefers-reduced-motion` + `scroll-padding-top` + `scrollbar-hide` in `globals.css`; focus rings on all raw `<button>` elements; 5 emoji icons → accessible SVGs; descriptive `alt` text on 6 images; layout shift fixes (`scale-*` → `opacity-*`); BottomNav icon size unified to `h-5 w-5`.
 
+- [x] **Pi deploy — configurable local storage URL** ([PR #78](https://github.com/mayloo89/circl/pull/78)): `LOCAL_STORAGE_BASE_URL` env var replaces hardcoded `http://localhost:<port>/uploads/files`; backend logs `base_url` instead of `path`; `deploy/` directory added to `.gitignore`; backend `Dockerfile` creates `/app/data` with correct ownership before `USER circl`.
+
+- [x] **Pi deploy — CSP fix for Next.js App Router** ([PR #79](https://github.com/mayloo89/circl/pull/79)): `script-src` gains `'unsafe-inline'` (required for App Router bootstrap hydration); `style-src` adds `https://fonts.googleapis.com`; `font-src` adds `https://fonts.gstatic.com`; `connect-src` adds `wss:`; `img-src` broadened to `https:`.
+
+- [x] **Pi deploy — disable Next.js image optimizer** ([PR #80](https://github.com/mayloo89/circl/pull/80)): `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` build arg (`false` by default); when `"true"` sets `images.unoptimized: true` in `next.config.ts`, bypassing `/_next/image` and its `remotePatterns` check; eliminates CPU-intensive resize/WebP conversion on low-power Pi hardware; `frontend/Dockerfile` wires the arg through.
+
 - [ ] **Phase 4 — Deployment + observability hosting** (PR #76–77): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
 
 - [ ] **Phase 5 — Final polish & launch** (PR #76–78): accessibility audit (WCAG 2.1 AA); runbooks (`docs/runbooks/`); final docs (README, CONTRIBUTING, architecture diagram).

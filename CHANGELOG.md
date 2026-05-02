@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pi deploy — disable Next.js image optimizer** ([PR #80](https://github.com/mayloo89/circl/pull/80)): `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` build arg (default `false`); when set to `"true"` in `deploy/docker-compose.prod.yml`, `images.unoptimized: true` is baked into the Next.js bundle at build time, bypassing `/_next/image` and its `remotePatterns` check; eliminates CPU-intensive WebP conversion on Raspberry Pi; `frontend/Dockerfile` wires the new ARG/ENV.
+
+- **Pi deploy — CSP fix for Next.js App Router** ([PR #79](https://github.com/mayloo89/circl/pull/79)): `script-src` gains `'unsafe-inline'` (required for App Router bootstrap hydration scripts); `style-src` adds `https://fonts.googleapis.com`; `font-src` adds `https://fonts.gstatic.com`; `connect-src` adds `wss:`; `img-src` broadened to `https:`.
+
+- **Pi deploy — configurable local storage URL** ([PR #78](https://github.com/mayloo89/circl/pull/78)): `LOCAL_STORAGE_BASE_URL` env var replaces hardcoded `http://localhost:<port>/uploads/files` so file URLs resolve correctly behind an nginx reverse proxy; backend logs `base_url` on startup; `backend/Dockerfile` adds `RUN mkdir -p /app/data && chown circl:circl /app/data` so the uploads volume mount point exists before the process starts; `deploy/` and `.env.prod` added to `.gitignore`.
+
 ### Added
 
 - **Modern Go + UX/UI audit fixes** ([PR #75](https://github.com/mayloo89/circl/pull/75)):
