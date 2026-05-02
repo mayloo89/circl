@@ -23,6 +23,8 @@ WORKDIR /app
 COPY --from=builder --chown=circl:circl /bin/api ./api
 COPY --from=builder --chown=circl:circl /app/migrations ./migrations
 
+RUN mkdir -p /app/data && chown circl:circl /app/data
+
 USER circl
 
 EXPOSE 8080
