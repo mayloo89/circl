@@ -35,11 +35,12 @@ const securityHeaders = [
           key: "Content-Security-Policy",
           value: [
             "default-src 'self'",
-            "script-src 'self'",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob:",
-            "font-src 'self'",
-            "connect-src 'self' wss:",
+            // Next.js App Router requires 'unsafe-inline' for bootstrap hydration scripts.
+            "script-src 'self' 'unsafe-inline' https://cdn.growthbook.io",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "img-src 'self' data: blob: https:",
+            "font-src 'self' https://fonts.gstatic.com",
+            "connect-src 'self' wss: https://cdn.growthbook.io",
             "frame-ancestors 'none'",
           ].join("; "),
         },
