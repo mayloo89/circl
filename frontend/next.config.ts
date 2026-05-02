@@ -56,6 +56,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns,
     dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
+    unoptimized: process.env.NEXT_PUBLIC_IMAGE_UNOPTIMIZED === "true",
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
