@@ -4,13 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/notifications"
 )
+
+// RateLimiter is satisfied by *ratelimit.RedisLimiter.
+type RateLimiter interface {
+	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
+}
 
 // Manager is the interface the handlers depend on.
 // *Service satisfies this interface.
@@ -30,6 +38,7 @@ type Manager interface {
 // handlerConfig holds optional dependencies for the contacts handler.
 type handlerConfig struct {
 	notifier notifications.Notifier
+	limiter  RateLimiter
 }
 
 // HandlerOption configures the contacts handler.
@@ -39,6 +48,11 @@ type HandlerOption func(*handlerConfig)
 // sent or accepted.
 func WithNotifier(n notifications.Notifier) HandlerOption {
 	return func(cfg *handlerConfig) { cfg.notifier = n }
+}
+
+// WithLimiter sets a rate limiter for outgoing contact requests (100/day per user).
+func WithLimiter(l RateLimiter) HandlerOption {
+	return func(cfg *handlerConfig) { cfg.limiter = l }
 }
 
 // NewHandler returns a chi router with all contacts and user-search routes.
@@ -88,6 +102,17 @@ func sendRequestHandler(svc Manager, cfg *handlerConfig) http.HandlerFunc {
 		if !ok {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
+		}
+
+		if cfg.limiter != nil {
+			key := fmt.Sprintf("contacts:send:%s:%s", userID, time.Now().UTC().Format("2006-01-02"))
+			allowed, err := cfg.limiter.Allow(r.Context(), key, 100, 24*time.Hour)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("contacts: rate limiter error")
+			} else if !allowed {
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many contact requests")
+				return
+			}
 		}
 
 		var body struct {

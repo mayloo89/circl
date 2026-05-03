@@ -1061,3 +1061,69 @@ func TestGetMyProfile_NilInterestsBecomesEmptySlice(t *testing.T) {
 		t.Errorf("interests = %v, want []", interests)
 	}
 }
+
+// --- Public profile privacy (S-1) ---
+
+func TestGetPublicProfile_NonOwner_NoDOBOrCoords(t *testing.T) {
+	dob := time.Date(1990, 3, 15, 0, 0, 0, 0, time.UTC)
+	lat, lon := 40.7128, -74.0060
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{
+			ID: "p1", UserID: "user-456", DisplayName: "Bob",
+			DateOfBirth: &dob, Latitude: &lat, Longitude: &lon,
+			Interests: []string{}, Photos: []profiles.ProfilePhoto{},
+		},
+	})
+
+	// authedReq uses caller "user-123" which differs from profile owner "user-456".
+	req := authedReq(t, http.MethodGet, "/profiles/user-456", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if _, has := resp["date_of_birth"]; has {
+		t.Error("date_of_birth must not be exposed to non-owner")
+	}
+	if _, has := resp["latitude"]; has {
+		t.Error("latitude must not be exposed to non-owner")
+	}
+	if _, has := resp["longitude"]; has {
+		t.Error("longitude must not be exposed to non-owner")
+	}
+	if resp["age"] == nil {
+		t.Error("age should be present for non-owner when DOB is set")
+	}
+}
+
+func TestGetPublicProfile_Owner_HasDOBAndCoords(t *testing.T) {
+	dob := time.Date(1990, 3, 15, 0, 0, 0, 0, time.UTC)
+	lat, lon := 40.7128, -74.0060
+	h := profiles.NewHandler(&mockProfileManager{
+		profile: &profiles.Profile{
+			ID: "p1", UserID: "user-123", DisplayName: "Alice",
+			DateOfBirth: &dob, Latitude: &lat, Longitude: &lon,
+			Interests: []string{}, Photos: []profiles.ProfilePhoto{},
+		},
+	})
+
+	// authedReq uses caller "user-123" which matches profile owner "user-123".
+	req := authedReq(t, http.MethodGet, "/profiles/user-123", "")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["date_of_birth"] == nil {
+		t.Error("owner should receive date_of_birth")
+	}
+	if resp["latitude"] == nil {
+		t.Error("owner should receive latitude")
+	}
+}

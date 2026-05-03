@@ -205,7 +205,10 @@ func main() {
 	// contactPushNotifier implements notifications.Notifier and enriches contact
 	// events with web push notifications for offline users.
 	contactPushNotifier := &contactNotifier{notifyFn: notifyUser}
-	contactsHandler := contacts.NewHandler(contactSvc, contacts.WithNotifier(contactPushNotifier))
+	contactsHandler := contacts.NewHandler(contactSvc,
+		contacts.WithNotifier(contactPushNotifier),
+		contacts.WithLimiter(limiter),
+	)
 
 	chatHub := chat.NewHub(rdb)
 	go chatHub.Run(appCtx)

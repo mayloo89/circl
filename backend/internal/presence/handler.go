@@ -1,6 +1,7 @@
 package presence
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,9 +17,17 @@ type Notifier interface {
 	Notify(userID string, e notifications.Event)
 }
 
+// PresenceStore is satisfied by *Store.
+type PresenceStore interface {
+	Heartbeat(ctx context.Context, userID string) (bool, error)
+	Offline(ctx context.Context, userID string) error
+	GetPresence(ctx context.Context, userIDs []string) ([]Info, error)
+	ContactIDs(ctx context.Context, userID string) ([]string, error)
+}
+
 // NewHandler returns a chi router with the presence endpoints.
 // Must be mounted behind requireAuth.
-func NewHandler(store *Store, notifier Notifier) http.Handler {
+func NewHandler(store PresenceStore, notifier Notifier) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/heartbeat", heartbeatHandler(store, notifier))
 	r.Delete("/heartbeat", offlineHandler(store, notifier))
@@ -29,7 +38,7 @@ func NewHandler(store *Store, notifier Notifier) http.Handler {
 // heartbeatHandler marks the authenticated user as online.
 //
 // POST /presence/heartbeat
-func heartbeatHandler(store *Store, notifier Notifier) http.HandlerFunc {
+func heartbeatHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -67,7 +76,7 @@ func heartbeatHandler(store *Store, notifier Notifier) http.HandlerFunc {
 // offlineHandler immediately marks the authenticated user as offline.
 //
 // DELETE /presence/heartbeat
-func offlineHandler(store *Store, notifier Notifier) http.HandlerFunc {
+func offlineHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -97,11 +106,13 @@ func offlineHandler(store *Store, notifier Notifier) http.HandlerFunc {
 }
 
 // getPresenceHandler returns presence info for a list of user IDs.
+// Real presence is only returned for the caller and their accepted contacts;
+// all other IDs receive an offline/unknown entry.
 //
 // GET /presence?ids=id1,id2,...
-func getPresenceHandler(store *Store) http.HandlerFunc {
+func getPresenceHandler(store PresenceStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := middleware.UserIDFromContext(r.Context())
+		callerID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
@@ -120,10 +131,30 @@ func getPresenceHandler(store *Store) http.HandlerFunc {
 			ids = ids[:100]
 		}
 
+		// Any authenticated user can see online/offline status.
+		// Only accepted contacts (and self) can see last_seen_at.
+		contactIDs, err := store.ContactIDs(r.Context(), callerID)
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+		canSeeLastSeen := make(map[string]bool, len(contactIDs)+1)
+		canSeeLastSeen[callerID] = true
+		for _, id := range contactIDs {
+			canSeeLastSeen[id] = true
+		}
+
 		info, err := store.GetPresence(r.Context(), ids)
 		if err != nil {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
+		}
+
+		// Strip last_seen_at for non-contacts.
+		for i := range info {
+			if !canSeeLastSeen[info[i].UserID] {
+				info[i].LastSeenAt = nil
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

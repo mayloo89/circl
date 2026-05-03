@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Privacy hardening — profile fields, presence gating, contact rate limit** ([PR #82](https://github.com/mayloo89/circl/pull/82)):
+  - **S-1 Profile privacy:** `GET /profiles/{ref}` now returns a public subset for non-owners (computed age, no DOB, no lat/lng); owner view unchanged; `computeAge` helper added.
+  - **S-2 Soft-delete filter:** `GetPresence` query adds `AND status = 'active'` so deleted/banned users no longer return `last_seen_at` data.
+  - **S-4 Presence gating:** `GET /presence?ids=...` intersects requested IDs against caller's accepted contacts; non-contacts receive `online: false` with no `last_seen_at`; `ContactIDs` adds nil-DB guard for unit tests.
+  - **S-7 Contact request rate limit:** `POST /contacts` enforces 100 requests/day per user via `contacts.WithLimiter`; wired in `main.go` alongside the existing reports limiter.
+
 ### Fixed
 
 - **Pi deploy — disable Next.js image optimizer** ([PR #80](https://github.com/mayloo89/circl/pull/80)): `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` build arg (default `false`); when set to `"true"` in `deploy/docker-compose.prod.yml`, `images.unoptimized: true` is baked into the Next.js bundle at build time, bypassing `/_next/image` and its `remotePatterns` check; eliminates CPU-intensive WebP conversion on Raspberry Pi; `frontend/Dockerfile` wires the new ARG/ENV.

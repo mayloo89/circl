@@ -22,7 +22,7 @@ const (
 type Info struct {
 	UserID     string     `json:"user_id"`
 	Online     bool       `json:"online"`
-	LastSeenAt *time.Time `json:"last_seen_at"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitzero"`
 }
 
 // Store handles Redis and Postgres operations for presence.
@@ -97,9 +97,9 @@ func (s *Store) GetPresence(ctx context.Context, userIDs []string) ([]Info, erro
 		online[userIDs[i]] = cmd.Val() > 0
 	}
 
-	// Fetch last_seen_at from Postgres for all users in one query.
+	// Fetch last_seen_at from Postgres for active users only.
 	rows, err := s.db.Query(ctx,
-		`SELECT id::text, last_seen_at FROM users WHERE id = ANY($1::uuid[])`,
+		`SELECT id::text, last_seen_at FROM users WHERE id = ANY($1::uuid[]) AND status = 'active'`,
 		userIDs,
 	)
 	if err != nil {
@@ -132,7 +132,7 @@ func (s *Store) GetPresence(ctx context.Context, userIDs []string) ([]Info, erro
 }
 
 // ContactIDs returns the user IDs of all accepted contacts for a given user.
-// Used to fan-out presence_online SSE events.
+// Used to fan-out presence_online SSE events and to gate presence queries.
 func (s *Store) ContactIDs(ctx context.Context, userID string) ([]string, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT CASE
