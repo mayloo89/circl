@@ -34,6 +34,42 @@ func (c *captureNotifier) Notify(_ string, e notifications.Event) {
 	c.events = append(c.events, e)
 }
 
+// stubStore implements presence.PresenceStore for unit tests.
+type stubStore struct {
+	heartbeatFn   func(ctx context.Context, userID string) (bool, error)
+	offlineFn     func(ctx context.Context, userID string) error
+	getPresenceFn func(ctx context.Context, userIDs []string) ([]presence.Info, error)
+	contactIDsFn  func(ctx context.Context, userID string) ([]string, error)
+}
+
+func (s *stubStore) Heartbeat(ctx context.Context, userID string) (bool, error) {
+	if s.heartbeatFn != nil {
+		return s.heartbeatFn(ctx, userID)
+	}
+	return false, nil
+}
+
+func (s *stubStore) Offline(ctx context.Context, userID string) error {
+	if s.offlineFn != nil {
+		return s.offlineFn(ctx, userID)
+	}
+	return nil
+}
+
+func (s *stubStore) GetPresence(ctx context.Context, userIDs []string) ([]presence.Info, error) {
+	if s.getPresenceFn != nil {
+		return s.getPresenceFn(ctx, userIDs)
+	}
+	return nil, nil
+}
+
+func (s *stubStore) ContactIDs(ctx context.Context, userID string) ([]string, error) {
+	if s.contactIDsFn != nil {
+		return s.contactIDsFn(ctx, userID)
+	}
+	return nil, nil
+}
+
 func openTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dbURL := os.Getenv("TEST_DATABASE_URL")
@@ -71,13 +107,7 @@ func serveWithAuth(h http.Handler, r *http.Request, rec *httptest.ResponseRecord
 // --- Unit-level handler tests (no DB needed) ---
 
 func TestHeartbeat_NoAuth(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
-
-	// Use a nil pool — handler should reject before touching DB.
-	store := presence.NewStore(rdb, nil)
-	h := presence.NewHandler(store, noopNotifier{})
+	h := presence.NewHandler(&stubStore{}, noopNotifier{})
 
 	req := httptest.NewRequest(http.MethodPost, "/heartbeat", nil)
 	rec := httptest.NewRecorder()
@@ -88,12 +118,7 @@ func TestHeartbeat_NoAuth(t *testing.T) {
 }
 
 func TestGetPresence_NoAuth(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
-
-	store := presence.NewStore(rdb, nil)
-	h := presence.NewHandler(store, noopNotifier{})
+	h := presence.NewHandler(&stubStore{}, noopNotifier{})
 
 	req := httptest.NewRequest(http.MethodGet, "/?ids=u-1", nil)
 	rec := httptest.NewRecorder()
@@ -104,12 +129,7 @@ func TestGetPresence_NoAuth(t *testing.T) {
 }
 
 func TestGetPresence_EmptyIDs(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
-
-	store := presence.NewStore(rdb, nil)
-	h := presence.NewHandler(store, noopNotifier{})
+	h := presence.NewHandler(&stubStore{}, noopNotifier{})
 
 	req := authedReq(httptest.NewRequest(http.MethodGet, "/", nil), "u-1")
 	rec := httptest.NewRecorder()
@@ -206,16 +226,18 @@ func TestIntegration_GetPresence_EmptyResult(t *testing.T) {
 // user can see whether another user is online, but last_seen_at is only visible to
 // accepted contacts.
 func TestGetPresence_NonContactSeesOnlineButNotLastSeen(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
-
-	// Store with no DB pool: ContactIDs returns nil (empty set).
-	store := presence.NewStore(rdb, nil)
+	now := time.Now()
+	store := &stubStore{
+		getPresenceFn: func(_ context.Context, userIDs []string) ([]presence.Info, error) {
+			infos := make([]presence.Info, len(userIDs))
+			for i, id := range userIDs {
+				infos[i] = presence.Info{UserID: id, Online: true, LastSeenAt: &now}
+			}
+			return infos, nil
+		},
+		// contactIDsFn is nil → returns empty slice (caller has no contacts)
+	}
 	h := presence.NewHandler(store, noopNotifier{})
-
-	// Set user-2 as online in Redis.
-	rdb.Set(context.Background(), "presence:user-2", 1, time.Minute) //nolint:errcheck
 
 	req := authedReq(httptest.NewRequest(http.MethodGet, "/?ids=user-2", nil), "user-1")
 	rec := httptest.NewRecorder()

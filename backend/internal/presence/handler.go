@@ -1,6 +1,7 @@
 package presence
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,9 +17,17 @@ type Notifier interface {
 	Notify(userID string, e notifications.Event)
 }
 
+// PresenceStore is satisfied by *Store.
+type PresenceStore interface {
+	Heartbeat(ctx context.Context, userID string) (bool, error)
+	Offline(ctx context.Context, userID string) error
+	GetPresence(ctx context.Context, userIDs []string) ([]Info, error)
+	ContactIDs(ctx context.Context, userID string) ([]string, error)
+}
+
 // NewHandler returns a chi router with the presence endpoints.
 // Must be mounted behind requireAuth.
-func NewHandler(store *Store, notifier Notifier) http.Handler {
+func NewHandler(store PresenceStore, notifier Notifier) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/heartbeat", heartbeatHandler(store, notifier))
 	r.Delete("/heartbeat", offlineHandler(store, notifier))
@@ -29,7 +38,7 @@ func NewHandler(store *Store, notifier Notifier) http.Handler {
 // heartbeatHandler marks the authenticated user as online.
 //
 // POST /presence/heartbeat
-func heartbeatHandler(store *Store, notifier Notifier) http.HandlerFunc {
+func heartbeatHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -67,7 +76,7 @@ func heartbeatHandler(store *Store, notifier Notifier) http.HandlerFunc {
 // offlineHandler immediately marks the authenticated user as offline.
 //
 // DELETE /presence/heartbeat
-func offlineHandler(store *Store, notifier Notifier) http.HandlerFunc {
+func offlineHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -101,7 +110,7 @@ func offlineHandler(store *Store, notifier Notifier) http.HandlerFunc {
 // all other IDs receive an offline/unknown entry.
 //
 // GET /presence?ids=id1,id2,...
-func getPresenceHandler(store *Store) http.HandlerFunc {
+func getPresenceHandler(store PresenceStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		callerID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {

@@ -97,15 +97,6 @@ func (s *Store) GetPresence(ctx context.Context, userIDs []string) ([]Info, erro
 		online[userIDs[i]] = cmd.Val() > 0
 	}
 
-	// No DB available (unit-test mode): return online status only.
-	if s.db == nil {
-		result := make([]Info, len(userIDs))
-		for i, id := range userIDs {
-			result[i] = Info{UserID: id, Online: online[id]}
-		}
-		return result, nil
-	}
-
 	// Fetch last_seen_at from Postgres for active users only.
 	rows, err := s.db.Query(ctx,
 		`SELECT id::text, last_seen_at FROM users WHERE id = ANY($1::uuid[]) AND status = 'active'`,
@@ -143,9 +134,6 @@ func (s *Store) GetPresence(ctx context.Context, userIDs []string) ([]Info, erro
 // ContactIDs returns the user IDs of all accepted contacts for a given user.
 // Used to fan-out presence_online SSE events and to gate presence queries.
 func (s *Store) ContactIDs(ctx context.Context, userID string) ([]string, error) {
-	if s.db == nil {
-		return nil, nil
-	}
 	rows, err := s.db.Query(ctx, `
 		SELECT CASE
 			WHEN requester_id = $1 THEN addressee_id::text
