@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **CSP nonce — remove `unsafe-inline` from `script-src` (S-6)** ([PR #84](https://github.com/mayloo89/circl/pull/84)): A per-request nonce (base64 UUID) is generated in `middleware.ts` for every production request. The nonce is injected into both the request headers (`x-nonce`, `Content-Security-Policy`) so Next.js stamps its own bootstrap scripts, and the response `Content-Security-Policy` header so the browser enforces it. `'unsafe-inline'` is removed from `script-src`; the static CSP block in `next.config.ts` is removed since middleware now owns it exclusively.
+
 - **WebSocket ticket auth (S-3)** ([PR #83](https://github.com/mayloo89/circl/pull/83)): `POST /ws-ticket` (behind `RequireAuth`) issues a single-use UUID ticket stored in Redis with a 60 s TTL; `GET /chat/rooms/{id}/ws` now authenticates via `?ticket=` instead of `?token=`; tickets are consumed atomically via `GETDEL` so reuse returns 401; JWT no longer appears in WebSocket upgrade query strings or proxy access logs. New `internal/wsticket` package with `Store`, `Issuer`, and `Redeemer` interfaces.
 
 - **Privacy hardening — profile fields, presence gating, contact rate limit** ([PR #82](https://github.com/mayloo89/circl/pull/82)):
