@@ -99,10 +99,39 @@ export function useChat(roomId: string | null, token: string | undefined) {
 
     cancelledRef.current = false
 
-    function connect() {
+    async function connect() {
       if (cancelledRef.current) return
 
-      const ws = new WebSocket(`${WS_URL}/chat/rooms/${roomId}/ws?token=${token}`)
+      // Exchange the Bearer token for a single-use 60 s ticket so the JWT
+      // never appears in WebSocket upgrade URLs or proxy access logs.
+      let ticket: string
+      try {
+        const res = await fetch(`${API_URL}/ws-ticket`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          if (!cancelledRef.current) {
+            const delay = retryDelayRef.current
+            retryDelayRef.current = Math.min(delay * 2, 30_000)
+            setTimeout(() => void connect(), delay)
+          }
+          return
+        }
+        const data = await res.json() as { ticket: string }
+        ticket = data.ticket
+      } catch {
+        if (!cancelledRef.current) {
+          const delay = retryDelayRef.current
+          retryDelayRef.current = Math.min(delay * 2, 30_000)
+          setTimeout(() => void connect(), delay)
+        }
+        return
+      }
+
+      if (cancelledRef.current) return
+
+      const ws = new WebSocket(`${WS_URL}/chat/rooms/${roomId}/ws?ticket=${ticket}`)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -115,7 +144,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
         if (!cancelledRef.current) {
           const delay = retryDelayRef.current
           retryDelayRef.current = Math.min(delay * 2, 30_000)
-          setTimeout(connect, delay)
+          setTimeout(() => void connect(), delay)
         }
       }
 
@@ -173,7 +202,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
       }
     }
 
-    connect()
+    void connect()
 
     return () => {
       cancelledRef.current = true
