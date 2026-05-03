@@ -41,6 +41,7 @@ type profileResponse struct {
 	Bio          string          `json:"bio"`
 	AvatarURL    string          `json:"avatar_url"`
 	DateOfBirth  *string         `json:"date_of_birth,omitempty"`
+	Age          *int            `json:"age,omitempty"`
 	Gender       string          `json:"gender"`
 	LocationText string          `json:"location_text"`
 	Latitude     *float64        `json:"latitude,omitempty"`
@@ -177,9 +178,10 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 }
 
 // getPublicProfileByRef serves GET /profiles/{ref} where ref is either a UUID or a username.
+// Owners receive all fields. Non-owners receive a public subset with no DOB or exact coordinates.
 func getPublicProfileByRef(svc ProfileManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := middleware.UserIDFromContext(r.Context())
+		callerID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
@@ -203,7 +205,11 @@ func getPublicProfileByRef(svc ProfileManager) http.HandlerFunc {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		apierror.WriteJSON(w, http.StatusOK, toResponse(profile))
+		if callerID == profile.UserID {
+			apierror.WriteJSON(w, http.StatusOK, toResponse(profile))
+		} else {
+			apierror.WriteJSON(w, http.StatusOK, toPublicResponse(profile))
+		}
 	}
 }
 
@@ -438,6 +444,44 @@ func toResponse(p *Profile) profileResponse {
 		resp.OnboardedAt = &s
 	}
 	return resp
+}
+
+// computeAge returns the caller's age in years, or nil if DOB is not set.
+func computeAge(dob *time.Time) *int {
+	if dob == nil {
+		return nil
+	}
+	now := time.Now()
+	years := now.Year() - dob.Year()
+	if now.Month() < dob.Month() || (now.Month() == dob.Month() && now.Day() < dob.Day()) {
+		years--
+	}
+	return &years
+}
+
+// toPublicResponse builds the response for non-owner callers: no DOB, no coordinates.
+func toPublicResponse(p *Profile) profileResponse {
+	photos := make([]photoResponse, len(p.Photos))
+	for i, ph := range p.Photos {
+		photos[i] = photoResponse{ID: ph.ID, URL: ph.URL}
+	}
+	interests := p.Interests
+	if interests == nil {
+		interests = []string{}
+	}
+	return profileResponse{
+		ID:           p.ID,
+		UserID:       p.UserID,
+		Username:     p.Username,
+		DisplayName:  p.DisplayName,
+		Bio:          p.Bio,
+		AvatarURL:    p.AvatarURL,
+		Age:          computeAge(p.DateOfBirth),
+		Gender:       p.Gender,
+		LocationText: p.LocationText,
+		Interests:    interests,
+		Photos:       photos,
+	}
 }
 
 func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {

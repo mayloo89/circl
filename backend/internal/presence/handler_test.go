@@ -199,3 +199,52 @@ func TestIntegration_GetPresence_EmptyResult(t *testing.T) {
 		t.Errorf("len = %d, want 0", len(infos))
 	}
 }
+
+// --- Presence gating (S-4) ---
+
+// TestGetPresence_NonContactSeesOnlineButNotLastSeen verifies that any authenticated
+// user can see whether another user is online, but last_seen_at is only visible to
+// accepted contacts.
+func TestGetPresence_NonContactSeesOnlineButNotLastSeen(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	// Store with no DB pool: ContactIDs returns nil (empty set).
+	store := presence.NewStore(rdb, nil)
+	h := presence.NewHandler(store, noopNotifier{})
+
+	// Set user-2 as online in Redis.
+	rdb.Set(context.Background(), "presence:user-2", 1, time.Minute) //nolint:errcheck
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/?ids=user-2", nil), "user-1")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsStr(body, `"user_id":"user-2"`) {
+		t.Error("response should include the requested user_id")
+	}
+	// Real online status must be visible to any authenticated user.
+	if !containsStr(body, `"online":true`) {
+		t.Error("non-contact should see real online=true status")
+	}
+	// last_seen_at must be stripped for non-contacts.
+	if containsStr(body, `"last_seen_at"`) {
+		t.Error("last_seen_at should not be present for non-contacts")
+	}
+}
+
+func containsStr(s, sub string) bool {
+	return len(s) >= len(sub) && func() bool {
+		for i := range len(s) - len(sub) + 1 {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	}()
+}

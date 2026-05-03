@@ -97,11 +97,13 @@ func offlineHandler(store *Store, notifier Notifier) http.HandlerFunc {
 }
 
 // getPresenceHandler returns presence info for a list of user IDs.
+// Real presence is only returned for the caller and their accepted contacts;
+// all other IDs receive an offline/unknown entry.
 //
 // GET /presence?ids=id1,id2,...
 func getPresenceHandler(store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := middleware.UserIDFromContext(r.Context())
+		callerID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
@@ -120,10 +122,30 @@ func getPresenceHandler(store *Store) http.HandlerFunc {
 			ids = ids[:100]
 		}
 
+		// Any authenticated user can see online/offline status.
+		// Only accepted contacts (and self) can see last_seen_at.
+		contactIDs, err := store.ContactIDs(r.Context(), callerID)
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+		canSeeLastSeen := make(map[string]bool, len(contactIDs)+1)
+		canSeeLastSeen[callerID] = true
+		for _, id := range contactIDs {
+			canSeeLastSeen[id] = true
+		}
+
 		info, err := store.GetPresence(r.Context(), ids)
 		if err != nil {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
+		}
+
+		// Strip last_seen_at for non-contacts.
+		for i := range info {
+			if !canSeeLastSeen[info[i].UserID] {
+				info[i].LastSeenAt = nil
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
