@@ -1,8 +1,21 @@
 import createMiddleware from "next-intl/middleware"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 import { auth } from "@/lib/auth"
 import { routing } from "./i18n/routing"
+
+function buildCSP(nonce: string): string {
+  return [
+    "default-src 'self'",
+    // No 'unsafe-inline': Next.js bootstrap scripts are stamped with the nonce.
+    `script-src 'self' 'nonce-${nonce}' https://cdn.growthbook.io`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' https://fonts.gstatic.com",
+    "connect-src 'self' wss: https://cdn.growthbook.io https://photon.komoot.io",
+    "frame-ancestors 'none'",
+  ].join("; ")
+}
 
 const intlMiddleware = createMiddleware(routing)
 
@@ -31,20 +44,44 @@ function stripLocale(pathname: string): string {
 }
 
 export default auth((req) => {
+  const isProd = process.env.NODE_ENV === "production"
+  const nonce = isProd ? btoa(crypto.randomUUID()) : null
+  const csp = nonce ? buildCSP(nonce) : null
+
+  const addCSP = (res: NextResponse): NextResponse => {
+    if (csp) res.headers.set("Content-Security-Policy", csp)
+    return res
+  }
+
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
   const localePath = stripLocale(pathname)
-
   const isAuthPage = AUTH_PAGES.some((p) => localePath.startsWith(p))
 
   if (!isLoggedIn && !isAuthPage) {
     const locale = getLocale(pathname)
-    return NextResponse.redirect(new URL(`/${locale}/login`, req.url))
+    return addCSP(NextResponse.redirect(new URL(`/${locale}/login`, req.url)))
   }
 
   if (isLoggedIn && isAuthPage) {
     const locale = getLocale(pathname)
-    return NextResponse.redirect(new URL(`/${locale}`, req.url))
+    return addCSP(NextResponse.redirect(new URL(`/${locale}`, req.url)))
+  }
+
+  if (nonce && csp) {
+    // Inject the nonce into the request headers so that:
+    // - Next.js automatically stamps its own bootstrap scripts with it.
+    // - Server Components can read it via headers().get('x-nonce').
+    // Setting CSP in request headers lets Next.js extract the nonce value.
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set("x-nonce", nonce)
+    requestHeaders.set("Content-Security-Policy", csp)
+
+    const modifiedReq = new NextRequest(req.url, {
+      headers: requestHeaders,
+      method: req.method,
+    })
+    return addCSP(intlMiddleware(modifiedReq) as NextResponse)
   }
 
   return intlMiddleware(req)

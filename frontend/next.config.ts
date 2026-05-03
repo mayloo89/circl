@@ -22,30 +22,15 @@ if (process.env.NEXT_PUBLIC_IMAGE_HOSTNAME) {
 
 const isProd = process.env.NODE_ENV === "production";
 
-// CSP and HSTS are production-only: in dev, cross-origin API calls to
-// localhost:8080 and Next.js hydration scripts would break under a strict policy.
+// CSP is set per-request in middleware.ts with a nonce — not here.
+// HSTS is production-only (localhost has no TLS).
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   ...(isProd
-    ? [
-        {
-          key: "Content-Security-Policy",
-          value: [
-            "default-src 'self'",
-            // Next.js App Router requires 'unsafe-inline' for bootstrap hydration scripts.
-            "script-src 'self' 'unsafe-inline' https://cdn.growthbook.io",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-            "img-src 'self' data: blob: https:",
-            "font-src 'self' https://fonts.gstatic.com",
-            "connect-src 'self' wss: https://cdn.growthbook.io https://photon.komoot.io",
-            "frame-ancestors 'none'",
-          ].join("; "),
-        },
-        { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
-      ]
+    ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
     : []),
 ];
 
