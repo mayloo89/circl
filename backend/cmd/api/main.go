@@ -41,6 +41,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/tracing"
 	"github.com/mayloo89/circl/backend/internal/uploads"
 	"github.com/mayloo89/circl/backend/internal/worker"
+	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
 
 const tokenExpiry = 15 * time.Minute
@@ -277,7 +278,8 @@ func main() {
 		return blocked
 	}
 
-	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, jwtSecret, func(recipientID, roomID string) {
+	wsTicketStore := wsticket.NewStore(rdb)
+	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, wsTicketStore, func(recipientID, roomID string) {
 		notifyUser(recipientID, notifications.Event{
 			Type:    "new_message",
 			Payload: map[string]string{"room_id": roomID},
@@ -396,6 +398,7 @@ func main() {
 		RequireAuth: requireAuth,
 
 		Auth:          authHandler,
+		WSTicket:      wsticket.NewHandler(wsTicketStore),
 		Account:       accountHandler,
 		Profile:       profileHandler,
 		Available:     profiles.PublicAvailableHandler(profileSvc),
