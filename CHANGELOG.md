@@ -10,10 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **WebSocket ticket auth (S-3)** ([PR #83](https://github.com/mayloo89/circl/pull/83)): `POST /ws-ticket` (behind `RequireAuth`) issues a single-use UUID ticket stored in Redis with a 60 s TTL; `GET /chat/rooms/{id}/ws` now authenticates via `?ticket=` instead of `?token=`; tickets are consumed atomically via `GETDEL` so reuse returns 401; JWT no longer appears in WebSocket upgrade query strings or proxy access logs. New `internal/wsticket` package with `Store`, `Issuer`, and `Redeemer` interfaces.
+
 - **Privacy hardening — profile fields, presence gating, contact rate limit** ([PR #82](https://github.com/mayloo89/circl/pull/82)):
   - **S-1 Profile privacy:** `GET /profiles/{ref}` now returns a public subset for non-owners (computed age, no DOB, no lat/lng); owner view unchanged; `computeAge` helper added.
   - **S-2 Soft-delete filter:** `GetPresence` query adds `AND status = 'active'` so deleted/banned users no longer return `last_seen_at` data.
-  - **S-4 Presence gating:** `GET /presence?ids=...` intersects requested IDs against caller's accepted contacts; non-contacts receive `online: false` with no `last_seen_at`; `ContactIDs` adds nil-DB guard for unit tests.
+  - **S-4 Presence gating:** `GET /presence?ids=...` returns real `online` status to any authenticated user (discovery use case); `last_seen_at` is only included for the caller's accepted contacts and themselves; absent from JSON entirely (`omitzero`) for non-contacts. `PresenceStore` interface extracted so handlers depend on an abstraction; nil-DB guards removed, replaced with proper stubs in tests.
   - **S-7 Contact request rate limit:** `POST /contacts` enforces 100 requests/day per user via `contacts.WithLimiter`; wired in `main.go` alongside the existing reports limiter.
 
 ### Fixed

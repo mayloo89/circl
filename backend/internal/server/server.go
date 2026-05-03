@@ -42,6 +42,7 @@ type Config struct {
 
 	// Sub-routers / handlers
 	Auth          http.Handler
+	WSTicket      http.Handler
 	Account       http.Handler
 	Profile       http.Handler
 	Available     http.Handler
@@ -95,13 +96,13 @@ func New(cfg Config) http.Handler {
 	// because the browser EventSource API does not support custom headers.
 	r.Handle("/notifications/stream", cfg.Notifications)
 
-	// WebSocket endpoint — auth is handled inside the handler via ?token=
-	// because the browser WebSocket API does not support custom headers.
+	// WebSocket endpoint — auth via single-use ?ticket= (from POST /ws-ticket).
 	r.Handle("/chat/rooms/{id}/ws", cfg.ChatWS)
 
 	// Protected routes — RequireAuth validates the Bearer JWT before forwarding.
 	r.Group(func(g chi.Router) {
 		g.Use(cfg.RequireAuth)
+		g.Handle("/ws-ticket", cfg.WSTicket)
 		g.Mount("/users/me", cfg.Account)
 		g.Mount("/profiles", cfg.Profile)
 		g.Mount("/", cfg.Contacts)

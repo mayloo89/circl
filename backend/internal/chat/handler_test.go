@@ -19,6 +19,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/token"
+	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
 
 const (
@@ -152,6 +153,25 @@ func serveWithAuth(h http.Handler, r *http.Request, rec *httptest.ResponseRecord
 // the defensive middleware.UserIDFromContext(!ok) branches inside each handler.
 func serveNoAuth(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder) {
 	h.ServeHTTP(rec, r)
+}
+
+// stubRedeemer implements wsticket.Redeemer for unit tests.
+// Pre-seed tickets map with ticket → userID entries.
+type stubRedeemer struct {
+	tickets map[string]string
+}
+
+func (s *stubRedeemer) Redeem(_ context.Context, ticket string) (string, error) {
+	userID, ok := s.tickets[ticket]
+	if !ok {
+		return "", wsticket.ErrInvalid
+	}
+	delete(s.tickets, ticket)
+	return userID, nil
+}
+
+func seededRedeemer(userID string) *stubRedeemer {
+	return &stubRedeemer{tickets: map[string]string{"test-ticket": userID}}
 }
 
 // --- GET DM room ---
@@ -681,8 +701,8 @@ func TestViewMessage_NoUserInContext(t *testing.T) {
 
 // --- WebSocket handler ---
 
-func TestWSHandler_NoToken(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{}, nil, testSecret, nil)
+func TestWSHandler_NoTicket(t *testing.T) {
+	h := chat.NewWSHandler(&mockManager{}, nil, &stubRedeemer{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -691,9 +711,9 @@ func TestWSHandler_NoToken(t *testing.T) {
 	}
 }
 
-func TestWSHandler_InvalidToken(t *testing.T) {
-	h := chat.NewWSHandler(&mockManager{}, nil, testSecret, nil)
-	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token=badtoken", nil)
+func TestWSHandler_InvalidTicket(t *testing.T) {
+	h := chat.NewWSHandler(&mockManager{}, nil, &stubRedeemer{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?ticket=no-such-ticket", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -703,9 +723,8 @@ func TestWSHandler_InvalidToken(t *testing.T) {
 
 func TestWSHandler_NotMember(t *testing.T) {
 	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
-	h := chat.NewWSHandler(&mockManager{room: groupRoom, isMember: false}, nil, testSecret, nil)
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
-	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
+	h := chat.NewWSHandler(&mockManager{room: groupRoom, isMember: false}, nil, seededRedeemer(testUserID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?ticket=test-ticket", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -715,9 +734,8 @@ func TestWSHandler_NotMember(t *testing.T) {
 
 func TestWSHandler_MemberCheckError(t *testing.T) {
 	groupRoom := &chat.Room{ID: "r-1", Type: "group"}
-	h := chat.NewWSHandler(&mockManager{room: groupRoom, memberErr: errors.New("db fail")}, nil, testSecret, nil)
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
-	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?token="+tok, nil)
+	h := chat.NewWSHandler(&mockManager{room: groupRoom, memberErr: errors.New("db fail")}, nil, seededRedeemer(testUserID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/rooms/r-1/ws?ticket=test-ticket", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -757,15 +775,14 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -806,15 +823,14 @@ func TestWSHandler_IgnoresEmptyContent(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -846,15 +862,14 @@ func TestWSHandler_HubShutdownSendsCloseFrame(t *testing.T) {
 	go hub.Run(ctx)
 
 	mgr := &mockManager{isMember: true}
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -894,15 +909,14 @@ func TestWSHandler_SendAttachmentMessage(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -952,15 +966,14 @@ func TestWSHandler_SendVideoAttachment(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?ticket=test-ticket", nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -997,15 +1010,14 @@ func TestWSHandler_SendFileAttachment(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?ticket=test-ticket", nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -1034,15 +1046,14 @@ func TestWSHandler_IgnoresUnknownType(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -1066,15 +1077,14 @@ func TestWSHandler_IgnoresAttachmentWithEmptyContent(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -1097,15 +1107,14 @@ func TestWSHandler_IgnoresAttachmentWithoutUploadID(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?ticket=test-ticket", nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -1129,15 +1138,14 @@ func TestWSHandler_SaveMessageError(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, msgErr: errors.New("db fail")}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -1171,15 +1179,14 @@ func TestWSHandler_SendViewOnceMessage(t *testing.T) {
 		CreatedAt: now,
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?ticket=test-ticket", nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -1229,15 +1236,14 @@ func TestWSHandler_SendTTLMessage(t *testing.T) {
 		CreatedAt: now,
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?ticket=test-ticket", nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -1271,15 +1277,14 @@ func TestWSHandler_SendTTLMessage(t *testing.T) {
 func TestWSHandler_InvalidTTLIgnored(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?token="+tok, nil)
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/rooms/r-1/ws?ticket=test-ticket", nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -1303,15 +1308,14 @@ func TestWSHandler_TypingEventBroadcast(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, displayName: "Alice"}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -1353,15 +1357,14 @@ func TestWSHandler_TypingEventDebounced(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, displayName: "Bob"}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -1415,15 +1418,14 @@ func TestWSHandler_ThumbnailURLBroadcast(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
@@ -1501,15 +1503,14 @@ func TestWSHandler_BlockedMessageSilentlyDropped(t *testing.T) {
 		},
 	}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil, cfg))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil, cfg))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -1553,15 +1554,14 @@ func TestWSHandler_NotBlockedMessageDelivered(t *testing.T) {
 		},
 	}
 
-	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 
 	r := chi.NewRouter()
-	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, testSecret, nil, cfg))
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil, cfg))
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?token=" + tok
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket=test-ticket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {

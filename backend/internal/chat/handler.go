@@ -20,7 +20,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
-	"github.com/mayloo89/circl/backend/internal/token"
+	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
 
 const (
@@ -171,18 +171,18 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 
 // NewWSHandler returns the WebSocket handler for a single room.
 // It must be registered outside the requireAuth middleware group because the
-// browser WebSocket API does not support custom request headers; the JWT is
-// passed as a ?token= query parameter instead and validated here.
+// browser WebSocket API does not support custom request headers; a short-lived
+// ticket (obtained via POST /ws-ticket) is passed as a ?ticket= query param.
 //
 // notifyNewMessage, if non-nil, is called for each non-sender room member
 // after a message is saved, allowing callers to push real-time SSE badges.
 // An optional HandlerConfig may be supplied to wire block-checking callbacks.
-func NewWSHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string), cfg ...HandlerConfig) http.HandlerFunc {
+func NewWSHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessage func(recipientID, roomID string), cfg ...HandlerConfig) http.HandlerFunc {
 	var c HandlerConfig
 	if len(cfg) > 0 {
 		c = cfg[0]
 	}
-	return wsHandler(svc, hub, jwtSecret, notifyNewMessage, c)
+	return wsHandler(svc, hub, tickets, notifyNewMessage, c)
 }
 
 // getDMHandler returns (or creates) the direct-message room between the
@@ -689,11 +689,12 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 }
 
 // wsHandler upgrades the connection to WebSocket and starts the client pumps.
-// Auth is performed via a ?token= query parameter because the browser
-// WebSocket API does not support custom headers.
+// Auth is performed via a single-use ?ticket= query parameter (obtained from
+// POST /ws-ticket) because the browser WebSocket API does not support custom
+// headers. The ticket is consumed on first use; reuse returns 401.
 //
-// GET /chat/rooms/{id}/ws?token=<jwt>
-func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(recipientID, roomID string), cfg HandlerConfig) http.HandlerFunc {
+// GET /chat/rooms/{id}/ws?ticket=<uuid>
+func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessage func(recipientID, roomID string), cfg HandlerConfig) http.HandlerFunc {
 	allowed := make(map[string]struct{}, len(cfg.AllowedOrigins))
 	for _, o := range cfg.AllowedOrigins {
 		allowed[o] = struct{}{}
@@ -710,17 +711,16 @@ func wsHandler(svc Manager, hub *Hub, jwtSecret string, notifyNewMessage func(re
 		},
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		tok := r.URL.Query().Get("token")
-		if tok == "" {
+		ticket := r.URL.Query().Get("ticket")
+		if ticket == "" {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
-		claims, err := token.Validate(tok, jwtSecret)
+		userID, err := tickets.Redeem(r.Context(), ticket)
 		if err != nil {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
-		userID := claims.Subject
 
 		roomID := chi.URLParam(r, "id")
 
