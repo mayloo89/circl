@@ -48,42 +48,47 @@ export default function TopBar() {
     .find(([route]) => pathname === route || (route !== "/" && pathname.startsWith(route)))?.[1] ?? "home"
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center border-b border-gray-800 bg-gray-900 px-4 lg:hidden">
-      <Link href="/" className="text-base font-bold text-white">
-        Circl
-      </Link>
-
-      <span className="ml-3 text-sm font-medium text-gray-400">
-        {t(titleKey as Parameters<typeof t>[0])}
-      </span>
-
-      <div className="ml-auto flex items-center gap-3">
-        {supported && permission !== "granted" && (
-          <button
-            onClick={enable}
-            aria-label={t("enablePush")}
-            className="cursor-pointer rounded p-1.5 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
-          >
-            <BellIcon muted />
-          </button>
-        )}
-        {supported && permission === "granted" && (
-          <button
-            onClick={disable}
-            aria-label={t("disablePush")}
-            className="cursor-pointer rounded p-1.5 text-green-400 transition-colors hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
-          >
-            <BellIcon />
-          </button>
-        )}
-
-        <Link href="/profile" aria-label={t("profile")}>
-          <Avatar
-            src={profile?.avatar_url ?? ""}
-            name={profile?.display_name || "?"}
-            size="xs"
-          />
+    <header
+      className="fixed left-0 right-0 top-0 z-40 border-b border-gray-800 bg-gray-900 lg:hidden"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
+      <div className="flex h-14 items-center px-4">
+        <Link href="/" className="text-base font-bold text-white">
+          Circl
         </Link>
+
+        <span className="ml-3 text-sm font-medium text-gray-400">
+          {t(titleKey as Parameters<typeof t>[0])}
+        </span>
+
+        <div className="ml-auto flex items-center gap-3">
+          {supported && permission !== "granted" && (
+            <button
+              onClick={enable}
+              aria-label={t("enablePush")}
+              className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            >
+              <BellIcon muted />
+            </button>
+          )}
+          {supported && permission === "granted" && (
+            <button
+              onClick={disable}
+              aria-label={t("disablePush")}
+              className="cursor-pointer rounded p-3 text-green-400 transition-colors hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            >
+              <BellIcon />
+            </button>
+          )}
+
+          <Link href="/profile" aria-label={t("profile")}>
+            <Avatar
+              src={profile?.avatar_url ?? ""}
+              name={profile?.display_name || "?"}
+              size="xs"
+            />
+          </Link>
+        </div>
       </div>
     </header>
   )

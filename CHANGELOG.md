@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Mobile UX — M-1 through M-6**: Six targeted mobile UX improvements:
+  - **M-1 Safe area insets**: `--safe-top` / `--safe-bottom` CSS variables in `:root`; `TopBar` wraps content in an inner `h-14` div and adds `paddingTop: env(safe-area-inset-top)` to its fixed header so the background colour fills the notch/Dynamic Island area; `BottomNav` uses `height: calc(4rem + env(safe-area-inset-bottom))` + matching `paddingBottom` so nav items stay in the 4 rem zone rather than being compressed; `AppShell` padding now uses `pt-[calc(3.5rem+var(--safe-top))]` / `pb-[calc(4rem+var(--safe-bottom))]` with `lg:pt-0 lg:pb-0` overrides; `Toast` and the public profile sticky action bar account for the bottom safe area.
+  - **M-2 Input auto-zoom**: `Input` component adds `text-base` (16 px) to its `<input>` element; `ChatInput` textarea also uses `text-base` — both prevent iOS Safari's 300 ms auto-zoom on focus.
+  - **M-3 Auto-growing textarea**: `ChatInput` replaces its single-line `<input type="text">` with a `<textarea rows={1} class="max-h-40 resize-none overflow-y-auto">` that expands as the user types (`scrollHeight` approach); Enter sends, Shift+Enter inserts a newline; height resets on send; `inputRef` prop type updated to `HTMLTextAreaElement`.
+  - **M-4 Camera capture**: onboarding photo `<input>` adds `capture="user"` (front camera for avatar selfies); chat attachment `<input>` adds `capture="environment"` (rear camera for media messages).
+  - **M-5 Push prompt timing**: `PushPrompt` defers the notification permission request until the user has at least one conversation — it fetches `GET /chat/rooms` on mount and only sets `eligible` when the list is non-empty; falls back to showing after 30 s if the request fails.
+  - **M-6 Touch targets**: Bell buttons in `TopBar` (`p-1.5` → `p-3`), close button in `BottomSheet` (`p-1.5 h-4 w-4` → `p-3 h-5 w-5`), and dismiss button in `ProfileCompletenessBanner` (`p-1 h-3.5 w-3.5` → `p-3.5 h-4 w-4`) all now meet the 44 pt minimum touch target size.
+
 ### Security
 
 - **CSP nonce — remove `unsafe-inline` from `script-src` (S-6)** ([PR #84](https://github.com/mayloo89/circl/pull/84)): A per-request nonce (base64 UUID) is generated in `middleware.ts` for every production request. The nonce is injected into both the request headers (`x-nonce`, `Content-Security-Policy`) so Next.js stamps its own bootstrap scripts, and the response `Content-Security-Policy` header so the browser enforces it. `'unsafe-inline'` is removed from `script-src`; the static CSP block in `next.config.ts` is removed since middleware now owns it exclusively.

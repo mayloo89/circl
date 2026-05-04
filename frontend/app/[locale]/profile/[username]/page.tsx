@@ -510,8 +510,11 @@ export default function PublicProfilePage() {
       {/* ── Mobile sticky action bar ── */}
       {contactStatus !== "loading" && (
         <div
-          className="fixed bottom-16 inset-x-0 z-30 border-t border-gray-800 bg-gray-950/95 px-4 py-3 backdrop-blur-sm lg:hidden"
-          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+          className="fixed inset-x-0 z-30 border-t border-gray-800 bg-gray-950/95 px-4 py-3 backdrop-blur-sm lg:hidden"
+          style={{
+            bottom: "calc(4rem + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "0.75rem",
+          }}
         >
           <ActionButtons />
         </div>

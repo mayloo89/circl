@@ -151,6 +151,12 @@
 
 - [x] **Privacy hardening** ([PR #82](https://github.com/mayloo89/circl/pull/82)): S-1 — `GET /profiles/{ref}` returns public subset for non-owners (age computed, no DOB/coords); S-2 — `GetPresence` filters `status = 'active'`; S-4 — presence gated to accepted contacts (`online: false` for non-contacts); S-7 — contact requests rate-limited at 100/day per user.
 
+- [x] **WebSocket ticket auth** ([PR #83](https://github.com/mayloo89/circl/pull/83)): S-3 — `POST /ws-ticket` issues single-use UUID tickets (60 s TTL) stored in Redis; WS auth reads `?ticket=` and consumes via `GETDEL`; `useChat` hook exchanges Bearer JWT for a ticket before each WebSocket upgrade.
+
+- [x] **CSP nonce** ([PR #84](https://github.com/mayloo89/circl/pull/84)): S-6 — per-request nonce in `middleware.ts` injected into request headers (`x-nonce`, `Content-Security-Policy`) so Next.js stamps its bootstrap scripts; `'unsafe-inline'` removed from `script-src`.
+
+- [x] **Mobile UX** ([PR #85](https://github.com/mayloo89/circl/pull/85)): M-1 — iOS safe-area insets via CSS variables (`--safe-top`, `--safe-bottom`) applied to `TopBar`, `BottomNav`, `AppShell`, `Toast`, public profile sticky bar; M-2 — `text-base` (16 px) on `Input` and `ChatInput` textarea prevents iOS auto-zoom; M-3 — `ChatInput` migrated from `<input>` to auto-growing `<textarea>` (Enter sends, Shift+Enter newline, max-h-40 + scroll); M-4 — `capture="user"` on onboarding photo input (avatar selfie), `capture="environment"` on chat file input; M-5 — `PushPrompt` defers until user has ≥1 chat room (falls back to 30 s); M-6 — bell buttons (`p-3`), BottomSheet close (`p-3 h-5 w-5`), and `ProfileCompletenessBanner` dismiss (`p-3.5 h-4 w-4`) all meet 44 pt touch targets.
+
 - [x] **Pi deploy — disable Next.js image optimizer** ([PR #80](https://github.com/mayloo89/circl/pull/80)): `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` build arg (`false` by default); when `"true"` sets `images.unoptimized: true` in `next.config.ts`, bypassing `/_next/image` and its `remotePatterns` check; eliminates CPU-intensive resize/WebP conversion on low-power Pi hardware; `frontend/Dockerfile` wires the arg through.
 
 - [ ] **Phase 4 — Deployment + observability hosting** (PR #76–77): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.

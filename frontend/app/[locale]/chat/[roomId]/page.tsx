@@ -120,7 +120,7 @@ export default function ChatRoomPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const isAtBottomRef = useRef(true)
   const didInitialScrollRef = useRef(false)
   const [showFab, setShowFab] = useState(false)

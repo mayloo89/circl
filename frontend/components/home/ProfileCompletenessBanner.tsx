@@ -94,9 +94,9 @@ export default function ProfileCompletenessBanner() {
         <button
           onClick={dismiss}
           aria-label={t("dismiss")}
-          className="flex-none cursor-pointer rounded p-1 text-gray-600 transition-colors hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+          className="flex-none cursor-pointer rounded p-3.5 text-gray-600 transition-colors hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>

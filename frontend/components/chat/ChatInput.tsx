@@ -14,7 +14,7 @@ interface ChatInputProps {
   onSend: (content: string) => void
   onAttach: (file: File) => void
   onTyping: () => void
-  inputRef?: React.RefObject<HTMLInputElement | null>
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>
   disableAttach?: boolean
   disableEphemeral?: boolean
 }
@@ -46,14 +46,21 @@ export default function ChatInput({
   const [showEphemeralMenu, setShowEphemeralMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const internalInputRef = useRef<HTMLInputElement>(null)
-  const effectiveRef = inputRef || internalInputRef
+  const internalInputRef = useRef<HTMLTextAreaElement>(null)
+  const effectiveRef = inputRef ?? internalInputRef
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto"
+    el.style.height = el.scrollHeight + "px"
+  }
 
   function handleSend() {
     const content = input.trim()
     if (!content) return
     onSend(content)
     setInput("")
+    const el = effectiveRef.current
+    if (el) el.style.height = "auto"
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -84,13 +91,14 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="relative flex items-center gap-3">
+      <div className="relative flex items-end gap-3">
         {!disableAttach && (
           <>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*,video/*"
+              capture="environment"
               className="hidden"
               onChange={handleFileChange}
             />
@@ -161,14 +169,15 @@ export default function ChatInput({
         </div>}
 
         <label htmlFor="message-input" className="sr-only">Message</label>
-        <input
+        <textarea
           ref={effectiveRef}
           id="message-input"
-          type="text"
+          rows={1}
           placeholder={t("messagePlaceholder")}
           value={input}
           onChange={(e) => {
             setInput(e.target.value)
+            autoResize(e.target)
             if (!typingThrottleRef.current) {
               onTyping()
               typingThrottleRef.current = setTimeout(() => {
@@ -176,8 +185,13 @@ export default function ChatInput({
               }, 2000)
             }
           }}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          className="flex-1 rounded-full border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault()
+              handleSend()
+            }
+          }}
+          className="flex-1 max-h-40 resize-none overflow-y-auto rounded-2xl border border-gray-700 bg-gray-800 px-4 py-2 text-base text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
         />
         <button
           onClick={handleSend}

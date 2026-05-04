@@ -79,8 +79,11 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-stretch border-t border-gray-800 bg-gray-900 lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch border-t border-gray-800 bg-gray-900 lg:hidden"
+      style={{
+        height: "calc(4rem + env(safe-area-inset-bottom, 0px))",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
       aria-label={t("mainNav")}
     >
       {items.map(({ href, label, icon, badge }) => {

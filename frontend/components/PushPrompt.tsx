@@ -1,17 +1,37 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { usePushContext } from "@/contexts/PushContext"
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+
 export default function PushPrompt() {
   const t = useTranslations("pushPrompt")
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const { permission, supported, enable } = usePushContext()
   const [dismissed, setDismissed] = useState(false)
+  const [eligible, setEligible] = useState(false)
 
-  if (status !== "authenticated" || !supported || permission !== "default" || dismissed) return null
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.accessToken) return
+    const fallback = setTimeout(() => setEligible(true), 30_000)
+    fetch(`${API_URL}/chat/rooms`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: unknown) => {
+        if (Array.isArray(data) && data.length > 0) {
+          clearTimeout(fallback)
+          setEligible(true)
+        }
+      })
+      .catch(() => {})
+    return () => clearTimeout(fallback)
+  }, [status, session?.accessToken])
+
+  if (!eligible || status !== "authenticated" || !supported || permission !== "default" || dismissed) return null
 
   return (
     <div className="flex items-center justify-between bg-brand-primary px-6 py-2 text-sm text-white">
