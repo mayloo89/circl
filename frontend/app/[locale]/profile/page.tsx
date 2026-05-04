@@ -1,11 +1,11 @@
 "use client"
 
 import Image from "next/image"
-import { useSession } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useTranslations } from "next-intl"
 
-import { useRouter } from "@/i18n/navigation"
+import { useRouter, Link } from "@/i18n/navigation"
 
 import { useUpload } from "@/hooks/useUpload"
 import Button from "@/components/ui/Button"
@@ -209,8 +209,31 @@ function useAutoReset(value: string, setValue: (v: string) => void, delay = 10_0
 
 export default function ProfilePage() {
   const t = useTranslations("profile")
+  const tNav = useTranslations("nav")
   const { data: session, status } = useSession()
   const router = useRouter()
+
+  async function handleSignOut() {
+    const token = session?.accessToken
+    if (token) {
+      try {
+        await fetch(`${API_URL}/presence/heartbeat`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } catch { /* non-critical */ }
+    }
+    if (session?.refreshToken) {
+      try {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: session.refreshToken }),
+        })
+      } catch { /* non-critical */ }
+    }
+    await signOut()
+  }
 
   const [profile, setProfile] = useState<Profile | null>(null)
   const [username, setUsername] = useState("")
@@ -446,6 +469,29 @@ export default function ProfilePage() {
                 {t("previewAsVisitor")}
               </Button>
             )}
+            {/* Settings + Logout — mobile only; desktop uses the sidebar */}
+            <Link
+              href="/settings"
+              aria-label={tNav("settings")}
+              className="lg:hidden cursor-pointer rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </Link>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              aria-label={tNav("logOut")}
+              className="lg:hidden cursor-pointer rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
             <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>
               <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </Button>
