@@ -81,7 +81,7 @@ export default function TopBar() {
             </button>
           )}
 
-          <Link href="/profile" aria-label={t("profile")}>
+          <Link href="/profile" aria-label={t("profile")} className="rounded-full p-1.5">
             <Avatar
               src={profile?.avatar_url ?? ""}
               name={profile?.display_name || "?"}

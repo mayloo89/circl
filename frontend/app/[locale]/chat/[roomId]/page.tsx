@@ -506,7 +506,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button aria-label={t("backToMessages")} onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="cursor-pointer text-gray-400 transition-colors hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded">
+        <button aria-label={t("backToMessages")} onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>

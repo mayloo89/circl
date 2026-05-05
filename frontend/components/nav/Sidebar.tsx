@@ -53,14 +53,6 @@ function UsersIcon() {
   )
 }
 
-function PersonIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
 
 function ChannelsIcon() {
   return (
@@ -116,7 +108,6 @@ export default function Sidebar() {
     { href: "/chat", label: t("messages"), icon: <ChatIcon />, badge: unreadChatCount },
     { href: "/chat/channels", label: t("channels"), icon: <ChannelsIcon /> },
     { href: "/contacts", label: t("contacts"), icon: <UsersIcon />, badge: pendingCount },
-    { href: "/profile", label: t("profile"), icon: <PersonIcon /> },
   ]
 
   async function handleSignOut() {

@@ -166,7 +166,7 @@ function useUsernameAvailability(username: string, token: string | undefined, cu
 
 function ProfileSkeleton() {
   return (
-    <div className="w-full max-w-lg space-y-6 px-4">
+    <div className="w-full max-w-2xl space-y-6 px-4">
       <div className="flex items-center justify-between">
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-5 w-16" />
@@ -459,7 +459,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
-      <div className="w-full max-w-lg space-y-6 px-4">
+      <div className="w-full max-w-2xl space-y-6 px-4">
 
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
@@ -473,7 +473,7 @@ export default function ProfilePage() {
             <Link
               href="/settings"
               aria-label={tNav("settings")}
-              className="lg:hidden cursor-pointer rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
+              className="lg:hidden cursor-pointer rounded-md p-3 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3" />
@@ -484,7 +484,7 @@ export default function ProfilePage() {
               type="button"
               onClick={handleSignOut}
               aria-label={tNav("logOut")}
-              className="lg:hidden cursor-pointer rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+              className="lg:hidden cursor-pointer rounded-md p-3 text-gray-400 transition-colors hover:bg-gray-800 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -492,9 +492,6 @@ export default function ProfilePage() {
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
             </button>
-            <Button variant="ghost" aria-label="Go to home" onClick={() => router.push("/")}>
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </Button>
           </div>
         </div>
 

@@ -429,6 +429,8 @@
     "acceptRequest": "Aceptar solicitud",
     "moreOptions": "Más opciones",
     "viewPhoto": "Ver foto de perfil",
+    "previewBanner": "Así es como tu perfil aparece para los demás",
+    "exitPreview": "Salir de la vista previa",
     "actions": {
       "message": "Mensaje",
       "addContact": "Agregar contacto",
