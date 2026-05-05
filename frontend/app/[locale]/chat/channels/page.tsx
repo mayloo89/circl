@@ -142,7 +142,7 @@ export default function ChannelsPage() {
   )
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
+    <div className="flex min-h-screen flex-col bg-gray-950">
       {token && (
         <CreateChannelModal
           open={createOpen}
@@ -155,21 +155,17 @@ export default function ChannelsPage() {
           }}
         />
       )}
-
-      <div className="w-full max-w-2xl space-y-6 px-4">
+<div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
             <p className="mt-1 text-sm text-gray-500">{t("subtitle")}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-                {t("newChannel")}
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => router.push("/chat")}>{t("backToMessages")}</Button>
-          </div>
+          {isAdmin && (
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+              {t("newChannel")}
+            </Button>
+          )}
         </div>
 
         <Input

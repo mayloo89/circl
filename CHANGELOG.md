@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Mobile UX + navigation audit** ([PR #86](https://github.com/mayloo89/circl/pull/86)):
+  - **M-1 Safe area insets**: `--safe-top` / `--safe-bottom` CSS variables in `:root`; `TopBar` wraps content in an inner `h-14` div and adds `paddingTop: env(safe-area-inset-top)` to its fixed header so the background colour fills the notch/Dynamic Island area; `BottomNav` uses `height: calc(4rem + env(safe-area-inset-bottom))` + matching `paddingBottom` so nav items stay in the 4 rem zone; `AppShell` padding via `@utility pt-topbar` / `@utility pb-bottomnav` with `lg:pt-0 lg:pb-0` overrides; `Toast` and the public profile sticky action bar account for the bottom safe area.
+  - **M-2 Input auto-zoom**: `Input` component adds `text-base` (16 px) to its `<input>` element; `ChatInput` textarea also uses `text-base` — both prevent iOS Safari's 300 ms auto-zoom on focus.
+  - **M-3 Auto-growing textarea**: `ChatInput` replaces its single-line `<input type="text">` with a `<textarea rows={1} class="max-h-40 resize-none overflow-y-auto">` that expands as the user types (`scrollHeight` approach); Enter sends, Shift+Enter inserts a newline; height resets on send; `inputRef` prop type updated to `HTMLTextAreaElement`.
+  - **M-4 Camera capture**: onboarding photo `<input>` adds `capture="user"` (front camera for avatar selfies); chat attachment `<input>` adds `capture="environment"` (rear camera for media messages).
+  - **M-5 Push prompt timing**: `PushPrompt` defers the notification permission request until the user has at least one conversation — it fetches `GET /chat/rooms` on mount and only sets `eligible` when the list is non-empty; falls back to showing after 30 s if the request fails.
+  - **M-6 Touch targets**: Bell buttons in `TopBar` (`p-1.5` → `p-3`), `BottomSheet` close (`p-1.5 h-4 w-4` → `p-3 h-5 w-5`), `ProfileCompletenessBanner` dismiss (`p-1 h-3.5 w-3.5` → `p-3.5 h-4 w-4`), chat room back button (added `p-3`, was bare icon), public profile hero and overflow buttons (`h-10 w-10` → `h-11 w-11`), own profile mobile Settings + Logout buttons (`p-2` → `p-3`) — all now meet the 44 pt minimum.
+  - **Mobile settings & logout**: Added `lg:hidden` gear-icon link (→ `/settings`) and logout button to the own profile page header so mobile users can reach both without the sidebar.
+  - **Collapsed sidebar logout**: Sign-out button was hidden behind `{!collapsed && ...}`; moved to a dedicated always-visible row above the user/avatar row.
+  - **Navigation cleanup**: Spurious back buttons removed from `/chat` and `/chat/channels` (top-level pages); back button removed from Contacts page (top-level) and own profile page (reached via persistent TopBar/Sidebar avatar).
+  - **BottomNav restructure**: Profile tab removed; Channels restored — final 5 items: Home, Browse, Messages, Channels, Contacts. Profile on mobile is accessed via the TopBar avatar (now with `p-1.5` touch target).
+  - **Sidebar cleanup**: Profile removed from `navItems`; the avatar/name row at the bottom of the sidebar is the sole desktop profile entry point, eliminating the duplicate link.
+  - **Profile preview mode**: Visiting `/profile/[username]` as the profile owner now renders a sticky preview banner ("This is how your profile appears to others" + "Exit preview" pill → `/profile`) instead of silently redirecting; action buttons (contact/message/block/report) are hidden in preview mode; i18n keys added in EN/ES/PT.
+  - **Layout consistency**: Contacts and own profile edit pages `max-w-lg` → `max-w-2xl`; public profile content section capped at `mx-auto max-w-2xl` — all list/form pages now share the same width as chat list and settings.
+
 ### Security
 
 - **CSP nonce — remove `unsafe-inline` from `script-src` (S-6)** ([PR #84](https://github.com/mayloo89/circl/pull/84)): A per-request nonce (base64 UUID) is generated in `middleware.ts` for every production request. The nonce is injected into both the request headers (`x-nonce`, `Content-Security-Policy`) so Next.js stamps its own bootstrap scripts, and the response `Content-Security-Policy` header so the browser enforces it. `'unsafe-inline'` is removed from `script-src`; the static CSP block in `next.config.ts` is removed since middleware now owns it exclusively.

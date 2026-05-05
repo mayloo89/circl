@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { useParams } from "next/navigation"
-import { useRouter } from "@/i18n/navigation"
+import { Link, useRouter } from "@/i18n/navigation"
 import { useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 
@@ -90,6 +90,7 @@ export default function PublicProfilePage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [isOwnProfile, setIsOwnProfile] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const overflowRef = useRef<HTMLDivElement>(null)
 
@@ -137,7 +138,7 @@ export default function PublicProfilePage() {
           blockedRes.ok   ? blockedRes.json()   : [],
         ])
 
-        if (myID && prof.user_id === myID) { router.replace("/profile"); return }
+        if (myID && prof.user_id === myID) { setIsOwnProfile(true) }
 
         setProfile(prof)
         const targetID = prof.user_id
@@ -330,27 +331,42 @@ export default function PublicProfilePage() {
 
   return (
     <>
+      {isOwnProfile && (
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-brand-primary/30 bg-brand-deep/95 px-4 py-2.5 backdrop-blur-sm">
+          <p className="text-sm font-medium text-white">{t("previewBanner")}</p>
+          <Link
+            href="/profile"
+            className="shrink-0 rounded-full bg-brand-primary px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
+          >
+            {t("exitPreview")}
+          </Link>
+        </div>
+      )}
+
       {lightbox && (
         <Lightbox url={lightbox} type="image" onClose={() => setLightbox(null)} />
       )}
 
-      <ConfirmDialog
-        open={blockConfirmOpen}
-        title={t("blockUserTitle")}
-        message={t("blockUserMessage", { name: profile.display_name })}
-        confirmLabel={t("block")}
-        loading={actionLoading}
-        onConfirm={handleBlock}
-        onCancel={() => setBlockConfirmOpen(false)}
-      />
-
-      <ReportDialog
-        open={reportConfirmOpen}
-        loading={actionLoading}
-        error={reportError}
-        onSubmit={handleReport}
-        onCancel={() => setReportConfirmOpen(false)}
-      />
+      {!isOwnProfile && (
+        <>
+          <ConfirmDialog
+            open={blockConfirmOpen}
+            title={t("blockUserTitle")}
+            message={t("blockUserMessage", { name: profile.display_name })}
+            confirmLabel={t("block")}
+            loading={actionLoading}
+            onConfirm={handleBlock}
+            onCancel={() => setBlockConfirmOpen(false)}
+          />
+          <ReportDialog
+            open={reportConfirmOpen}
+            loading={actionLoading}
+            error={reportError}
+            onSubmit={handleReport}
+            onCancel={() => setReportConfirmOpen(false)}
+          />
+        </>
+      )}
 
       {/* ── Hero ── */}
       <div className="relative min-h-[55vh] overflow-hidden bg-gray-900">
@@ -386,7 +402,7 @@ export default function PublicProfilePage() {
           type="button"
           onClick={() => router.back()}
           aria-label={tc("back")}
-          className="absolute left-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -394,63 +410,65 @@ export default function PublicProfilePage() {
         </button>
 
         {/* Overflow menu */}
-        <div ref={overflowRef} className="absolute right-4 top-4 z-10">
-          <button
-            type="button"
-            onClick={() => setOverflowOpen((v) => !v)}
-            aria-label={t("moreOptions")}
-            aria-expanded={overflowOpen}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
-          >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="5"  r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
-            </svg>
-          </button>
-
-          {overflowOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 mt-1 min-w-[10rem] overflow-hidden rounded-xl bg-gray-800 shadow-2xl ring-1 ring-gray-700"
+        {!isOwnProfile && (
+          <div ref={overflowRef} className="absolute right-4 top-4 z-10">
+            <button
+              type="button"
+              onClick={() => setOverflowOpen((v) => !v)}
+              aria-label={t("moreOptions")}
+              aria-expanded={overflowOpen}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
             >
-              {isBlocked ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setOverflowOpen(false); void handleUnblock() }}
-                  disabled={actionLoading}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 disabled:opacity-50"
-                >
-                  {t("actions.unblock")}
-                </button>
-              ) : (
-                <>
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="5"  r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="12" cy="19" r="1.5" />
+              </svg>
+            </button>
+
+            {overflowOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 mt-1 min-w-[10rem] overflow-hidden rounded-xl bg-gray-800 shadow-2xl ring-1 ring-gray-700"
+              >
+                {isBlocked ? (
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => { setOverflowOpen(false); setBlockConfirmOpen(true) }}
-                    className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-gray-700"
+                    onClick={() => { setOverflowOpen(false); void handleUnblock() }}
+                    disabled={actionLoading}
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 disabled:opacity-50"
                   >
-                    {t("actions.block")}
+                    {t("actions.unblock")}
                   </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setOverflowOpen(false); setReportConfirmOpen(true) }}
-                    className="w-full border-t border-gray-700 px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700"
-                  >
-                    {t("actions.report")}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setOverflowOpen(false); setBlockConfirmOpen(true) }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-gray-700"
+                    >
+                      {t("actions.block")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setOverflowOpen(false); setReportConfirmOpen(true) }}
+                      className="w-full border-t border-gray-700 px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700"
+                    >
+                      {t("actions.report")}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Content ── */}
-      <div className="space-y-5 px-4 pb-36 pt-6 lg:pb-8">
+      <div className="mx-auto max-w-2xl space-y-5 px-4 pb-36 pt-6 lg:pb-8">
 
         {error && (
           <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
@@ -498,7 +516,7 @@ export default function PublicProfilePage() {
         )}
 
         {/* Desktop inline actions */}
-        {contactStatus !== "loading" && (
+        {!isOwnProfile && contactStatus !== "loading" && (
           <div className="hidden lg:block pt-1">
             <ActionButtons />
           </div>
@@ -508,10 +526,13 @@ export default function PublicProfilePage() {
       </div>
 
       {/* ── Mobile sticky action bar ── */}
-      {contactStatus !== "loading" && (
+      {!isOwnProfile && contactStatus !== "loading" && (
         <div
-          className="fixed bottom-16 inset-x-0 z-30 border-t border-gray-800 bg-gray-950/95 px-4 py-3 backdrop-blur-sm lg:hidden"
-          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+          className="fixed inset-x-0 z-30 border-t border-gray-800 bg-gray-950/95 px-4 py-3 backdrop-blur-sm lg:hidden"
+          style={{
+            bottom: "calc(4rem + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "0.75rem",
+          }}
         >
           <ActionButtons />
         </div>

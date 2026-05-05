@@ -18,7 +18,7 @@ test.describe("profile", () => {
 
   test("navigates home from profile page", async ({ authenticatedPage: { page } }) => {
     await page.goto("/en/profile")
-    await page.getByRole("button", { name: /home/i }).click()
+    await page.getByRole("link", { name: /home/i }).click()
     await page.waitForURL(/\/en\/?$/)
     await expect(page.getByText("Welcome to Circl")).toBeVisible()
   })

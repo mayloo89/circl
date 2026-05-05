@@ -109,7 +109,7 @@ export default function OnboardingPhotoPage() {
             </span>
           )}
         </button>
-        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileChange} className="hidden" />
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={handleFileChange} className="hidden" />
         {preview && (
           <button
             type="button"

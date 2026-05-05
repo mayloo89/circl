@@ -53,14 +53,6 @@ function UsersIcon() {
   )
 }
 
-function PersonIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
 
 function ChannelsIcon() {
   return (
@@ -116,7 +108,6 @@ export default function Sidebar() {
     { href: "/chat", label: t("messages"), icon: <ChatIcon />, badge: unreadChatCount },
     { href: "/chat/channels", label: t("channels"), icon: <ChannelsIcon /> },
     { href: "/contacts", label: t("contacts"), icon: <UsersIcon />, badge: pendingCount },
-    { href: "/profile", label: t("profile"), icon: <PersonIcon /> },
   ]
 
   async function handleSignOut() {
@@ -302,7 +293,18 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* User row + sign out */}
+        {/* Sign out — always visible; icon-only when collapsed */}
+        <button
+          onClick={handleSignOut}
+          aria-label={t("logOut")}
+          title={collapsed ? t("logOut") : undefined}
+          className={`cursor-pointer flex w-full items-center rounded-lg py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}
+        >
+          <LogOutIcon />
+          {!collapsed && t("logOut")}
+        </button>
+
+        {/* User / profile row — always last */}
         <div className={`flex items-center rounded-lg py-2.5 ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}>
           <Link href="/profile" aria-label={t("profile")} title={collapsed ? (profile?.display_name ?? t("profile")) : undefined}>
             <Avatar
@@ -312,18 +314,9 @@ export default function Sidebar() {
             />
           </Link>
           {!collapsed && (
-            <>
-              <span className="flex-1 truncate text-sm text-gray-300">
-                {profile?.display_name}
-              </span>
-              <button
-                onClick={handleSignOut}
-                aria-label={t("logOut")}
-                className="text-gray-500 hover:text-red-400 transition-colors"
-              >
-                <LogOutIcon />
-              </button>
-            </>
+            <span className="flex-1 truncate text-sm text-gray-300">
+              {profile?.display_name}
+            </span>
           )}
         </div>
       </div>

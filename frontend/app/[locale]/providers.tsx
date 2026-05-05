@@ -72,7 +72,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const isOnboarding = pathname.includes("/onboarding")
 
   const outerClass = authenticated && !isOnboarding
-    ? `flex h-dvh flex-col overflow-hidden pt-14 pb-16 transition-all duration-200 lg:pt-0 lg:pb-0 ${collapsed ? "lg:ml-16" : "lg:ml-64"}`
+    ? `flex h-dvh flex-col overflow-hidden pt-topbar pb-bottomnav transition-all duration-200 lg:pt-0 lg:pb-0 ${collapsed ? "lg:ml-16" : "lg:ml-64"}`
     : "min-h-dvh"
 
   return (

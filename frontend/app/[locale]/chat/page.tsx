@@ -95,7 +95,6 @@ function RoomSkeleton() {
 
 export default function ChatPage() {
   const t = useTranslations("chat")
-  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const router = useRouter()
   const [rooms, setRooms] = useState<RoomSummary[]>([])
@@ -160,7 +159,7 @@ export default function ChatPage() {
     : rooms
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
+    <div className="flex min-h-screen flex-col bg-gray-950">
       {token && (
         <CreateGroupModal
           open={createGroupOpen}
@@ -173,11 +172,8 @@ export default function ChatPage() {
           }}
         />
       )}
-      <div className="w-full max-w-lg space-y-6 px-4">
+<div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" aria-label={tc("back")} onClick={() => router.back()} className="p-2">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          </Button>
           <h1 className="flex-1 text-3xl font-bold text-white">{t("title")}</h1>
           <Button
             variant="secondary"

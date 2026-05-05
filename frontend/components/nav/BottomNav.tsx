@@ -44,6 +44,7 @@ function UsersIcon() {
   )
 }
 
+
 function ChannelsIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -54,14 +55,6 @@ function ChannelsIcon() {
   )
 }
 
-function PersonIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
 
 export default function BottomNav() {
   const t = useTranslations("nav")
@@ -74,17 +67,19 @@ export default function BottomNav() {
     { href: "/chat", label: t("messages"), icon: <ChatIcon />, badge: unreadChatCount },
     { href: "/chat/channels", label: t("channels"), icon: <ChannelsIcon /> },
     { href: "/contacts", label: t("contacts"), icon: <UsersIcon />, badge: pendingCount },
-    { href: "/profile", label: t("profile"), icon: <PersonIcon /> },
   ]
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-stretch border-t border-gray-800 bg-gray-900 lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch border-t border-gray-800 bg-gray-900 lg:hidden"
+      style={{
+        height: "calc(4rem + env(safe-area-inset-bottom, 0px))",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
       aria-label={t("mainNav")}
     >
       {items.map(({ href, label, icon, badge }) => {
-        const isActive = href === "/" ? pathname === "/" : href === "/chat" ? pathname === "/chat" || pathname.startsWith("/chat/") && !pathname.startsWith("/chat/channels") : pathname === href || pathname.startsWith(href + "/")
+        const isActive = href === "/" ? pathname === "/" : href === "/chat" ? pathname === "/chat" || (pathname.startsWith("/chat/") && !pathname.startsWith("/chat/channels")) : pathname === href || pathname.startsWith(href + "/")
         return (
           <Link
             key={href}

@@ -62,7 +62,6 @@ interface BlockedUser {
 
 export default function ContactsPage() {
   const t = useTranslations("contacts")
-  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const router = useRouter()
 
@@ -275,12 +274,9 @@ export default function ContactsPage() {
       onCancel={() => setUnblockConfirm(null)}
     />
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
-      <div className="w-full max-w-lg space-y-8 px-4">
+      <div className="w-full max-w-2xl space-y-8 px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
-          <Button variant="ghost" aria-label={tc("back")} onClick={() => router.back()} className="p-2">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          </Button>
         </div>
 
         {error && (
