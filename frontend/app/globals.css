@@ -108,3 +108,13 @@ html {
     display: none;
   }
 }
+
+/* Safe-area-aware padding for the app shell — accounts for TopBar and BottomNav heights
+   including the notch / Dynamic Island / home-indicator areas on iOS. */
+@utility pt-topbar {
+  padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+}
+
+@utility pb-bottomnav {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}

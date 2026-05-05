@@ -302,7 +302,18 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* User row */}
+        {/* Sign out — always visible; icon-only when collapsed */}
+        <button
+          onClick={handleSignOut}
+          aria-label={t("logOut")}
+          title={collapsed ? t("logOut") : undefined}
+          className={`cursor-pointer flex w-full items-center rounded-lg py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}
+        >
+          <LogOutIcon />
+          {!collapsed && t("logOut")}
+        </button>
+
+        {/* User / profile row — always last */}
         <div className={`flex items-center rounded-lg py-2.5 ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}>
           <Link href="/profile" aria-label={t("profile")} title={collapsed ? (profile?.display_name ?? t("profile")) : undefined}>
             <Avatar
@@ -317,17 +328,6 @@ export default function Sidebar() {
             </span>
           )}
         </div>
-
-        {/* Sign out — always visible; icon-only when collapsed */}
-        <button
-          onClick={handleSignOut}
-          aria-label={t("logOut")}
-          title={collapsed ? t("logOut") : undefined}
-          className={`cursor-pointer flex w-full items-center rounded-lg py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}
-        >
-          <LogOutIcon />
-          {!collapsed && t("logOut")}
-        </button>
       </div>
 
       {/* Invisible element to push content margin — consumed by AppShell via context */}
