@@ -36,6 +36,8 @@ backend/data/
 .agents/
 .opencode/
 skills-lock.json
+CLAUDE.md
+CLAUDE.local.md
 
 # Local CI script
 run-ci-local.sh
