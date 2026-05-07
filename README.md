@@ -16,7 +16,6 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 ## Documentation
 - [Implementation plan](docs/implementation-plan.md)
 - [API reference (OpenAPI 3.1.0)](docs/openapi.yaml)
-- [Production readiness checklist](docs/production-readiness.md)
 
 ## Project status
 - ✅ **Foundation** ([PR #1](https://github.com/mayloo89/circl/pull/1)): repo structure, linters, CI/CD
@@ -248,8 +247,7 @@ circl/
 │   └── tempo/             # Tempo config (OTLP receivers, 7-day trace retention)
 ├── docs/
 │   ├── implementation-plan.md
-│   ├── openapi.yaml       # OpenAPI 3.1.0 spec (~40 endpoints)
-│   └── production-readiness.md
+│   └── openapi.yaml       # OpenAPI 3.1.0 spec (~40 endpoints)
 ├── .github/workflows/     # CI: secret-scan, frontend, backend, backend-integration, e2e, openapi-lint
 ├── .gitleaks.toml         # Gitleaks allowlist for known test-only secrets
 ├── docker-compose.yml     # Full dev stack (API, Postgres, Redis, MinIO, Mailpit, observability)
