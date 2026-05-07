@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import Input from "@/components/ui/Input"
+import { useFocusTrap } from "@/hooks/useFocusTrap"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -65,6 +66,11 @@ export default function GroupMembersPanel({
 
   const [removeConfirm, setRemoveConfirm] = useState<MemberProfile | null>(null)
   const [removeLoading, setRemoveLoading] = useState(false)
+
+  const panelRef = useRef<HTMLDivElement>(null)
+  // Body scroll is already locked by the parent chat layout, so leave that
+  // off here — only the focus trap and Escape handling are needed.
+  useFocusTrap({ active: true, containerRef: panelRef, onEscape: onClose, lockBodyScroll: false })
 
   const isAdmin = members.some((m) => m.user_id === currentUserId && m.is_admin)
   const memberIds = new Set(members.map((m) => m.user_id))
@@ -182,7 +188,13 @@ export default function GroupMembersPanel({
   const isSelfLeave = removeConfirm?.user_id === currentUserId
 
   return (
-    <div className="flex h-full flex-col bg-gray-900">
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={roomType === "channel" ? t("channelSettings") : t("groupSettings")}
+      className="flex h-full flex-col bg-gray-900"
+    >
       <ConfirmDialog
         open={!!removeConfirm}
         title={isSelfLeave ? (roomType === "channel" ? t("leaveChannelTitle") : t("leaveGroupTitle")) : t("removeMemberTitle")}

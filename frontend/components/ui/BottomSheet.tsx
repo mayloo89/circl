@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect } from "react"
+import { useRef } from "react"
+
+import { useFocusTrap } from "@/hooks/useFocusTrap"
 
 interface BottomSheetProps {
   open: boolean
@@ -10,21 +12,9 @@ interface BottomSheetProps {
 }
 
 export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
-  useEffect(() => {
-    if (!open) return
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-    document.addEventListener("keydown", handleKey)
-    return () => document.removeEventListener("keydown", handleKey)
-  }, [open, onClose])
+  const sheetRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => { document.body.style.overflow = prev }
-  }, [open])
+  useFocusTrap({ active: open, containerRef: sheetRef, onEscape: onClose })
 
   if (!open) return null
 
@@ -38,6 +28,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
       />
       {/* Sheet */}
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
