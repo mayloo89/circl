@@ -196,7 +196,18 @@
     "noResults": "No conversations match your search.",
     "goToContacts": "Go to contacts",
     "selectConversationTitle": "Select a conversation",
-    "selectConversationDesc": "Pick a conversation from the list to start chatting."
+    "selectConversationDesc": "Pick a conversation from the list to start chatting.",
+    "newChat": "New chat",
+    "newChatTitle": "Start a new chat",
+    "newChatSearchPlaceholder": "Search contacts…",
+    "newChatNoContacts": "You have no contacts yet.",
+    "newChatNoMatches": "No contacts match your search.",
+    "newChatFailed": "Could not start the chat. Please try again.",
+    "newChatDisabledTitle": "Add contacts first to start chatting.",
+    "newGroupDisabledTitle": "Add contacts first to create a group.",
+    "newChatCount": "{count, plural, one {# contact} other {# contacts}}",
+    "newChatFooterNote": "Only accepted contacts can be messaged.",
+    "newChatManageContacts": "Manage contacts"
   },
   "contacts": {
     "title": "Contacts",

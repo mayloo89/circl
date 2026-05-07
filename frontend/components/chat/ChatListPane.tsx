@@ -12,6 +12,7 @@ import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
 import CreateGroupModal from "@/components/chat/CreateGroupModal"
+import NewChatModal from "@/components/chat/NewChatModal"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -111,6 +112,10 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
+  const [newChatOpen, setNewChatOpen] = useState(false)
+  // Contact count drives the disabled state on both compose buttons. We fetch
+  // it once on mount; null = unknown (pre-fetch), 0 = disable, >0 = enable.
+  const [contactCount, setContactCount] = useState<number | null>(null)
   const [now, setNow] = useState(0)
 
   useEffect(() => {
@@ -155,6 +160,14 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return
+    fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: unknown[]) => setContactCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => setContactCount(0))
+  }, [status, token])
+
+  useEffect(() => {
+    if (status !== "authenticated" || !token) return
     const id = setInterval(silentRefresh, 10_000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,24 +192,48 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
   return (
     <div className={wrapperClass}>
       {token && (
-        <CreateGroupModal
-          open={createGroupOpen}
-          token={token}
-          onClose={() => setCreateGroupOpen(false)}
-          onCreated={(roomId) => {
-            setCreateGroupOpen(false)
-            loadRooms()
-            router.push(`/chat/${roomId}`)
-          }}
-        />
+        <>
+          <NewChatModal
+            open={newChatOpen}
+            token={token}
+            onClose={() => setNewChatOpen(false)}
+            onCreated={(roomId) => {
+              setNewChatOpen(false)
+              loadRooms()
+              router.push(`/chat/${roomId}`)
+            }}
+          />
+          <CreateGroupModal
+            open={createGroupOpen}
+            token={token}
+            onClose={() => setCreateGroupOpen(false)}
+            onCreated={(roomId) => {
+              setCreateGroupOpen(false)
+              loadRooms()
+              router.push(`/chat/${roomId}`)
+            }}
+          />
+        </>
       )}
       <div className={innerClass}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <h1 className={`flex-1 font-bold text-white ${isPane ? "text-xl" : "text-3xl"}`}>{t("title")}</h1>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setNewChatOpen(true)}
+            disabled={contactCount === 0}
+            title={contactCount === 0 ? t("newChatDisabledTitle") : undefined}
+            aria-label={t("newChat")}
+          >
+            {t("newChat")}
+          </Button>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setCreateGroupOpen(true)}
+            disabled={contactCount === 0}
+            title={contactCount === 0 ? t("newGroupDisabledTitle") : undefined}
             aria-label={t("newGroup")}
           >
             {t("newGroup")}

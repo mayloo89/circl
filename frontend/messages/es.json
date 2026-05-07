@@ -196,7 +196,18 @@
     "noResults": "Ninguna conversación coincide con tu búsqueda.",
     "goToContacts": "Ir a contactos",
     "selectConversationTitle": "Selecciona una conversación",
-    "selectConversationDesc": "Elige una conversación de la lista para comenzar a chatear."
+    "selectConversationDesc": "Elige una conversación de la lista para comenzar a chatear.",
+    "newChat": "Nuevo chat",
+    "newChatTitle": "Iniciar un nuevo chat",
+    "newChatSearchPlaceholder": "Buscar contactos…",
+    "newChatNoContacts": "Aún no tienes contactos.",
+    "newChatNoMatches": "Ningún contacto coincide con tu búsqueda.",
+    "newChatFailed": "No se pudo iniciar el chat. Inténtalo de nuevo.",
+    "newChatDisabledTitle": "Agrega contactos primero para empezar a chatear.",
+    "newGroupDisabledTitle": "Agrega contactos primero para crear un grupo.",
+    "newChatCount": "{count, plural, one {# contacto} other {# contactos}}",
+    "newChatFooterNote": "Solo se puede enviar mensajes a contactos aceptados.",
+    "newChatManageContacts": "Gestionar contactos"
   },
   "contacts": {
     "title": "Contactos",
