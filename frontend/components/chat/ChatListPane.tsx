@@ -12,6 +12,7 @@ import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
 import CreateGroupModal from "@/components/chat/CreateGroupModal"
+import NewChatModal from "@/components/chat/NewChatModal"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -93,7 +94,16 @@ function RoomSkeleton() {
   )
 }
 
-export default function ChatPage() {
+interface ChatListPaneProps {
+  selectedRoomId?: string
+  /**
+   * `page` — standalone full-width view used by /chat on mobile and as the only column on small screens.
+   * `pane` — embedded side-pane variant used on desktop split layouts (compact spacing, no outer padding).
+   */
+  variant?: "page" | "pane"
+}
+
+export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatListPaneProps) {
   const t = useTranslations("chat")
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -102,7 +112,12 @@ export default function ChatPage() {
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
+  const [newChatOpen, setNewChatOpen] = useState(false)
+  // Contact count drives the disabled state on both compose buttons. We fetch
+  // it once on mount; null = unknown (pre-fetch), 0 = disable, >0 = enable.
+  const [contactCount, setContactCount] = useState<number | null>(null)
   const [now, setNow] = useState(0)
+
   useEffect(() => {
     const initial = setTimeout(() => setNow(Date.now()), 0)
     const id = setInterval(() => setNow(Date.now()), 60_000)
@@ -145,6 +160,14 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return
+    fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: unknown[]) => setContactCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => setContactCount(0))
+  }, [status, token])
+
+  useEffect(() => {
+    if (status !== "authenticated" || !token) return
     const id = setInterval(silentRefresh, 10_000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,27 +181,59 @@ export default function ChatPage() {
       })
     : rooms
 
+  const isPane = variant === "pane"
+  const wrapperClass = isPane
+    ? "flex h-full w-full flex-col bg-gray-950"
+    : "flex min-h-full w-full flex-col bg-gray-950"
+  const innerClass = isPane
+    ? "flex flex-1 flex-col gap-4 overflow-hidden px-3 py-4"
+    : "mx-auto w-full max-w-2xl space-y-6 px-4 py-6"
+
   return (
-    <div className="flex min-h-screen flex-col bg-gray-950">
+    <div className={wrapperClass}>
       {token && (
-        <CreateGroupModal
-          open={createGroupOpen}
-          token={token}
-          onClose={() => setCreateGroupOpen(false)}
-          onCreated={(roomId) => {
-            setCreateGroupOpen(false)
-            loadRooms()
-            router.push(`/chat/${roomId}`)
-          }}
-        />
+        <>
+          <NewChatModal
+            open={newChatOpen}
+            token={token}
+            onClose={() => setNewChatOpen(false)}
+            onCreated={(roomId) => {
+              setNewChatOpen(false)
+              loadRooms()
+              router.push(`/chat/${roomId}`)
+            }}
+          />
+          <CreateGroupModal
+            open={createGroupOpen}
+            token={token}
+            onClose={() => setCreateGroupOpen(false)}
+            onCreated={(roomId) => {
+              setCreateGroupOpen(false)
+              loadRooms()
+              router.push(`/chat/${roomId}`)
+            }}
+          />
+        </>
       )}
-<div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
-        <div className="flex items-center gap-3">
-          <h1 className="flex-1 text-3xl font-bold text-white">{t("title")}</h1>
+      <div className={innerClass}>
+        <div className="flex items-center gap-2">
+          <h1 className={`flex-1 font-bold text-white ${isPane ? "text-xl" : "text-3xl"}`}>{t("title")}</h1>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setNewChatOpen(true)}
+            disabled={contactCount === 0}
+            title={contactCount === 0 ? t("newChatDisabledTitle") : undefined}
+            aria-label={t("newChat")}
+          >
+            {t("newChat")}
+          </Button>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setCreateGroupOpen(true)}
+            disabled={contactCount === 0}
+            title={contactCount === 0 ? t("newGroupDisabledTitle") : undefined}
             aria-label={t("newGroup")}
           >
             {t("newGroup")}
@@ -195,7 +250,7 @@ export default function ChatPage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("search")}
             aria-label={t("search")}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-4 text-sm text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+            className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-4 text-base text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
           />
         </div>
 
@@ -206,7 +261,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        <div className="rounded-lg bg-gray-900 shadow-xl ring-1 ring-gray-800">
+        <div className={`rounded-lg bg-gray-900 ring-1 ring-gray-800 ${isPane ? "flex-1 overflow-y-auto" : "shadow-xl"}`}>
           {status === "loading" || loading ? (
             <ul className="divide-y divide-gray-800">
               {[0, 1, 2].map((i) => <RoomSkeleton key={i} />)}
@@ -232,41 +287,47 @@ export default function ChatPage() {
             </div>
           ) : (
             <ul className="divide-y divide-gray-800">
-              {filteredRooms.map((room) => (
-                <li key={room.id}>
-                  <Link
-                    href={`/chat/${room.id}`}
-                    className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-800/60"
-                  >
-                    <Avatar
-                      src={room.type === "dm" ? room.peer_avatar_url : undefined}
-                      name={room.type === "dm" ? (room.peer_name || "?") : (room.name || "G")}
-                      size="lg"
-                      color={room.type === "group" ? "indigo" : "gray"}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-white">
-                        {room.type === "dm" ? room.peer_name || "Unknown" : room.name}
-                      </p>
-                      {room.last_message && (
-                        <div className="mt-0.5 truncate text-xs text-gray-400">
-                          <LastMessagePreview msg={room.last_message} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-none flex-col items-end gap-1.5">
-                      {room.last_message && (
-                        <span className="text-xs text-gray-600">
-                          {relativeTime(room.last_message.created_at, now)}
-                        </span>
-                      )}
-                      {room.unread_count > 0 && (
-                        <Badge count={room.unread_count} max={99} />
-                      )}
-                    </div>
-                  </Link>
-                </li>
-              ))}
+              {filteredRooms.map((room) => {
+                const isSelected = room.id === selectedRoomId
+                return (
+                  <li key={room.id}>
+                    <Link
+                      href={`/chat/${room.id}`}
+                      aria-current={isSelected ? "page" : undefined}
+                      className={`flex items-center gap-3 px-6 py-4 transition-colors ${
+                        isSelected ? "bg-brand-primary/10" : "hover:bg-gray-800/60"
+                      }`}
+                    >
+                      <Avatar
+                        src={room.type === "dm" ? room.peer_avatar_url : undefined}
+                        name={room.type === "dm" ? (room.peer_name || "?") : (room.name || "G")}
+                        size="lg"
+                        color={room.type === "group" ? "indigo" : "gray"}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm font-semibold ${isSelected ? "text-brand-primary" : "text-white"}`}>
+                          {room.type === "dm" ? room.peer_name || "Unknown" : room.name}
+                        </p>
+                        {room.last_message && (
+                          <div className="mt-0.5 truncate text-xs text-gray-400">
+                            <LastMessagePreview msg={room.last_message} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-none flex-col items-end gap-1.5">
+                        {room.last_message && (
+                          <span className="text-xs text-gray-600">
+                            {relativeTime(room.last_message.created_at, now)}
+                          </span>
+                        )}
+                        {room.unread_count > 0 && (
+                          <Badge count={room.unread_count} max={99} />
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

@@ -33,7 +33,8 @@
     "mainNav": "Navegación principal",
     "collapseSidebar": "Colapsar menú",
     "expandSidebar": "Expandir menú",
-    "notifications": "Notificaciones"
+    "notifications": "Notificaciones",
+    "skipToContent": "Saltar al contenido principal"
   },
   "login": {
     "title": "Iniciar sesión",
@@ -193,7 +194,20 @@
     "retry": "Reintentar",
     "search": "Buscar conversaciones…",
     "noResults": "Ninguna conversación coincide con tu búsqueda.",
-    "goToContacts": "Ir a contactos"
+    "goToContacts": "Ir a contactos",
+    "selectConversationTitle": "Selecciona una conversación",
+    "selectConversationDesc": "Elige una conversación de la lista para comenzar a chatear.",
+    "newChat": "Nuevo chat",
+    "newChatTitle": "Iniciar un nuevo chat",
+    "newChatSearchPlaceholder": "Buscar contactos…",
+    "newChatNoContacts": "Aún no tienes contactos.",
+    "newChatNoMatches": "Ningún contacto coincide con tu búsqueda.",
+    "newChatFailed": "No se pudo iniciar el chat. Inténtalo de nuevo.",
+    "newChatDisabledTitle": "Agrega contactos primero para empezar a chatear.",
+    "newGroupDisabledTitle": "Agrega contactos primero para crear un grupo.",
+    "newChatCount": "{count, plural, one {# contacto} other {# contactos}}",
+    "newChatFooterNote": "Solo se puede enviar mensajes a contactos aceptados.",
+    "newChatManageContacts": "Gestionar contactos"
   },
   "contacts": {
     "title": "Contactos",
@@ -332,7 +346,7 @@
   "chatRoom": {
     "loading": "Cargando…",
     "leaveChannelTitle": "Salir del canal",
-    "leaveChannelMessage": "Dejarás de recibir mensajes y tu nombre será eliminado de la lista de participantes.",
+    "leaveChannelMessage": "Si sales, perderás el acceso a todos los mensajes anteriores de este canal y no podrás volver a leerlos. Esta acción no se puede deshacer.",
     "leaveGroupTitle": "Salir del grupo",
     "leaveThisChannel": "¿Salir de este canal? Ya no recibirás mensajes.",
     "leaveThisGroup": "¿Salir de este grupo? Ya no recibirás mensajes.",
