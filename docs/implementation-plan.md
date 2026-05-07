@@ -92,9 +92,6 @@
 - [x] **UI primitive component library** (PR #29): `Avatar`, `Badge`, `Button`, `Input`, `Skeleton`, `Modal`, `Toast`, `PresenceDot` in `components/ui/`; route `loading.tsx`/`error.tsx` for all authenticated segments; all callers updated.
 - [x] **Domain component library** (PR #30): `MessageBubble`, `DateSeparator`, `TypingIndicator`, `ChatInput`, `Lightbox` in `components/chat/`; `ContactCard`, `SearchBar` in `components/contacts/`; `PhotoGallery`, `ProfileHeader` in `components/profile/`; shared `types/chat.ts` and `lib/chatHelpers.ts`; `chat/[roomId]/page.tsx` reduced from ~800 to ~210 lines.
 - [x] **Route guard cleanup and form validation** (PR #31): removed redundant per-page `useEffect` auth redirects (superseded by existing `proxy.ts`); removed server-side redirect from `app/page.tsx`; `lib/validation.ts` with Zod schemas for login and register forms.
-
-### Upcoming — see full roadmap in development plan
-
 - [x] **Frontend testing foundation** (PR #32): vitest + @testing-library/react + msw; 129 tests across all `components/ui/*`, `hooks/useUpload`, `hooks/useHeartbeat`, `hooks/usePresence`, `lib/chatHelpers`, `lib/validation`; 99.56% statements, 100% branches and functions.
 - [x] **Playwright E2E testing** (PR #33): `@playwright/test`; `playwright.config.ts`; fixtures with API-level user creation; auth, profile, contacts, and real-time chat flows; CI job with Postgres + Redis service containers and backend auto-start.
 - [x] **Backend integration tests** (PR #34): `internal/testutil` package (OpenDB, CreateUser, NewRedis); chat store integration tests (ViewOnceMessage, DeleteMessage, TombstoneMessage, ListExpiredMessages); uploads pgStore integration tests; CI `backend-integration` job with Postgres + Redis service containers.
@@ -163,11 +160,103 @@
 
 - [x] **Pi deploy — disable Next.js image optimizer** ([PR #80](https://github.com/mayloo89/circl/pull/80)): `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` build arg (`false` by default); when `"true"` sets `images.unoptimized: true` in `next.config.ts`, bypassing `/_next/image` and its `remotePatterns` check; eliminates CPU-intensive resize/WebP conversion on low-power Pi hardware; `frontend/Dockerfile` wires the arg through.
 
-- [ ] **Phase 4 — Deployment + observability hosting** (PR #76–77): CI deploy workflow; production hosting (Fly.io + Vercel + Neon + Upstash + S3/R2); secrets via vault/KMS; **observability hosting decision (Grafana Cloud managed vs self-hosted)**; DB backups (automated + tested restore drill); key rotation runbook.
+### Trust & Safety / legal (pre-launch blocker)
 
-- [ ] **Phase 5 — Final polish & launch** (PR #76–78): accessibility audit (WCAG 2.1 AA); runbooks (`docs/runbooks/`); final docs (README, CONTRIBUTING, architecture diagram).
+- [ ] **Terms / Privacy / Community Guidelines pages** — add `/terms`, `/privacy`, `/guidelines`, `/safety` MDX-driven routes in all three locales; "I agree to Terms + Privacy" checkbox on registration; footer links from login + Settings.
+- [ ] **GDPR Art. 20 / CCPA data export** — `POST /account/export` enqueues an asynq job → generates a JSON + media zip in S3 → emails a one-time signed URL with 14-day retention.
+- [ ] **Image moderation in the upload worker** — NSFW classifier + CSAM detection (open-source / AWS Rekognition / Cloudflare Images / PhotoDNA / Thorn Safer); rejected uploads return `code=upload_rejected_moderation`; admin notified.
+- [ ] **Expanded report categories** — `underage`, `threat_violence`, `csam`, `impersonation`. CSAM auto-pages on-call and bypasses the normal queue.
+- [ ] **Age-verification audit log + policy doc** — log "claims 18+" with timestamp + IP at registration; document the policy under `/safety`. Identity verification (Stripe Identity / Veriff) deferred to a paid tier or report-flagged users.
+- [ ] **Secret rotation verification** — confirm `JWT_SECRET` and VAPID keys have been rotated since the original commit removal; document rotation steps in a runbook (deferred to Phase 4).
+- [ ] **Appeals process for suspended/banned users** — on suspension, send email with reason + an unauthenticated `/appeal/{token}` link; admin queue gains an "Appeals" tab.
 
-> Observability PRs (#56–#60) follow the OTel convention: logs via Loki, metrics via Prometheus, traces via Tempo, all correlated by trace_id and unified in Grafana. Production hosting (managed vs self-hosted) is decided in Phase 4.
+### Privacy controls UI
+
+- [ ] **Block / unblock surfaced in the public profile overflow menu** — block exists today; verify unblock is reachable for every state.
+- [ ] **"Don't show my distance to non-contacts" toggle** in `/settings`; backend already filters via `profile_preferences`.
+- [ ] **Hide presence / last-seen toggle** in `/settings` — symmetric: turning off your visibility also hides others' presence from you.
+- [ ] **Read-receipts and typing-indicator opt-out** — symmetric (you don't see others' reads if you've turned yours off); backend suppresses both emit and receive on the WS frames.
+- [ ] **Per-category notification toggles** in `/settings` — chat messages, contact requests, channel mentions, system. Persist in `profile_preferences`.
+- [ ] **Manage blocked users list** in `/settings` — avatar + name + Unblock action.
+
+### Discovery & retention
+
+- [ ] **Browse ranking** — score = shared interests + recency of activity + distance, with a deterministic shuffle per session.
+- [ ] **Pause-discovery toggle** — single boolean on `profile_preferences` ("don't show me to others").
+- [ ] **Primary-photo selector** in the profile photo gallery.
+- [ ] **Profile-completeness gating** — blur browse cards under 40% completeness with a CTA on the user's own card.
+
+### Communication features
+
+- [ ] **Message reactions, reply-to threading, in-room message search**.
+- [ ] **Link previews in chat** — server-fetched OG metadata, cached.
+- [ ] **Lightbox swipe-to-close + pinch-to-zoom** (`components/chat/Lightbox.tsx`).
+
+### Group / channel admin
+
+- [ ] **Group enhancements** — avatar, description, per-room mute, invite links, admin transfer.
+- [ ] **Channel enhancements** — slowmode, per-channel kick (separate from platform ban), pinned announcements.
+
+### Web / desktop polish
+
+- [ ] **Browse filter state synced to URL** `searchParams` so filters survive refresh and URLs are shareable; restored on mount.
+- [ ] **Form-error a11y** — `Input.tsx` lacks `aria-invalid` and `aria-describedby`; on submit error, move focus to the first invalid field. Should pass axe-core CI for form pages.
+- [ ] **`app/robots.ts`** with `Disallow: /` (or selectively indexable); `metadata.robots: { index: false }` on profile/chat/contacts/admin layouts.
+- [ ] **Color-contrast audit** — any remaining `text-gray-500/600` body text on `bg-gray-900` lifted to `text-gray-400` minimum (most fixed in earlier UX passes; sweep remaining call sites).
+- [ ] **Browse card double-action cleanup** — card is a `<Link>` and the contact button blocks navigation via `e.preventDefault()`; replace with explicit two-action layout to remove the gestural ambiguity on mobile.
+- [ ] **Contacts search results separation** — currently mixed with the established-contacts sections; render a dedicated search-results view above the lists or as a switch.
+- [ ] **Manual screen-reader pass** — VoiceOver on iOS Safari + macOS Safari across every authenticated route; fix labels, redundant announcements, role/link semantics. Deferred from PR #88 because it requires a hands-on device session.
+
+### i18n cleanup
+
+- [ ] **Hardcoded `"en"` in `chatHelpers.ts`** `toLocaleDateString` calls — replace with `useLocale()`.
+- [ ] **Hardcoded English distance strings** in browse ("km away", "< 1 km away") — move to `messages/*.json`.
+- [ ] **BottomNav label wrap test** — verify ES/PT labels don't wrap at 360px viewport width.
+
+### Performance
+
+- [ ] **Server/client split** — page-level `"use client"` everywhere; split each route into a server shell + client island where viable.
+- [ ] **Lazy-load heavy components** — `PhotoGallery`, `Lightbox`, `CreateGroupModal`, `NewChatModal` via `next/dynamic`.
+- [ ] **Dynamic Type compatibility** — hardcoded `text-[10px]`, `text-[11px]`, `text-[12px]` in chat break iOS Dynamic Type; replace with Tailwind tokens.
+- [ ] **Dedupe `/chat/rooms` fetch** — `ChatListPane` and `RoomView` both fetch room metadata; share via context provider so the right pane stops re-fetching when the layout already has it.
+
+### Polish
+
+- [ ] **Branded `not-found.tsx`** per locale.
+- [ ] **`app/manifest.ts`** for PWA add-to-home.
+- [ ] **Pull-to-refresh** on chat list and browse.
+- [ ] **Offline banner** driven by `navigator.onLine`.
+- [ ] **In-app notification inbox** — persistent log of past SSE events.
+- [ ] **Email digest** for dormant users (>14 days inactive).
+- [ ] **Status page or in-app degraded-service banner** driven by `/health`.
+- [ ] **Feature-flag system** — env-driven minimum, `unleash` long-term.
+- [ ] **Maintenance-mode flag** in config.
+- [ ] **Marketing landing page** for unauthenticated visitors.
+
+### Phase 4 — Production deployment & operations
+
+- [ ] **Hosting decisions** — frontend on Vercel; backend on Fly.io / Render / AWS; PostgreSQL on Neon / RDS / Supabase; Redis on Upstash / ElastiCache; object storage on S3 / R2 with CloudFront / Cloudflare CDN. Domain registration and DNS.
+- [ ] **TLS** — automatic via the platform or Let's Encrypt; force HTTPS redirect (HSTS already enabled in `SecurityHeaders` for production).
+- [ ] **CI/CD pipeline** — staging deploy on push to `develop`, production deploy on push to `main`; coverage reporting gate (98%+ on handlers/services); Docker image build + registry push; environment secrets in GitHub Actions Settings.
+- [ ] **Pre-deploy checks** — run migrations before deploy; database backup before destructive migrations; tested rollback plan with down migrations; platform health-check + readiness gates.
+- [ ] **DB ops** — automated daily backups; periodic restore drill; `sslmode=require` (or `verify-full`) in production `DATABASE_URL`.
+- [ ] **Secrets management** — `JWT_SECRET`, VAPID keys, `NEXTAUTH_SECRET`, SMTP credentials in vault/KMS (not env files); key-rotation runbook documented under `docs/runbooks/`.
+- [ ] **Observability hosting decision** — Grafana Cloud (managed) vs. self-hosted Loki + Prometheus + Tempo + Grafana stack from PR #60.
+- [ ] **Sentry integration** — frontend + backend error tracking; capture panics in goroutines (WebSocket pumps, hub).
+- [ ] **Global per-IP API rate limit middleware** — beyond the existing per-endpoint limiters (`LOGIN_IP_LIMIT`, `REGISTER_IP_LIMIT`, contact-request 100/day, reports 10/hour).
+- [ ] **WebSocket connection rate limit** — cap concurrent WS upgrades per IP.
+- [ ] **`next/image` remote patterns** — replace dev `localhost:9000` MinIO entry with the production CDN hostname.
+- [ ] **NextAuth cookie verification** — confirm `secure: true` / `httpOnly: true` / `sameSite: "lax"` are applied (automatic when `NEXTAUTH_URL` is `https://`, but worth confirming on first deploy).
+
+### Phase 5 — Final polish & launch
+
+- [ ] **WCAG 2.1 AA audit** — axe-core CI gate; manual VoiceOver run; keyboard-only walkthrough.
+- [ ] **Operational runbooks** under `docs/runbooks/` — incident playbooks (DB outage, Redis outage, message-delivery degraded), on-call rotation, alert response procedures, secret rotation.
+- [ ] **Final docs** — README polish, `CONTRIBUTING.md`, architecture diagram (component + data flow), `SECURITY.md` (responsible disclosure).
+- [ ] **Pre-launch smoke test** — register → verify email → login → complete profile → add contact → send DM → join channel → block + unblock → delete account → reactivate.
+- [ ] **Load test** concurrent WebSocket connections at expected peak.
+
+> Observability PRs (#56–#60) follow the OTel convention: logs via Loki, metrics via Prometheus, traces via Tempo, all correlated by `trace_id` and unified in Grafana. Production hosting (managed vs. self-hosted) is decided in Phase 4.
 
 ## 9. Testing strategy
 - Unit: handlers and services (auth, chat, profiles, contacts).
@@ -179,3 +268,49 @@
 - SLIs: HTTP/WS latency, message delivery rate, 5xx error rate, heartbeat expiry.
 - Alerts: WS drops, queue backlogs, worker errors, disk space, DB connections.
 - Encrypted and tested backups; periodic key rotation.
+
+## 11. Production environment reference
+
+### Backend
+
+| Variable | Dev default | Production requirement |
+|----------|-------------|----------------------|
+| `ENV` | `development` | `production` |
+| `PORT` | `8080` | Platform-assigned or custom |
+| `DATABASE_URL` | local with `sslmode=disable` | Managed DB with `sslmode=require` (or `verify-full`) |
+| `REDIS_URL` | `localhost:6379` | Managed Redis URL with TLS |
+| `JWT_SECRET` | dev value | `openssl rand -base64 64`, min 32 chars |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | `https://yourdomain.com` |
+| `STORAGE_PROVIDER` | `local` | `s3` |
+| `LOCAL_STORAGE_BASE_URL` | `http://localhost:8080/uploads/files` | Public URL for local storage if used in prod (Pi deploy) |
+| `S3_ENDPOINT` | MinIO local URL | S3 / R2 endpoint |
+| `S3_REGION` | — | Bucket region |
+| `S3_BUCKET` | — | Bucket name |
+| `S3_ACCESS_KEY` | — | IAM access key |
+| `S3_SECRET_KEY` | — | IAM secret key |
+| `IMAGE_MAX_PX` | `1024` | Tune for bandwidth vs. quality |
+| `LOGIN_IP_LIMIT` | `20` | Tune per environment |
+| `REGISTER_IP_LIMIT` | `10` | Tune per environment |
+| `VAPID_PUBLIC_KEY` | — | Generate for Web Push |
+| `VAPID_PRIVATE_KEY` | — | Generate for Web Push |
+| `SMTP_HOST` | — | Production mail server |
+| `SMTP_PORT` | — | 587 (STARTTLS) or 465 (TLS) |
+| `SMTP_USER` | — | SMTP credentials |
+| `SMTP_PASS` | — | SMTP credentials |
+| `SMTP_FROM` | — | Sender address |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset (no-op exporter) | OTLP collector URL (e.g. Grafana Cloud or self-hosted Tempo) |
+| `OTEL_SERVICE_NAME` | `circl-backend` | Same |
+| `OTEL_SAMPLE_RATE` | `0.1` | Tune for trace volume |
+| `LOG_LEVEL` | `debug` | `info` |
+| `TEST_ENDPOINTS_ENABLED` | `true` (E2E only) | unset |
+
+### Frontend
+
+| Variable | Dev default | Production requirement |
+|----------|-------------|----------------------|
+| `NEXTAUTH_URL` | `http://localhost:3000` | `https://yourdomain.com` |
+| `NEXTAUTH_SECRET` | dev value | `openssl rand -base64 32` |
+| `BACKEND_URL` | `http://localhost:8080` | Internal backend URL (server-side only) |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | `https://api.yourdomain.com` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | — | Match backend `VAPID_PUBLIC_KEY` |
+| `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` | `false` | `true` only on low-power deploys (Pi) where `/_next/image` is too expensive |
