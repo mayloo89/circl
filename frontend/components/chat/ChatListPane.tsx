@@ -170,8 +170,8 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
 
   const isPane = variant === "pane"
   const wrapperClass = isPane
-    ? "flex h-full flex-col bg-gray-950"
-    : "flex min-h-full flex-col bg-gray-950"
+    ? "flex h-full w-full flex-col bg-gray-950"
+    : "flex min-h-full w-full flex-col bg-gray-950"
   const innerClass = isPane
     ? "flex flex-1 flex-col gap-4 overflow-hidden px-3 py-4"
     : "mx-auto w-full max-w-2xl space-y-6 px-4 py-6"
