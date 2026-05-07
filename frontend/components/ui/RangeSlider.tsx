@@ -8,6 +8,8 @@ interface RangeSliderProps {
   formatValue?: (value: number) => string
   disabled?: boolean
   className?: string
+  /** Accessible label describing what the slider controls (e.g. "Minimum age"). Required for screen readers. */
+  ariaLabel?: string
 }
 
 export default function RangeSlider({
@@ -18,6 +20,7 @@ export default function RangeSlider({
   formatValue,
   disabled,
   className = "",
+  ariaLabel,
 }: RangeSliderProps) {
   const pct = max > min ? ((value - min) / (max - min)) * 100 : 0
   const display = formatValue ? formatValue(value) : String(value)
@@ -37,6 +40,8 @@ export default function RangeSlider({
           max={max}
           value={value}
           disabled={disabled}
+          aria-label={ariaLabel}
+          aria-valuetext={display}
           onChange={(e) => onChange(Number(e.target.value))}
           className="relative w-full cursor-pointer appearance-none bg-transparent
             [&::-webkit-slider-thumb]:appearance-none

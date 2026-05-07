@@ -13,6 +13,7 @@ import ReportDialog from "@/components/ui/ReportDialog"
 import Skeleton from "@/components/ui/Skeleton"
 import PhotoGallery from "@/components/profile/PhotoGallery"
 import Lightbox from "@/components/chat/Lightbox"
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -93,6 +94,8 @@ export default function PublicProfilePage() {
   const [isOwnProfile, setIsOwnProfile] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const overflowRef = useRef<HTMLDivElement>(null)
+  const overflowMenuRef = useRef<HTMLDivElement>(null)
+  useMenuKeyboard({ open: overflowOpen, containerRef: overflowMenuRef, onClose: () => setOverflowOpen(false) })
 
   const t = useTranslations("publicProfile")
   const tc = useTranslations("common")
@@ -416,6 +419,7 @@ export default function PublicProfilePage() {
               type="button"
               onClick={() => setOverflowOpen((v) => !v)}
               aria-label={t("moreOptions")}
+              aria-haspopup="menu"
               aria-expanded={overflowOpen}
               className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
             >
@@ -428,7 +432,9 @@ export default function PublicProfilePage() {
 
             {overflowOpen && (
               <div
+                ref={overflowMenuRef}
                 role="menu"
+                aria-label={t("moreOptions")}
                 className="absolute right-0 mt-1 min-w-[10rem] overflow-hidden rounded-xl bg-gray-800 shadow-2xl ring-1 ring-gray-700"
               >
                 {isBlocked ? (

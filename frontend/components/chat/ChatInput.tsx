@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl"
 
 import type { EphemeralMode } from "@/types/chat"
 import { EPHEMERAL_LABELS } from "@/types/chat"
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard"
 
 interface ChatInputProps {
   connected: boolean
@@ -48,6 +49,8 @@ export default function ChatInput({
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const internalInputRef = useRef<HTMLTextAreaElement>(null)
   const effectiveRef = inputRef ?? internalInputRef
+  const ephemeralMenuRef = useRef<HTMLDivElement>(null)
+  useMenuKeyboard({ open: showEphemeralMenu, containerRef: ephemeralMenuRef, onClose: () => setShowEphemeralMenu(false) })
 
   function autoResize(el: HTMLTextAreaElement) {
     el.style.height = "auto"
@@ -126,9 +129,12 @@ export default function ChatInput({
         {/* Ephemeral mode button */}
         {!disableEphemeral && <div className="relative flex-none">
           <button
+            type="button"
             onClick={() => setShowEphemeralMenu((v) => !v)}
             disabled={!connected}
             aria-label={t("ephemeralMessage")}
+            aria-haspopup="menu"
+            aria-expanded={showEphemeralMenu}
             title={t("ephemeralMessage")}
             className={`cursor-pointer rounded-full p-2 transition-colors disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover ${
               ephemeral !== "off"
@@ -150,12 +156,19 @@ export default function ChatInput({
           </button>
 
           {showEphemeralMenu && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
+            <div
+              ref={ephemeralMenuRef}
+              role="menu"
+              aria-label={t("ephemeralMessage")}
+              className="absolute bottom-full left-0 mb-2 w-48 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl"
+            >
               <p className="px-4 py-2 text-xs text-gray-500">{t("ephemeralAppliesTo")}</p>
               <div className="border-t border-gray-700/60" />
               {(Object.keys(EPHEMERAL_LABELS) as EphemeralMode[]).map((mode) => (
                 <button
                   key={mode}
+                  type="button"
+                  role="menuitem"
                   onClick={() => { onEphemeralChange(mode); setShowEphemeralMenu(false) }}
                   className={`flex w-full cursor-pointer items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover ${
                     ephemeral === mode ? "text-amber-400" : "text-gray-300"
