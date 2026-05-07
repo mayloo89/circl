@@ -33,7 +33,8 @@
     "mainNav": "Main navigation",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "skipToContent": "Skip to main content"
   },
   "login": {
     "title": "Sign in to your account",
@@ -193,7 +194,9 @@
     "retry": "Retry",
     "search": "Search conversations…",
     "noResults": "No conversations match your search.",
-    "goToContacts": "Go to contacts"
+    "goToContacts": "Go to contacts",
+    "selectConversationTitle": "Select a conversation",
+    "selectConversationDesc": "Pick a conversation from the list to start chatting."
   },
   "contacts": {
     "title": "Contacts",
@@ -332,7 +335,7 @@
   "chatRoom": {
     "loading": "Loading…",
     "leaveChannelTitle": "Leave channel",
-    "leaveChannelMessage": "You will stop receiving messages and your name will be removed from the participant list.",
+    "leaveChannelMessage": "If you leave, you'll lose access to all past messages in this channel and won't be able to read them again. This cannot be undone.",
     "leaveGroupTitle": "Leave group",
     "leaveThisChannel": "Leave this channel? You will no longer receive messages.",
     "leaveThisGroup": "Leave this group? You will no longer receive messages.",

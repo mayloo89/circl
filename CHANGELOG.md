@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Desktop UX + accessibility — phase 1** (PR #87):
+  - **W-2 Desktop two-column DM layout**: `ChatListPane` extracted from `app/[locale]/chat/page.tsx` into a reusable `components/chat/ChatListPane.tsx` with `variant="page" | "pane"`. On `lg:` breakpoints, `/chat` now renders the list as a fixed-width `w-96` left column with a "Select a conversation" empty state on the right; `/chat/[roomId]` renders the same `<ChatListPane variant="pane" />` on the left for DM and group rooms, with the conversation as the right pane. Mobile keeps the existing single-column behaviour. Channels are deliberately excluded from the split — the channel page (`room.type === "channel"`) stays single-pane on every breakpoint to avoid making accidental channel-switching a path to message loss. The list pane highlights the active room via `aria-current="page"` + brand-tinted background.
+  - **W-7 Skip-to-content link**: `AppShell` exposes a `sr-only focus:not-sr-only` skip link as the first focusable element when authenticated; jumps to the new `<main id="main-content">` wrapper. EN/ES/PT copy in `nav.skipToContent`.
+  - **Channel leave copy hardening**: `chatRoom.leaveChannelMessage` rewritten in EN/ES/PT to spell out the irreversible nature of the action — leaving a channel permanently removes access to past messages.
+  - **Note on W-1**: Sidebar already highlights the current route (`Sidebar.tsx` `isActive` + `aria-current="page"`); no work needed.
+
 - **Mobile UX + navigation audit** ([PR #86](https://github.com/mayloo89/circl/pull/86)):
   - **M-1 Safe area insets**: `--safe-top` / `--safe-bottom` CSS variables in `:root`; `TopBar` wraps content in an inner `h-14` div and adds `paddingTop: env(safe-area-inset-top)` to its fixed header so the background colour fills the notch/Dynamic Island area; `BottomNav` uses `height: calc(4rem + env(safe-area-inset-bottom))` + matching `paddingBottom` so nav items stay in the 4 rem zone; `AppShell` padding via `@utility pt-topbar` / `@utility pb-bottomnav` with `lg:pt-0 lg:pb-0` overrides; `Toast` and the public profile sticky action bar account for the bottom safe area.
   - **M-2 Input auto-zoom**: `Input` component adds `text-base` (16 px) to its `<input>` element; `ChatInput` textarea also uses `text-base` — both prevent iOS Safari's 300 ms auto-zoom on focus.

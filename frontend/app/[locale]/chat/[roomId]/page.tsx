@@ -17,6 +17,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import PresenceDot from "@/components/ui/PresenceDot"
 import Skeleton from "@/components/ui/Skeleton"
 import ChatInput from "@/components/chat/ChatInput"
+import ChatListPane from "@/components/chat/ChatListPane"
 import DateSeparator from "@/components/chat/DateSeparator"
 import GroupMembersPanel from "@/components/chat/GroupMembersPanel"
 import Lightbox from "@/components/chat/Lightbox"
@@ -451,8 +452,19 @@ export default function ChatRoomPage() {
     )
   }
 
+  // Desktop side pane (DM list) is shown for DM and group rooms only.
+  // Channels are excluded because navigating between them risks accidental
+  // membership loss — channel pages stay single-pane on every breakpoint.
+  const showDesktopSidePane = !room || room.type !== "channel"
+
   return (
-    <div className="flex h-full flex-col bg-gray-950">
+    <div className="flex h-full bg-gray-950">
+      {showDesktopSidePane && (
+        <aside className="hidden lg:flex lg:h-full lg:w-96 lg:shrink-0 lg:flex-col lg:border-r lg:border-gray-800">
+          <ChatListPane selectedRoomId={roomId ?? undefined} variant="pane" />
+        </aside>
+      )}
+      <div className="relative flex h-full flex-1 flex-col">
       {/* Group / channel members side panel */}
       {groupPanelOpen && (room?.type === "group" || room?.type === "channel") && token && userID && roomId && (
         <div className="absolute inset-0 z-30 bg-gray-950">
@@ -735,6 +747,7 @@ export default function ChatRoomPage() {
             </ul>
           </aside>
         )}
+      </div>
       </div>
     </div>
   )

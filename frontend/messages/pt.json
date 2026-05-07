@@ -33,7 +33,8 @@
     "mainNav": "Navegação principal",
     "collapseSidebar": "Recolher menu",
     "expandSidebar": "Expandir menu",
-    "notifications": "Notificações"
+    "notifications": "Notificações",
+    "skipToContent": "Pular para o conteúdo principal"
   },
   "login": {
     "title": "Entrar na sua conta",
@@ -193,7 +194,9 @@
     "retry": "Tentar novamente",
     "search": "Pesquisar conversas…",
     "noResults": "Nenhuma conversa corresponde à sua pesquisa.",
-    "goToContacts": "Ir para contatos"
+    "goToContacts": "Ir para contatos",
+    "selectConversationTitle": "Selecione uma conversa",
+    "selectConversationDesc": "Escolha uma conversa da lista para começar a conversar."
   },
   "contacts": {
     "title": "Contatos",
@@ -332,7 +335,7 @@
   "chatRoom": {
     "loading": "Carregando…",
     "leaveChannelTitle": "Sair do canal",
-    "leaveChannelMessage": "Você deixará de receber mensagens e seu nome será removido da lista de participantes.",
+    "leaveChannelMessage": "Se você sair, perderá o acesso a todas as mensagens anteriores deste canal e não poderá lê-las novamente. Esta ação não pode ser desfeita.",
     "leaveGroupTitle": "Sair do grupo",
     "leaveThisChannel": "Sair deste canal? Você não receberá mais mensagens.",
     "leaveThisGroup": "Sair deste grupo? Você não receberá mais mensagens.",

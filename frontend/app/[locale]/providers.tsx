@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { SessionProvider, signOut, useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { useLocale } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import { firstIncompleteStep } from "@/lib/onboardingSteps"
 import { NotificationsProvider } from "@/contexts/NotificationsContext"
@@ -68,6 +68,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
   const { collapsed } = useSidebar()
   const pathname = usePathname()
+  const tNav = useTranslations("nav")
   const authenticated = status === "authenticated"
   const isOnboarding = pathname.includes("/onboarding")
 
@@ -77,13 +78,25 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {authenticated && !isOnboarding && (
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+        >
+          {tNav("skipToContent")}
+        </a>
+      )}
       {authenticated && !isOnboarding && <Sidebar />}
       {authenticated && !isOnboarding && <TopBar />}
       <div className={outerClass}>
         {authenticated && !isOnboarding && <PushPrompt />}
-        <div className={authenticated && !isOnboarding ? "flex-1 overflow-auto min-h-0" : "contents"}>
-          {children}
-        </div>
+        {authenticated && !isOnboarding ? (
+          <main id="main-content" className="flex-1 overflow-auto min-h-0">
+            {children}
+          </main>
+        ) : (
+          <div className="contents">{children}</div>
+        )}
       </div>
       {authenticated && !isOnboarding && <BottomNav />}
     </>
