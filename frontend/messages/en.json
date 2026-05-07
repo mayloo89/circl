@@ -207,7 +207,8 @@
     "newGroupDisabledTitle": "Add contacts first to create a group.",
     "newChatCount": "{count, plural, one {# contact} other {# contacts}}",
     "newChatFooterNote": "Only accepted contacts can be messaged.",
-    "newChatManageContacts": "Manage contacts"
+    "newChatManageContacts": "Manage contacts",
+    "conversationsList": "Conversations"
   },
   "contacts": {
     "title": "Contacts",
@@ -248,6 +249,7 @@
     "saved": "Profile saved.",
     "cancel": "Cancel",
     "avatar": "Profile photo",
+    "changeAvatar": "Change profile photo",
     "photos": "Photos",
     "genderMale": "Male",
     "genderFemale": "Female",

@@ -1,6 +1,7 @@
 "use client"
 
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 
 import ChatListPane from "@/components/chat/ChatListPane"
 
@@ -21,13 +22,14 @@ import ChatListPane from "@/components/chat/ChatListPane"
  * membership and message access, so channels stay deliberately single-pane.
  */
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("chat")
   const params = useParams()
   const selectedRoomId = typeof params.roomId === "string" ? params.roomId : undefined
 
   return (
     <div className="flex h-full bg-gray-950">
       <aside
-        aria-label="Conversations"
+        aria-label={t("conversationsList")}
         className="hidden lg:flex lg:h-full lg:w-96 lg:shrink-0 lg:flex-col lg:border-r lg:border-gray-800"
       >
         <ChatListPane selectedRoomId={selectedRoomId} variant="pane" />

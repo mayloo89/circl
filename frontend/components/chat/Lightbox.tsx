@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl"
+
 import Modal from "@/components/ui/Modal"
 
 interface LightboxProps {
@@ -7,14 +9,15 @@ interface LightboxProps {
 }
 
 export default function Lightbox({ url, type, onClose }: LightboxProps) {
+  const tc = useTranslations("common")
   return (
     <Modal open onClose={onClose}>
       <button
-        aria-label="Close"
+        aria-label={tc("close")}
         className="absolute right-4 top-4 cursor-pointer rounded-full p-2 text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50"
         onClick={onClose}
       >
-        <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>

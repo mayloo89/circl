@@ -66,4 +66,30 @@ describe("Modal", () => {
     fireEvent.keyDown(document, { key: "Escape" })
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  it("restores focus to the trigger element when closed", async () => {
+    function Harness({ open }: { open: boolean }) {
+      return (
+        <>
+          <button data-testid="trigger">Trigger</button>
+          <Modal open={open} onClose={() => {}}>
+            <button data-testid="inside">Inside</button>
+          </Modal>
+        </>
+      )
+    }
+
+    const { rerender } = render(<Harness open={false} />)
+    const trigger = screen.getByTestId("trigger")
+    trigger.focus()
+    expect(document.activeElement).toBe(trigger)
+
+    rerender(<Harness open={true} />)
+    // Focus moves into the dialog on the next animation frame.
+    await new Promise((r) => requestAnimationFrame(() => r(null)))
+    expect(document.activeElement).toBe(screen.getByTestId("inside"))
+
+    rerender(<Harness open={false} />)
+    expect(document.activeElement).toBe(trigger)
+  })
 })

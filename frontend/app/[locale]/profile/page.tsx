@@ -548,7 +548,7 @@ export default function ProfilePage() {
           <div className="flex flex-col items-center gap-3">
             <button
               type="button"
-              aria-label="Change avatar"
+              aria-label={t("changeAvatar")}
               onClick={() => avatarInputRef.current?.click()}
               disabled={uploadingAvatar}
               className="group relative h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-brand-hover focus:outline-none focus:ring-brand-hover"

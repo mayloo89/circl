@@ -248,12 +248,14 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             max={maxAge}
             value={minAge}
             onChange={(v) => setDraft((d) => ({ ...d, min_age: v === AGE_MIN ? null : v }))}
+            ariaLabel={t("ageMin")}
           />
           <RangeSlider
             min={minAge}
             max={AGE_MAX}
             value={maxAge}
             onChange={(v) => setDraft((d) => ({ ...d, max_age: v === AGE_MAX ? null : v }))}
+            ariaLabel={t("ageMax")}
           />
         </div>
       </div>
@@ -267,6 +269,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
           value={maxDist}
           onChange={(v) => setDraft((d) => ({ ...d, max_distance_km: v === DIST_MAX ? null : v }))}
           formatValue={(v) => v === DIST_MAX ? t("anyDistance") : `${v} km`}
+          ariaLabel={t("maxDistance")}
         />
       </div>
 
