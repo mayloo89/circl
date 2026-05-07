@@ -1,7 +1,6 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useParams } from "next/navigation"
 import { useRouter } from "@/i18n/navigation"
 import { useEffect, useRef, useState } from "react"
 
@@ -17,7 +16,6 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import PresenceDot from "@/components/ui/PresenceDot"
 import Skeleton from "@/components/ui/Skeleton"
 import ChatInput from "@/components/chat/ChatInput"
-import ChatListPane from "@/components/chat/ChatListPane"
 import DateSeparator from "@/components/chat/DateSeparator"
 import GroupMembersPanel from "@/components/chat/GroupMembersPanel"
 import Lightbox from "@/components/chat/Lightbox"
@@ -76,11 +74,23 @@ function MessageSkeletons() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ChatRoomPage() {
+interface RoomViewProps {
+  roomId: string | null
+  /**
+   * Where to navigate when the user leaves or backs out.
+   * - "messages" — DM/group rooms hosted under /chat/(messages)/[roomId]
+   * - "channels" — channel rooms hosted under /chat/channels/[channelId]
+   *
+   * The backend room type is still the source of truth for behaviour
+   * (members panel auto-open, attachment toggle, etc.); this prop only
+   * controls the back/leave destination.
+   */
+  surface: "messages" | "channels"
+}
+
+export default function RoomView({ roomId, surface }: RoomViewProps) {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const params = useParams()
-  const roomId = typeof params.roomId === "string" ? params.roomId : null
 
   const t = useTranslations("chatRoom")
   const token = session?.accessToken
@@ -452,19 +462,10 @@ export default function ChatRoomPage() {
     )
   }
 
-  // Desktop side pane (DM list) is shown for DM and group rooms only.
-  // Channels are excluded because navigating between them risks accidental
-  // membership loss — channel pages stay single-pane on every breakpoint.
-  const showDesktopSidePane = !room || room.type !== "channel"
+  const listDestination = surface === "channels" ? "/chat/channels" : "/chat"
 
   return (
-    <div className="flex h-full bg-gray-950">
-      {showDesktopSidePane && (
-        <aside className="hidden lg:flex lg:h-full lg:w-96 lg:shrink-0 lg:flex-col lg:border-r lg:border-gray-800">
-          <ChatListPane selectedRoomId={roomId ?? undefined} variant="pane" />
-        </aside>
-      )}
-      <div className="relative flex h-full flex-1 flex-col">
+    <div className="relative flex h-full flex-col bg-gray-950">
       {/* Group / channel members side panel */}
       {groupPanelOpen && (room?.type === "group" || room?.type === "channel") && token && userID && roomId && (
         <div className="absolute inset-0 z-30 bg-gray-950">
@@ -479,7 +480,7 @@ export default function ChatRoomPage() {
               setGroupName(name)
               setRoom((prev) => prev ? { ...prev, name } : prev)
             }}
-            onLeft={() => requestLeave(room.type === "channel" ? "/chat/channels" : "/chat")}
+            onLeft={() => requestLeave(listDestination)}
           />
         </div>
       )}
@@ -518,7 +519,7 @@ export default function ChatRoomPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
-        <button aria-label={t("backToMessages")} onClick={() => requestLeave(room?.type === "channel" ? "/chat/channels" : "/chat")} className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover">
+        <button aria-label={t("backToMessages")} onClick={() => requestLeave(listDestination)} className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -747,7 +748,6 @@ export default function ChatRoomPage() {
             </ul>
           </aside>
         )}
-      </div>
       </div>
     </div>
   )

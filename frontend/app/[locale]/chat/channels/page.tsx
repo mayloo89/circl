@@ -151,7 +151,7 @@ export default function ChannelsPage() {
           onCreated={(ch) => {
             setChannels((prev) => [ch, ...prev])
             setCreateOpen(false)
-            router.push(`/chat/${ch.id}`)
+            router.push(`/chat/channels/${ch.id}`)
           }}
         />
       )}
@@ -221,7 +221,7 @@ export default function ChannelsPage() {
                   <Button
                     variant="primary"
                     size="sm"
-                    onClick={() => router.push(`/chat/${ch.id}`)}
+                    onClick={() => router.push(`/chat/channels/${ch.id}`)}
                   >
                     {t("enter")}
                   </Button>
