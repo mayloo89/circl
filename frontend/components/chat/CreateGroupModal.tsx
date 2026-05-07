@@ -113,7 +113,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
           <h2 className="text-base font-semibold text-white">{t("createGroupTitle")}</h2>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={tc("close")}
             onClick={handleClose}
             className="text-gray-500 hover:text-gray-300"
           >

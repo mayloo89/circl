@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef } from "react"
+import { useTranslations } from "next-intl"
 
 import { useFocusTrap } from "@/hooks/useFocusTrap"
 
@@ -12,6 +13,7 @@ interface BottomSheetProps {
 }
 
 export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+  const tc = useTranslations("common")
   const sheetRef = useRef<HTMLDivElement>(null)
 
   useFocusTrap({ active: open, containerRef: sheetRef, onEscape: onClose })
@@ -39,7 +41,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
           <button
             onClick={onClose}
             className="ml-auto cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
-            aria-label="Close"
+            aria-label={tc("close")}
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" />

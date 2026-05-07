@@ -215,7 +215,7 @@ export default function GroupMembersPanel({
       <div className="flex items-center gap-3 border-b border-gray-800 px-4 py-3">
         <button
           type="button"
-          aria-label="Close panel"
+          aria-label={tc("close")}
           onClick={onClose}
           className="text-gray-400 hover:text-gray-200"
         >

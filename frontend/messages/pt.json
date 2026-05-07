@@ -207,7 +207,8 @@
     "newGroupDisabledTitle": "Adicione contatos primeiro para criar um grupo.",
     "newChatCount": "{count, plural, one {# contato} other {# contatos}}",
     "newChatFooterNote": "Apenas contatos aceitos podem receber mensagens.",
-    "newChatManageContacts": "Gerenciar contatos"
+    "newChatManageContacts": "Gerenciar contatos",
+    "conversationsList": "Conversas"
   },
   "contacts": {
     "title": "Contatos",
@@ -248,7 +249,8 @@
     "saved": "Perfil salvo.",
     "cancel": "Cancelar",
     "avatar": "Foto de perfil",
-    "photos": "Fotos",
+    "changeAvatar": "Alterar foto de perfil",
+    "photos":"Fotos",
     "genderMale": "Masculino",
     "genderFemale": "Feminino",
     "genderTransMale": "Trans masculino",
