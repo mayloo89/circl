@@ -1,0 +1,5 @@
+ALTER TABLE profile_preferences
+    ADD COLUMN IF NOT EXISTS notify_chat_messages    BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS notify_contact_requests BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS notify_channel_mentions BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS notify_system           BOOLEAN NOT NULL DEFAULT TRUE;

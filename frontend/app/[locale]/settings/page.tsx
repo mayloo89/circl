@@ -21,11 +21,64 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 // Notifications section
 // ---------------------------------------------------------------------------
 
-function NotificationsSection() {
+type NotificationKey =
+  | "notify_chat_messages"
+  | "notify_contact_requests"
+  | "notify_channel_mentions"
+  | "notify_system"
+
+function NotificationsSection({ token }: { token: string | undefined }) {
   const t = useTranslations("settings")
+  const tc = useTranslations("common")
   const { permission, supported, enable, disable } = usePushContext()
+  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  const [pendingKey, setPendingKey] = useState<NotificationKey | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+    fetch(`${API_URL}/profiles/me/preferences`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Preferences | null) => {
+        if (data) setPrefs(data)
+      })
+      .catch(() => {
+        // Initial load failure leaves prefs=null → toggles render disabled.
+      })
+  }, [token])
+
+  async function update(key: NotificationKey, next: boolean) {
+    if (!prefs || !token) return
+    const updated = { ...prefs, [key]: next }
+    setPrefs(updated)
+    setPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch(`${API_URL}/profiles/me/preferences`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(updated),
+      })
+      if (!res.ok) {
+        setError(t("notificationUpdateFailed"))
+        setPrefs(prefs)
+        return
+      }
+      const fresh: Preferences = await res.json()
+      setPrefs(fresh)
+    } catch {
+      setError(tc("networkError"))
+      setPrefs(prefs)
+    } finally {
+      setPendingKey(null)
+    }
+  }
 
   if (!supported) return null
+
+  const togglesDisabled = prefs === null || pendingKey !== null
 
   return (
     <section aria-labelledby="notifications-heading">
@@ -48,6 +101,55 @@ function NotificationsSection() {
             </Button>
           )}
         </div>
+
+        <div className="border-t border-gray-700 px-5 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            {t("notifyCategoriesLabel")}
+          </p>
+        </div>
+        <div className="flex flex-col divide-y divide-gray-700">
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("notifyChatMessages")}
+              description={t("notifyChatMessagesDesc")}
+              checked={prefs?.notify_chat_messages ?? true}
+              disabled={togglesDisabled}
+              onChange={(e) => update("notify_chat_messages", e.target.checked)}
+            />
+          </div>
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("notifyContactRequests")}
+              description={t("notifyContactRequestsDesc")}
+              checked={prefs?.notify_contact_requests ?? true}
+              disabled={togglesDisabled}
+              onChange={(e) => update("notify_contact_requests", e.target.checked)}
+            />
+          </div>
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("notifyChannelMentions")}
+              description={t("notifyChannelMentionsDesc")}
+              checked={prefs?.notify_channel_mentions ?? true}
+              disabled={togglesDisabled}
+              onChange={(e) => update("notify_channel_mentions", e.target.checked)}
+            />
+          </div>
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("notifySystem")}
+              description={t("notifySystemDesc")}
+              checked={prefs?.notify_system ?? true}
+              disabled={togglesDisabled}
+              onChange={(e) => update("notify_system", e.target.checked)}
+            />
+          </div>
+        </div>
+        {error && (
+          <p role="alert" className="border-t border-gray-700 px-5 py-3 text-sm text-red-400">
+            {error}
+          </p>
+        )}
       </div>
     </section>
   )
@@ -67,6 +169,10 @@ interface Preferences {
   hide_presence: boolean
   hide_read_receipts: boolean
   hide_typing_indicator: boolean
+  notify_chat_messages: boolean
+  notify_contact_requests: boolean
+  notify_channel_mentions: boolean
+  notify_system: boolean
 }
 
 type PrivacyKey =
@@ -665,7 +771,7 @@ export default function SettingsPage() {
         <h1 className="mb-8 text-2xl font-bold text-white">{t("title")}</h1>
 
         <div className="flex flex-col gap-10">
-          <NotificationsSection />
+          <NotificationsSection token={token} />
           <LanguageSection token={token} />
           <PrivacySection token={token} />
           <BlockedUsersSection token={token} />

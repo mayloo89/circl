@@ -193,14 +193,23 @@ func main() {
 		log.Info().Msg("web push notifications enabled")
 	}
 
-	// notifyUser sends an SSE event and a web push notification (if enabled).
-	// Push is always attempted so users receive notifications regardless of
-	// whether the app is currently open — the service worker handles dedup.
-	notifyUser := func(userID string, e notifications.Event, n push.Notification) {
+	// notifyUser sends an SSE event and a web push notification (if enabled
+	// and the recipient hasn't opted out of the relevant notification
+	// category). The category gate `wants` runs against the recipient's
+	// stored notification preferences; pass nil to send unconditionally.
+	// SSE is never gated — it powers in-app badges and live UI updates.
+	notifyUser := func(userID string, e notifications.Event, n push.Notification, wants func(profiles.NotificationFlags) bool) {
 		hub.Notify(userID, e)
-		if pushSvc.Enabled() {
-			go pushSvc.Send(appCtx, userID, n)
+		if !pushSvc.Enabled() {
+			return
 		}
+		if wants != nil {
+			flags, err := profileSvc.GetNotificationFlags(appCtx, userID)
+			if err != nil || !wants(flags) {
+				return
+			}
+		}
+		go pushSvc.Send(appCtx, userID, n)
 	}
 
 	// contactPushNotifier implements notifications.Notifier and enriches contact
@@ -298,7 +307,7 @@ func main() {
 			Title: "New message",
 			Body:  "You have a new message",
 			URL:   "/chat/" + roomID,
-		})
+		}, func(f profiles.NotificationFlags) bool { return f.ChatMessages })
 	}, chat.HandlerConfig{
 		IsBlockedInRoom: isBlockedInRoom,
 		AllowedOrigins:  corsOrigins,
@@ -531,9 +540,10 @@ func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore prof
 }
 
 // contactNotifier implements notifications.Notifier and enriches contact events
-// with web push notifications for offline users.
+// with web push notifications for offline users. Pushes are gated on the
+// recipient's NotifyContactRequests preference; SSE events are always sent.
 type contactNotifier struct {
-	notifyFn func(userID string, e notifications.Event, n push.Notification)
+	notifyFn func(userID string, e notifications.Event, n push.Notification, wants func(profiles.NotificationFlags) bool)
 }
 
 func (c *contactNotifier) Notify(userID string, e notifications.Event) {
@@ -546,7 +556,7 @@ func (c *contactNotifier) Notify(userID string, e notifications.Event) {
 	case "contact_removed":
 		n = push.Notification{Title: "Contact removed", URL: "/contacts"}
 	}
-	c.notifyFn(userID, e, n)
+	c.notifyFn(userID, e, n, func(f profiles.NotificationFlags) bool { return f.ContactRequests })
 }
 
 // presencePrivacy adapts *profiles.Service to presence.PrivacyLookup so the

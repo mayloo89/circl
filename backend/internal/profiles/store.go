@@ -486,12 +486,15 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 	return profiles, rows.Err()
 }
 
-// GetPreferences returns the discovery and privacy preferences for the given
-// user. Returns an empty preferences object if none have been set yet.
+// GetPreferences returns the discovery, privacy, and notification preferences
+// for the given user. Returns a defaults object if no row has been written
+// yet — defaults match the SQL column defaults (privacy toggles off,
+// notification toggles on).
 func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference, locale,
-		        hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator
+		        hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
+		        notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system
 		   FROM profile_preferences
 		  WHERE user_id = $1`,
 		userID,
@@ -500,9 +503,10 @@ func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePr
 	if err := row.Scan(
 		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
 		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
+		&p.NotifyChatMessages, &p.NotifyContactRequests, &p.NotifyChannelMentions, &p.NotifySystem,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &ProfilePreferences{UserID: userID, GenderPreference: []string{}, Locale: "es"}, nil
+			return defaultPreferences(userID), nil
 		}
 		return nil, fmt.Errorf("get preferences: %w", err)
 	}
@@ -510,6 +514,20 @@ func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePr
 		p.GenderPreference = []string{}
 	}
 	return &p, nil
+}
+
+// defaultPreferences returns the same defaults the SQL layer would produce
+// for a fresh row: privacy toggles off, notification toggles on, locale "es".
+func defaultPreferences(userID string) *ProfilePreferences {
+	return &ProfilePreferences{
+		UserID:                userID,
+		GenderPreference:      []string{},
+		Locale:                "es",
+		NotifyChatMessages:    true,
+		NotifyContactRequests: true,
+		NotifyChannelMentions: true,
+		NotifySystem:          true,
+	}
 }
 
 // GetPrivacyFlagsByIDs returns the privacy toggles for each requested user
@@ -588,9 +606,10 @@ func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs Pr
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO profile_preferences (
 		     user_id, min_age, max_age, max_distance_km, gender_preference, locale,
-		     hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator
+		     hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
+		     notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET min_age                         = EXCLUDED.min_age,
 		        max_age                         = EXCLUDED.max_age,
@@ -601,17 +620,25 @@ func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs Pr
 		        hide_presence                   = EXCLUDED.hide_presence,
 		        hide_read_receipts              = EXCLUDED.hide_read_receipts,
 		        hide_typing_indicator           = EXCLUDED.hide_typing_indicator,
+		        notify_chat_messages            = EXCLUDED.notify_chat_messages,
+		        notify_contact_requests         = EXCLUDED.notify_contact_requests,
+		        notify_channel_mentions         = EXCLUDED.notify_channel_mentions,
+		        notify_system                   = EXCLUDED.notify_system,
 		        updated_at                      = now()
 		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference, locale,
-		           hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator`,
+		           hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
+		           notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system`,
 		userID, prefs.MinAge, prefs.MaxAge, prefs.MaxDistanceKm, genderPref, locale,
 		prefs.HideDistanceFromNonContacts, prefs.HidePresence,
 		prefs.HideReadReceipts, prefs.HideTypingIndicator,
+		prefs.NotifyChatMessages, prefs.NotifyContactRequests,
+		prefs.NotifyChannelMentions, prefs.NotifySystem,
 	)
 	var p ProfilePreferences
 	if err := row.Scan(
 		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
 		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
+		&p.NotifyChatMessages, &p.NotifyContactRequests, &p.NotifyChannelMentions, &p.NotifySystem,
 	); err != nil {
 		return nil, fmt.Errorf("upsert preferences: %w", err)
 	}

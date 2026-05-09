@@ -63,7 +63,8 @@ type ProfileInput struct {
 	OnboardedAt  *time.Time
 }
 
-// ProfilePreferences holds discovery and privacy preferences for a user.
+// ProfilePreferences holds discovery, privacy, and notification preferences
+// for a user.
 type ProfilePreferences struct {
 	UserID           string
 	MinAge           *int
@@ -76,6 +77,11 @@ type ProfilePreferences struct {
 	HidePresence                bool
 	HideReadReceipts            bool
 	HideTypingIndicator         bool
+	// Per-category notification toggles. All default true.
+	NotifyChatMessages    bool
+	NotifyContactRequests bool
+	NotifyChannelMentions bool
+	NotifySystem          bool
 }
 
 // PrivacyFlags is the read-only subset of privacy toggles used by services
@@ -86,6 +92,16 @@ type PrivacyFlags struct {
 	HidePresence                bool
 	HideReadReceipts            bool
 	HideTypingIndicator         bool
+}
+
+// NotificationFlags is the read-only subset of per-category notification
+// toggles consumed by the push gate. All fields default to true so users
+// without a preferences row keep receiving notifications.
+type NotificationFlags struct {
+	ChatMessages    bool
+	ContactRequests bool
+	ChannelMentions bool
+	System          bool
 }
 
 // InterestSuggestion is a suggested interest with its global usage count.
@@ -320,6 +336,21 @@ func (s *Service) GetPrivacyFlags(ctx context.Context, userID string) (PrivacyFl
 		HidePresence:                prefs.HidePresence,
 		HideReadReceipts:            prefs.HideReadReceipts,
 		HideTypingIndicator:         prefs.HideTypingIndicator,
+	}, nil
+}
+
+// GetNotificationFlags returns the per-category notification toggles for a
+// user. Used by the push gate at delivery time. All fields default true.
+func (s *Service) GetNotificationFlags(ctx context.Context, userID string) (NotificationFlags, error) {
+	prefs, err := s.store.GetPreferences(ctx, userID)
+	if err != nil {
+		return NotificationFlags{}, err
+	}
+	return NotificationFlags{
+		ChatMessages:    prefs.NotifyChatMessages,
+		ContactRequests: prefs.NotifyContactRequests,
+		ChannelMentions: prefs.NotifyChannelMentions,
+		System:          prefs.NotifySystem,
 	}, nil
 }
 

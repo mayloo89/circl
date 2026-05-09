@@ -201,7 +201,17 @@
     "hideReadReceiptsDesc": "When on, others don't see when you've read their messages. You also stop seeing theirs.",
     "hideTyping": "Hide typing indicators",
     "hideTypingDesc": "When on, others don't see when you're typing. You also stop seeing theirs.",
-    "privacyUpdateFailed": "Failed to update privacy preference. Please try again."
+    "privacyUpdateFailed": "Failed to update privacy preference. Please try again.",
+    "notifyCategoriesLabel": "Send me notifications for",
+    "notifyChatMessages": "Chat messages",
+    "notifyChatMessagesDesc": "New messages in your DMs and groups.",
+    "notifyContactRequests": "Contact requests",
+    "notifyContactRequestsDesc": "When someone sends, accepts, or removes a contact request.",
+    "notifyChannelMentions": "Channel mentions",
+    "notifyChannelMentionsDesc": "When someone mentions you in a public channel.",
+    "notifySystem": "System",
+    "notifySystemDesc": "Account and safety alerts. Critical notices may still arrive even when off.",
+    "notificationUpdateFailed": "Failed to update notification preference. Please try again."
   },
   "chat": {
     "title": "Messages",
