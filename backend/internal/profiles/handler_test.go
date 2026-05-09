@@ -23,6 +23,7 @@ type mockProfileManager struct {
 	prefs             *profiles.ProfilePreferences
 	interests         []profiles.InterestSuggestion
 	browsePage        *profiles.BrowsePage
+	lastUpdate        *profiles.PreferencesUpdate
 	browseErr         error
 	usernameAvailable bool
 	getErr            error
@@ -79,14 +80,28 @@ func (m *mockProfileManager) GetMyPreferences(_ context.Context, _ string) (*pro
 	return &profiles.ProfilePreferences{GenderPreference: []string{}}, nil
 }
 
-func (m *mockProfileManager) UpdateMyPreferences(_ context.Context, _ string, prefs profiles.ProfilePreferences) (*profiles.ProfilePreferences, error) {
+func (m *mockProfileManager) UpdateMyPreferences(_ context.Context, _ string, update profiles.PreferencesUpdate) (*profiles.ProfilePreferences, error) {
 	if m.updatePrefsErr != nil {
 		return nil, m.updatePrefsErr
 	}
-	if prefs.GenderPreference == nil {
-		prefs.GenderPreference = []string{}
+	m.lastUpdate = &update
+	out := profiles.ProfilePreferences{GenderPreference: []string{}}
+	if update.MinAge.Set {
+		out.MinAge = update.MinAge.Value
 	}
-	return &prefs, nil
+	if update.MaxAge.Set {
+		out.MaxAge = update.MaxAge.Value
+	}
+	if update.MaxDistanceKm.Set {
+		out.MaxDistanceKm = update.MaxDistanceKm.Value
+	}
+	if update.GenderPreference != nil {
+		out.GenderPreference = *update.GenderPreference
+	}
+	if update.Locale != nil {
+		out.Locale = *update.Locale
+	}
+	return &out, nil
 }
 
 func (m *mockProfileManager) SearchInterests(_ context.Context, _ string) ([]profiles.InterestSuggestion, error) {
@@ -585,6 +600,79 @@ func TestUpdateMyPreferences_Unauthorized(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- Wire-level partial-update semantics (Optional[int]) ---
+
+// A locale-only PUT body must reach the service as a PreferencesUpdate
+// where only Locale is present and every other field stays at its zero
+// (Set=false / nil pointer). This is the bug fix for the original REPLACE
+// behavior that nulled out unrelated columns on every locale change.
+func TestUpdateMyPreferences_LocaleOnlyPropagatesEmptyUpdate(t *testing.T) {
+	mgr := &mockProfileManager{}
+	h := profiles.NewHandler(mgr)
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", `{"locale":"en"}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	got := mgr.lastUpdate
+	if got == nil {
+		t.Fatal("manager did not receive an update")
+	}
+	if got.Locale == nil || *got.Locale != "en" {
+		t.Errorf("Locale = %v, want \"en\"", got.Locale)
+	}
+	if got.MinAge.Set || got.MaxAge.Set || got.MaxDistanceKm.Set {
+		t.Errorf("filter ints should be unset, got %+v", got)
+	}
+	if got.GenderPreference != nil || got.HidePresence != nil ||
+		got.NotifyChatMessages != nil {
+		t.Errorf("unrelated fields should be nil, got %+v", got)
+	}
+}
+
+// JSON `null` on a nullable filter int must reach the service as
+// Optional[int]{Set: true, Value: nil} so the store writes NULL.
+func TestUpdateMyPreferences_ExplicitNullForFilterInt(t *testing.T) {
+	mgr := &mockProfileManager{}
+	h := profiles.NewHandler(mgr)
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", `{"min_age":null}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	got := mgr.lastUpdate.MinAge
+	if !got.Set {
+		t.Error("MinAge.Set should be true on explicit JSON null")
+	}
+	if got.Value != nil {
+		t.Errorf("MinAge.Value should be nil on explicit JSON null, got %v", got.Value)
+	}
+}
+
+// JSON value on a filter int reaches the service as Optional[int]{Set: true, Value: &v}.
+func TestUpdateMyPreferences_PresentValueForFilterInt(t *testing.T) {
+	mgr := &mockProfileManager{}
+	h := profiles.NewHandler(mgr)
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/preferences", `{"min_age":25}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	got := mgr.lastUpdate.MinAge
+	if !got.Set || got.Value == nil || *got.Value != 25 {
+		t.Errorf("MinAge = %+v, want Set=true Value=&25", got)
 	}
 }
 

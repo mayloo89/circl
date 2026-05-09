@@ -51,26 +51,26 @@ function NotificationsSection({ token }: { token: string | undefined }) {
 
   async function update(key: NotificationKey, next: boolean) {
     if (!prefs || !token) return
-    const updated = { ...prefs, [key]: next }
-    setPrefs(updated)
+    const previous = prefs
+    setPrefs({ ...prefs, [key]: next })
     setPendingKey(key)
     setError(null)
     try {
       const res = await fetch(`${API_URL}/profiles/me/preferences`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(updated),
+        body: JSON.stringify({ [key]: next }),
       })
       if (!res.ok) {
         setError(t("notificationUpdateFailed"))
-        setPrefs(prefs)
+        setPrefs(previous)
         return
       }
       const fresh: Preferences = await res.json()
       setPrefs(fresh)
     } catch {
       setError(tc("networkError"))
-      setPrefs(prefs)
+      setPrefs(previous)
     } finally {
       setPendingKey(null)
     }
@@ -213,26 +213,26 @@ function PrivacySection({ token }: { token: string | undefined }) {
 
   async function update(key: PrivacyKey, next: boolean) {
     if (!prefs || !token) return
-    const updated = { ...prefs, [key]: next }
-    setPrefs(updated)
+    const previous = prefs
+    setPrefs({ ...prefs, [key]: next })
     setPendingKey(key)
     setError(null)
     try {
       const res = await fetch(`${API_URL}/profiles/me/preferences`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(updated),
+        body: JSON.stringify({ [key]: next }),
       })
       if (!res.ok) {
         setError(t("privacyUpdateFailed"))
-        setPrefs(prefs)
+        setPrefs(previous)
         return
       }
       const fresh: Preferences = await res.json()
       setPrefs(fresh)
     } catch {
       setError(tc("networkError"))
-      setPrefs(prefs)
+      setPrefs(previous)
     } finally {
       setPendingKey(null)
     }

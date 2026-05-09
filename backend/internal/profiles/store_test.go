@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,9 +12,33 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type mockQuerier struct{ row rowScanner }
+type mockQuerier struct {
+	row rowScanner
+	// rows lets the test queue distinct rowScanners so callers that exec a
+	// write and then read the row back receive different scans. When non-nil
+	// it takes precedence over `row`.
+	rows []rowScanner
+	// lastExecSQL / lastExecArgs capture the most recent Exec call for
+	// tests that want to assert on the dynamic SQL output.
+	lastExecSQL  string
+	lastExecArgs []any
+	execErr      error
+}
 
-func (m *mockQuerier) QueryRow(_ context.Context, _ string, _ ...any) rowScanner { return m.row }
+func (m *mockQuerier) QueryRow(_ context.Context, _ string, _ ...any) rowScanner {
+	if len(m.rows) > 0 {
+		next := m.rows[0]
+		m.rows = m.rows[1:]
+		return next
+	}
+	return m.row
+}
+
+func (m *mockQuerier) Exec(_ context.Context, sql string, args ...any) error {
+	m.lastExecSQL = sql
+	m.lastExecArgs = args
+	return m.execErr
+}
 
 type mockRow struct{ scanFn func(dest ...any) error }
 
@@ -225,36 +250,103 @@ func TestPgStore_GetPreferences_Success(t *testing.T) {
 
 // --- UpsertPreferences ---
 
-func TestPgStore_UpsertPreferences_Success(t *testing.T) {
-	minAge := 20
-	maxAge := 35
-	dist := 50
-	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
+// readbackRow returns a mockRow that scans a "fresh" preferences read so
+// the post-Exec GetPreferences call inside UpsertPreferences succeeds.
+// Tests don't usually need to assert on these values; the goal is to
+// exercise the dynamic SQL path.
+func readbackRow() *mockRow {
+	return &mockRow{scanFn: func(dest ...any) error {
 		*dest[0].(*string) = "user-1"
-		*dest[1].(**int) = &minAge
-		*dest[2].(**int) = &maxAge
-		*dest[3].(**int) = &dist
-		*dest[4].(*[]string) = []string{"female"}
+		// dest[1..3] are **int — leave nil
+		*dest[4].(*[]string) = []string{}
+		*dest[5].(*string) = "es"
+		// dest[6..13] are *bool — defaults to false
 		return nil
-	}}}}
+	}}
+}
 
-	p, err := store.UpsertPreferences(t.Context(), "user-1", ProfilePreferences{
-		MinAge: &minAge, MaxAge: &maxAge, MaxDistanceKm: &dist, GenderPreference: []string{"female"},
+// TestPgStore_UpsertPreferences_LocaleOnlyEmitsSingleColumnWrite proves the
+// dynamic SQL only references the columns that were Set — fixing the prior
+// REPLACE bug where a locale-only PUT clobbered every other column.
+func TestPgStore_UpsertPreferences_LocaleOnlyEmitsSingleColumnWrite(t *testing.T) {
+	mq := &mockQuerier{rows: []rowScanner{readbackRow()}}
+	store := &pgStore{db: mq}
+
+	loc := "en"
+	if _, err := store.UpsertPreferences(t.Context(), "user-1", PreferencesUpdate{Locale: &loc}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sql := mq.lastExecSQL
+	if !strings.Contains(sql, "INSERT INTO profile_preferences (user_id, locale)") {
+		t.Errorf("expected INSERT to list only user_id and locale, got SQL:\n%s", sql)
+	}
+	if !strings.Contains(sql, "DO UPDATE SET updated_at = now(), locale = $2") {
+		t.Errorf("expected DO UPDATE SET to touch only locale, got SQL:\n%s", sql)
+	}
+	for _, col := range []string{"min_age", "max_age", "max_distance_km", "gender_preference",
+		"hide_distance_from_non_contacts", "hide_presence", "hide_read_receipts", "hide_typing_indicator",
+		"notify_chat_messages", "notify_contact_requests", "notify_channel_mentions", "notify_system"} {
+		if strings.Contains(sql, col) {
+			t.Errorf("locale-only PUT must not mention %s, got SQL:\n%s", col, sql)
+		}
+	}
+	if len(mq.lastExecArgs) != 2 {
+		t.Errorf("expected 2 SQL args (user_id, locale), got %d: %v", len(mq.lastExecArgs), mq.lastExecArgs)
+	}
+}
+
+// TestPgStore_UpsertPreferences_NoFieldsDoNothingClause exercises the
+// degenerate case where the caller PUTs an empty body. The store still has
+// to insert a row on first call (so column defaults apply) but must not
+// rewrite an existing row.
+func TestPgStore_UpsertPreferences_NoFieldsDoNothingClause(t *testing.T) {
+	mq := &mockQuerier{rows: []rowScanner{readbackRow()}}
+	store := &pgStore{db: mq}
+
+	if _, err := store.UpsertPreferences(t.Context(), "user-1", PreferencesUpdate{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(mq.lastExecSQL, "DO NOTHING") {
+		t.Errorf("expected DO NOTHING on empty update, got SQL:\n%s", mq.lastExecSQL)
+	}
+}
+
+// TestPgStore_UpsertPreferences_ExplicitNullClearsFilterInt proves an
+// Optional[int] with Set=true and Value=nil produces a SQL write that sets
+// the column to NULL — the browse "Clear filters" path.
+func TestPgStore_UpsertPreferences_ExplicitNullClearsFilterInt(t *testing.T) {
+	mq := &mockQuerier{rows: []rowScanner{readbackRow()}}
+	store := &pgStore{db: mq}
+
+	_, err := store.UpsertPreferences(t.Context(), "user-1", PreferencesUpdate{
+		MinAge: Optional[int]{Set: true, Value: nil},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if p.MaxAge == nil || *p.MaxAge != 35 {
-		t.Errorf("MaxAge = %v, want 35", p.MaxAge)
+
+	if !strings.Contains(mq.lastExecSQL, "min_age = $2") {
+		t.Errorf("expected min_age write in SQL, got:\n%s", mq.lastExecSQL)
+	}
+	if len(mq.lastExecArgs) != 2 {
+		t.Fatalf("expected 2 SQL args, got %d: %v", len(mq.lastExecArgs), mq.lastExecArgs)
+	}
+	// The arg for min_age must be a *int that is nil (so pgx encodes NULL).
+	got, ok := mq.lastExecArgs[1].(*int)
+	if !ok {
+		t.Fatalf("min_age arg should be *int, got %T", mq.lastExecArgs[1])
+	}
+	if got != nil {
+		t.Errorf("min_age arg should be nil *int (NULL), got %v", got)
 	}
 }
 
 func TestPgStore_UpsertPreferences_Error(t *testing.T) {
-	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
-		return errors.New("db error")
-	}}}}
+	mq := &mockQuerier{execErr: errors.New("db error")}
+	store := &pgStore{db: mq}
 
-	_, err := store.UpsertPreferences(t.Context(), "user-1", ProfilePreferences{})
+	_, err := store.UpsertPreferences(t.Context(), "user-1", PreferencesUpdate{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -485,8 +577,12 @@ func TestProfiles_Integration(t *testing.T) {
 		minAge := 22
 		maxAge := 38
 		dist := 100
-		_, err := svc.UpdateMyPreferences(t.Context(), userID, ProfilePreferences{
-			MinAge: &minAge, MaxAge: &maxAge, MaxDistanceKm: &dist, GenderPreference: []string{"female"},
+		gp := []string{"female"}
+		_, err := svc.UpdateMyPreferences(t.Context(), userID, PreferencesUpdate{
+			MinAge:           Optional[int]{Set: true, Value: &minAge},
+			MaxAge:           Optional[int]{Set: true, Value: &maxAge},
+			MaxDistanceKm:    Optional[int]{Set: true, Value: &dist},
+			GenderPreference: &gp,
 		})
 		if err != nil {
 			t.Fatalf("update preferences error: %v", err)

@@ -23,7 +23,7 @@ type ProfileManager interface {
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, userID, photoID string) error
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
-	UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
+	UpdateMyPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
 	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) (*BrowsePage, error)
 }
@@ -81,20 +81,25 @@ type preferencesResponse struct {
 	NotifySystem                bool     `json:"notify_system"`
 }
 
+// updatePreferencesRequest is the wire-level partial-update payload. All
+// fields are optional; only fields the caller explicitly sets are forwarded
+// to the store. The three nullable filter ints use Optional[int] because
+// "set to NULL" (browse "Clear filters") must be distinguishable from
+// "omit, preserve existing".
 type updatePreferencesRequest struct {
-	MinAge                      *int     `json:"min_age"`
-	MaxAge                      *int     `json:"max_age"`
-	MaxDistanceKm               *int     `json:"max_distance_km"`
-	GenderPreference            []string `json:"gender_preference"`
-	Locale                      string   `json:"locale"`
-	HideDistanceFromNonContacts bool     `json:"hide_distance_from_non_contacts"`
-	HidePresence                bool     `json:"hide_presence"`
-	HideReadReceipts            bool     `json:"hide_read_receipts"`
-	HideTypingIndicator         bool     `json:"hide_typing_indicator"`
-	NotifyChatMessages          bool     `json:"notify_chat_messages"`
-	NotifyContactRequests       bool     `json:"notify_contact_requests"`
-	NotifyChannelMentions       bool     `json:"notify_channel_mentions"`
-	NotifySystem                bool     `json:"notify_system"`
+	MinAge                      Optional[int] `json:"min_age"`
+	MaxAge                      Optional[int] `json:"max_age"`
+	MaxDistanceKm               Optional[int] `json:"max_distance_km"`
+	GenderPreference            *[]string     `json:"gender_preference"`
+	Locale                      *string       `json:"locale"`
+	HideDistanceFromNonContacts *bool         `json:"hide_distance_from_non_contacts"`
+	HidePresence                *bool         `json:"hide_presence"`
+	HideReadReceipts            *bool         `json:"hide_read_receipts"`
+	HideTypingIndicator         *bool         `json:"hide_typing_indicator"`
+	NotifyChatMessages          *bool         `json:"notify_chat_messages"`
+	NotifyContactRequests       *bool         `json:"notify_contact_requests"`
+	NotifyChannelMentions       *bool         `json:"notify_channel_mentions"`
+	NotifySystem                *bool         `json:"notify_system"`
 }
 
 type addPhotoRequest struct {
@@ -284,16 +289,11 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 			return
 		}
 
-		genderPref := req.GenderPreference
-		if genderPref == nil {
-			genderPref = []string{}
-		}
-
-		prefs, err := svc.UpdateMyPreferences(r.Context(), userID, ProfilePreferences{
+		prefs, err := svc.UpdateMyPreferences(r.Context(), userID, PreferencesUpdate{
 			MinAge:                      req.MinAge,
 			MaxAge:                      req.MaxAge,
 			MaxDistanceKm:               req.MaxDistanceKm,
-			GenderPreference:            genderPref,
+			GenderPreference:            req.GenderPreference,
 			Locale:                      req.Locale,
 			HideDistanceFromNonContacts: req.HideDistanceFromNonContacts,
 			HidePresence:                req.HidePresence,

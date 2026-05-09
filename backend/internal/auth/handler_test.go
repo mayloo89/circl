@@ -228,7 +228,7 @@ func (m *mockProfileStore) DeletePhoto(_ context.Context, _, _ string) error { r
 func (m *mockProfileStore) GetPreferences(_ context.Context, _ string) (*profiles.ProfilePreferences, error) {
 	return nil, nil
 }
-func (m *mockProfileStore) UpsertPreferences(_ context.Context, _ string, _ profiles.ProfilePreferences) (*profiles.ProfilePreferences, error) {
+func (m *mockProfileStore) UpsertPreferences(_ context.Context, _ string, _ profiles.PreferencesUpdate) (*profiles.ProfilePreferences, error) {
 	return nil, nil
 }
 func (m *mockProfileStore) SearchInterests(_ context.Context, _ string, _ int) ([]profiles.InterestSuggestion, error) {
