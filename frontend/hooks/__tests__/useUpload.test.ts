@@ -59,7 +59,7 @@ describe("useUpload", () => {
 
   it("completes the 3-step flow and returns the result", async () => {
     const { result } = renderHook(() => useUpload("token"))
-    let res: Awaited<ReturnType<typeof result.current.upload>>
+    let res: Awaited<ReturnType<typeof result.current.upload>> = null
     await act(async () => {
       res = await result.current.upload(makeFile(), "avatar")
     })
