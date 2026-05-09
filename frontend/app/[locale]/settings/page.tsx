@@ -1,12 +1,13 @@
 "use client"
 
 import { signOut, useSession } from "next-auth/react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslations, useLocale } from "next-intl"
 import { useRouter, usePathname } from "@/i18n/navigation"
 import { routing, type Locale } from "@/i18n/routing"
 
 import { usePushContext } from "@/contexts/PushContext"
+import Avatar from "@/components/ui/Avatar"
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import Modal from "@/components/ui/Modal"
@@ -47,6 +48,115 @@ function NotificationsSection() {
           )}
         </div>
       </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Blocked users section
+// ---------------------------------------------------------------------------
+
+interface BlockedUser {
+  block_id: string
+  user_id: string
+  username: string
+  email: string
+  display_name: string
+  avatar_url: string
+}
+
+function BlockedUsersSection({ token }: { token: string | undefined }) {
+  const t = useTranslations("settings")
+  const tc = useTranslations("common")
+  const router = useRouter()
+  const [blocked, setBlocked] = useState<BlockedUser[] | null>(null)
+  const [unblockConfirm, setUnblockConfirm] = useState<BlockedUser | null>(null)
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+    fetch(`${API_URL}/contacts/blocked`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: BlockedUser[]) => setBlocked(data))
+      .catch(() => setBlocked([]))
+  }, [token])
+
+  async function handleUnblock(userId: string) {
+    if (!token) return
+    setPendingId(userId)
+    setError(null)
+    try {
+      const res = await fetch(`${API_URL}/contacts/${userId}/block`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        setError(t("unblockFailed"))
+        return
+      }
+      setBlocked((prev) => prev?.filter((b) => b.user_id !== userId) ?? null)
+      setUnblockConfirm(null)
+    } catch {
+      setError(tc("networkError"))
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  return (
+    <section aria-labelledby="blocked-heading">
+      <h2 id="blocked-heading" className="mb-4 text-base font-semibold text-white">
+        {t("blockedUsers")}
+      </h2>
+      <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
+        <div className="px-5 py-4">
+          <p className="text-sm font-medium text-gray-200">{t("blockedUsersLabel")}</p>
+          <p className="mt-0.5 text-xs text-gray-500">{t("blockedUsersDesc")}</p>
+        </div>
+        {error && (
+          <p role="alert" className="border-t border-gray-700 px-5 py-3 text-sm text-red-400">
+            {error}
+          </p>
+        )}
+        {blocked === null ? (
+          <p className="border-t border-gray-700 px-5 py-4 text-sm text-gray-500">{tc("loading")}</p>
+        ) : blocked.length === 0 ? (
+          <p className="border-t border-gray-700 px-5 py-4 text-sm text-gray-500">{t("blockedEmpty")}</p>
+        ) : (
+          <ul className="divide-y divide-gray-700 border-t border-gray-700">
+            {blocked.map((b) => (
+              <li key={b.block_id} className="flex items-center justify-between gap-3 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/profile/${b.username || b.user_id}`)}
+                  className="flex items-center gap-3 rounded transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+                >
+                  <Avatar src={b.avatar_url} name={b.display_name || b.email} size="sm" />
+                  <span className="text-sm font-medium text-gray-300">{b.display_name || b.email}</span>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setUnblockConfirm(b)}
+                  loading={pendingId === b.user_id}
+                  disabled={pendingId !== null}
+                >
+                  {t("unblock")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <ConfirmDialog
+        open={unblockConfirm !== null}
+        title={t("unblock")}
+        message={t("unblockConfirmMessage", { name: unblockConfirm?.display_name || "" })}
+        confirmLabel={t("unblock")}
+        onConfirm={() => unblockConfirm && handleUnblock(unblockConfirm.user_id)}
+        onCancel={() => setUnblockConfirm(null)}
+      />
     </section>
   )
 }
@@ -420,6 +530,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-10">
           <NotificationsSection />
           <LanguageSection token={token} />
+          <BlockedUsersSection token={token} />
           <PasswordSection token={token} />
           <DeleteAccountSection token={token} />
         </div>

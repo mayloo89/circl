@@ -183,7 +183,14 @@
     "languageDesc": "Choose your preferred display language.",
     "languageEs": "Español",
     "languageEn": "English",
-    "languagePt": "Português"
+    "languagePt": "Português",
+    "blockedUsers": "Blocked users",
+    "blockedUsersLabel": "Manage blocked users",
+    "blockedUsersDesc": "People you have blocked cannot send you messages or contact requests.",
+    "blockedEmpty": "You haven't blocked anyone.",
+    "unblock": "Unblock",
+    "unblockConfirmMessage": "Unblock {name}? They will be able to message you again.",
+    "unblockFailed": "Failed to unblock user. Please try again."
   },
   "chat": {
     "title": "Messages",
@@ -215,14 +222,12 @@
     "search": "Search users…",
     "sentRequests": "Sent Requests",
     "myContacts": "My Contacts ({count})",
-    "blockedUsers": "Blocked Users",
     "noContacts": "No contacts yet. Use the search above to add someone.",
     "pendingRequests": "Pending Requests",
     "accept": "Accept",
     "decline": "Decline",
     "remove": "Remove",
     "block": "Block",
-    "unblock": "Unblock",
     "addContact": "Add contact",
     "cancel": "Cancel",
     "message": "Message",
@@ -231,8 +236,7 @@
     "loading": "Loading…",
     "add": "Add",
     "addContactTitle": "Add Contact",
-    "searchByEmail": "Search by name or email…",
-    "unblockConfirmMessage": "Unblock {name}? They will be able to message you again."
+    "searchByEmail": "Search by name or email…"
   },
   "profile": {
     "title": "My Profile",

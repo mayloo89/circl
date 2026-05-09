@@ -183,7 +183,14 @@
     "languageDesc": "Elige tu idioma preferido.",
     "languageEs": "Español",
     "languageEn": "English",
-    "languagePt": "Português"
+    "languagePt": "Português",
+    "blockedUsers": "Usuarios bloqueados",
+    "blockedUsersLabel": "Gestionar usuarios bloqueados",
+    "blockedUsersDesc": "Las personas que has bloqueado no pueden enviarte mensajes ni solicitudes de contacto.",
+    "blockedEmpty": "No has bloqueado a nadie.",
+    "unblock": "Desbloquear",
+    "unblockConfirmMessage": "¿Desbloquear a {name}? Podrá enviarte mensajes nuevamente.",
+    "unblockFailed": "No se pudo desbloquear al usuario. Inténtalo de nuevo."
   },
   "chat": {
     "title": "Mensajes",
@@ -215,14 +222,12 @@
     "search": "Buscar usuarios…",
     "sentRequests": "Solicitudes enviadas",
     "myContacts": "Mis Contactos ({count})",
-    "blockedUsers": "Usuarios bloqueados",
     "noContacts": "Sin contactos aún. Usa el buscador para agregar a alguien.",
     "pendingRequests": "Solicitudes pendientes",
     "accept": "Aceptar",
     "decline": "Rechazar",
     "remove": "Eliminar",
     "block": "Bloquear",
-    "unblock": "Desbloquear",
     "addContact": "Agregar contacto",
     "cancel": "Cancelar",
     "message": "Mensaje",
@@ -231,8 +236,7 @@
     "loading": "Cargando…",
     "add": "Agregar",
     "addContactTitle": "Agregar Contacto",
-    "searchByEmail": "Buscar por nombre o correo…",
-    "unblockConfirmMessage": "¿Desbloquear a {name}? Podrá enviarte mensajes nuevamente."
+    "searchByEmail": "Buscar por nombre o correo…"
   },
   "profile": {
     "title": "Mi Perfil",
