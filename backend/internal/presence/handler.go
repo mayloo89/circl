@@ -25,20 +25,42 @@ type PresenceStore interface {
 	ContactIDs(ctx context.Context, userID string) ([]string, error)
 }
 
+// PrivacyLookup returns the hide_presence flag for each requested user.
+// Users without a preferences row are absent from the map and must be
+// treated as not hiding (the zero bool).
+type PrivacyLookup interface {
+	HidePresenceByIDs(ctx context.Context, userIDs []string) (map[string]bool, error)
+}
+
+// noopPrivacy is a PrivacyLookup that always returns no hidden users.
+// Used in tests and callers that have not opted into the symmetric
+// hide_presence gate.
+type noopPrivacy struct{}
+
+func (noopPrivacy) HidePresenceByIDs(_ context.Context, _ []string) (map[string]bool, error) {
+	return map[string]bool{}, nil
+}
+
 // NewHandler returns a chi router with the presence endpoints.
 // Must be mounted behind requireAuth.
-func NewHandler(store PresenceStore, notifier Notifier) http.Handler {
+//
+// privacy may be nil; in that case the handler behaves as if no user has
+// hide_presence enabled (legacy behavior).
+func NewHandler(store PresenceStore, notifier Notifier, privacy PrivacyLookup) http.Handler {
+	if privacy == nil {
+		privacy = noopPrivacy{}
+	}
 	r := chi.NewRouter()
-	r.Post("/heartbeat", heartbeatHandler(store, notifier))
-	r.Delete("/heartbeat", offlineHandler(store, notifier))
-	r.Get("/", getPresenceHandler(store))
+	r.Post("/heartbeat", heartbeatHandler(store, notifier, privacy))
+	r.Delete("/heartbeat", offlineHandler(store, notifier, privacy))
+	r.Get("/", getPresenceHandler(store, privacy))
 	return r
 }
 
 // heartbeatHandler marks the authenticated user as online.
 //
 // POST /presence/heartbeat
-func heartbeatHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
+func heartbeatHandler(store PresenceStore, notifier Notifier, privacy PrivacyLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -53,20 +75,10 @@ func heartbeatHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 		}
 
 		// If the user just came online, notify their contacts via SSE.
+		// Symmetric: if either the transitioning user or a recipient has
+		// hide_presence enabled, the event is suppressed for that pair.
 		if justOnline {
-			go func() {
-				contacts, err := store.ContactIDs(r.Context(), userID)
-				if err != nil {
-					return
-				}
-				event := notifications.Event{
-					Type:    "presence_online",
-					Payload: map[string]string{"user_id": userID},
-				}
-				for _, cid := range contacts {
-					notifier.Notify(cid, event)
-				}
-			}()
+			go fanoutPresence(r.Context(), "presence_online", userID, store, notifier, privacy)
 		}
 
 		w.WriteHeader(http.StatusNoContent)
@@ -76,7 +88,7 @@ func heartbeatHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 // offlineHandler immediately marks the authenticated user as offline.
 //
 // DELETE /presence/heartbeat
-func offlineHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
+func offlineHandler(store PresenceStore, notifier Notifier, privacy PrivacyLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -87,21 +99,37 @@ func offlineHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		// Notify contacts so they can update presence immediately.
-		go func() {
-			contacts, err := store.ContactIDs(r.Context(), userID)
-			if err != nil {
-				return
-			}
-			event := notifications.Event{
-				Type:    "presence_offline",
-				Payload: map[string]string{"user_id": userID},
-			}
-			for _, cid := range contacts {
-				notifier.Notify(cid, event)
-			}
-		}()
+		go fanoutPresence(r.Context(), "presence_offline", userID, store, notifier, privacy)
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// fanoutPresence emits a presence_online/offline SSE event to the user's
+// accepted contacts, applying the symmetric hide_presence rule: if the
+// transitioning user has hide_presence the event is dropped entirely;
+// individual recipients with hide_presence are skipped.
+func fanoutPresence(ctx context.Context, eventType, userID string, store PresenceStore, notifier Notifier, privacy PrivacyLookup) {
+	contacts, err := store.ContactIDs(ctx, userID)
+	if err != nil {
+		return
+	}
+	all := append([]string{userID}, contacts...)
+	hide, err := privacy.HidePresenceByIDs(ctx, all)
+	if err != nil {
+		return
+	}
+	if hide[userID] {
+		return
+	}
+	event := notifications.Event{
+		Type:    eventType,
+		Payload: map[string]string{"user_id": userID},
+	}
+	for _, cid := range contacts {
+		if hide[cid] {
+			continue
+		}
+		notifier.Notify(cid, event)
 	}
 }
 
@@ -109,8 +137,13 @@ func offlineHandler(store PresenceStore, notifier Notifier) http.HandlerFunc {
 // Real presence is only returned for the caller and their accepted contacts;
 // all other IDs receive an offline/unknown entry.
 //
+// Symmetric hide_presence: if the caller has hide_presence enabled, every
+// returned entry is forced to offline / no last_seen_at. If a queried
+// user has hide_presence enabled, that single entry is forced to offline /
+// no last_seen_at regardless of contact status.
+//
 // GET /presence?ids=id1,id2,...
-func getPresenceHandler(store PresenceStore) http.HandlerFunc {
+func getPresenceHandler(store PresenceStore, privacy PrivacyLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		callerID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -150,8 +183,19 @@ func getPresenceHandler(store PresenceStore) http.HandlerFunc {
 			return
 		}
 
-		// Strip last_seen_at for non-contacts.
+		hide, err := privacy.HidePresenceByIDs(r.Context(), append([]string{callerID}, ids...))
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+		callerHides := hide[callerID]
+
 		for i := range info {
+			if callerHides || hide[info[i].UserID] {
+				info[i].Online = false
+				info[i].LastSeenAt = nil
+				continue
+			}
 			if !canSeeLastSeen[info[i].UserID] {
 				info[i].LastSeenAt = nil
 			}

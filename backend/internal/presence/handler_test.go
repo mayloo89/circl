@@ -107,7 +107,7 @@ func serveWithAuth(h http.Handler, r *http.Request, rec *httptest.ResponseRecord
 // --- Unit-level handler tests (no DB needed) ---
 
 func TestHeartbeat_NoAuth(t *testing.T) {
-	h := presence.NewHandler(&stubStore{}, noopNotifier{})
+	h := presence.NewHandler(&stubStore{}, noopNotifier{}, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/heartbeat", nil)
 	rec := httptest.NewRecorder()
@@ -118,7 +118,7 @@ func TestHeartbeat_NoAuth(t *testing.T) {
 }
 
 func TestGetPresence_NoAuth(t *testing.T) {
-	h := presence.NewHandler(&stubStore{}, noopNotifier{})
+	h := presence.NewHandler(&stubStore{}, noopNotifier{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/?ids=u-1", nil)
 	rec := httptest.NewRecorder()
@@ -129,7 +129,7 @@ func TestGetPresence_NoAuth(t *testing.T) {
 }
 
 func TestGetPresence_EmptyIDs(t *testing.T) {
-	h := presence.NewHandler(&stubStore{}, noopNotifier{})
+	h := presence.NewHandler(&stubStore{}, noopNotifier{}, nil)
 
 	req := authedReq(httptest.NewRequest(http.MethodGet, "/", nil), "u-1")
 	rec := httptest.NewRecorder()
@@ -237,7 +237,7 @@ func TestGetPresence_NonContactSeesOnlineButNotLastSeen(t *testing.T) {
 		},
 		// contactIDsFn is nil → returns empty slice (caller has no contacts)
 	}
-	h := presence.NewHandler(store, noopNotifier{})
+	h := presence.NewHandler(store, noopNotifier{}, nil)
 
 	req := authedReq(httptest.NewRequest(http.MethodGet, "/?ids=user-2", nil), "user-1")
 	rec := httptest.NewRecorder()
@@ -269,4 +269,143 @@ func containsStr(s, sub string) bool {
 		}
 		return false
 	}()
+}
+
+// stubPrivacy implements presence.PrivacyLookup with a fixed map of hidden users.
+type stubPrivacy struct {
+	hidden map[string]bool
+	err    error
+}
+
+func (s stubPrivacy) HidePresenceByIDs(_ context.Context, _ []string) (map[string]bool, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.hidden, nil
+}
+
+// --- Symmetric hide_presence (PR B) ---
+
+// When the queried user has hide_presence enabled, the response forces
+// online=false and strips last_seen_at regardless of the caller's contact
+// status.
+func TestGetPresence_TargetHidingForcesOffline(t *testing.T) {
+	now := time.Now()
+	store := &stubStore{
+		getPresenceFn: func(_ context.Context, userIDs []string) ([]presence.Info, error) {
+			infos := make([]presence.Info, len(userIDs))
+			for i, id := range userIDs {
+				infos[i] = presence.Info{UserID: id, Online: true, LastSeenAt: &now}
+			}
+			return infos, nil
+		},
+		contactIDsFn: func(_ context.Context, _ string) ([]string, error) {
+			// Caller is contacts with the target — which would normally
+			// expose last_seen_at. The hide flag must override.
+			return []string{"target-1"}, nil
+		},
+	}
+	privacy := stubPrivacy{hidden: map[string]bool{"target-1": true}}
+	h := presence.NewHandler(store, noopNotifier{}, privacy)
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/?ids=target-1", nil), "caller-1")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsStr(body, `"online":false`) {
+		t.Errorf("body = %s, want online=false (target hides)", body)
+	}
+	if containsStr(body, `"last_seen_at"`) {
+		t.Errorf("body = %s, want last_seen_at stripped", body)
+	}
+}
+
+// When the calling user has hide_presence enabled, every entry in the
+// response is forced to online=false / no last_seen_at — symmetric.
+func TestGetPresence_CallerHidingForcesAllOffline(t *testing.T) {
+	now := time.Now()
+	store := &stubStore{
+		getPresenceFn: func(_ context.Context, userIDs []string) ([]presence.Info, error) {
+			infos := make([]presence.Info, len(userIDs))
+			for i, id := range userIDs {
+				infos[i] = presence.Info{UserID: id, Online: true, LastSeenAt: &now}
+			}
+			return infos, nil
+		},
+		contactIDsFn: func(_ context.Context, _ string) ([]string, error) {
+			return []string{"target-a", "target-b"}, nil
+		},
+	}
+	privacy := stubPrivacy{hidden: map[string]bool{"caller-1": true}}
+	h := presence.NewHandler(store, noopNotifier{}, privacy)
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/?ids=target-a,target-b", nil), "caller-1")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if containsStr(body, `"online":true`) {
+		t.Errorf("body = %s, want all online=false (caller hides)", body)
+	}
+	if containsStr(body, `"last_seen_at"`) {
+		t.Errorf("body = %s, want last_seen_at stripped for all entries", body)
+	}
+}
+
+// Heartbeat fanout: when the transitioning user has hide_presence, no
+// presence_online event is delivered to any contact (outbound suppression).
+func TestHeartbeat_HidingUserSuppressesFanout(t *testing.T) {
+	notifier := &captureNotifier{}
+	store := &stubStore{
+		heartbeatFn: func(_ context.Context, _ string) (bool, error) { return true, nil },
+		contactIDsFn: func(_ context.Context, _ string) ([]string, error) {
+			return []string{"contact-1", "contact-2"}, nil
+		},
+	}
+	privacy := stubPrivacy{hidden: map[string]bool{"caller-1": true}}
+	h := presence.NewHandler(store, notifier, privacy)
+
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/heartbeat", nil), "caller-1")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	// fanoutPresence runs in a goroutine — give it a moment to settle.
+	time.Sleep(50 * time.Millisecond)
+	if len(notifier.events) != 0 {
+		t.Errorf("events = %d, want 0 (caller hides → no fanout)", len(notifier.events))
+	}
+}
+
+// Heartbeat fanout: contacts with hide_presence enabled are skipped while
+// the rest still receive the event (per-recipient inbound suppression).
+func TestHeartbeat_HidingContactSkippedFromFanout(t *testing.T) {
+	notifier := &captureNotifier{}
+	store := &stubStore{
+		heartbeatFn: func(_ context.Context, _ string) (bool, error) { return true, nil },
+		contactIDsFn: func(_ context.Context, _ string) ([]string, error) {
+			return []string{"contact-hidden", "contact-visible"}, nil
+		},
+	}
+	privacy := stubPrivacy{hidden: map[string]bool{"contact-hidden": true}}
+	h := presence.NewHandler(store, notifier, privacy)
+
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/heartbeat", nil), "caller-1")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if len(notifier.events) != 1 {
+		t.Errorf("events = %d, want 1 (only the visible contact)", len(notifier.events))
+	}
 }

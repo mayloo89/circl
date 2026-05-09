@@ -43,6 +43,12 @@ type Client struct {
 	avatarURL       string
 	isChannel       bool
 	isBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
+	// hideReadReceipts and hideTyping are populated at WS connect from the
+	// user's profile preferences. They are used both as the emit gate (for
+	// frames originating from this client) and the receive gate (in
+	// hub.deliver). Pref changes take effect on the next reconnect.
+	hideReadReceipts bool
+	hideTyping       bool
 	// ctx carries the OpenTelemetry session span for this connection.
 	// The span is ended in readPump's defer when the connection closes.
 	ctx context.Context
@@ -114,6 +120,18 @@ type HandlerConfig struct {
 	// AllowedOrigins is the list of origins permitted to open WebSocket
 	// connections. When empty, all origins are allowed (development only).
 	AllowedOrigins []string
+	// PrivacyResolver, if set, returns the user's typing-indicator and
+	// read-receipt opt-out flags. Called once at WS connect and on each
+	// REST-initiated read_receipt to decide whether to publish. When nil
+	// the gate is open (legacy behavior).
+	PrivacyResolver func(ctx context.Context, userID string) (PrivacyFlags, error)
+}
+
+// PrivacyFlags are the chat-relevant subset of a user's privacy preferences.
+// All fields default to false (no hiding).
+type PrivacyFlags struct {
+	HideReadReceipts bool
+	HideTyping       bool
 }
 
 // resolveMessageType maps a client-supplied frame type and MIME type to the
@@ -768,18 +786,25 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			),
 		)
 
+		var privacy PrivacyFlags
+		if cfg.PrivacyResolver != nil {
+			privacy, _ = cfg.PrivacyResolver(r.Context(), userID)
+		}
+
 		client := &Client{
-			hub:             hub,
-			conn:            conn,
-			send:            make(chan []byte, 256),
-			userID:          userID,
-			roomID:          roomID,
-			username:        username,
-			displayName:     displayName,
-			avatarURL:       avatarURL,
-			isChannel:       isChannel,
-			isBlockedInRoom: cfg.IsBlockedInRoom,
-			ctx:             sessCtx,
+			hub:              hub,
+			conn:             conn,
+			send:             make(chan []byte, 256),
+			userID:           userID,
+			roomID:           roomID,
+			username:         username,
+			displayName:      displayName,
+			avatarURL:        avatarURL,
+			isChannel:        isChannel,
+			isBlockedInRoom:  cfg.IsBlockedInRoom,
+			hideReadReceipts: privacy.HideReadReceipts,
+			hideTyping:       privacy.HideTyping,
+			ctx:              sessCtx,
 		}
 
 		hub.register <- client
@@ -819,6 +844,9 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		}
 
 		if in.Type == "typing" {
+			if c.hideTyping {
+				continue
+			}
 			if time.Since(lastTypingBroadcast) >= 2*time.Second {
 				lastTypingBroadcast = time.Now()
 				if data, err := json.Marshal(typingFrame{

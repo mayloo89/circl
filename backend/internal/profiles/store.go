@@ -486,17 +486,21 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 	return profiles, rows.Err()
 }
 
-// GetPreferences returns the discovery preferences for the given user.
-// Returns an empty preferences object if none have been set yet.
+// GetPreferences returns the discovery and privacy preferences for the given
+// user. Returns an empty preferences object if none have been set yet.
 func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference, locale
+		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference, locale,
+		        hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator
 		   FROM profile_preferences
 		  WHERE user_id = $1`,
 		userID,
 	)
 	var p ProfilePreferences
-	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale); err != nil {
+	if err := row.Scan(
+		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
+		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &ProfilePreferences{UserID: userID, GenderPreference: []string{}, Locale: "es"}, nil
 		}
@@ -508,7 +512,69 @@ func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePr
 	return &p, nil
 }
 
-// UpsertPreferences inserts or updates the discovery preferences for the given user.
+// GetPrivacyFlagsByIDs returns the privacy toggles for each requested user
+// keyed by user_id. Users with no preferences row are absent from the map;
+// callers should treat absence as the zero PrivacyFlags (all false).
+func (s *pgStore) GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (map[string]PrivacyFlags, error) {
+	if len(userIDs) == 0 {
+		return map[string]PrivacyFlags{}, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id::text, hide_distance_from_non_contacts, hide_presence,
+		        hide_read_receipts, hide_typing_indicator
+		   FROM profile_preferences
+		  WHERE user_id = ANY($1::uuid[])`,
+		userIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get privacy flags: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]PrivacyFlags, len(userIDs))
+	for rows.Next() {
+		var (
+			id    string
+			flags PrivacyFlags
+		)
+		if err := rows.Scan(&id, &flags.HideDistanceFromNonContacts, &flags.HidePresence,
+			&flags.HideReadReceipts, &flags.HideTypingIndicator); err != nil {
+			return nil, fmt.Errorf("get privacy flags: scan: %w", err)
+		}
+		out[id] = flags
+	}
+	return out, rows.Err()
+}
+
+// AcceptedContactIDs returns the user IDs of the given user's accepted
+// contacts. Used to gate per-viewer visibility in browse and presence.
+func (s *pgStore) AcceptedContactIDs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT CASE
+			WHEN requester_id = $1 THEN addressee_id::text
+			ELSE requester_id::text
+		END AS contact_user_id
+		FROM contacts
+		WHERE (requester_id = $1 OR addressee_id = $1)
+		  AND status = 'accepted'`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("accepted contact ids: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("accepted contact ids: scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// UpsertPreferences inserts or updates the discovery and privacy preferences
+// for the given user.
 func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error) {
 	genderPref := prefs.GenderPreference
 	if genderPref == nil {
@@ -520,20 +586,33 @@ func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs Pr
 	}
 
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO profile_preferences (user_id, min_age, max_age, max_distance_km, gender_preference, locale)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO profile_preferences (
+		     user_id, min_age, max_age, max_distance_km, gender_preference, locale,
+		     hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator
+		 )
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 ON CONFLICT (user_id) DO UPDATE
-		    SET min_age           = EXCLUDED.min_age,
-		        max_age           = EXCLUDED.max_age,
-		        max_distance_km   = EXCLUDED.max_distance_km,
-		        gender_preference = EXCLUDED.gender_preference,
-		        locale            = EXCLUDED.locale,
-		        updated_at        = now()
-		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference, locale`,
+		    SET min_age                         = EXCLUDED.min_age,
+		        max_age                         = EXCLUDED.max_age,
+		        max_distance_km                 = EXCLUDED.max_distance_km,
+		        gender_preference               = EXCLUDED.gender_preference,
+		        locale                          = EXCLUDED.locale,
+		        hide_distance_from_non_contacts = EXCLUDED.hide_distance_from_non_contacts,
+		        hide_presence                   = EXCLUDED.hide_presence,
+		        hide_read_receipts              = EXCLUDED.hide_read_receipts,
+		        hide_typing_indicator           = EXCLUDED.hide_typing_indicator,
+		        updated_at                      = now()
+		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference, locale,
+		           hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator`,
 		userID, prefs.MinAge, prefs.MaxAge, prefs.MaxDistanceKm, genderPref, locale,
+		prefs.HideDistanceFromNonContacts, prefs.HidePresence,
+		prefs.HideReadReceipts, prefs.HideTypingIndicator,
 	)
 	var p ProfilePreferences
-	if err := row.Scan(&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale); err != nil {
+	if err := row.Scan(
+		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
+		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
+	); err != nil {
 		return nil, fmt.Errorf("upsert preferences: %w", err)
 	}
 	if p.GenderPreference == nil {

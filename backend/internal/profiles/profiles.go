@@ -63,7 +63,7 @@ type ProfileInput struct {
 	OnboardedAt  *time.Time
 }
 
-// ProfilePreferences holds discovery preferences for a user.
+// ProfilePreferences holds discovery and privacy preferences for a user.
 type ProfilePreferences struct {
 	UserID           string
 	MinAge           *int
@@ -71,6 +71,21 @@ type ProfilePreferences struct {
 	MaxDistanceKm    *int
 	GenderPreference []string
 	Locale           string
+	// Privacy toggles. All default false.
+	HideDistanceFromNonContacts bool
+	HidePresence                bool
+	HideReadReceipts            bool
+	HideTypingIndicator         bool
+}
+
+// PrivacyFlags is the read-only subset of privacy toggles used by services
+// that gate behavior on a user's privacy preferences without needing the
+// full preferences object (e.g. presence handler, chat hub, browse).
+type PrivacyFlags struct {
+	HideDistanceFromNonContacts bool
+	HidePresence                bool
+	HideReadReceipts            bool
+	HideTypingIndicator         bool
 }
 
 // InterestSuggestion is a suggested interest with its global usage count.
@@ -145,6 +160,8 @@ type Store interface {
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, photoID, userID string) error
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
+	GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (map[string]PrivacyFlags, error)
+	AcceptedContactIDs(ctx context.Context, userID string) ([]string, error)
 	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
 	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) ([]BrowseProfile, error)
@@ -290,6 +307,29 @@ func (s *Service) GetMyPreferences(ctx context.Context, userID string) (*Profile
 	return s.store.GetPreferences(ctx, userID)
 }
 
+// GetPrivacyFlags returns the privacy toggles for a single user. Used by
+// chat and presence to gate WS frame delivery and presence visibility on
+// the user's stored preferences.
+func (s *Service) GetPrivacyFlags(ctx context.Context, userID string) (PrivacyFlags, error) {
+	prefs, err := s.store.GetPreferences(ctx, userID)
+	if err != nil {
+		return PrivacyFlags{}, err
+	}
+	return PrivacyFlags{
+		HideDistanceFromNonContacts: prefs.HideDistanceFromNonContacts,
+		HidePresence:                prefs.HidePresence,
+		HideReadReceipts:            prefs.HideReadReceipts,
+		HideTypingIndicator:         prefs.HideTypingIndicator,
+	}, nil
+}
+
+// GetPrivacyFlagsByIDs returns the privacy toggles for the given user IDs.
+// Users with no preferences row are absent from the map; callers must treat
+// absence as the zero PrivacyFlags (all false).
+func (s *Service) GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (map[string]PrivacyFlags, error) {
+	return s.store.GetPrivacyFlagsByIDs(ctx, userIDs)
+}
+
 // UpdateMyPreferences validates and persists discovery preferences.
 func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error) {
 	if prefs.MinAge != nil && *prefs.MinAge < 18 {
@@ -310,6 +350,10 @@ func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs 
 // Browse returns a cursor-paginated list of profiles visible to the given user,
 // filtered by their stored discovery preferences. cursor is an opaque token
 // returned by a previous call; pass "" to start from the first page.
+//
+// Distance is suppressed (DistanceKm = nil) for any browsed profile whose
+// owner has set hide_distance_from_non_contacts and is not an accepted
+// contact of the caller.
 func (s *Service) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) (*BrowsePage, error) {
 	profiles, err := s.store.Browse(ctx, userID, limit+1, cursor, sortByDistance, interests)
 	if err != nil {
@@ -320,6 +364,35 @@ func (s *Service) Browse(ctx context.Context, userID string, limit int, cursor s
 		profiles = profiles[:limit]
 		nextCursor = EncodeBrowseCursor(profiles[limit-1], sortByDistance)
 	}
+
+	if len(profiles) > 0 {
+		ids := make([]string, len(profiles))
+		for i, p := range profiles {
+			ids[i] = p.UserID
+		}
+		flags, err := s.store.GetPrivacyFlagsByIDs(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		contactIDs, err := s.store.AcceptedContactIDs(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		isContact := make(map[string]struct{}, len(contactIDs))
+		for _, id := range contactIDs {
+			isContact[id] = struct{}{}
+		}
+		for i := range profiles {
+			if !flags[profiles[i].UserID].HideDistanceFromNonContacts {
+				continue
+			}
+			if _, ok := isContact[profiles[i].UserID]; ok {
+				continue
+			}
+			profiles[i].DistanceKm = nil
+		}
+	}
+
 	now := time.Now()
 	for i := range profiles {
 		if profiles[i].DateOfBirth != nil {

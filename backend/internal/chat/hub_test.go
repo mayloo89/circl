@@ -196,6 +196,85 @@ func TestHub_SlowClientIsEvicted(t *testing.T) {
 	t.Error("send channel was not closed after slow-client eviction")
 }
 
+func TestHub_TypingFrameSkippedForClientHidingTyping(t *testing.T) {
+	hub, cancel := newTestHub(t)
+	defer cancel()
+
+	hider := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-hider", roomID: "room-priv", hideTyping: true}
+	listener := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-listener", roomID: "room-priv"}
+
+	mustRegister(t, hub, hider)
+	mustRegister(t, hub, listener)
+
+	typing := []byte(`{"event":"typing","user_id":"u-other","room_id":"room-priv","display_name":"Other"}`)
+	if err := hub.Publish(t.Context(), "room-priv", typing); err != nil {
+		t.Fatalf("Publish error: %v", err)
+	}
+
+	// listener still receives the typing frame.
+	got := receiveWithTimeout(t, listener.send, 500*time.Millisecond)
+	if string(got) != string(typing) {
+		t.Errorf("listener got %s, want %s", got, typing)
+	}
+	// hider does NOT receive the typing frame.
+	select {
+	case msg := <-hider.send:
+		t.Errorf("hider unexpectedly received typing frame: %s", msg)
+	case <-time.After(100 * time.Millisecond):
+		// expected — frame suppressed for the hider
+	}
+}
+
+func TestHub_ReadReceiptFrameSkippedForClientHidingReceipts(t *testing.T) {
+	hub, cancel := newTestHub(t)
+	defer cancel()
+
+	hider := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-hider", roomID: "room-rr", hideReadReceipts: true}
+	listener := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-listener", roomID: "room-rr"}
+
+	mustRegister(t, hub, hider)
+	mustRegister(t, hub, listener)
+
+	receipt := []byte(`{"event":"read_receipt","room_id":"room-rr","user_id":"u-other","read_at":"2026-01-01T00:00:00Z"}`)
+	if err := hub.Publish(t.Context(), "room-rr", receipt); err != nil {
+		t.Fatalf("Publish error: %v", err)
+	}
+
+	got := receiveWithTimeout(t, listener.send, 500*time.Millisecond)
+	if string(got) != string(receipt) {
+		t.Errorf("listener got %s, want %s", got, receipt)
+	}
+	select {
+	case msg := <-hider.send:
+		t.Errorf("hider unexpectedly received read_receipt frame: %s", msg)
+	case <-time.After(100 * time.Millisecond):
+		// expected — frame suppressed for the hider
+	}
+}
+
+func TestHub_NewMessageFrameDeliveredToHidersRegardless(t *testing.T) {
+	hub, cancel := newTestHub(t)
+	defer cancel()
+
+	// Both flags set on a single client; only typing/read_receipt should be
+	// suppressed — content frames must still arrive.
+	hider := &Client{
+		hub: hub, send: make(chan []byte, 8), userID: "u-hider", roomID: "room-mix",
+		hideTyping: true, hideReadReceipts: true,
+	}
+	mustRegister(t, hub, hider)
+
+	msg := []byte(`{"event":"new_message","id":"m-1","room_id":"room-mix","sender_id":"u-other","content":"hi"}`)
+	if err := hub.Publish(t.Context(), "room-mix", msg); err != nil {
+		t.Fatalf("Publish error: %v", err)
+	}
+
+	got := receiveWithTimeout(t, hider.send, 500*time.Millisecond)
+	if string(got) != string(msg) {
+		t.Errorf("hider got %s, want %s — content frames must not be gated", got, msg)
+	}
+}
+
 func TestHub_CancelStopsRun(t *testing.T) {
 	hub, cancel := newTestHub(t)
 
