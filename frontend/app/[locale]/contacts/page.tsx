@@ -7,9 +7,7 @@ import { useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { usePresence } from "@/hooks/usePresence"
-import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
-import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import ContactCard from "@/components/contacts/ContactCard"
 import SearchBar from "@/components/contacts/SearchBar"
@@ -51,15 +49,6 @@ interface AcceptedContact {
   avatar_url: string
 }
 
-interface BlockedUser {
-  block_id: string
-  user_id: string
-  username: string
-  email: string
-  display_name: string
-  avatar_url: string
-}
-
 export default function ContactsPage() {
   const t = useTranslations("contacts")
   const { data: session, status } = useSession()
@@ -68,11 +57,9 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<AcceptedContact[]>([])
   const [pending, setPending] = useState<PendingRequest[]>([])
   const [sent, setSent] = useState<SentRequest[]>([])
-  const [blocked, setBlocked] = useState<BlockedUser[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
   const [removeConfirm, setRemoveConfirm] = useState<AcceptedContact | null>(null)
-  const [unblockConfirm, setUnblockConfirm] = useState<BlockedUser | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
 
@@ -100,9 +87,8 @@ export default function ContactsPage() {
       fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
       fetch(`${API_URL}/contacts/pending`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
       fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
-      fetch(`${API_URL}/contacts/blocked`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
     ])
-      .then(([c, p, s, bl]) => { setContacts(c); setPending(p); setSent(s); setBlocked(bl) })
+      .then(([c, p, s]) => { setContacts(c); setPending(p); setSent(s) })
       .catch(() => setError("Failed to load contacts."))
       .finally(() => setLoading(false))
   }, [status, token])
@@ -232,21 +218,6 @@ export default function ContactsPage() {
     }
   }
 
-  async function unblock(userID: string) {
-    setError("")
-    try {
-      const res = await fetch(`${API_URL}/contacts/${userID}/block`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) { setError(await apiError(res, "Failed to unblock user.")); return }
-      setBlocked((prev) => prev.filter((b) => b.user_id !== userID))
-      setUnblockConfirm(null)
-    } catch {
-      setError("Network error. Please try again.")
-    }
-  }
-
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
@@ -264,14 +235,6 @@ export default function ContactsPage() {
       confirmLabel={t("remove")}
       onConfirm={() => { if (removeConfirm) { remove(removeConfirm.contact_id); setRemoveConfirm(null) } }}
       onCancel={() => setRemoveConfirm(null)}
-    />
-    <ConfirmDialog
-      open={unblockConfirm !== null}
-      title={t("unblock")}
-      message={t("unblockConfirmMessage", { name: unblockConfirm?.display_name || "" })}
-      confirmLabel={t("unblock")}
-      onConfirm={() => unblockConfirm && unblock(unblockConfirm.user_id)}
-      onCancel={() => setUnblockConfirm(null)}
     />
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-2xl space-y-8 px-4">
@@ -363,32 +326,6 @@ export default function ContactsPage() {
           )}
         </div>
 
-        {blocked.length > 0 && (
-          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 text-lg font-semibold text-white">{t("blockedUsers")}</h2>
-            <ul className="divide-y divide-gray-700">
-              {blocked.map((b) => (
-                <li key={b.block_id} className="flex items-center justify-between gap-3 py-3">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/profile/${b.username || b.user_id}`)}
-                    className="flex items-center gap-3 hover:opacity-80"
-                  >
-                    <Avatar src={b.avatar_url} name={b.display_name || b.email} size="sm" />
-                    <span className="text-sm font-medium text-gray-300">{b.display_name || b.email}</span>
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setUnblockConfirm(b)}
-                  >
-                    {t("unblock")}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     </div>
     </>
