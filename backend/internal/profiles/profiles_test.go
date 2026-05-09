@@ -899,3 +899,34 @@ func TestGetPrivacyFlags_DerivedFromPreferences(t *testing.T) {
 		t.Errorf("flags = %+v", flags)
 	}
 }
+
+// --- GetNotificationFlags ---
+
+func TestGetNotificationFlags_DerivedFromPreferences(t *testing.T) {
+	svc := NewService(&mockStore{
+		prefs: &ProfilePreferences{
+			UserID:                "u-1",
+			NotifyChatMessages:    false,
+			NotifyContactRequests: true,
+			NotifyChannelMentions: false,
+			NotifySystem:          true,
+		},
+	})
+
+	flags, err := svc.GetNotificationFlags(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flags.ChatMessages || !flags.ContactRequests || flags.ChannelMentions || !flags.System {
+		t.Errorf("flags = %+v", flags)
+	}
+}
+
+func TestGetNotificationFlags_PropagatesStoreError(t *testing.T) {
+	svc := NewService(&mockStore{prefsErr: errors.New("db error")})
+
+	_, err := svc.GetNotificationFlags(t.Context(), "u-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

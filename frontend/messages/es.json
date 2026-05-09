@@ -201,7 +201,17 @@
     "hideReadReceiptsDesc": "Si está activado, los demás no sabrán cuándo has leído sus mensajes. Tú tampoco verás los suyos.",
     "hideTyping": "Ocultar indicador de escritura",
     "hideTypingDesc": "Si está activado, los demás no verán cuándo estás escribiendo. Tú tampoco verás los suyos.",
-    "privacyUpdateFailed": "No se pudo actualizar la preferencia de privacidad. Inténtalo de nuevo."
+    "privacyUpdateFailed": "No se pudo actualizar la preferencia de privacidad. Inténtalo de nuevo.",
+    "notifyCategoriesLabel": "Envíame notificaciones para",
+    "notifyChatMessages": "Mensajes",
+    "notifyChatMessagesDesc": "Nuevos mensajes en tus chats y grupos.",
+    "notifyContactRequests": "Solicitudes de contacto",
+    "notifyContactRequestsDesc": "Cuando alguien envía, acepta o elimina una solicitud de contacto.",
+    "notifyChannelMentions": "Menciones en canales",
+    "notifyChannelMentionsDesc": "Cuando alguien te menciona en un canal público.",
+    "notifySystem": "Sistema",
+    "notifySystemDesc": "Avisos de cuenta y seguridad. Algunos avisos críticos pueden llegar aunque esté desactivado.",
+    "notificationUpdateFailed": "No se pudo actualizar la preferencia de notificación. Inténtalo de nuevo."
   },
   "chat": {
     "title": "Mensajes",

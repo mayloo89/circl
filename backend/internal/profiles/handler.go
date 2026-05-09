@@ -75,6 +75,10 @@ type preferencesResponse struct {
 	HidePresence                bool     `json:"hide_presence"`
 	HideReadReceipts            bool     `json:"hide_read_receipts"`
 	HideTypingIndicator         bool     `json:"hide_typing_indicator"`
+	NotifyChatMessages          bool     `json:"notify_chat_messages"`
+	NotifyContactRequests       bool     `json:"notify_contact_requests"`
+	NotifyChannelMentions       bool     `json:"notify_channel_mentions"`
+	NotifySystem                bool     `json:"notify_system"`
 }
 
 type updatePreferencesRequest struct {
@@ -87,6 +91,10 @@ type updatePreferencesRequest struct {
 	HidePresence                bool     `json:"hide_presence"`
 	HideReadReceipts            bool     `json:"hide_read_receipts"`
 	HideTypingIndicator         bool     `json:"hide_typing_indicator"`
+	NotifyChatMessages          bool     `json:"notify_chat_messages"`
+	NotifyContactRequests       bool     `json:"notify_contact_requests"`
+	NotifyChannelMentions       bool     `json:"notify_channel_mentions"`
+	NotifySystem                bool     `json:"notify_system"`
 }
 
 type addPhotoRequest struct {
@@ -291,6 +299,10 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 			HidePresence:                req.HidePresence,
 			HideReadReceipts:            req.HideReadReceipts,
 			HideTypingIndicator:         req.HideTypingIndicator,
+			NotifyChatMessages:          req.NotifyChatMessages,
+			NotifyContactRequests:       req.NotifyContactRequests,
+			NotifyChannelMentions:       req.NotifyChannelMentions,
+			NotifySystem:                req.NotifySystem,
 		})
 		if err != nil {
 			if errors.Is(err, ErrInvalidInput) {
@@ -515,6 +527,10 @@ func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {
 		HidePresence:                p.HidePresence,
 		HideReadReceipts:            p.HideReadReceipts,
 		HideTypingIndicator:         p.HideTypingIndicator,
+		NotifyChatMessages:          p.NotifyChatMessages,
+		NotifyContactRequests:       p.NotifyContactRequests,
+		NotifyChannelMentions:       p.NotifyChannelMentions,
+		NotifySystem:                p.NotifySystem,
 	}
 }
 
