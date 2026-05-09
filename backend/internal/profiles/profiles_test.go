@@ -15,6 +15,8 @@ type mockStore struct {
 	prefs             *ProfilePreferences
 	interests         []InterestSuggestion
 	browseProfiles    []BrowseProfile
+	privacyFlags      map[string]PrivacyFlags
+	contactIDs        []string
 	browseErr         error
 	usernameAvailable bool
 	getErr            error
@@ -28,6 +30,8 @@ type mockStore struct {
 	upsertPrefsErr    error
 	searchIntErr      error
 	usernameAvailErr  error
+	privacyFlagsErr   error
+	contactIDsErr     error
 }
 
 func (m *mockStore) GetByUserID(_ context.Context, _ string) (*Profile, error) {
@@ -115,6 +119,23 @@ func (m *mockStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool,
 		return m.browseProfiles, nil
 	}
 	return []BrowseProfile{}, nil
+}
+
+func (m *mockStore) GetPrivacyFlagsByIDs(_ context.Context, _ []string) (map[string]PrivacyFlags, error) {
+	if m.privacyFlagsErr != nil {
+		return nil, m.privacyFlagsErr
+	}
+	if m.privacyFlags != nil {
+		return m.privacyFlags, nil
+	}
+	return map[string]PrivacyFlags{}, nil
+}
+
+func (m *mockStore) AcceptedContactIDs(_ context.Context, _ string) ([]string, error) {
+	if m.contactIDsErr != nil {
+		return nil, m.contactIDsErr
+	}
+	return m.contactIDs, nil
 }
 
 // validDOB returns a DOB 25 years in the past (always valid for 18+ check).
@@ -788,5 +809,93 @@ func TestGetPublicProfileByUsername_PhotosError(t *testing.T) {
 	_, err := svc.GetPublicProfileByUsername(t.Context(), "bob")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- Browse: distance suppression for non-contacts ---
+
+func TestBrowse_SuppressesDistanceForNonContactsWhenViewedHidesDistance(t *testing.T) {
+	d1, d2, d3 := 5.0, 12.0, 30.0
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "alice", DistanceKm: &d1},
+			{ID: "p2", UserID: "bob", DistanceKm: &d2},
+			{ID: "p3", UserID: "carol", DistanceKm: &d3},
+		},
+		privacyFlags: map[string]PrivacyFlags{
+			"alice": {HideDistanceFromNonContacts: true},
+			"bob":   {HideDistanceFromNonContacts: true},
+			// carol has no row → defaults to all false; distance must remain.
+		},
+		contactIDs: []string{"alice"}, // viewer is contacts with alice only.
+	})
+
+	page, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(page.Profiles) != 3 {
+		t.Fatalf("got %d profiles, want 3", len(page.Profiles))
+	}
+	// alice is a contact → distance preserved despite the flag.
+	if page.Profiles[0].DistanceKm == nil || *page.Profiles[0].DistanceKm != d1 {
+		t.Errorf("alice distance = %v, want %v (contact, flag does not apply)", page.Profiles[0].DistanceKm, d1)
+	}
+	// bob is not a contact and has the flag → distance must be nil.
+	if page.Profiles[1].DistanceKm != nil {
+		t.Errorf("bob distance = %v, want nil (non-contact + flag)", page.Profiles[1].DistanceKm)
+	}
+	// carol has no flag → distance preserved.
+	if page.Profiles[2].DistanceKm == nil || *page.Profiles[2].DistanceKm != d3 {
+		t.Errorf("carol distance = %v, want %v (no flag)", page.Profiles[2].DistanceKm, d3)
+	}
+}
+
+func TestBrowse_PrivacyFlagsErrorPropagates(t *testing.T) {
+	d := 5.0
+	svc := NewService(&mockStore{
+		browseProfiles:  []BrowseProfile{{ID: "p1", UserID: "alice", DistanceKm: &d}},
+		privacyFlagsErr: errors.New("db error"),
+	})
+
+	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestBrowse_AcceptedContactIDsErrorPropagates(t *testing.T) {
+	d := 5.0
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{{ID: "p1", UserID: "alice", DistanceKm: &d}},
+		privacyFlags:   map[string]PrivacyFlags{"alice": {HideDistanceFromNonContacts: true}},
+		contactIDsErr:  errors.New("db error"),
+	})
+
+	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- GetPrivacyFlags ---
+
+func TestGetPrivacyFlags_DerivedFromPreferences(t *testing.T) {
+	svc := NewService(&mockStore{
+		prefs: &ProfilePreferences{
+			UserID:                      "u-1",
+			HideDistanceFromNonContacts: true,
+			HidePresence:                false,
+			HideReadReceipts:            true,
+			HideTypingIndicator:         false,
+		},
+	})
+
+	flags, err := svc.GetPrivacyFlags(t.Context(), "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !flags.HideDistanceFromNonContacts || flags.HidePresence || !flags.HideReadReceipts || flags.HideTypingIndicator {
+		t.Errorf("flags = %+v", flags)
 	}
 }

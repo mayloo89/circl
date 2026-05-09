@@ -190,7 +190,18 @@
     "blockedEmpty": "You haven't blocked anyone.",
     "unblock": "Unblock",
     "unblockConfirmMessage": "Unblock {name}? They will be able to message you again.",
-    "unblockFailed": "Failed to unblock user. Please try again."
+    "unblockFailed": "Failed to unblock user. Please try again.",
+    "privacy": "Privacy",
+    "symmetric": "Symmetric",
+    "hideDistance": "Hide my distance from non-contacts",
+    "hideDistanceDesc": "When on, people who aren't in your contacts won't see how far away you are.",
+    "hidePresence": "Hide my online status and last seen",
+    "hidePresenceDesc": "When on, others won't see when you're online or your last-seen time. You also stop seeing theirs.",
+    "hideReadReceipts": "Hide read receipts",
+    "hideReadReceiptsDesc": "When on, others don't see when you've read their messages. You also stop seeing theirs.",
+    "hideTyping": "Hide typing indicators",
+    "hideTypingDesc": "When on, others don't see when you're typing. You also stop seeing theirs.",
+    "privacyUpdateFailed": "Failed to update privacy preference. Please try again."
   },
   "chat": {
     "title": "Messages",

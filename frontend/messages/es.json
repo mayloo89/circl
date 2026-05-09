@@ -190,7 +190,18 @@
     "blockedEmpty": "No has bloqueado a nadie.",
     "unblock": "Desbloquear",
     "unblockConfirmMessage": "¿Desbloquear a {name}? Podrá enviarte mensajes nuevamente.",
-    "unblockFailed": "No se pudo desbloquear al usuario. Inténtalo de nuevo."
+    "unblockFailed": "No se pudo desbloquear al usuario. Inténtalo de nuevo.",
+    "privacy": "Privacidad",
+    "symmetric": "Simétrico",
+    "hideDistance": "Ocultar mi distancia a no contactos",
+    "hideDistanceDesc": "Si está activado, las personas que no son tus contactos no verán a qué distancia estás.",
+    "hidePresence": "Ocultar mi estado en línea y última conexión",
+    "hidePresenceDesc": "Si está activado, los demás no verán cuándo estás en línea ni tu última conexión. Tú tampoco verás las suyas.",
+    "hideReadReceipts": "Ocultar confirmaciones de lectura",
+    "hideReadReceiptsDesc": "Si está activado, los demás no sabrán cuándo has leído sus mensajes. Tú tampoco verás los suyos.",
+    "hideTyping": "Ocultar indicador de escritura",
+    "hideTypingDesc": "Si está activado, los demás no verán cuándo estás escribiendo. Tú tampoco verás los suyos.",
+    "privacyUpdateFailed": "No se pudo actualizar la preferencia de privacidad. Inténtalo de nuevo."
   },
   "chat": {
     "title": "Mensajes",

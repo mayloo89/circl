@@ -215,7 +215,7 @@ func main() {
 	go chatHub.Run(appCtx)
 
 	presenceStore := presence.NewStore(rdb, pool)
-	presenceHandler := presence.NewHandler(presenceStore, hub)
+	presenceHandler := presence.NewHandler(presenceStore, hub, presencePrivacy{svc: profileSvc})
 
 	// Storage provider: LocalStorage for dev, S3Storage for production.
 	storageProvider := config.EnvOrDefault("STORAGE_PROVIDER", "local")
@@ -278,6 +278,17 @@ func main() {
 		return blocked
 	}
 
+	chatPrivacy := func(ctx context.Context, userID string) (chat.PrivacyFlags, error) {
+		flags, err := profileSvc.GetPrivacyFlags(ctx, userID)
+		if err != nil {
+			return chat.PrivacyFlags{}, err
+		}
+		return chat.PrivacyFlags{
+			HideReadReceipts: flags.HideReadReceipts,
+			HideTyping:       flags.HideTypingIndicator,
+		}, nil
+	}
+
 	wsTicketStore := wsticket.NewStore(rdb)
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, wsTicketStore, func(recipientID, roomID string) {
 		notifyUser(recipientID, notifications.Event{
@@ -291,6 +302,7 @@ func main() {
 	}, chat.HandlerConfig{
 		IsBlockedInRoom: isBlockedInRoom,
 		AllowedOrigins:  corsOrigins,
+		PrivacyResolver: chatPrivacy,
 	})
 
 	notifyDeleted := func(roomID, messageID string) {
@@ -305,6 +317,12 @@ func main() {
 		Hub:                  chatHub,
 		NotifyMessageDeleted: notifyDeleted,
 		NotifyRoomRead: func(roomID, userID string, readAt time.Time) {
+			// Emit gate: drop the broadcast entirely when the reader has
+			// opted out of read receipts. The hub's deliver loop also
+			// applies the symmetric receive gate per recipient.
+			if flags, err := profileSvc.GetPrivacyFlags(appCtx, userID); err == nil && flags.HideReadReceipts {
+				return
+			}
 			data, _ := json.Marshal(map[string]any{
 				"event":   "read_receipt",
 				"room_id": roomID,
@@ -529,4 +547,25 @@ func (c *contactNotifier) Notify(userID string, e notifications.Event) {
 		n = push.Notification{Title: "Contact removed", URL: "/contacts"}
 	}
 	c.notifyFn(userID, e, n)
+}
+
+// presencePrivacy adapts *profiles.Service to presence.PrivacyLookup so the
+// presence handler can gate visibility on the symmetric hide_presence flag
+// without taking a dependency on the profiles package.
+type presencePrivacy struct {
+	svc *profiles.Service
+}
+
+func (p presencePrivacy) HidePresenceByIDs(ctx context.Context, userIDs []string) (map[string]bool, error) {
+	flags, err := p.svc.GetPrivacyFlagsByIDs(ctx, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(flags))
+	for id, f := range flags {
+		if f.HidePresence {
+			out[id] = true
+		}
+	}
+	return out, nil
 }

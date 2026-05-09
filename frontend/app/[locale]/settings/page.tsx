@@ -13,6 +13,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import Modal from "@/components/ui/Modal"
 import PasswordField from "@/components/ui/PasswordField"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
+import Toggle from "@/components/ui/Toggle"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -47,6 +48,142 @@ function NotificationsSection() {
             </Button>
           )}
         </div>
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Privacy section
+// ---------------------------------------------------------------------------
+
+interface Preferences {
+  min_age: number | null
+  max_age: number | null
+  max_distance_km: number | null
+  gender_preference: string[]
+  locale: string
+  hide_distance_from_non_contacts: boolean
+  hide_presence: boolean
+  hide_read_receipts: boolean
+  hide_typing_indicator: boolean
+}
+
+type PrivacyKey =
+  | "hide_distance_from_non_contacts"
+  | "hide_presence"
+  | "hide_read_receipts"
+  | "hide_typing_indicator"
+
+function SymmetricBadge() {
+  const t = useTranslations("settings")
+  return (
+    <span className="rounded-full bg-brand-wash/60 px-2 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-brand-subtle ring-1 ring-brand-strong/40">
+      {t("symmetric")}
+    </span>
+  )
+}
+
+function PrivacySection({ token }: { token: string | undefined }) {
+  const t = useTranslations("settings")
+  const tc = useTranslations("common")
+  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  const [pendingKey, setPendingKey] = useState<PrivacyKey | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+    fetch(`${API_URL}/profiles/me/preferences`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Preferences | null) => {
+        if (data) setPrefs(data)
+      })
+      .catch(() => {
+        // Initial load failure leaves prefs=null → toggles render disabled.
+      })
+  }, [token])
+
+  async function update(key: PrivacyKey, next: boolean) {
+    if (!prefs || !token) return
+    const updated = { ...prefs, [key]: next }
+    setPrefs(updated)
+    setPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch(`${API_URL}/profiles/me/preferences`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(updated),
+      })
+      if (!res.ok) {
+        setError(t("privacyUpdateFailed"))
+        setPrefs(prefs)
+        return
+      }
+      const fresh: Preferences = await res.json()
+      setPrefs(fresh)
+    } catch {
+      setError(tc("networkError"))
+      setPrefs(prefs)
+    } finally {
+      setPendingKey(null)
+    }
+  }
+
+  return (
+    <section aria-labelledby="privacy-heading">
+      <h2 id="privacy-heading" className="mb-4 text-base font-semibold text-white">
+        {t("privacy")}
+      </h2>
+      <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
+        <div className="flex flex-col divide-y divide-gray-700">
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("hideDistance")}
+              description={t("hideDistanceDesc")}
+              checked={prefs?.hide_distance_from_non_contacts ?? false}
+              disabled={prefs === null || pendingKey !== null}
+              onChange={(e) => update("hide_distance_from_non_contacts", e.target.checked)}
+            />
+          </div>
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("hidePresence")}
+              description={t("hidePresenceDesc")}
+              badge={<SymmetricBadge />}
+              checked={prefs?.hide_presence ?? false}
+              disabled={prefs === null || pendingKey !== null}
+              onChange={(e) => update("hide_presence", e.target.checked)}
+            />
+          </div>
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("hideReadReceipts")}
+              description={t("hideReadReceiptsDesc")}
+              badge={<SymmetricBadge />}
+              checked={prefs?.hide_read_receipts ?? false}
+              disabled={prefs === null || pendingKey !== null}
+              onChange={(e) => update("hide_read_receipts", e.target.checked)}
+            />
+          </div>
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("hideTyping")}
+              description={t("hideTypingDesc")}
+              badge={<SymmetricBadge />}
+              checked={prefs?.hide_typing_indicator ?? false}
+              disabled={prefs === null || pendingKey !== null}
+              onChange={(e) => update("hide_typing_indicator", e.target.checked)}
+            />
+          </div>
+        </div>
+        {error && (
+          <p role="alert" className="border-t border-gray-700 px-5 py-3 text-sm text-red-400">
+            {error}
+          </p>
+        )}
       </div>
     </section>
   )
@@ -530,6 +667,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-10">
           <NotificationsSection />
           <LanguageSection token={token} />
+          <PrivacySection token={token} />
           <BlockedUsersSection token={token} />
           <PasswordSection token={token} />
           <DeleteAccountSection token={token} />

@@ -210,12 +210,27 @@ func (h *Hub) removeClient(client *Client) {
 
 // deliver sends data to all locally connected clients for roomID.
 // Slow clients (full send buffer) are removed.
+//
+// Privacy gate: when the frame's "event" field is "typing" or "read_receipt",
+// individual clients with the matching opt-out flag are skipped (symmetric
+// hide_typing_indicator / hide_read_receipts).
 func (h *Hub) deliver(roomID string, data []byte) {
 	clients, ok := h.rooms[roomID]
 	if !ok {
 		return
 	}
+	event := frameEvent(data)
 	for c := range clients {
+		switch event {
+		case "typing":
+			if c.hideTyping {
+				continue
+			}
+		case "read_receipt":
+			if c.hideReadReceipts {
+				continue
+			}
+		}
 		select {
 		case c.send <- data:
 		default:
@@ -224,6 +239,19 @@ func (h *Hub) deliver(roomID string, data []byte) {
 			close(c.send)
 		}
 	}
+}
+
+// frameEvent extracts the "event" field from a JSON frame without parsing
+// the full payload. Returns an empty string if the frame is not valid JSON
+// or has no "event" key.
+func frameEvent(data []byte) string {
+	var meta struct {
+		Event string `json:"event"`
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return ""
+	}
+	return meta.Event
 }
 
 // listenRedis forwards messages from the Redis channel into the broadcast

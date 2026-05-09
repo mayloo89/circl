@@ -237,6 +237,12 @@ func (m *mockProfileStore) SearchInterests(_ context.Context, _ string, _ int) (
 func (m *mockProfileStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) ([]profiles.BrowseProfile, error) {
 	return nil, nil
 }
+func (m *mockProfileStore) GetPrivacyFlagsByIDs(_ context.Context, _ []string) (map[string]profiles.PrivacyFlags, error) {
+	return map[string]profiles.PrivacyFlags{}, nil
+}
+func (m *mockProfileStore) AcceptedContactIDs(_ context.Context, _ string) ([]string, error) {
+	return nil, nil
+}
 
 func TestRegisterHandler_Success(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})

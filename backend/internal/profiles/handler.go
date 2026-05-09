@@ -66,19 +66,27 @@ type updateRequest struct {
 }
 
 type preferencesResponse struct {
-	MinAge           *int     `json:"min_age"`
-	MaxAge           *int     `json:"max_age"`
-	MaxDistanceKm    *int     `json:"max_distance_km"`
-	GenderPreference []string `json:"gender_preference"`
-	Locale           string   `json:"locale"`
+	MinAge                      *int     `json:"min_age"`
+	MaxAge                      *int     `json:"max_age"`
+	MaxDistanceKm               *int     `json:"max_distance_km"`
+	GenderPreference            []string `json:"gender_preference"`
+	Locale                      string   `json:"locale"`
+	HideDistanceFromNonContacts bool     `json:"hide_distance_from_non_contacts"`
+	HidePresence                bool     `json:"hide_presence"`
+	HideReadReceipts            bool     `json:"hide_read_receipts"`
+	HideTypingIndicator         bool     `json:"hide_typing_indicator"`
 }
 
 type updatePreferencesRequest struct {
-	MinAge           *int     `json:"min_age"`
-	MaxAge           *int     `json:"max_age"`
-	MaxDistanceKm    *int     `json:"max_distance_km"`
-	GenderPreference []string `json:"gender_preference"`
-	Locale           string   `json:"locale"`
+	MinAge                      *int     `json:"min_age"`
+	MaxAge                      *int     `json:"max_age"`
+	MaxDistanceKm               *int     `json:"max_distance_km"`
+	GenderPreference            []string `json:"gender_preference"`
+	Locale                      string   `json:"locale"`
+	HideDistanceFromNonContacts bool     `json:"hide_distance_from_non_contacts"`
+	HidePresence                bool     `json:"hide_presence"`
+	HideReadReceipts            bool     `json:"hide_read_receipts"`
+	HideTypingIndicator         bool     `json:"hide_typing_indicator"`
 }
 
 type addPhotoRequest struct {
@@ -274,11 +282,15 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 		}
 
 		prefs, err := svc.UpdateMyPreferences(r.Context(), userID, ProfilePreferences{
-			MinAge:           req.MinAge,
-			MaxAge:           req.MaxAge,
-			MaxDistanceKm:    req.MaxDistanceKm,
-			GenderPreference: genderPref,
-			Locale:           req.Locale,
+			MinAge:                      req.MinAge,
+			MaxAge:                      req.MaxAge,
+			MaxDistanceKm:               req.MaxDistanceKm,
+			GenderPreference:            genderPref,
+			Locale:                      req.Locale,
+			HideDistanceFromNonContacts: req.HideDistanceFromNonContacts,
+			HidePresence:                req.HidePresence,
+			HideReadReceipts:            req.HideReadReceipts,
+			HideTypingIndicator:         req.HideTypingIndicator,
 		})
 		if err != nil {
 			if errors.Is(err, ErrInvalidInput) {
@@ -494,11 +506,15 @@ func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {
 		locale = "es"
 	}
 	return preferencesResponse{
-		MinAge:           p.MinAge,
-		MaxAge:           p.MaxAge,
-		MaxDistanceKm:    p.MaxDistanceKm,
-		GenderPreference: genderPref,
-		Locale:           locale,
+		MinAge:                      p.MinAge,
+		MaxAge:                      p.MaxAge,
+		MaxDistanceKm:               p.MaxDistanceKm,
+		GenderPreference:            genderPref,
+		Locale:                      locale,
+		HideDistanceFromNonContacts: p.HideDistanceFromNonContacts,
+		HidePresence:                p.HidePresence,
+		HideReadReceipts:            p.HideReadReceipts,
+		HideTypingIndicator:         p.HideTypingIndicator,
 	}
 }
 
