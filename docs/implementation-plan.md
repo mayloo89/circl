@@ -213,6 +213,7 @@
 - [x] **Distance "Cualquiera/Any/Qualquer" label → `∞ km`** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — at the slider's max value, the localized "Any" label was visually long in ES/PT and read as a word rather than a quantity. Replaced by the `∞ km` glyph across all three locales (the symbol carries enough meaning that no per-locale word is needed).
 - [x] **Camera capture on profile avatar + gallery file inputs** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — onboarding photo and chat composer already had `capture` attributes; the profile edit page's avatar and showcase-photo `<input type="file">`s were missing them. Added `capture="user"` (front camera) on both since these are typically self-photos.
 - [x] **Contacts page pending-requests section** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — verified that `pending.length > 0` already gates the section so it disappears at zero. No code change; recorded here so the audit isn't lost.
+- [x] **`RangeSlider` value column wrap** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — fixed `w-12` (48px) was narrower than `"XXX km"` at `text-sm` with `tabular-nums` (~50px), so distance values intermittently wrapped (`362` / `km`). Bumped to `w-14` and added `whitespace-nowrap` so any future overflow surfaces visibly in QA instead of silently wrapping.
 
 ### i18n cleanup
 
