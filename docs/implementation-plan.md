@@ -232,7 +232,7 @@
 
 ### Polish
 
-- [x] **Admin user list shows real presence** — added an "Activity" column to `/admin/users` separate from the moderation `status` column. Backend handler enriches each `UserRecord` with `online` + `last_seen_at` via a new `PresenceLookupFunc` injected into `admin.NewHandler`; main.go provides the adapter on top of `presence.Store.GetPresence` so admin stays decoupled from the presence package. UI shows a green dot + "Online" when present, a gray dot + relative "X ago" using the existing `formatLastSeen` helper otherwise (with the absolute timestamp on hover via `title`), and "Never" for users who have never connected. Three handler tests cover the overlay, the Redis-down propagation as a 500, and the legacy nil-lookup fallback.
+- [x] **Admin user list shows real presence** ([PR #98](https://github.com/mayloo89/circl/pull/98)) — added an "Activity" column to `/admin/users` separate from the moderation `status` column. Backend handler enriches each `UserRecord` with `online` + `last_seen_at` via a new `PresenceLookupFunc` injected into `admin.NewHandler`; main.go provides the adapter on top of `presence.Store.GetPresence` so admin stays decoupled from the presence package. UI shows a green dot + "Online" when present, a gray dot + relative "X ago" using the existing `formatLastSeen` helper otherwise (with the absolute timestamp on hover via `title`), and "Never" for users who have never connected. Three handler tests cover the overlay, the Redis-down propagation as a 500, and the legacy nil-lookup fallback.
 - [ ] **Branded `not-found.tsx`** per locale.
 - [ ] **`app/manifest.ts`** for PWA add-to-home.
 - [ ] **Pull-to-refresh** on chat list and browse.
