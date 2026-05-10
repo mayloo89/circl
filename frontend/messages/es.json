@@ -283,6 +283,25 @@
     "genderNonBinary": "No binario",
     "genderPreferNotToSay": "Prefiero no decir",
     "genderCustom": "Personalizado",
+    "lookingFor": "Buscando",
+    "lookingForDesc": "Cuéntale a los demás qué estás buscando. Todos los campos son opcionales.",
+    "lookingForTagsLabel": "Qué",
+    "lookingForGenderLabel": "Quién",
+    "lookingForAgeRange": "Rango de edad",
+    "lookingForAgeMin": "Mín",
+    "lookingForAgeMax": "Máx",
+    "lookingForTag": {
+      "chatting": "Charlar",
+      "dating": "Citas",
+      "friendship": "Amistad",
+      "language_exchange": "Intercambio de idiomas"
+    },
+    "lookingForGenderOption": {
+      "Man": "Hombres",
+      "Woman": "Mujeres",
+      "Non-binary": "No binarios",
+      "Other": "Otros"
+    },
     "report": "Reportar usuario",
     "sendMessage": "Enviar mensaje",
     "addContact": "Agregar contacto",
@@ -472,6 +491,21 @@
     "moreOptions": "Más opciones",
     "viewPhoto": "Ver foto de perfil",
     "previewBanner": "Así es como tu perfil aparece para los demás",
+    "lookingFor": "Buscando",
+    "lookingForAgeChip": "Edad {range}",
+    "ageUpTo": "hasta {age}",
+    "lookingForTag": {
+      "chatting": "Charlar",
+      "dating": "Citas",
+      "friendship": "Amistad",
+      "language_exchange": "Intercambio de idiomas"
+    },
+    "lookingForGenderOption": {
+      "Man": "Hombres",
+      "Woman": "Mujeres",
+      "Non-binary": "No binarios",
+      "Other": "Otros"
+    },
     "exitPreview": "Salir de la vista previa",
     "actions": {
       "message": "Mensaje",

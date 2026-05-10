@@ -25,6 +25,30 @@ const MAX_BIO = 280
 const MAX_PHOTOS = 6
 const MAX_INTERESTS = 20
 
+// Canonical "Looking for" tag keys — must match backend's LookingForTags.
+// Stored verbatim; the UI translates each via `profile.lookingForTag.<key>`.
+const LOOKING_FOR_TAGS = ["chatting", "dating", "friendship", "language_exchange"] as const
+const MAX_LOOKING_FOR_TAGS = LOOKING_FOR_TAGS.length
+
+// Canonical "Looking for" gender keys — must match backend's LookingForGenders
+// and the browse filter panel's GENDER_OPTIONS so the two surfaces stay
+// aligned. The user's own gender uses a different (more granular) set; this
+// one is intentionally narrow because it describes who you want to meet.
+const LOOKING_FOR_GENDERS = ["Man", "Woman", "Non-binary", "Other"] as const
+
+// parseAgeOrNull turns the controlled-input string into either an int the
+// API can write or null when the user has emptied the field. Out-of-range
+// values are clamped to null so an obviously-bad client value doesn't get
+// rejected by the backend on save — backend validation still fires for
+// any value in range that violates the constraints.
+function parseAgeOrNull(s: string): number | null {
+  const trimmed = s.trim()
+  if (trimmed === "") return null
+  const n = Number.parseInt(trimmed, 10)
+  if (Number.isNaN(n) || n < 18 || n > 120) return null
+  return n
+}
+
 const GENDER_OPTIONS = [
   "Male",
   "Female",
@@ -132,6 +156,10 @@ interface Profile {
   latitude?: number
   longitude?: number
   interests: string[]
+  looking_for_tags: string[]
+  looking_for_gender: string[]
+  looking_for_age_min: number | null
+  looking_for_age_max: number | null
   photos: ProfilePhoto[]
 }
 
@@ -251,6 +279,10 @@ export default function ProfilePage() {
   const [locationEdited, setLocationEdited] = useState(false)
   const [interestInput, setInterestInput] = useState("")
   const [interestFocused, setInterestFocused] = useState(false)
+  const [lookingForTags, setLookingForTags] = useState<string[]>([])
+  const [lookingForGender, setLookingForGender] = useState<string[]>([])
+  const [lookingForAgeMin, setLookingForAgeMin] = useState<string>("")
+  const [lookingForAgeMax, setLookingForAgeMax] = useState<string>("")
   const locationRef = useRef<HTMLDivElement>(null)
   const interestRef = useRef<HTMLDivElement>(null)
   const [formError, setFormError] = useState("")
@@ -298,7 +330,11 @@ export default function ProfilePage() {
     (dateOfBirth ?? "") !== (profile.date_of_birth ?? "") ||
     effectiveGender(gender, genderOther) !== profile.gender ||
     locationText !== profile.location_text ||
-    JSON.stringify(interests) !== JSON.stringify(profile.interests)
+    JSON.stringify(interests) !== JSON.stringify(profile.interests) ||
+    JSON.stringify([...lookingForTags].sort()) !== JSON.stringify([...(profile.looking_for_tags ?? [])].sort()) ||
+    JSON.stringify([...lookingForGender].sort()) !== JSON.stringify([...(profile.looking_for_gender ?? [])].sort()) ||
+    parseAgeOrNull(lookingForAgeMin) !== (profile.looking_for_age_min ?? null) ||
+    parseAgeOrNull(lookingForAgeMax) !== (profile.looking_for_age_max ?? null)
   )
 
   useEffect(() => {
@@ -323,6 +359,10 @@ export default function ProfilePage() {
         setLocationLat(data.latitude ?? null)
         setLocationLng(data.longitude ?? null)
         setInterests(data.interests ?? [])
+        setLookingForTags(data.looking_for_tags ?? [])
+        setLookingForGender(data.looking_for_gender ?? [])
+        setLookingForAgeMin(data.looking_for_age_min != null ? String(data.looking_for_age_min) : "")
+        setLookingForAgeMax(data.looking_for_age_max != null ? String(data.looking_for_age_max) : "")
       })
       .catch(() => setLoadError("Failed to load profile."))
       .finally(() => setLoading(false))
@@ -345,6 +385,10 @@ export default function ProfilePage() {
         longitude: locationLng,
         interests,
         date_of_birth: dateOfBirth || undefined,
+        looking_for_tags: lookingForTags,
+        looking_for_gender: lookingForGender,
+        looking_for_age_min: parseAgeOrNull(lookingForAgeMin),
+        looking_for_age_max: parseAgeOrNull(lookingForAgeMax),
       }
 
       const res = await fetch(`${API_URL}/profiles/me`, {
@@ -790,6 +834,100 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Looking for — public stated intent, distinct from the private
+                discovery filters in /browse. All fields are optional. */}
+            <div className="space-y-3 rounded-md border border-gray-800 bg-gray-900/40 p-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-200">{t("lookingFor")}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{t("lookingForDesc")}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("lookingForTagsLabel")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {LOOKING_FOR_TAGS.map((tag) => {
+                    const active = lookingForTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() =>
+                          setLookingForTags((prev) =>
+                            prev.includes(tag) ? prev.filter((x) => x !== tag) : prev.length >= MAX_LOOKING_FOR_TAGS ? prev : [...prev, tag],
+                          )
+                        }
+                        className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
+                          active
+                            ? "bg-brand-primary text-white ring-brand-hover"
+                            : "bg-gray-800 text-gray-400 ring-gray-700 hover:text-gray-200"
+                        }`}
+                      >
+                        {t(`lookingForTag.${tag}` as Parameters<typeof t>[0])}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("lookingForGenderLabel")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {LOOKING_FOR_GENDERS.map((g) => {
+                    const active = lookingForGender.includes(g)
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() =>
+                          setLookingForGender((prev) =>
+                            prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g],
+                          )
+                        }
+                        className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
+                          active
+                            ? "bg-brand-primary text-white ring-brand-hover"
+                            : "bg-gray-800 text-gray-400 ring-gray-700 hover:text-gray-200"
+                        }`}
+                      >
+                        {t(`lookingForGenderOption.${g}` as Parameters<typeof t>[0])}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("lookingForAgeRange")}</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={18}
+                    max={120}
+                    placeholder={t("lookingForAgeMin")}
+                    aria-label={t("lookingForAgeMin")}
+                    value={lookingForAgeMin}
+                    onChange={(e) => setLookingForAgeMin(e.target.value)}
+                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  />
+                  <span className="text-gray-500">–</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={18}
+                    max={120}
+                    placeholder={t("lookingForAgeMax")}
+                    aria-label={t("lookingForAgeMax")}
+                    value={lookingForAgeMax}
+                    onChange={(e) => setLookingForAgeMax(e.target.value)}
+                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  />
+                </div>
+              </div>
             </div>
 
             {formError && <p className="text-sm text-red-400">{formError}</p>}

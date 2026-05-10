@@ -283,6 +283,25 @@
     "genderNonBinary": "Non-binary",
     "genderPreferNotToSay": "Prefer not to say",
     "genderCustom": "Custom",
+    "lookingFor": "Looking for",
+    "lookingForDesc": "Tell others what you're looking for. All fields are optional.",
+    "lookingForTagsLabel": "What",
+    "lookingForGenderLabel": "Who",
+    "lookingForAgeRange": "Age range",
+    "lookingForAgeMin": "Min",
+    "lookingForAgeMax": "Max",
+    "lookingForTag": {
+      "chatting": "Chatting",
+      "dating": "Dating",
+      "friendship": "Friendship",
+      "language_exchange": "Language exchange"
+    },
+    "lookingForGenderOption": {
+      "Man": "Men",
+      "Woman": "Women",
+      "Non-binary": "Non-binary",
+      "Other": "Other"
+    },
     "report": "Report user",
     "sendMessage": "Send message",
     "addContact": "Add contact",
@@ -473,6 +492,21 @@
     "viewPhoto": "View profile photo",
     "previewBanner": "This is how your profile appears to others",
     "exitPreview": "Exit preview",
+    "lookingFor": "Looking for",
+    "lookingForAgeChip": "Ages {range}",
+    "ageUpTo": "up to {age}",
+    "lookingForTag": {
+      "chatting": "Chatting",
+      "dating": "Dating",
+      "friendship": "Friendship",
+      "language_exchange": "Language exchange"
+    },
+    "lookingForGenderOption": {
+      "Man": "Men",
+      "Woman": "Women",
+      "Non-binary": "Non-binary",
+      "Other": "Other"
+    },
     "actions": {
       "message": "Message",
       "addContact": "Add contact",

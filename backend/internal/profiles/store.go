@@ -52,7 +52,9 @@ const profileSelectSQL = `
 	            WHERE pi.user_id = p.user_id
 	            ORDER BY i.name
 	       ) AS interests,
-	       p.onboarded_at
+	       p.onboarded_at,
+	       p.looking_for_tags, p.looking_for_gender,
+	       p.looking_for_age_min, p.looking_for_age_max
 	  FROM profiles p`
 
 func scanProfile(row rowScanner) (*Profile, error) {
@@ -61,6 +63,8 @@ func scanProfile(row rowScanner) (*Profile, error) {
 		&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
 		&p.Latitude, &p.Longitude, &p.Interests, &p.OnboardedAt,
+		&p.LookingForTags, &p.LookingForGender,
+		&p.LookingForAgeMin, &p.LookingForAgeMax,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -69,6 +73,12 @@ func scanProfile(row rowScanner) (*Profile, error) {
 	}
 	if p.Interests == nil {
 		p.Interests = []string{}
+	}
+	if p.LookingForTags == nil {
+		p.LookingForTags = []string{}
+	}
+	if p.LookingForGender == nil {
+		p.LookingForGender = []string{}
 	}
 	return &p, nil
 }
@@ -106,31 +116,51 @@ func (s *pgStore) IsUsernameAvailable(ctx context.Context, username string) (boo
 // Upsert inserts or updates the profile for the given user ID.
 // Interests are managed separately via SyncInterests.
 func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*Profile, error) {
+	tags := in.LookingForTags
+	if tags == nil {
+		tags = []string{}
+	}
+	genders := in.LookingForGender
+	if genders == nil {
+		genders = []string{}
+	}
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO profiles (user_id, username, display_name, bio, avatar_url,
 		                       date_of_birth, gender, location_text, latitude, longitude,
-		                       onboarded_at)
+		                       onboarded_at,
+		                       looking_for_tags, looking_for_gender,
+		                       looking_for_age_min, looking_for_age_max)
 		 VALUES ($1, NULLIF($2, ''), $3, $4, NULLIF($5, ''),
 		         $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10,
-		         $11)
+		         $11,
+		         $12, $13,
+		         $14, $15)
 		 ON CONFLICT (user_id) DO UPDATE
-		    SET username      = COALESCE(NULLIF(EXCLUDED.username, ''), profiles.username),
-		        display_name  = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
-		        bio           = EXCLUDED.bio,
-		        avatar_url    = EXCLUDED.avatar_url,
-		        date_of_birth = EXCLUDED.date_of_birth,
-		        gender        = EXCLUDED.gender,
-		        location_text = EXCLUDED.location_text,
-		        latitude      = EXCLUDED.latitude,
-		        longitude     = EXCLUDED.longitude,
-		        onboarded_at  = COALESCE(profiles.onboarded_at, EXCLUDED.onboarded_at),
-		        updated_at    = now()
+		    SET username             = COALESCE(NULLIF(EXCLUDED.username, ''), profiles.username),
+		        display_name         = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
+		        bio                  = EXCLUDED.bio,
+		        avatar_url           = EXCLUDED.avatar_url,
+		        date_of_birth        = EXCLUDED.date_of_birth,
+		        gender               = EXCLUDED.gender,
+		        location_text        = EXCLUDED.location_text,
+		        latitude             = EXCLUDED.latitude,
+		        longitude            = EXCLUDED.longitude,
+		        onboarded_at         = COALESCE(profiles.onboarded_at, EXCLUDED.onboarded_at),
+		        looking_for_tags     = EXCLUDED.looking_for_tags,
+		        looking_for_gender   = EXCLUDED.looking_for_gender,
+		        looking_for_age_min  = EXCLUDED.looking_for_age_min,
+		        looking_for_age_max  = EXCLUDED.looking_for_age_max,
+		        updated_at           = now()
 		 RETURNING id, user_id, COALESCE(username, ''), display_name, bio, COALESCE(avatar_url, ''),
 		           date_of_birth, COALESCE(gender, ''), COALESCE(location_text, ''),
-		           latitude, longitude, onboarded_at`,
+		           latitude, longitude, onboarded_at,
+		           looking_for_tags, looking_for_gender,
+		           looking_for_age_min, looking_for_age_max`,
 		userID, in.Username, in.DisplayName, in.Bio, in.AvatarURL,
 		in.DateOfBirth, in.Gender, in.LocationText, in.Latitude, in.Longitude,
 		in.OnboardedAt,
+		tags, genders,
+		in.LookingForAgeMin, in.LookingForAgeMax,
 	)
 
 	var p Profile
@@ -138,6 +168,8 @@ func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*
 		&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.Bio, &p.AvatarURL,
 		&p.DateOfBirth, &p.Gender, &p.LocationText,
 		&p.Latitude, &p.Longitude, &p.OnboardedAt,
+		&p.LookingForTags, &p.LookingForGender,
+		&p.LookingForAgeMin, &p.LookingForAgeMax,
 	); err != nil {
 		if isUniqueViolation(err, "profiles_username_key") {
 			return nil, ErrUsernameTaken
@@ -146,6 +178,12 @@ func (s *pgStore) Upsert(ctx context.Context, userID string, in ProfileInput) (*
 	}
 
 	p.Interests = []string{}
+	if p.LookingForTags == nil {
+		p.LookingForTags = []string{}
+	}
+	if p.LookingForGender == nil {
+		p.LookingForGender = []string{}
+	}
 	return &p, nil
 }
 

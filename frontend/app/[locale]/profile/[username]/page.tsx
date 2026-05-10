@@ -33,6 +33,10 @@ interface PublicProfile {
   location_text: string
   interests: string[]
   photos: ProfilePhoto[]
+  looking_for_tags: string[]
+  looking_for_gender: string[]
+  looking_for_age_min: number | null
+  looking_for_age_max: number | null
 }
 
 interface SentRequest     { contact_id: string; user_id: string }
@@ -50,6 +54,51 @@ function formatAge(dob?: string): string | null {
   const m = today.getMonth() - d.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
   return String(age)
+}
+
+// LookingForBlock renders the public-profile "Looking for" section when at
+// least one field is set. Tags / genders display as localized chips; the
+// age range is rendered as "min–max", "min+", or "up to max" depending on
+// which bounds are set.
+function LookingForBlock({ profile }: { profile: PublicProfile }) {
+  const t = useTranslations("publicProfile")
+  const tags = profile.looking_for_tags ?? []
+  const genders = profile.looking_for_gender ?? []
+  const min = profile.looking_for_age_min
+  const max = profile.looking_for_age_max
+  let ageLabel: string | null = null
+  if (min !== null && max !== null) ageLabel = `${min}–${max}`
+  else if (min !== null) ageLabel = `${min}+`
+  else if (max !== null) ageLabel = t("ageUpTo", { age: max })
+
+  return (
+    <div className="space-y-2 rounded-md border border-gray-800 bg-gray-900/40 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{t("lookingFor")}</p>
+      <div className="flex flex-wrap gap-2">
+        {tags.map((tag) => (
+          <span
+            key={`tag-${tag}`}
+            className="rounded-full bg-brand-primary/20 px-3 py-1 text-xs font-medium text-brand-subtle ring-1 ring-brand-primary/60"
+          >
+            {t(`lookingForTag.${tag}` as Parameters<typeof t>[0])}
+          </span>
+        ))}
+        {genders.map((g) => (
+          <span
+            key={`g-${g}`}
+            className="rounded-full bg-brand-wash/50 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
+          >
+            {t(`lookingForGenderOption.${g}` as Parameters<typeof t>[0])}
+          </span>
+        ))}
+        {ageLabel && (
+          <span className="rounded-full bg-gray-800 px-3 py-1 text-xs text-gray-300 ring-1 ring-gray-700">
+            {t("lookingForAgeChip", { range: ageLabel })}
+          </span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function HeroSkeleton() {
@@ -519,6 +568,14 @@ export default function PublicProfilePage() {
               </span>
             ))}
           </div>
+        )}
+
+        {/* Looking for — only render the section if any field has a value. */}
+        {(profile.looking_for_tags?.length > 0
+          || profile.looking_for_gender?.length > 0
+          || profile.looking_for_age_min !== null
+          || profile.looking_for_age_max !== null) && (
+          <LookingForBlock profile={profile} />
         )}
 
         {/* Desktop inline actions */}
