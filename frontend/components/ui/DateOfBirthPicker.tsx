@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useLocale } from "next-intl"
 
 function daysInMonth(month: number, year: number): number {
   if (!month) return 31
@@ -32,11 +33,18 @@ function parseParts(value: string): [number, number, number] {
   ]
 }
 
+// Locales whose conventional date format leads with the month rather than
+// the day. Everywhere else (including all of Latin America and Iberia)
+// reads day-first, so DMY is the safe default.
+const MONTH_FIRST_LOCALES = new Set(["en"])
+
 export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, error, labels }: Props) {
   const [y0, m0, d0] = parseParts(value)
   const [localYear,  setLocalYear]  = useState(y0)
   const [localMonth, setLocalMonth] = useState(m0)
   const [localDay,   setLocalDay]   = useState(d0)
+  const locale = useLocale()
+  const monthFirst = MONTH_FIRST_LOCALES.has(locale)
 
   function emit(y: number, m: number, d: number) {
     if (!y || !m || !d) { onChange(""); return }
@@ -84,31 +92,63 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
         <label className="block text-sm font-medium text-gray-300">{label}</label>
       )}
       <div className={`flex gap-2${label ? " mt-1" : ""}`}>
-        <select
-          aria-label={dayLabel}
-          value={localDay || ""}
-          onChange={(e) => handleDay(parseInt(e.target.value, 10) || 0)}
-          onBlur={onBlur}
-          className={baseSelect}
-        >
-          <option value="">{dayLabel}</option>
-          {Array.from({ length: totalDays }, (_, i) => i + 1).map((d) => (
-            <option key={d} value={d}>{String(d).padStart(2, "0")}</option>
-          ))}
-        </select>
+        {monthFirst ? (
+          <>
+            <select
+              aria-label={monthLabel}
+              value={localMonth || ""}
+              onChange={(e) => handleMonth(parseInt(e.target.value, 10) || 0)}
+              onBlur={onBlur}
+              className={baseSelect}
+            >
+              <option value="">{monthLabel}</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+              ))}
+            </select>
 
-        <select
-          aria-label={monthLabel}
-          value={localMonth || ""}
-          onChange={(e) => handleMonth(parseInt(e.target.value, 10) || 0)}
-          onBlur={onBlur}
-          className={baseSelect}
-        >
-          <option value="">{monthLabel}</option>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
-          ))}
-        </select>
+            <select
+              aria-label={dayLabel}
+              value={localDay || ""}
+              onChange={(e) => handleDay(parseInt(e.target.value, 10) || 0)}
+              onBlur={onBlur}
+              className={baseSelect}
+            >
+              <option value="">{dayLabel}</option>
+              {Array.from({ length: totalDays }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>{String(d).padStart(2, "0")}</option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <>
+            <select
+              aria-label={dayLabel}
+              value={localDay || ""}
+              onChange={(e) => handleDay(parseInt(e.target.value, 10) || 0)}
+              onBlur={onBlur}
+              className={baseSelect}
+            >
+              <option value="">{dayLabel}</option>
+              {Array.from({ length: totalDays }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>{String(d).padStart(2, "0")}</option>
+              ))}
+            </select>
+
+            <select
+              aria-label={monthLabel}
+              value={localMonth || ""}
+              onChange={(e) => handleMonth(parseInt(e.target.value, 10) || 0)}
+              onBlur={onBlur}
+              className={baseSelect}
+            >
+              <option value="">{monthLabel}</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+              ))}
+            </select>
+          </>
+        )}
 
         <select
           id={id}
