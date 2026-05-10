@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -40,7 +41,7 @@ func superAdminRequest(r *http.Request) *http.Request {
 
 // newHandler builds an admin handler backed by the given mock store.
 func newHandler(store admin.Store) http.Handler {
-	return admin.NewHandler(admin.NewService(store))
+	return admin.NewHandler(admin.NewService(store), nil)
 }
 
 // --- GET /stats ---
@@ -154,6 +155,113 @@ func TestListUsers_Success(t *testing.T) {
 	}
 	if len(body.Users) != 2 {
 		t.Errorf("len(users) = %d, want 2", len(body.Users))
+	}
+}
+
+// TestListUsers_PresenceOverlay verifies the handler enriches each user
+// row with online + last_seen_at from the injected presence lookup, and
+// that users absent from the lookup map default to offline / no last-seen.
+func TestListUsers_PresenceOverlay(t *testing.T) {
+	now := time.Now().UTC()
+	users := []*admin.UserRecord{
+		{ID: "u-1", Email: "a@example.com", Status: "active"},
+		{ID: "u-2", Email: "b@example.com", Status: "active"},
+		{ID: "u-3", Email: "c@example.com", Status: "active"},
+	}
+	store := &mockStore{users: users, usersTotal: 3}
+	lookup := admin.PresenceLookupFunc(func(_ context.Context, ids []string) (map[string]admin.UserPresence, error) {
+		// Capture the ids the handler passed for assertion.
+		if len(ids) != 3 {
+			t.Errorf("lookup called with %d ids, want 3", len(ids))
+		}
+		return map[string]admin.UserPresence{
+			"u-1": {Online: true, LastSeenAt: &now},
+			"u-2": {Online: false, LastSeenAt: &now},
+			// u-3 absent → handler should treat as offline / no last-seen.
+		}, nil
+	})
+
+	h := admin.NewHandler(admin.NewService(store), lookup)
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/users", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var body struct {
+		Users []struct {
+			ID         string     `json:"id"`
+			Online     bool       `json:"online"`
+			LastSeenAt *time.Time `json:"last_seen_at"`
+		} `json:"users"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(body.Users) != 3 {
+		t.Fatalf("len(users) = %d, want 3", len(body.Users))
+	}
+	if !body.Users[0].Online || body.Users[0].LastSeenAt == nil {
+		t.Errorf("u-1 should be online with last_seen, got %+v", body.Users[0])
+	}
+	if body.Users[1].Online || body.Users[1].LastSeenAt == nil {
+		t.Errorf("u-2 should be offline with last_seen, got %+v", body.Users[1])
+	}
+	if body.Users[2].Online || body.Users[2].LastSeenAt != nil {
+		t.Errorf("u-3 should be offline with no last_seen (absent from lookup), got %+v", body.Users[2])
+	}
+}
+
+// TestListUsers_PresenceLookupError surfaces a 500 if the presence lookup
+// fails — admins shouldn't see partial / stale presence silently.
+func TestListUsers_PresenceLookupError(t *testing.T) {
+	store := &mockStore{
+		users:      []*admin.UserRecord{{ID: "u-1", Email: "a@example.com", Status: "active"}},
+		usersTotal: 1,
+	}
+	lookup := admin.PresenceLookupFunc(func(_ context.Context, _ []string) (map[string]admin.UserPresence, error) {
+		return nil, errors.New("redis down")
+	})
+
+	h := admin.NewHandler(admin.NewService(store), lookup)
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/users", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// TestListUsers_NilPresenceLookupSkipsEnrichment proves passing nil for
+// the lookup is the legacy / no-presence path — users are returned with
+// online=false, last_seen_at omitted, and no extra calls.
+func TestListUsers_NilPresenceLookupSkipsEnrichment(t *testing.T) {
+	store := &mockStore{
+		users:      []*admin.UserRecord{{ID: "u-1", Email: "a@example.com", Status: "active"}},
+		usersTotal: 1,
+	}
+	h := admin.NewHandler(admin.NewService(store), nil)
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/users", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var body struct {
+		Users []struct {
+			Online     bool       `json:"online"`
+			LastSeenAt *time.Time `json:"last_seen_at"`
+		} `json:"users"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if body.Users[0].Online || body.Users[0].LastSeenAt != nil {
+		t.Errorf("expected zero-value presence on nil lookup, got %+v", body.Users[0])
 	}
 }
 

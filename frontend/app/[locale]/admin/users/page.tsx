@@ -6,6 +6,7 @@ import { Link } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
+import { formatLastSeen } from "@/hooks/usePresence"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -17,6 +18,8 @@ interface UserRecord {
   status: string
   role: string
   created_at: string
+  online: boolean
+  last_seen_at: string | null
 }
 
 const STATUS_OPTIONS = ["", "active", "suspended", "banned"]
@@ -333,6 +336,7 @@ export default function AdminUsersPage() {
             <tr>
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Activity</th>
               <th className="px-4 py-3">Joined</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -343,13 +347,14 @@ export default function AdminUsersPage() {
                 <tr key={i} className="bg-gray-950">
                   <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-32 ml-auto" /></td>
                 </tr>
               ))
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-500 bg-gray-950">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500 bg-gray-950">
                   No users found
                 </td>
               </tr>
@@ -378,6 +383,21 @@ export default function AdminUsersPage() {
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[u.status] ?? "bg-gray-800 text-gray-400"}`}>
                       {u.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-400">
+                    {u.online ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
+                        <span className="text-green-400">Online</span>
+                      </span>
+                    ) : u.last_seen_at ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-gray-600" aria-hidden="true" />
+                        <span title={new Date(u.last_seen_at).toLocaleString()}>{formatLastSeen(u.last_seen_at)}</span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">Never</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-400">
                     {new Date(u.created_at).toLocaleDateString()}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mayloo89/circl/backend/internal/apierror"
@@ -13,14 +14,18 @@ import (
 
 // handler handles admin HTTP routes.
 type handler struct {
-	svc *Service
+	svc      *Service
+	presence PresenceLookupFunc
 }
 
 // NewHandler returns an http.Handler covering all admin routes.
 // All routes require the caller to be an admin (checked via RequireAdmin middleware).
 // Must be mounted behind RequireAuth so the admin flag is already in context.
-func NewHandler(svc *Service) http.Handler {
-	h := &handler{svc: svc}
+//
+// presence may be nil; in that case the user list omits live presence
+// (legacy behavior) and existing tests don't need to wire it up.
+func NewHandler(svc *Service, presence PresenceLookupFunc) http.Handler {
+	h := &handler{svc: svc, presence: presence}
 	r := chi.NewRouter()
 	r.Use(middleware.RequireAdmin)
 	r.Get("/stats", h.getStats)
@@ -75,8 +80,35 @@ func (h *handler) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Overlay live presence onto each user record. We do this at the
+	// handler layer rather than in the service so admin stays decoupled
+	// from the presence package; the lookup is injected via NewHandler.
+	var pres map[string]UserPresence
+	if h.presence != nil && len(users) > 0 {
+		ids := make([]string, len(users))
+		for i, u := range users {
+			ids[i] = u.ID
+		}
+		pres, err = h.presence(r.Context(), ids)
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+	}
+
+	type listItem struct {
+		*UserRecord
+		Online     bool       `json:"online"`
+		LastSeenAt *time.Time `json:"last_seen_at,omitzero"`
+	}
+	enriched := make([]listItem, len(users))
+	for i, u := range users {
+		p := pres[u.ID]
+		enriched[i] = listItem{UserRecord: u, Online: p.Online, LastSeenAt: p.LastSeenAt}
+	}
+
 	apierror.WriteJSON(w, http.StatusOK, map[string]any{
-		"users": users,
+		"users": enriched,
 		"total": total,
 	})
 }
