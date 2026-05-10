@@ -18,9 +18,12 @@ import { ToastProvider } from "@/components/ui/Toast"
 
 function SessionGuard() {
   const { data: session } = useSession()
+  const signingOut = useRef(false)
   useEffect(() => {
+    if (signingOut.current) return
     if (session?.error === "TokenExpired" || session?.error === "RefreshFailed") {
-      signOut({ callbackUrl: "/login" })
+      signingOut.current = true
+      signOut({ callbackUrl: "/login", redirect: true })
     }
   }, [session?.error])
   return null
