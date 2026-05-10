@@ -104,6 +104,63 @@ type NotificationFlags struct {
 	System          bool
 }
 
+// Optional represents a JSON field that distinguishes "omitted" (Set=false),
+// "explicit null" (Set=true, Value=nil), and "present value" (Set=true,
+// Value=&v). Used by partial-update request payloads where the three
+// states have distinct semantics — for example, the browse "Clear filters"
+// affordance posts `{"min_age": null}` to clear, while a locale-only PUT
+// omits min_age entirely and expects the existing value to be preserved.
+type Optional[T any] struct {
+	Set   bool
+	Value *T
+}
+
+// UnmarshalJSON marks Set=true on any present field, including JSON null,
+// and decodes a non-null value into Value.
+func (o *Optional[T]) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	if len(b) == 4 && string(b) == "null" {
+		o.Value = nil
+		return nil
+	}
+	var v T
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	o.Value = &v
+	return nil
+}
+
+// PreferencesUpdate is the partial-update payload for UpsertPreferences.
+// Each field's "is this field present in the request?" semantic is
+// expressed differently:
+//   - Optional[int] for the three nullable filter ints, since "set to
+//     NULL" must be distinguishable from "omit".
+//   - *T for fields whose null state is meaningless (the caller would
+//     never post `{"locale": null}` or `{"hide_presence": null}`); a nil
+//     pointer there means "omit, preserve existing".
+//   - *[]string for gender_preference: nil means omit; an empty slice
+//     pointer means "clear".
+//
+// The store maps Set=false / nil-pointer to "leave column untouched" and
+// Set=true / non-nil-pointer to "overwrite with this value (including
+// NULL when applicable)".
+type PreferencesUpdate struct {
+	MinAge                      Optional[int]
+	MaxAge                      Optional[int]
+	MaxDistanceKm               Optional[int]
+	GenderPreference            *[]string
+	Locale                      *string
+	HideDistanceFromNonContacts *bool
+	HidePresence                *bool
+	HideReadReceipts            *bool
+	HideTypingIndicator         *bool
+	NotifyChatMessages          *bool
+	NotifyContactRequests       *bool
+	NotifyChannelMentions       *bool
+	NotifySystem                *bool
+}
+
 // InterestSuggestion is a suggested interest with its global usage count.
 type InterestSuggestion struct {
 	Name  string
@@ -178,7 +235,7 @@ type Store interface {
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (map[string]PrivacyFlags, error)
 	AcceptedContactIDs(ctx context.Context, userID string) ([]string, error)
-	UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error)
+	UpsertPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
 	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) ([]BrowseProfile, error)
 }
@@ -361,21 +418,24 @@ func (s *Service) GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (m
 	return s.store.GetPrivacyFlagsByIDs(ctx, userIDs)
 }
 
-// UpdateMyPreferences validates and persists discovery preferences.
-func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error) {
-	if prefs.MinAge != nil && *prefs.MinAge < 18 {
+// UpdateMyPreferences validates the present fields of update and applies
+// them via partial upsert. Fields the caller did not set preserve the
+// existing DB value (or fall back to the SQL column default when the row
+// is new). Explicit JSON null on a nullable filter int clears the column.
+func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error) {
+	if v := update.MinAge.Value; v != nil && *v < 18 {
 		return nil, fmt.Errorf("%w: min_age must be at least 18", ErrInvalidInput)
 	}
-	if prefs.MaxAge != nil && *prefs.MaxAge > 120 {
+	if v := update.MaxAge.Value; v != nil && *v > 120 {
 		return nil, fmt.Errorf("%w: max_age must be at most 120", ErrInvalidInput)
 	}
-	if prefs.MinAge != nil && prefs.MaxAge != nil && *prefs.MinAge > *prefs.MaxAge {
+	if min, max := update.MinAge.Value, update.MaxAge.Value; min != nil && max != nil && *min > *max {
 		return nil, fmt.Errorf("%w: min_age must be less than or equal to max_age", ErrInvalidInput)
 	}
-	if prefs.MaxDistanceKm != nil && *prefs.MaxDistanceKm <= 0 {
+	if v := update.MaxDistanceKm.Value; v != nil && *v <= 0 {
 		return nil, fmt.Errorf("%w: max_distance_km must be positive", ErrInvalidInput)
 	}
-	return s.store.UpsertPreferences(ctx, userID, prefs)
+	return s.store.UpsertPreferences(ctx, userID, update)
 }
 
 // Browse returns a cursor-paginated list of profiles visible to the given user,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -17,12 +18,18 @@ type rowScanner interface {
 
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) rowScanner
+	Exec(ctx context.Context, sql string, args ...any) error
 }
 
 type pgxQuerier struct{ pool *pgxpool.Pool }
 
 func (q *pgxQuerier) QueryRow(ctx context.Context, sql string, args ...any) rowScanner {
 	return q.pool.QueryRow(ctx, sql, args...)
+}
+
+func (q *pgxQuerier) Exec(ctx context.Context, sql string, args ...any) error {
+	_, err := q.pool.Exec(ctx, sql, args...)
+	return err
 }
 
 type pgStore struct {
@@ -591,59 +598,85 @@ func (s *pgStore) AcceptedContactIDs(ctx context.Context, userID string) ([]stri
 	return ids, rows.Err()
 }
 
-// UpsertPreferences inserts or updates the discovery and privacy preferences
-// for the given user.
-func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, prefs ProfilePreferences) (*ProfilePreferences, error) {
-	genderPref := prefs.GenderPreference
-	if genderPref == nil {
-		genderPref = []string{}
-	}
-	locale := prefs.Locale
-	if locale == "" {
-		locale = "es"
+// UpsertPreferences applies a partial update to the user's preferences row,
+// inserting one with column defaults if it does not yet exist. Each field
+// in update is independently dispatched: fields the caller did not specify
+// (Optional[T].Set == false, or nil pointer) are omitted from both the
+// INSERT column list and the ON CONFLICT SET clause, so existing values
+// are preserved on update and the SQL DEFAULT is applied on insert.
+func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error) {
+	cols := []string{"user_id"}
+	placeholders := []string{"$1"}
+	sets := []string{"updated_at = now()"}
+	args := []any{userID}
+
+	addField := func(col string, value any) {
+		idx := len(args) + 1
+		cols = append(cols, col)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", idx))
+		sets = append(sets, fmt.Sprintf("%s = $%d", col, idx))
+		args = append(args, value)
 	}
 
-	row := s.db.QueryRow(ctx,
-		`INSERT INTO profile_preferences (
-		     user_id, min_age, max_age, max_distance_km, gender_preference, locale,
-		     hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
-		     notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system
-		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-		 ON CONFLICT (user_id) DO UPDATE
-		    SET min_age                         = EXCLUDED.min_age,
-		        max_age                         = EXCLUDED.max_age,
-		        max_distance_km                 = EXCLUDED.max_distance_km,
-		        gender_preference               = EXCLUDED.gender_preference,
-		        locale                          = EXCLUDED.locale,
-		        hide_distance_from_non_contacts = EXCLUDED.hide_distance_from_non_contacts,
-		        hide_presence                   = EXCLUDED.hide_presence,
-		        hide_read_receipts              = EXCLUDED.hide_read_receipts,
-		        hide_typing_indicator           = EXCLUDED.hide_typing_indicator,
-		        notify_chat_messages            = EXCLUDED.notify_chat_messages,
-		        notify_contact_requests         = EXCLUDED.notify_contact_requests,
-		        notify_channel_mentions         = EXCLUDED.notify_channel_mentions,
-		        notify_system                   = EXCLUDED.notify_system,
-		        updated_at                      = now()
-		 RETURNING user_id, min_age, max_age, max_distance_km, gender_preference, locale,
-		           hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
-		           notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system`,
-		userID, prefs.MinAge, prefs.MaxAge, prefs.MaxDistanceKm, genderPref, locale,
-		prefs.HideDistanceFromNonContacts, prefs.HidePresence,
-		prefs.HideReadReceipts, prefs.HideTypingIndicator,
-		prefs.NotifyChatMessages, prefs.NotifyContactRequests,
-		prefs.NotifyChannelMentions, prefs.NotifySystem,
+	if update.MinAge.Set {
+		addField("min_age", update.MinAge.Value)
+	}
+	if update.MaxAge.Set {
+		addField("max_age", update.MaxAge.Value)
+	}
+	if update.MaxDistanceKm.Set {
+		addField("max_distance_km", update.MaxDistanceKm.Value)
+	}
+	if update.GenderPreference != nil {
+		addField("gender_preference", *update.GenderPreference)
+	}
+	if update.Locale != nil {
+		addField("locale", *update.Locale)
+	}
+	if update.HideDistanceFromNonContacts != nil {
+		addField("hide_distance_from_non_contacts", *update.HideDistanceFromNonContacts)
+	}
+	if update.HidePresence != nil {
+		addField("hide_presence", *update.HidePresence)
+	}
+	if update.HideReadReceipts != nil {
+		addField("hide_read_receipts", *update.HideReadReceipts)
+	}
+	if update.HideTypingIndicator != nil {
+		addField("hide_typing_indicator", *update.HideTypingIndicator)
+	}
+	if update.NotifyChatMessages != nil {
+		addField("notify_chat_messages", *update.NotifyChatMessages)
+	}
+	if update.NotifyContactRequests != nil {
+		addField("notify_contact_requests", *update.NotifyContactRequests)
+	}
+	if update.NotifyChannelMentions != nil {
+		addField("notify_channel_mentions", *update.NotifyChannelMentions)
+	}
+	if update.NotifySystem != nil {
+		addField("notify_system", *update.NotifySystem)
+	}
+
+	// On a no-op update (no fields supplied) the INSERT degenerates to an
+	// INSERT (user_id) with a plain DO NOTHING clause; the row is created
+	// with all column defaults if it was missing, otherwise nothing changes.
+	conflictClause := "DO UPDATE SET " + strings.Join(sets, ", ")
+	if len(cols) == 1 {
+		conflictClause = "DO NOTHING"
+	}
+
+	sql := fmt.Sprintf(`
+		INSERT INTO profile_preferences (%s)
+		VALUES (%s)
+		ON CONFLICT (user_id) %s`,
+		strings.Join(cols, ", "),
+		strings.Join(placeholders, ", "),
+		conflictClause,
 	)
-	var p ProfilePreferences
-	if err := row.Scan(
-		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
-		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
-		&p.NotifyChatMessages, &p.NotifyContactRequests, &p.NotifyChannelMentions, &p.NotifySystem,
-	); err != nil {
+
+	if err := s.db.Exec(ctx, sql, args...); err != nil {
 		return nil, fmt.Errorf("upsert preferences: %w", err)
 	}
-	if p.GenderPreference == nil {
-		p.GenderPreference = []string{}
-	}
-	return &p, nil
+	return s.GetPreferences(ctx, userID)
 }

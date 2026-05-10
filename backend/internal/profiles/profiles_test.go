@@ -17,6 +17,7 @@ type mockStore struct {
 	browseProfiles    []BrowseProfile
 	privacyFlags      map[string]PrivacyFlags
 	contactIDs        []string
+	lastUpsertUpdate  *PreferencesUpdate
 	browseErr         error
 	usernameAvailable bool
 	getErr            error
@@ -91,14 +92,55 @@ func (m *mockStore) GetPreferences(_ context.Context, _ string) (*ProfilePrefere
 	return &ProfilePreferences{GenderPreference: []string{}}, nil
 }
 
-func (m *mockStore) UpsertPreferences(_ context.Context, _ string, prefs ProfilePreferences) (*ProfilePreferences, error) {
+func (m *mockStore) UpsertPreferences(_ context.Context, _ string, update PreferencesUpdate) (*ProfilePreferences, error) {
 	if m.upsertPrefsErr != nil {
 		return nil, m.upsertPrefsErr
 	}
-	if prefs.GenderPreference == nil {
-		prefs.GenderPreference = []string{}
+	m.lastUpsertUpdate = &update
+	// Build a result reflecting only the fields the caller set, so tests
+	// that assert on the returned struct see the partial-update semantics
+	// surfaced by the production store.
+	out := ProfilePreferences{GenderPreference: []string{}}
+	if update.MinAge.Set {
+		out.MinAge = update.MinAge.Value
 	}
-	return &prefs, nil
+	if update.MaxAge.Set {
+		out.MaxAge = update.MaxAge.Value
+	}
+	if update.MaxDistanceKm.Set {
+		out.MaxDistanceKm = update.MaxDistanceKm.Value
+	}
+	if update.GenderPreference != nil {
+		out.GenderPreference = *update.GenderPreference
+	}
+	if update.Locale != nil {
+		out.Locale = *update.Locale
+	}
+	if update.HideDistanceFromNonContacts != nil {
+		out.HideDistanceFromNonContacts = *update.HideDistanceFromNonContacts
+	}
+	if update.HidePresence != nil {
+		out.HidePresence = *update.HidePresence
+	}
+	if update.HideReadReceipts != nil {
+		out.HideReadReceipts = *update.HideReadReceipts
+	}
+	if update.HideTypingIndicator != nil {
+		out.HideTypingIndicator = *update.HideTypingIndicator
+	}
+	if update.NotifyChatMessages != nil {
+		out.NotifyChatMessages = *update.NotifyChatMessages
+	}
+	if update.NotifyContactRequests != nil {
+		out.NotifyContactRequests = *update.NotifyContactRequests
+	}
+	if update.NotifyChannelMentions != nil {
+		out.NotifyChannelMentions = *update.NotifyChannelMentions
+	}
+	if update.NotifySystem != nil {
+		out.NotifySystem = *update.NotifySystem
+	}
+	return &out, nil
 }
 
 func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]InterestSuggestion, error) {
@@ -609,14 +651,23 @@ func TestGetMyPreferences_Error(t *testing.T) {
 
 // --- UpdateMyPreferences ---
 
+// optInt is a small constructor helper for present-non-null Optional[int]
+// so test bodies don't need to take the address of locals each time.
+func optInt(v int) Optional[int] {
+	return Optional[int]{Set: true, Value: &v}
+}
+
+// optIntNull is the explicit-JSON-null variant ("clear this column").
+func optIntNull() Optional[int] {
+	return Optional[int]{Set: true, Value: nil}
+}
+
 func TestUpdateMyPreferences_Success(t *testing.T) {
-	minAge := 20
-	maxAge := 35
-	dist := 50
+	gp := []string{"any"}
 	svc := NewService(&mockStore{})
 
-	p, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{
-		MinAge: &minAge, MaxAge: &maxAge, MaxDistanceKm: &dist, GenderPreference: []string{"any"},
+	p, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{
+		MinAge: optInt(20), MaxAge: optInt(35), MaxDistanceKm: optInt(50), GenderPreference: &gp,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -627,41 +678,36 @@ func TestUpdateMyPreferences_Success(t *testing.T) {
 }
 
 func TestUpdateMyPreferences_MinAgeTooLow(t *testing.T) {
-	minAge := 16
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{MinAge: &minAge})
+	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{MinAge: optInt(16)})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
 }
 
 func TestUpdateMyPreferences_MaxAgeTooHigh(t *testing.T) {
-	maxAge := 200
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{MaxAge: &maxAge})
+	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{MaxAge: optInt(200)})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
 }
 
 func TestUpdateMyPreferences_MinGreaterThanMax(t *testing.T) {
-	minAge := 40
-	maxAge := 30
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{MinAge: &minAge, MaxAge: &maxAge})
+	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{MinAge: optInt(40), MaxAge: optInt(30)})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
 }
 
 func TestUpdateMyPreferences_InvalidDistance(t *testing.T) {
-	dist := 0
 	svc := NewService(&mockStore{})
 
-	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{MaxDistanceKm: &dist})
+	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{MaxDistanceKm: optInt(0)})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -670,9 +716,103 @@ func TestUpdateMyPreferences_InvalidDistance(t *testing.T) {
 func TestUpdateMyPreferences_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{upsertPrefsErr: errors.New("db error")})
 
-	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", ProfilePreferences{})
+	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- Partial update semantics ---
+
+// A locale-only PUT must not appear in the upsert as anything but a single
+// `locale` column write. The bug we're fixing is that the previous code
+// treated absent fields as zero values and clobbered them.
+func TestUpdateMyPreferences_LocaleOnlyDoesNotClobber(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store)
+
+	loc := "en"
+	if _, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{Locale: &loc}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := store.lastUpsertUpdate
+	if got == nil {
+		t.Fatal("expected store to receive an update; got nil")
+	}
+	if got.Locale == nil || *got.Locale != "en" {
+		t.Errorf("Locale = %v, want \"en\"", got.Locale)
+	}
+	if got.MinAge.Set || got.MaxAge.Set || got.MaxDistanceKm.Set {
+		t.Errorf("filter ints should be unset on locale-only PUT, got %+v", got)
+	}
+	if got.GenderPreference != nil {
+		t.Errorf("GenderPreference should be nil on locale-only PUT, got %+v", got.GenderPreference)
+	}
+	if got.HidePresence != nil || got.HideReadReceipts != nil || got.HideTypingIndicator != nil ||
+		got.HideDistanceFromNonContacts != nil {
+		t.Errorf("privacy flags should be nil on locale-only PUT, got %+v", got)
+	}
+	if got.NotifyChatMessages != nil || got.NotifyContactRequests != nil ||
+		got.NotifyChannelMentions != nil || got.NotifySystem != nil {
+		t.Errorf("notification flags should be nil on locale-only PUT, got %+v", got)
+	}
+}
+
+// A toggle-only PUT for one privacy flag must not touch any other column.
+func TestUpdateMyPreferences_PrivacyToggleOnlyIsolated(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store)
+
+	hide := true
+	if _, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{HidePresence: &hide}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := store.lastUpsertUpdate
+	if got == nil || got.HidePresence == nil || !*got.HidePresence {
+		t.Fatalf("HidePresence not forwarded: %+v", got)
+	}
+	if got.Locale != nil || got.GenderPreference != nil ||
+		got.MinAge.Set || got.MaxAge.Set || got.MaxDistanceKm.Set ||
+		got.NotifyChatMessages != nil || got.NotifyContactRequests != nil {
+		t.Errorf("unrelated fields should be unset on a privacy-toggle-only PUT, got %+v", got)
+	}
+}
+
+// Browse "Clear filters" sends explicit JSON nulls for the three nullable
+// filter ints. Optional[int] preserves the distinction between "omitted"
+// and "explicit null" so the store can clear the column on a null.
+func TestUpdateMyPreferences_ExplicitNullClearsFilterInts(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store)
+
+	gp := []string{}
+	_, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{
+		MinAge:           optIntNull(),
+		MaxAge:           optIntNull(),
+		MaxDistanceKm:    optIntNull(),
+		GenderPreference: &gp,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := store.lastUpsertUpdate
+	if got == nil {
+		t.Fatal("expected store to receive an update; got nil")
+	}
+	if !got.MinAge.Set || got.MinAge.Value != nil {
+		t.Errorf("MinAge should be Set with nil Value (explicit null), got %+v", got.MinAge)
+	}
+	if !got.MaxAge.Set || got.MaxAge.Value != nil {
+		t.Errorf("MaxAge should be Set with nil Value, got %+v", got.MaxAge)
+	}
+	if !got.MaxDistanceKm.Set || got.MaxDistanceKm.Value != nil {
+		t.Errorf("MaxDistanceKm should be Set with nil Value, got %+v", got.MaxDistanceKm)
+	}
+	if got.GenderPreference == nil || len(*got.GenderPreference) != 0 {
+		t.Errorf("GenderPreference should be a non-nil empty slice, got %+v", got.GenderPreference)
 	}
 }
 
