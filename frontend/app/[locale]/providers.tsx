@@ -14,6 +14,7 @@ import Sidebar from "@/components/nav/Sidebar"
 import TopBar from "@/components/nav/TopBar"
 import BottomNav from "@/components/nav/BottomNav"
 import PushPrompt from "@/components/PushPrompt"
+import AuthLocalePicker from "@/components/AuthLocalePicker"
 import { ToastProvider } from "@/components/ui/Toast"
 
 function SessionGuard() {
@@ -73,6 +74,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const tNav = useTranslations("nav")
   const authenticated = status === "authenticated"
+  const unauthenticated = status === "unauthenticated"
   const isOnboarding = pathname.includes("/onboarding")
 
   const outerClass = authenticated && !isOnboarding
@@ -81,6 +83,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {unauthenticated && <AuthLocalePicker />}
       {authenticated && !isOnboarding && (
         <a
           href="#main-content"
