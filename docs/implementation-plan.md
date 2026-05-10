@@ -194,7 +194,7 @@
 - [ ] **Message reactions, reply-to threading, in-room message search**.
 - [ ] **Link previews in chat** — server-fetched OG metadata, cached.
 - [ ] **Lightbox swipe-to-close + pinch-to-zoom** (`components/chat/Lightbox.tsx`).
-- [x] **Channel-leave double-confirmation** — in-app `ConfirmDialog` followed by browser `beforeunload` dialog when navigating away from a channel via the in-app interceptor. Suppressed by a `bypassBeforeUnloadRef` set inside `confirmLeave` so the listener short-circuits once the user has already confirmed.
+- [x] **Channel-leave double-confirmation** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — in-app `ConfirmDialog` followed by browser `beforeunload` dialog when navigating away from a channel via the in-app interceptor. Suppressed by a `bypassBeforeUnloadRef` set inside `confirmLeave` so the listener short-circuits once the user has already confirmed.
 
 ### Group / channel admin
 
@@ -210,9 +210,9 @@
 - [ ] **Browse card double-action cleanup** — card is a `<Link>` and the contact button blocks navigation via `e.preventDefault()`; replace with explicit two-action layout to remove the gestural ambiguity on mobile.
 - [ ] **Contacts search results separation** — currently mixed with the established-contacts sections; render a dedicated search-results view above the lists or as a switch.
 - [ ] **Manual screen-reader pass** — VoiceOver on iOS Safari + macOS Safari across every authenticated route; fix labels, redundant announcements, role/link semantics. Deferred from PR #88 because it requires a hands-on device session.
-- [x] **Distance "Cualquiera/Any/Qualquer" label → `∞ km`** — at the slider's max value, the localized "Any" label was visually long in ES/PT and read as a word rather than a quantity. Replaced by the `∞ km` glyph across all three locales (the symbol carries enough meaning that no per-locale word is needed).
-- [x] **Camera capture on profile avatar + gallery file inputs** — onboarding photo and chat composer already had `capture` attributes; the profile edit page's avatar and showcase-photo `<input type="file">`s were missing them. Added `capture="user"` (front camera) on both since these are typically self-photos.
-- [x] **Contacts page pending-requests section** — verified that `pending.length > 0` already gates the section so it disappears at zero. No code change; recorded here so the audit isn't lost.
+- [x] **Distance "Cualquiera/Any/Qualquer" label → `∞ km`** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — at the slider's max value, the localized "Any" label was visually long in ES/PT and read as a word rather than a quantity. Replaced by the `∞ km` glyph across all three locales (the symbol carries enough meaning that no per-locale word is needed).
+- [x] **Camera capture on profile avatar + gallery file inputs** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — onboarding photo and chat composer already had `capture` attributes; the profile edit page's avatar and showcase-photo `<input type="file">`s were missing them. Added `capture="user"` (front camera) on both since these are typically self-photos.
+- [x] **Contacts page pending-requests section** ([PR #96](https://github.com/mayloo89/circl/pull/96)) — verified that `pending.length > 0` already gates the section so it disappears at zero. No code change; recorded here so the audit isn't lost.
 
 ### i18n cleanup
 
