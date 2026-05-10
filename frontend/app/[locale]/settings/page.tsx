@@ -766,7 +766,7 @@ export default function SettingsPage() {
   const token = session?.accessToken
 
   return (
-    <div className="min-h-screen bg-gray-950 px-4 py-10">
+    <div className="min-h-full bg-gray-950 px-4 py-10">
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-8 text-2xl font-bold text-white">{t("title")}</h1>
 
