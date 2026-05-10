@@ -395,6 +395,13 @@ candidates AS (
       AND EXISTS (
           SELECT 1 FROM users u WHERE u.id = p.user_id AND u.status = 'active'
       )
+      -- "Hide profiles without a photo" filter — only applies when the
+      -- viewer has the toggle on. IS NOT TRUE handles NULL safely (no
+      -- preferences row → treat as off → no filter).
+      AND (
+          prefs.require_photo IS NOT TRUE
+          OR (p.avatar_url IS NOT NULL AND p.avatar_url <> '')
+      )
 )
 SELECT id, user_id, username, display_name, avatar_url, date_of_birth,
        gender, location_text, created_at, distance_km, first_photo_url, interests
@@ -500,6 +507,7 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference, locale,
+		        require_photo,
 		        hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
 		        notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system
 		   FROM profile_preferences
@@ -509,6 +517,7 @@ func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePr
 	var p ProfilePreferences
 	if err := row.Scan(
 		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
+		&p.RequirePhoto,
 		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
 		&p.NotifyChatMessages, &p.NotifyContactRequests, &p.NotifyChannelMentions, &p.NotifySystem,
 	); err != nil {
@@ -632,6 +641,9 @@ func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, update P
 	}
 	if update.Locale != nil {
 		addField("locale", *update.Locale)
+	}
+	if update.RequirePhoto != nil {
+		addField("require_photo", *update.RequirePhoto)
 	}
 	if update.HideDistanceFromNonContacts != nil {
 		addField("hide_distance_from_non_contacts", *update.HideDistanceFromNonContacts)

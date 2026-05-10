@@ -306,6 +306,7 @@
     "noResults": "No se encontraron perfiles.",
     "loadMore": "Cargar más",
     "sortByDistance": "Ordenar por distancia",
+    "requirePhoto": "Solo perfiles con foto",
     "filterInterests": "Intereses",
     "searchInterests": "Buscar…",
     "age": "{age} años",

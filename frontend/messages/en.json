@@ -306,6 +306,7 @@
     "noResults": "No profiles found.",
     "loadMore": "Load more",
     "sortByDistance": "Sort by distance",
+    "requirePhoto": "Only profiles with a photo",
     "filterInterests": "Interests",
     "searchInterests": "Search…",
     "age": "{age} years old",

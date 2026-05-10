@@ -71,6 +71,7 @@ type preferencesResponse struct {
 	MaxDistanceKm               *int     `json:"max_distance_km"`
 	GenderPreference            []string `json:"gender_preference"`
 	Locale                      string   `json:"locale"`
+	RequirePhoto                bool     `json:"require_photo"`
 	HideDistanceFromNonContacts bool     `json:"hide_distance_from_non_contacts"`
 	HidePresence                bool     `json:"hide_presence"`
 	HideReadReceipts            bool     `json:"hide_read_receipts"`
@@ -92,6 +93,7 @@ type updatePreferencesRequest struct {
 	MaxDistanceKm               Optional[int] `json:"max_distance_km"`
 	GenderPreference            *[]string     `json:"gender_preference"`
 	Locale                      *string       `json:"locale"`
+	RequirePhoto                *bool         `json:"require_photo"`
 	HideDistanceFromNonContacts *bool         `json:"hide_distance_from_non_contacts"`
 	HidePresence                *bool         `json:"hide_presence"`
 	HideReadReceipts            *bool         `json:"hide_read_receipts"`
@@ -295,6 +297,7 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 			MaxDistanceKm:               req.MaxDistanceKm,
 			GenderPreference:            req.GenderPreference,
 			Locale:                      req.Locale,
+			RequirePhoto:                req.RequirePhoto,
 			HideDistanceFromNonContacts: req.HideDistanceFromNonContacts,
 			HidePresence:                req.HidePresence,
 			HideReadReceipts:            req.HideReadReceipts,
@@ -523,6 +526,7 @@ func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {
 		MaxDistanceKm:               p.MaxDistanceKm,
 		GenderPreference:            genderPref,
 		Locale:                      locale,
+		RequirePhoto:                p.RequirePhoto,
 		HideDistanceFromNonContacts: p.HideDistanceFromNonContacts,
 		HidePresence:                p.HidePresence,
 		HideReadReceipts:            p.HideReadReceipts,

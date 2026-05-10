@@ -116,6 +116,9 @@ func (m *mockStore) UpsertPreferences(_ context.Context, _ string, update Prefer
 	if update.Locale != nil {
 		out.Locale = *update.Locale
 	}
+	if update.RequirePhoto != nil {
+		out.RequirePhoto = *update.RequirePhoto
+	}
 	if update.HideDistanceFromNonContacts != nil {
 		out.HideDistanceFromNonContacts = *update.HideDistanceFromNonContacts
 	}
@@ -777,6 +780,28 @@ func TestUpdateMyPreferences_PrivacyToggleOnlyIsolated(t *testing.T) {
 		got.MinAge.Set || got.MaxAge.Set || got.MaxDistanceKm.Set ||
 		got.NotifyChatMessages != nil || got.NotifyContactRequests != nil {
 		t.Errorf("unrelated fields should be unset on a privacy-toggle-only PUT, got %+v", got)
+	}
+}
+
+// require_photo follows the same partial-update path as the privacy
+// toggles — a PUT that only sets it must not touch any other column.
+func TestUpdateMyPreferences_RequirePhotoToggleIsolated(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store)
+
+	rp := true
+	if _, err := svc.UpdateMyPreferences(t.Context(), "user-1", PreferencesUpdate{RequirePhoto: &rp}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := store.lastUpsertUpdate
+	if got == nil || got.RequirePhoto == nil || !*got.RequirePhoto {
+		t.Fatalf("RequirePhoto not forwarded: %+v", got)
+	}
+	if got.Locale != nil || got.GenderPreference != nil ||
+		got.MinAge.Set || got.MaxAge.Set || got.MaxDistanceKm.Set ||
+		got.HidePresence != nil || got.NotifyChatMessages != nil {
+		t.Errorf("unrelated fields should be unset on a require-photo-only PUT, got %+v", got)
 	}
 }
 

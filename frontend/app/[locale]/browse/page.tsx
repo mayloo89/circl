@@ -43,6 +43,7 @@ interface Preferences {
   max_age: number | null
   max_distance_km: number | null
   gender_preference: string[]
+  require_photo: boolean
 }
 
 const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
@@ -340,6 +341,17 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
         )}
       </div>
 
+      {/* Require photo */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={draft.require_photo}
+          onChange={(e) => setDraft((d) => ({ ...d, require_photo: e.target.checked }))}
+          className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-brand-hover"
+        />
+        <span className="text-xs text-gray-300">{t("requirePhoto")}</span>
+      </label>
+
       {/* Sort by distance */}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
@@ -370,6 +382,7 @@ function activeFilterCount(prefs: Preferences, interests: string[]): number {
     prefs.max_distance_km !== null,
     prefs.gender_preference.length > 0,
     interests.length > 0,
+    prefs.require_photo,
   ].filter(Boolean).length
 }
 
@@ -390,6 +403,7 @@ export default function BrowsePage() {
     max_age: null,
     max_distance_km: null,
     gender_preference: [],
+    require_photo: false,
   })
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [sortByDistance, setSortByDistance] = useState(false)
@@ -476,7 +490,7 @@ export default function BrowsePage() {
   }
 
   async function handleClearFilters() {
-    const empty: Preferences = { min_age: null, max_age: null, max_distance_km: null, gender_preference: [] }
+    const empty: Preferences = { min_age: null, max_age: null, max_distance_km: null, gender_preference: [], require_photo: false }
     await handleApplyFilters(empty, false, [])
   }
 

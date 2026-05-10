@@ -72,6 +72,9 @@ type ProfilePreferences struct {
 	MaxDistanceKm    *int
 	GenderPreference []string
 	Locale           string
+	// Discovery filter — when true, browse hides profiles that don't have an
+	// avatar. Default false (no filter applied).
+	RequirePhoto bool
 	// Privacy toggles. All default false.
 	HideDistanceFromNonContacts bool
 	HidePresence                bool
@@ -151,6 +154,7 @@ type PreferencesUpdate struct {
 	MaxDistanceKm               Optional[int]
 	GenderPreference            *[]string
 	Locale                      *string
+	RequirePhoto                *bool
 	HideDistanceFromNonContacts *bool
 	HidePresence                *bool
 	HideReadReceipts            *bool
