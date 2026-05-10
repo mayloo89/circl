@@ -1,0 +1,2 @@
+ALTER TABLE profile_preferences
+    ADD COLUMN IF NOT EXISTS require_photo BOOLEAN NOT NULL DEFAULT FALSE;

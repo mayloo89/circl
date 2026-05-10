@@ -165,6 +165,7 @@ interface Preferences {
   max_distance_km: number | null
   gender_preference: string[]
   locale: string
+  require_photo: boolean
   hide_distance_from_non_contacts: boolean
   hide_presence: boolean
   hide_read_receipts: boolean

@@ -186,7 +186,7 @@
 - [ ] **Pause-discovery toggle** — single boolean on `profile_preferences` ("don't show me to others").
 - [ ] **Primary-photo selector** in the profile photo gallery.
 - [ ] **Profile-completeness gating** — blur browse cards under 40% completeness with a CTA on the user's own card.
-- [ ] **"Hide profiles without a profile photo" filter in browse** — `profile_preferences.require_photo` boolean; UI toggle in browse filter panel; backend adds `AND p.avatar_url IS NOT NULL` when the flag is set.
+- [x] **"Hide profiles without a profile photo" filter in browse** ([PR #99](https://github.com/mayloo89/circl/pull/99)) — migration `000029` adds `require_photo BOOLEAN NOT NULL DEFAULT FALSE` to `profile_preferences`. The browse SQL gates on `prefs.require_photo IS NOT TRUE OR (p.avatar_url IS NOT NULL AND p.avatar_url <> '')`, so empty-string avatars are treated as missing too. UI is a checkbox under the existing distance / gender / interests filters in the browse `FilterPanel`, persisted on toggle via the same partial-update PUT to `/profiles/me/preferences` that the existing filters use; the active-filter count and "Clear filters" handler now include `require_photo`.
 - [ ] **"Looking for" public-profile fields** — new columns on `profiles`: `looking_for_tags TEXT[]` (chatting / dating / friendship / language exchange / …), `looking_for_gender TEXT[]`, `looking_for_age_min INT`, `looking_for_age_max INT`. Distinct from the private `profile_preferences` discovery filters; users curate what's public on their profile. Optional "Copy from search filters" button to seed from existing prefs.
 
 ### Communication features
