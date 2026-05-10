@@ -96,6 +96,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       // Access token expired — attempt silent refresh.
+      // On either a non-OK response or a network error we clear the stored
+      // refresh token so the next JWT callback short-circuits to RefreshFailed
+      // instead of replaying the same already-rejected token in a tight loop.
       if (token.refreshToken) {
         try {
           const res = await fetch(`${BACKEND_URL}/auth/refresh`, {
@@ -104,6 +107,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             body: JSON.stringify({ refresh_token: token.refreshToken }),
           })
           if (!res.ok) {
+            token.refreshToken = undefined
             token.error = "RefreshFailed"
             return token
           }
@@ -113,6 +117,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.error = undefined
           return token
         } catch {
+          token.refreshToken = undefined
           token.error = "RefreshFailed"
           return token
         }
