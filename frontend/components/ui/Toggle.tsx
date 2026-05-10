@@ -11,13 +11,19 @@ export interface ToggleProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
   badge?: React.ReactNode
 }
 
+// The native checkbox is rendered transparent and absolutely positioned over
+// the visible track — not `sr-only` — so its bounding box matches the track.
+// This matters because `<main>` is the page's scroll container (set in
+// AppShell), and a focused element with a 1×1 box at the top-left of its
+// label triggers the browser's scroll-into-view behaviour, which would
+// otherwise jump the page on every toggle.
 const Toggle = forwardRef<HTMLInputElement, ToggleProps>(function Toggle(
   { label, description, badge, checked, disabled, className = "", id, ...rest },
   ref,
 ) {
   const inputId = id ?? `toggle-${label.replace(/\s+/g, "-").toLowerCase()}`
   const trackBase =
-    "relative inline-flex h-6 w-11 shrink-0 self-center rounded-full ring-1 transition-colors"
+    "relative inline-flex h-6 w-11 rounded-full ring-1 transition-colors"
   const trackOff = "bg-gray-700 ring-gray-600"
   const trackOn = "bg-brand-primary ring-brand-hover"
   const thumbBase =
@@ -38,23 +44,24 @@ const Toggle = forwardRef<HTMLInputElement, ToggleProps>(function Toggle(
         {description && <span className="text-xs text-gray-500">{description}</span>}
       </span>
 
-      <input
-        ref={ref}
-        id={inputId}
-        type="checkbox"
-        role="switch"
-        aria-checked={checked}
-        checked={checked}
-        disabled={disabled}
-        className="peer sr-only"
-        {...rest}
-      />
-
-      <span
-        aria-hidden="true"
-        className={`${trackBase} ${checked ? trackOn : trackOff} peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-hover`}
-      >
-        <span className={`${thumbBase} ${checked ? "translate-x-5" : "translate-x-0"}`} />
+      <span className="relative inline-flex shrink-0 self-center">
+        <input
+          ref={ref}
+          id={inputId}
+          type="checkbox"
+          role="switch"
+          aria-checked={checked}
+          checked={checked}
+          disabled={disabled}
+          className="peer absolute inset-0 z-10 m-0 cursor-pointer appearance-none rounded-full opacity-0 disabled:cursor-not-allowed"
+          {...rest}
+        />
+        <span
+          aria-hidden="true"
+          className={`${trackBase} ${checked ? trackOn : trackOff} peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-hover`}
+        >
+          <span className={`${thumbBase} ${checked ? "translate-x-5" : "translate-x-0"}`} />
+        </span>
       </span>
     </label>
   )
