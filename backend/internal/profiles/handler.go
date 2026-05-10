@@ -34,35 +34,41 @@ type photoResponse struct {
 }
 
 type profileResponse struct {
-	ID           string          `json:"id"`
-	UserID       string          `json:"user_id"`
-	Username     string          `json:"username"`
-	DisplayName  string          `json:"display_name"`
-	Bio          string          `json:"bio"`
-	AvatarURL    string          `json:"avatar_url"`
-	DateOfBirth  *string         `json:"date_of_birth,omitempty"`
-	Age          *int            `json:"age,omitempty"`
-	Gender       string          `json:"gender"`
-	LocationText string          `json:"location_text"`
-	Latitude     *float64        `json:"latitude,omitempty"`
-	Longitude    *float64        `json:"longitude,omitempty"`
-	Interests    []string        `json:"interests"`
-	Photos       []photoResponse `json:"photos"`
-	OnboardedAt  *string         `json:"onboarded_at,omitempty"`
+	ID               string          `json:"id"`
+	UserID           string          `json:"user_id"`
+	Username         string          `json:"username"`
+	DisplayName      string          `json:"display_name"`
+	Bio              string          `json:"bio"`
+	AvatarURL        string          `json:"avatar_url"`
+	DateOfBirth      *string         `json:"date_of_birth,omitempty"`
+	Age              *int            `json:"age,omitempty"`
+	Gender           string          `json:"gender"`
+	LocationText     string          `json:"location_text"`
+	Latitude         *float64        `json:"latitude,omitempty"`
+	Longitude        *float64        `json:"longitude,omitempty"`
+	Interests        []string        `json:"interests"`
+	Photos           []photoResponse `json:"photos"`
+	OnboardedAt      *string         `json:"onboarded_at,omitempty"`
+	LookingForGender []string        `json:"looking_for_gender"`
+	LookingForAgeMin *int            `json:"looking_for_age_min"`
+	LookingForAgeMax *int            `json:"looking_for_age_max"`
 }
 
 type updateRequest struct {
-	Username      string   `json:"username"`
-	DisplayName   string   `json:"display_name"`
-	Bio           string   `json:"bio"`
-	AvatarURL     string   `json:"avatar_url"`
-	DateOfBirth   *string  `json:"date_of_birth"`
-	Gender        string   `json:"gender"`
-	LocationText  string   `json:"location_text"`
-	Latitude      *float64 `json:"latitude"`
-	Longitude     *float64 `json:"longitude"`
-	Interests     []string `json:"interests"`
-	MarkOnboarded bool     `json:"mark_onboarded"`
+	Username         string   `json:"username"`
+	DisplayName      string   `json:"display_name"`
+	Bio              string   `json:"bio"`
+	AvatarURL        string   `json:"avatar_url"`
+	DateOfBirth      *string  `json:"date_of_birth"`
+	Gender           string   `json:"gender"`
+	LocationText     string   `json:"location_text"`
+	Latitude         *float64 `json:"latitude"`
+	Longitude        *float64 `json:"longitude"`
+	Interests        []string `json:"interests"`
+	MarkOnboarded    bool     `json:"mark_onboarded"`
+	LookingForGender []string `json:"looking_for_gender"`
+	LookingForAgeMin *int     `json:"looking_for_age_min"`
+	LookingForAgeMax *int     `json:"looking_for_age_max"`
 }
 
 type preferencesResponse struct {
@@ -159,15 +165,18 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 		}
 
 		in := ProfileInput{
-			Username:     req.Username,
-			DisplayName:  req.DisplayName,
-			Bio:          req.Bio,
-			AvatarURL:    req.AvatarURL,
-			Gender:       req.Gender,
-			LocationText: req.LocationText,
-			Latitude:     req.Latitude,
-			Longitude:    req.Longitude,
-			Interests:    req.Interests,
+			Username:         req.Username,
+			DisplayName:      req.DisplayName,
+			Bio:              req.Bio,
+			AvatarURL:        req.AvatarURL,
+			Gender:           req.Gender,
+			LocationText:     req.LocationText,
+			Latitude:         req.Latitude,
+			Longitude:        req.Longitude,
+			Interests:        req.Interests,
+			LookingForGender: req.LookingForGender,
+			LookingForAgeMin: req.LookingForAgeMin,
+			LookingForAgeMax: req.LookingForAgeMax,
 		}
 		if req.MarkOnboarded {
 			now := time.Now()
@@ -448,19 +457,26 @@ func toResponse(p *Profile) profileResponse {
 	if interests == nil {
 		interests = []string{}
 	}
+	genders := p.LookingForGender
+	if genders == nil {
+		genders = []string{}
+	}
 	resp := profileResponse{
-		ID:           p.ID,
-		UserID:       p.UserID,
-		Username:     p.Username,
-		DisplayName:  p.DisplayName,
-		Bio:          p.Bio,
-		AvatarURL:    p.AvatarURL,
-		Gender:       p.Gender,
-		LocationText: p.LocationText,
-		Latitude:     p.Latitude,
-		Longitude:    p.Longitude,
-		Interests:    interests,
-		Photos:       photos,
+		ID:               p.ID,
+		UserID:           p.UserID,
+		Username:         p.Username,
+		DisplayName:      p.DisplayName,
+		Bio:              p.Bio,
+		AvatarURL:        p.AvatarURL,
+		Gender:           p.Gender,
+		LocationText:     p.LocationText,
+		Latitude:         p.Latitude,
+		Longitude:        p.Longitude,
+		Interests:        interests,
+		Photos:           photos,
+		LookingForGender: genders,
+		LookingForAgeMin: p.LookingForAgeMin,
+		LookingForAgeMax: p.LookingForAgeMax,
 	}
 	if p.DateOfBirth != nil {
 		s := p.DateOfBirth.Format("2006-01-02")
@@ -487,6 +503,8 @@ func computeAge(dob *time.Time) *int {
 }
 
 // toPublicResponse builds the response for non-owner callers: no DOB, no coordinates.
+// "Looking for" fields are included — they are explicitly public and the
+// whole point of the feature is for other users to see them.
 func toPublicResponse(p *Profile) profileResponse {
 	photos := make([]photoResponse, len(p.Photos))
 	for i, ph := range p.Photos {
@@ -496,18 +514,25 @@ func toPublicResponse(p *Profile) profileResponse {
 	if interests == nil {
 		interests = []string{}
 	}
+	genders := p.LookingForGender
+	if genders == nil {
+		genders = []string{}
+	}
 	return profileResponse{
-		ID:           p.ID,
-		UserID:       p.UserID,
-		Username:     p.Username,
-		DisplayName:  p.DisplayName,
-		Bio:          p.Bio,
-		AvatarURL:    p.AvatarURL,
-		Age:          computeAge(p.DateOfBirth),
-		Gender:       p.Gender,
-		LocationText: p.LocationText,
-		Interests:    interests,
-		Photos:       photos,
+		ID:               p.ID,
+		UserID:           p.UserID,
+		Username:         p.Username,
+		DisplayName:      p.DisplayName,
+		Bio:              p.Bio,
+		AvatarURL:        p.AvatarURL,
+		Age:              computeAge(p.DateOfBirth),
+		Gender:           p.Gender,
+		LocationText:     p.LocationText,
+		Interests:        interests,
+		Photos:           photos,
+		LookingForGender: genders,
+		LookingForAgeMin: p.LookingForAgeMin,
+		LookingForAgeMax: p.LookingForAgeMax,
 	}
 }
 

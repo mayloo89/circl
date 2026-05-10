@@ -46,21 +46,43 @@ type Profile struct {
 	Interests    []string
 	Photos       []ProfilePhoto
 	OnboardedAt  *time.Time
+	// "Looking for" — public stated intent, distinct from the private
+	// `profile_preferences` discovery filters. Empty array / nil ints mean
+	// the user hasn't said.
+	LookingForGender []string
+	LookingForAgeMin *int
+	LookingForAgeMax *int
 }
 
 // ProfileInput holds the editable fields for profile create/update.
 type ProfileInput struct {
-	Username     string
-	DisplayName  string
-	Bio          string
-	AvatarURL    string
-	DateOfBirth  *time.Time
-	Gender       string
-	LocationText string
-	Latitude     *float64
-	Longitude    *float64
-	Interests    []string
-	OnboardedAt  *time.Time
+	Username         string
+	DisplayName      string
+	Bio              string
+	AvatarURL        string
+	DateOfBirth      *time.Time
+	Gender           string
+	LocationText     string
+	Latitude         *float64
+	Longitude        *float64
+	Interests        []string
+	OnboardedAt      *time.Time
+	LookingForGender []string
+	LookingForAgeMin *int
+	LookingForAgeMax *int
+}
+
+// LookingForGenders is the canonical set the "Looking for" multi-select
+// renders against. Matches the self-id gender list (minus "Custom") so
+// users can express interest in the same identities the platform supports
+// for self-id. "Prefer not to say" stays in for inclusion symmetry.
+var LookingForGenders = []string{
+	"Male",
+	"Female",
+	"Trans male",
+	"Trans female",
+	"Non-binary",
+	"Prefer not to say",
 }
 
 // ProfilePreferences holds discovery, privacy, and notification preferences
@@ -328,6 +350,9 @@ func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in Profile
 	if len(in.Interests) > MaxInterests {
 		return nil, fmt.Errorf("%w: maximum %d interests allowed", ErrInvalidInput, MaxInterests)
 	}
+	if err := validateLookingFor(in); err != nil {
+		return nil, err
+	}
 	profile, err := s.store.Upsert(ctx, userID, in)
 	if err != nil {
 		return nil, err
@@ -346,6 +371,32 @@ func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in Profile
 	}
 	profile.Photos = photos
 	return profile, nil
+}
+
+// validateLookingFor applies the public-intent validation rules used by
+// UpdateMyProfile: gender values must come from the canonical set, and
+// the optional age bounds must each be in [18, 120] with min ≤ max when
+// both are provided.
+func validateLookingFor(in ProfileInput) error {
+	genderSet := make(map[string]struct{}, len(LookingForGenders))
+	for _, g := range LookingForGenders {
+		genderSet[g] = struct{}{}
+	}
+	for _, g := range in.LookingForGender {
+		if _, ok := genderSet[g]; !ok {
+			return fmt.Errorf("%w: unknown looking_for_gender %q", ErrInvalidInput, g)
+		}
+	}
+	if v := in.LookingForAgeMin; v != nil && (*v < 18 || *v > 120) {
+		return fmt.Errorf("%w: looking_for_age_min must be between 18 and 120", ErrInvalidInput)
+	}
+	if v := in.LookingForAgeMax; v != nil && (*v < 18 || *v > 120) {
+		return fmt.Errorf("%w: looking_for_age_max must be between 18 and 120", ErrInvalidInput)
+	}
+	if mn, mx := in.LookingForAgeMin, in.LookingForAgeMax; mn != nil && mx != nil && *mn > *mx {
+		return fmt.Errorf("%w: looking_for_age_min must be less than or equal to looking_for_age_max", ErrInvalidInput)
+	}
+	return nil
 }
 
 // SearchInterests returns interest suggestions matching the given prefix, ordered by usage.

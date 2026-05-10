@@ -372,6 +372,58 @@ func TestUpdateMyProfile_TooManyInterests(t *testing.T) {
 	}
 }
 
+// --- LookingFor validation ---
+
+func TestUpdateMyProfile_LookingForUnknownGender(t *testing.T) {
+	svc := NewService(&mockStore{})
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+		DisplayName: "Alice", DateOfBirth: validDOB(),
+		LookingForGender: []string{"Robot"},
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestUpdateMyProfile_LookingForAgeOutOfRange(t *testing.T) {
+	svc := NewService(&mockStore{})
+	for _, c := range []struct {
+		name     string
+		min, max *int
+	}{
+		{"min below 18", ptrInt(17), nil},
+		{"max above 120", nil, ptrInt(150)},
+		{"min greater than max", ptrInt(40), ptrInt(30)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+				DisplayName: "Alice", DateOfBirth: validDOB(),
+				LookingForAgeMin: c.min, LookingForAgeMax: c.max,
+			})
+			if !errors.Is(err, ErrInvalidInput) {
+				t.Errorf("got %v, want ErrInvalidInput", err)
+			}
+		})
+	}
+}
+
+func TestUpdateMyProfile_LookingForAcceptsCanonicalValues(t *testing.T) {
+	svc := NewService(&mockStore{})
+	min, max := 25, 35
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+		DisplayName:      "Alice",
+		DateOfBirth:      validDOB(),
+		LookingForGender: []string{"Female", "Non-binary"},
+		LookingForAgeMin: &min,
+		LookingForAgeMax: &max,
+	})
+	if err != nil {
+		t.Errorf("expected no error for canonical values, got %v", err)
+	}
+}
+
+func ptrInt(v int) *int { return &v }
+
 func TestUpdateMyProfile_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{upsertErr: errors.New("db error")})
 

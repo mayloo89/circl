@@ -33,6 +33,20 @@ interface PublicProfile {
   location_text: string
   interests: string[]
   photos: ProfilePhoto[]
+  looking_for_gender: string[]
+  looking_for_age_min: number | null
+  looking_for_age_max: number | null
+}
+
+// Maps the canonical "Looking for" gender stored value to the existing
+// self-id gender translation key — same set as the profile edit page.
+const PUBLIC_LOOKING_FOR_GENDER_KEYS: Record<string, "genderMale" | "genderFemale" | "genderTransMale" | "genderTransFemale" | "genderNonBinary" | "genderPreferNotToSay"> = {
+  "Male": "genderMale",
+  "Female": "genderFemale",
+  "Trans male": "genderTransMale",
+  "Trans female": "genderTransFemale",
+  "Non-binary": "genderNonBinary",
+  "Prefer not to say": "genderPreferNotToSay",
 }
 
 interface SentRequest     { contact_id: string; user_id: string }
@@ -50,6 +64,47 @@ function formatAge(dob?: string): string | null {
   const m = today.getMonth() - d.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
   return String(age)
+}
+
+// LookingForBlock renders the public-profile "Looking for" section when at
+// least one field is set. Genders display as localized chips (reusing the
+// self-id `profile.gender*` keys via PUBLIC_LOOKING_FOR_GENDER_KEYS); the
+// age range is rendered as "min–max", "min+", or "up to max" depending on
+// which bounds are set.
+function LookingForBlock({ profile }: { profile: PublicProfile }) {
+  const t = useTranslations("publicProfile")
+  const tp = useTranslations("profile")
+  const genders = profile.looking_for_gender ?? []
+  const min = profile.looking_for_age_min
+  const max = profile.looking_for_age_max
+  let ageLabel: string | null = null
+  if (min !== null && max !== null) ageLabel = `${min}–${max}`
+  else if (min !== null) ageLabel = `${min}+`
+  else if (max !== null) ageLabel = t("ageUpTo", { age: max })
+
+  return (
+    <div className="space-y-2 rounded-md border border-gray-800 bg-gray-900/40 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{t("lookingFor")}</p>
+      <div className="flex flex-wrap gap-2">
+        {genders.map((g) => {
+          const key = PUBLIC_LOOKING_FOR_GENDER_KEYS[g]
+          return (
+            <span
+              key={`g-${g}`}
+              className="rounded-full bg-brand-wash/50 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
+            >
+              {key ? tp(key) : g}
+            </span>
+          )
+        })}
+        {ageLabel && (
+          <span className="rounded-full bg-gray-800 px-3 py-1 text-xs text-gray-300 ring-1 ring-gray-700">
+            {t("lookingForAgeChip", { range: ageLabel })}
+          </span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function HeroSkeleton() {
@@ -519,6 +574,13 @@ export default function PublicProfilePage() {
               </span>
             ))}
           </div>
+        )}
+
+        {/* Looking for — only render the section if any field has a value. */}
+        {(profile.looking_for_gender?.length > 0
+          || profile.looking_for_age_min !== null
+          || profile.looking_for_age_max !== null) && (
+          <LookingForBlock profile={profile} />
         )}
 
         {/* Desktop inline actions */}

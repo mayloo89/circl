@@ -25,6 +25,44 @@ const MAX_BIO = 280
 const MAX_PHOTOS = 6
 const MAX_INTERESTS = 20
 
+// Canonical "Looking for" gender keys — must match backend's LookingForGenders.
+// Mirrors the self-id gender list (minus the Custom free-text option) so
+// users can express interest in the same identities the platform supports.
+// Each value reuses the existing self-id translation keys for display so
+// labels stay consistent between the two surfaces.
+const LOOKING_FOR_GENDERS = [
+  "Male",
+  "Female",
+  "Trans male",
+  "Trans female",
+  "Non-binary",
+  "Prefer not to say",
+] as const
+
+// Maps each canonical "Looking for" gender value to the existing
+// `profile.gender*` translation key so we don't duplicate strings.
+const LOOKING_FOR_GENDER_KEYS: Record<(typeof LOOKING_FOR_GENDERS)[number], "genderMale" | "genderFemale" | "genderTransMale" | "genderTransFemale" | "genderNonBinary" | "genderPreferNotToSay"> = {
+  "Male": "genderMale",
+  "Female": "genderFemale",
+  "Trans male": "genderTransMale",
+  "Trans female": "genderTransFemale",
+  "Non-binary": "genderNonBinary",
+  "Prefer not to say": "genderPreferNotToSay",
+}
+
+// parseAgeOrNull turns the controlled-input string into either an int the
+// API can write or null when the user has emptied the field. Out-of-range
+// values are clamped to null so an obviously-bad client value doesn't get
+// rejected by the backend on save — backend validation still fires for
+// any value in range that violates the constraints.
+function parseAgeOrNull(s: string): number | null {
+  const trimmed = s.trim()
+  if (trimmed === "") return null
+  const n = Number.parseInt(trimmed, 10)
+  if (Number.isNaN(n) || n < 18 || n > 120) return null
+  return n
+}
+
 const GENDER_OPTIONS = [
   "Male",
   "Female",
@@ -36,6 +74,19 @@ const GENDER_OPTIONS = [
 ]
 
 const CUSTOM_GENDER = "Custom"
+
+// Maps each self-id gender option's stored value to its existing
+// `profile.gender*` translation key so the <select> renders localized
+// labels. "Custom" itself falls through to `genderCustom` (handled inline).
+const GENDER_OPTION_KEYS: Record<string, "genderMale" | "genderFemale" | "genderTransMale" | "genderTransFemale" | "genderNonBinary" | "genderPreferNotToSay" | "genderCustom"> = {
+  "Male": "genderMale",
+  "Female": "genderFemale",
+  "Trans male": "genderTransMale",
+  "Trans female": "genderTransFemale",
+  "Non-binary": "genderNonBinary",
+  "Prefer not to say": "genderPreferNotToSay",
+  "Custom": "genderCustom",
+}
 
 interface InterestSuggestion {
   name: string
@@ -132,6 +183,9 @@ interface Profile {
   latitude?: number
   longitude?: number
   interests: string[]
+  looking_for_gender: string[]
+  looking_for_age_min: number | null
+  looking_for_age_max: number | null
   photos: ProfilePhoto[]
 }
 
@@ -251,6 +305,9 @@ export default function ProfilePage() {
   const [locationEdited, setLocationEdited] = useState(false)
   const [interestInput, setInterestInput] = useState("")
   const [interestFocused, setInterestFocused] = useState(false)
+  const [lookingForGender, setLookingForGender] = useState<string[]>([])
+  const [lookingForAgeMin, setLookingForAgeMin] = useState<string>("")
+  const [lookingForAgeMax, setLookingForAgeMax] = useState<string>("")
   const locationRef = useRef<HTMLDivElement>(null)
   const interestRef = useRef<HTMLDivElement>(null)
   const [formError, setFormError] = useState("")
@@ -298,7 +355,10 @@ export default function ProfilePage() {
     (dateOfBirth ?? "") !== (profile.date_of_birth ?? "") ||
     effectiveGender(gender, genderOther) !== profile.gender ||
     locationText !== profile.location_text ||
-    JSON.stringify(interests) !== JSON.stringify(profile.interests)
+    JSON.stringify(interests) !== JSON.stringify(profile.interests) ||
+    JSON.stringify([...lookingForGender].sort()) !== JSON.stringify([...(profile.looking_for_gender ?? [])].sort()) ||
+    parseAgeOrNull(lookingForAgeMin) !== (profile.looking_for_age_min ?? null) ||
+    parseAgeOrNull(lookingForAgeMax) !== (profile.looking_for_age_max ?? null)
   )
 
   useEffect(() => {
@@ -323,6 +383,9 @@ export default function ProfilePage() {
         setLocationLat(data.latitude ?? null)
         setLocationLng(data.longitude ?? null)
         setInterests(data.interests ?? [])
+        setLookingForGender(data.looking_for_gender ?? [])
+        setLookingForAgeMin(data.looking_for_age_min != null ? String(data.looking_for_age_min) : "")
+        setLookingForAgeMax(data.looking_for_age_max != null ? String(data.looking_for_age_max) : "")
       })
       .catch(() => setLoadError("Failed to load profile."))
       .finally(() => setLoading(false))
@@ -345,6 +408,9 @@ export default function ProfilePage() {
         longitude: locationLng,
         interests,
         date_of_birth: dateOfBirth || undefined,
+        looking_for_gender: lookingForGender,
+        looking_for_age_min: parseAgeOrNull(lookingForAgeMin),
+        looking_for_age_max: parseAgeOrNull(lookingForAgeMax),
       }
 
       const res = await fetch(`${API_URL}/profiles/me`, {
@@ -614,12 +680,12 @@ export default function ProfilePage() {
                 />
               </div>
               {profile?.username && (
-                <p className="mt-1 text-xs text-gray-500">Username cannot be changed once set.</p>
+                <p className="mt-1 text-xs text-gray-500">{t("usernameLocked")}</p>
               )}
             </div>
 
             <Input
-              label="Display Name"
+              label={t("displayName")}
               id="displayName"
               type="text"
               value={displayName}
@@ -630,7 +696,7 @@ export default function ProfilePage() {
 
             <div>
               <div className="flex items-center justify-between">
-                <label htmlFor="bio" className="block text-sm font-medium text-gray-300">Bio</label>
+                <label htmlFor="bio" className="block text-sm font-medium text-gray-300">{t("bio")}</label>
                 <span className={`text-xs ${bio.length > MAX_BIO ? "text-red-400" : "text-gray-500"}`}>
                   {bio.length}/{MAX_BIO}
                 </span>
@@ -650,17 +716,17 @@ export default function ProfilePage() {
             </div>
 
             <Input
-              label="Date of birth"
+              label={t("dateOfBirth")}
               id="dateOfBirth"
               type="date"
               value={dateOfBirth}
               onChange={(e) => setDateOfBirth(e.target.value)}
               dirty={(dateOfBirth ?? "") !== (profile?.date_of_birth ?? "")}
-              helper="You must be at least 18 years old."
+              helper={t("dobHelper")}
             />
 
             <div>
-              <label htmlFor="gender" className="block text-sm font-medium text-gray-300">Gender</label>
+              <label htmlFor="gender" className="block text-sm font-medium text-gray-300">{t("gender")}</label>
               <select
                 id="gender"
                 value={gender}
@@ -671,9 +737,9 @@ export default function ProfilePage() {
                     : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
                 }`}
               >
-                <option value="">Prefer not to say</option>
+                <option value="">{t("genderPreferNotToSay")}</option>
                 {GENDER_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
+                  <option key={opt} value={opt}>{t(GENDER_OPTION_KEYS[opt] ?? "genderCustom")}</option>
                 ))}
               </select>
               {gender === CUSTOM_GENDER && (
@@ -681,7 +747,7 @@ export default function ProfilePage() {
                   type="text"
                   value={genderOther}
                   onChange={(e) => setGenderOther(e.target.value)}
-                  placeholder="Describe your gender…"
+                  placeholder={t("genderCustomPlaceholder")}
                   maxLength={50}
                   className="mt-2 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
                 />
@@ -689,14 +755,14 @@ export default function ProfilePage() {
             </div>
 
             <div ref={locationRef} className="relative">
-              <label htmlFor="location" className="block text-sm font-medium text-gray-300">Location</label>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-300">{t("location")}</label>
               <div className="relative mt-1">
                 <input
                   id="location"
                   type="text"
                   value={locationQuery}
                   onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value); setLocationLat(null); setLocationLng(null); setLocationEdited(true) }}
-                  placeholder="e.g. Paris, France"
+                  placeholder={t("locationPlaceholder")}
                   autoComplete="off"
                   className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
                     locationText !== (profile?.location_text ?? "")
@@ -735,7 +801,7 @@ export default function ProfilePage() {
             {/* Interests tag input */}
             <div ref={interestRef} className="relative">
               <div className="flex items-center justify-between">
-                <label htmlFor="interestInput" className="block text-sm font-medium text-gray-300">Interests</label>
+                <label htmlFor="interestInput" className="block text-sm font-medium text-gray-300">{t("interests")}</label>
                 <span className={`text-xs ${interests.length >= MAX_INTERESTS ? "text-red-400" : "text-gray-500"}`}>
                   {interests.length}/{MAX_INTERESTS}
                 </span>
@@ -747,7 +813,7 @@ export default function ProfilePage() {
                 onChange={(e) => setInterestInput(e.target.value)}
                 onKeyDown={handleAddInterest}
                 onFocus={() => setInterestFocused(true)}
-                placeholder="Type and press Enter to add"
+                placeholder={t("interestsPlaceholder")}
                 disabled={interests.length >= MAX_INTERESTS}
                 autoComplete="off"
                 className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
@@ -790,6 +856,72 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Looking for — public stated intent, distinct from the private
+                discovery filters in /browse. All fields are optional. */}
+            <div className="space-y-3 rounded-md border border-gray-800 bg-gray-900/40 p-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-200">{t("lookingFor")}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{t("lookingForDesc")}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("lookingForGenderLabel")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {LOOKING_FOR_GENDERS.map((g) => {
+                    const active = lookingForGender.includes(g)
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() =>
+                          setLookingForGender((prev) =>
+                            prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g],
+                          )
+                        }
+                        className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
+                          active
+                            ? "bg-brand-primary text-white ring-brand-hover"
+                            : "bg-gray-800 text-gray-400 ring-gray-700 hover:text-gray-200"
+                        }`}
+                      >
+                        {t(LOOKING_FOR_GENDER_KEYS[g])}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("lookingForAgeRange")}</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={18}
+                    max={120}
+                    placeholder={t("lookingForAgeMin")}
+                    aria-label={t("lookingForAgeMin")}
+                    value={lookingForAgeMin}
+                    onChange={(e) => setLookingForAgeMin(e.target.value)}
+                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  />
+                  <span className="text-gray-500">–</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={18}
+                    max={120}
+                    placeholder={t("lookingForAgeMax")}
+                    aria-label={t("lookingForAgeMax")}
+                    value={lookingForAgeMax}
+                    onChange={(e) => setLookingForAgeMax(e.target.value)}
+                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  />
+                </div>
+              </div>
             </div>
 
             {formError && <p className="text-sm text-red-400">{formError}</p>}
