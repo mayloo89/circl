@@ -283,25 +283,17 @@
     "genderNonBinary": "Non-binary",
     "genderPreferNotToSay": "Prefer not to say",
     "genderCustom": "Custom",
+    "usernameLocked": "Username cannot be changed once set.",
+    "dobHelper": "You must be at least 18 years old.",
+    "genderCustomPlaceholder": "Describe your gender…",
+    "locationPlaceholder": "e.g. Paris, France",
+    "interestsPlaceholder": "Type and press Enter to add",
     "lookingFor": "Looking for",
-    "lookingForDesc": "Tell others what you're looking for. All fields are optional.",
-    "lookingForTagsLabel": "What",
+    "lookingForDesc": "Tell others who you're looking for. All fields are optional.",
     "lookingForGenderLabel": "Who",
     "lookingForAgeRange": "Age range",
     "lookingForAgeMin": "Min",
     "lookingForAgeMax": "Max",
-    "lookingForTag": {
-      "chatting": "Chatting",
-      "dating": "Dating",
-      "friendship": "Friendship",
-      "language_exchange": "Language exchange"
-    },
-    "lookingForGenderOption": {
-      "Man": "Men",
-      "Woman": "Women",
-      "Non-binary": "Non-binary",
-      "Other": "Other"
-    },
     "report": "Report user",
     "sendMessage": "Send message",
     "addContact": "Add contact",
@@ -495,18 +487,6 @@
     "lookingFor": "Looking for",
     "lookingForAgeChip": "Ages {range}",
     "ageUpTo": "up to {age}",
-    "lookingForTag": {
-      "chatting": "Chatting",
-      "dating": "Dating",
-      "friendship": "Friendship",
-      "language_exchange": "Language exchange"
-    },
-    "lookingForGenderOption": {
-      "Man": "Men",
-      "Woman": "Women",
-      "Non-binary": "Non-binary",
-      "Other": "Other"
-    },
     "actions": {
       "message": "Message",
       "addContact": "Add contact",

@@ -283,25 +283,17 @@
     "genderNonBinary": "No binario",
     "genderPreferNotToSay": "Prefiero no decir",
     "genderCustom": "Personalizado",
-    "lookingFor": "Buscando",
-    "lookingForDesc": "Cuéntale a los demás qué estás buscando. Todos los campos son opcionales.",
-    "lookingForTagsLabel": "Qué",
+    "usernameLocked": "El nombre de usuario no se puede cambiar una vez establecido.",
+    "dobHelper": "Debes tener al menos 18 años.",
+    "genderCustomPlaceholder": "Describe tu género…",
+    "locationPlaceholder": "ej. París, Francia",
+    "interestsPlaceholder": "Escribe y pulsa Enter para añadir",
+    "lookingFor": "Busco",
+    "lookingForDesc": "Cuéntale a los demás a quién estás buscando. Todos los campos son opcionales.",
     "lookingForGenderLabel": "Quién",
     "lookingForAgeRange": "Rango de edad",
     "lookingForAgeMin": "Mín",
     "lookingForAgeMax": "Máx",
-    "lookingForTag": {
-      "chatting": "Charlar",
-      "dating": "Citas",
-      "friendship": "Amistad",
-      "language_exchange": "Intercambio de idiomas"
-    },
-    "lookingForGenderOption": {
-      "Man": "Hombres",
-      "Woman": "Mujeres",
-      "Non-binary": "No binarios",
-      "Other": "Otros"
-    },
     "report": "Reportar usuario",
     "sendMessage": "Enviar mensaje",
     "addContact": "Agregar contacto",
@@ -491,21 +483,9 @@
     "moreOptions": "Más opciones",
     "viewPhoto": "Ver foto de perfil",
     "previewBanner": "Así es como tu perfil aparece para los demás",
-    "lookingFor": "Buscando",
+    "lookingFor": "Busca",
     "lookingForAgeChip": "Edad {range}",
     "ageUpTo": "hasta {age}",
-    "lookingForTag": {
-      "chatting": "Charlar",
-      "dating": "Citas",
-      "friendship": "Amistad",
-      "language_exchange": "Intercambio de idiomas"
-    },
-    "lookingForGenderOption": {
-      "Man": "Hombres",
-      "Woman": "Mujeres",
-      "Non-binary": "No binarios",
-      "Other": "Otros"
-    },
     "exitPreview": "Salir de la vista previa",
     "actions": {
       "message": "Mensaje",

@@ -374,31 +374,6 @@ func TestUpdateMyProfile_TooManyInterests(t *testing.T) {
 
 // --- LookingFor validation ---
 
-func TestUpdateMyProfile_LookingForUnknownTag(t *testing.T) {
-	svc := NewService(&mockStore{})
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
-		DisplayName:    "Alice",
-		DateOfBirth:    validDOB(),
-		LookingForTags: []string{"chatting", "marriage"}, // "marriage" is not in the canonical set
-	})
-	if !errors.Is(err, ErrInvalidInput) {
-		t.Errorf("got %v, want ErrInvalidInput", err)
-	}
-}
-
-func TestUpdateMyProfile_LookingForTooManyTags(t *testing.T) {
-	all := append([]string(nil), LookingForTags...)
-	tooMany := append(all, all[0]) // exceeds MaxLookingForTags
-	svc := NewService(&mockStore{})
-	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
-		DisplayName: "Alice", DateOfBirth: validDOB(),
-		LookingForTags: tooMany,
-	})
-	if !errors.Is(err, ErrInvalidInput) {
-		t.Errorf("got %v, want ErrInvalidInput", err)
-	}
-}
-
 func TestUpdateMyProfile_LookingForUnknownGender(t *testing.T) {
 	svc := NewService(&mockStore{})
 	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
@@ -438,8 +413,7 @@ func TestUpdateMyProfile_LookingForAcceptsCanonicalValues(t *testing.T) {
 	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
 		DisplayName:      "Alice",
 		DateOfBirth:      validDOB(),
-		LookingForTags:   []string{"chatting", "friendship"},
-		LookingForGender: []string{"Woman", "Non-binary"},
+		LookingForGender: []string{"Female", "Non-binary"},
 		LookingForAgeMin: &min,
 		LookingForAgeMax: &max,
 	})

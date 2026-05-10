@@ -47,9 +47,8 @@ type Profile struct {
 	Photos       []ProfilePhoto
 	OnboardedAt  *time.Time
 	// "Looking for" — public stated intent, distinct from the private
-	// `profile_preferences` discovery filters. Empty arrays / nil ints mean
+	// `profile_preferences` discovery filters. Empty array / nil ints mean
 	// the user hasn't said.
-	LookingForTags   []string
 	LookingForGender []string
 	LookingForAgeMin *int
 	LookingForAgeMax *int
@@ -68,30 +67,23 @@ type ProfileInput struct {
 	Longitude        *float64
 	Interests        []string
 	OnboardedAt      *time.Time
-	LookingForTags   []string
 	LookingForGender []string
 	LookingForAgeMin *int
 	LookingForAgeMax *int
 }
 
-// LookingForTags is the canonical set of supported "Looking for" tags. The
-// frontend renders localized labels for each; the backend validates that
-// values posted on profile update belong to this set so the column doesn't
-// drift into a free-form mess that's hard to filter or localize later.
-var LookingForTags = []string{
-	"chatting",
-	"dating",
-	"friendship",
-	"language_exchange",
+// LookingForGenders is the canonical set the "Looking for" multi-select
+// renders against. Matches the self-id gender list (minus "Custom") so
+// users can express interest in the same identities the platform supports
+// for self-id. "Prefer not to say" stays in for inclusion symmetry.
+var LookingForGenders = []string{
+	"Male",
+	"Female",
+	"Trans male",
+	"Trans female",
+	"Non-binary",
+	"Prefer not to say",
 }
-
-// MaxLookingForTags caps how many tags a user can set on their profile.
-const MaxLookingForTags = 4
-
-// LookingForGenders is the canonical set the multi-select renders against.
-// Mirrors the existing browse `gender_preference` options so the two
-// surfaces stay aligned.
-var LookingForGenders = []string{"Man", "Woman", "Non-binary", "Other"}
 
 // ProfilePreferences holds discovery, privacy, and notification preferences
 // for a user.
@@ -382,22 +374,10 @@ func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in Profile
 }
 
 // validateLookingFor applies the public-intent validation rules used by
-// UpdateMyProfile: tags must come from the canonical set, gender must come
-// from the canonical set, and the optional age bounds must each be in
-// [18, 120] with min ≤ max when both are provided.
+// UpdateMyProfile: gender values must come from the canonical set, and
+// the optional age bounds must each be in [18, 120] with min ≤ max when
+// both are provided.
 func validateLookingFor(in ProfileInput) error {
-	if len(in.LookingForTags) > MaxLookingForTags {
-		return fmt.Errorf("%w: maximum %d looking_for_tags allowed", ErrInvalidInput, MaxLookingForTags)
-	}
-	tagSet := make(map[string]struct{}, len(LookingForTags))
-	for _, t := range LookingForTags {
-		tagSet[t] = struct{}{}
-	}
-	for _, t := range in.LookingForTags {
-		if _, ok := tagSet[t]; !ok {
-			return fmt.Errorf("%w: unknown looking_for_tag %q", ErrInvalidInput, t)
-		}
-	}
 	genderSet := make(map[string]struct{}, len(LookingForGenders))
 	for _, g := range LookingForGenders {
 		genderSet[g] = struct{}{}

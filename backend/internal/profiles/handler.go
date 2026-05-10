@@ -49,7 +49,6 @@ type profileResponse struct {
 	Interests        []string        `json:"interests"`
 	Photos           []photoResponse `json:"photos"`
 	OnboardedAt      *string         `json:"onboarded_at,omitempty"`
-	LookingForTags   []string        `json:"looking_for_tags"`
 	LookingForGender []string        `json:"looking_for_gender"`
 	LookingForAgeMin *int            `json:"looking_for_age_min"`
 	LookingForAgeMax *int            `json:"looking_for_age_max"`
@@ -67,7 +66,6 @@ type updateRequest struct {
 	Longitude        *float64 `json:"longitude"`
 	Interests        []string `json:"interests"`
 	MarkOnboarded    bool     `json:"mark_onboarded"`
-	LookingForTags   []string `json:"looking_for_tags"`
 	LookingForGender []string `json:"looking_for_gender"`
 	LookingForAgeMin *int     `json:"looking_for_age_min"`
 	LookingForAgeMax *int     `json:"looking_for_age_max"`
@@ -176,7 +174,6 @@ func updateMyProfile(svc ProfileManager) http.HandlerFunc {
 			Latitude:         req.Latitude,
 			Longitude:        req.Longitude,
 			Interests:        req.Interests,
-			LookingForTags:   req.LookingForTags,
 			LookingForGender: req.LookingForGender,
 			LookingForAgeMin: req.LookingForAgeMin,
 			LookingForAgeMax: req.LookingForAgeMax,
@@ -460,10 +457,6 @@ func toResponse(p *Profile) profileResponse {
 	if interests == nil {
 		interests = []string{}
 	}
-	tags := p.LookingForTags
-	if tags == nil {
-		tags = []string{}
-	}
 	genders := p.LookingForGender
 	if genders == nil {
 		genders = []string{}
@@ -481,7 +474,6 @@ func toResponse(p *Profile) profileResponse {
 		Longitude:        p.Longitude,
 		Interests:        interests,
 		Photos:           photos,
-		LookingForTags:   tags,
 		LookingForGender: genders,
 		LookingForAgeMin: p.LookingForAgeMin,
 		LookingForAgeMax: p.LookingForAgeMax,
@@ -522,10 +514,6 @@ func toPublicResponse(p *Profile) profileResponse {
 	if interests == nil {
 		interests = []string{}
 	}
-	tags := p.LookingForTags
-	if tags == nil {
-		tags = []string{}
-	}
 	genders := p.LookingForGender
 	if genders == nil {
 		genders = []string{}
@@ -542,7 +530,6 @@ func toPublicResponse(p *Profile) profileResponse {
 		LocationText:     p.LocationText,
 		Interests:        interests,
 		Photos:           photos,
-		LookingForTags:   tags,
 		LookingForGender: genders,
 		LookingForAgeMin: p.LookingForAgeMin,
 		LookingForAgeMax: p.LookingForAgeMax,
