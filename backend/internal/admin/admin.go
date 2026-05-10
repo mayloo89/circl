@@ -32,6 +32,22 @@ type UserRecord struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// UserPresence is the live activity snapshot the admin user list overlays
+// on top of each UserRecord. `Online` reflects the Redis presence keyset
+// (TTL'd by the heartbeat) and `LastSeenAt` mirrors `users.last_seen_at`.
+// Both fields default to their zero values for users with no presence data.
+type UserPresence struct {
+	Online     bool       `json:"online"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitzero"`
+}
+
+// PresenceLookupFunc returns live presence info keyed by user ID. Users
+// without a presence row are absent from the map; callers treat absence
+// as offline / no last-seen. Implemented in main.go on top of the
+// presence package's Store.GetPresence so admin doesn't take a direct
+// dependency on the presence package.
+type PresenceLookupFunc func(ctx context.Context, userIDs []string) (map[string]UserPresence, error)
+
 // Suspension records a moderation action against a user.
 type Suspension struct {
 	ID             string

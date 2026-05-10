@@ -397,7 +397,18 @@ func main() {
 	}()
 
 	uploadHandler := uploads.NewHandler(uploadSvc)
-	adminHandler := admin.NewHandler(adminSvc)
+	adminPresenceLookup := func(ctx context.Context, ids []string) (map[string]admin.UserPresence, error) {
+		info, err := presenceStore.GetPresence(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]admin.UserPresence, len(info))
+		for _, i := range info {
+			out[i.UserID] = admin.UserPresence{Online: i.Online, LastSeenAt: i.LastSeenAt}
+		}
+		return out, nil
+	}
+	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup)
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 

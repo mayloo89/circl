@@ -232,7 +232,7 @@
 
 ### Polish
 
-- [ ] **Admin user list shows real presence** — current admin panel column is moderation `status` (`active` / `suspended` / `banned`); add an online dot + "last seen X ago" sourced from `users.last_seen_at` and the Redis presence keyset so admins can identify currently-active users at a glance.
+- [x] **Admin user list shows real presence** — added an "Activity" column to `/admin/users` separate from the moderation `status` column. Backend handler enriches each `UserRecord` with `online` + `last_seen_at` via a new `PresenceLookupFunc` injected into `admin.NewHandler`; main.go provides the adapter on top of `presence.Store.GetPresence` so admin stays decoupled from the presence package. UI shows a green dot + "Online" when present, a gray dot + relative "X ago" using the existing `formatLastSeen` helper otherwise (with the absolute timestamp on hover via `title`), and "Never" for users who have never connected. Three handler tests cover the overlay, the Redis-down propagation as a 500, and the legacy nil-lookup fallback.
 - [ ] **Branded `not-found.tsx`** per locale.
 - [ ] **`app/manifest.ts`** for PWA add-to-home.
 - [ ] **Pull-to-refresh** on chat list and browse.
