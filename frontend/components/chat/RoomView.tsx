@@ -108,6 +108,10 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   const [blockLoading, setBlockLoading] = useState(false)
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
   const [pendingNav, setPendingNav] = useState<(() => void) | null>(null)
+  // Set true once the user confirms the in-app leave dialog so the
+  // beforeunload listener short-circuits and the browser doesn't show its
+  // own "leave site?" dialog on top of the one the user already accepted.
+  const bypassBeforeUnloadRef = useRef(false)
 
   function requestLeave(url: string) {
     if (room?.type === "channel") {
@@ -120,6 +124,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
 
   function confirmLeave() {
     setLeaveConfirmOpen(false)
+    bypassBeforeUnloadRef.current = true
     pendingNav?.()
     setPendingNav(null)
   }
@@ -152,8 +157,11 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   useEffect(() => {
     if (room?.type !== "channel") return
 
-    // Browser-level: refresh, tab close, address-bar navigation.
+    // Browser-level: refresh, tab close, address-bar navigation. Skip when
+    // the user already accepted the in-app confirmation so we don't stack
+    // a second "leave site?" prompt on top of it.
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (bypassBeforeUnloadRef.current) return
       e.preventDefault()
       e.returnValue = ""
     }

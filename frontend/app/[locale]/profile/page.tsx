@@ -564,7 +564,7 @@ export default function ProfilePage() {
                 {uploadingAvatar ? "Uploading…" : "Change"}
               </span>
             </button>
-            <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="hidden" />
+            <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={handleAvatarChange} className="hidden" />
             <p className="text-sm text-gray-500">{session?.user?.email}</p>
             {(uploadError || avatarError || avatarSuccess) && (
               <p className={`text-xs ${(uploadError || avatarError) ? "text-red-400" : "text-green-400"}`}>
@@ -821,6 +821,7 @@ export default function ProfilePage() {
           ref={photoInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
+          capture="user"
           onChange={handleAddPhoto}
           className="hidden"
         />

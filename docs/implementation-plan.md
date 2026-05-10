@@ -186,12 +186,15 @@
 - [ ] **Pause-discovery toggle** — single boolean on `profile_preferences` ("don't show me to others").
 - [ ] **Primary-photo selector** in the profile photo gallery.
 - [ ] **Profile-completeness gating** — blur browse cards under 40% completeness with a CTA on the user's own card.
+- [ ] **"Hide profiles without a profile photo" filter in browse** — `profile_preferences.require_photo` boolean; UI toggle in browse filter panel; backend adds `AND p.avatar_url IS NOT NULL` when the flag is set.
+- [ ] **"Looking for" public-profile fields** — new columns on `profiles`: `looking_for_tags TEXT[]` (chatting / dating / friendship / language exchange / …), `looking_for_gender TEXT[]`, `looking_for_age_min INT`, `looking_for_age_max INT`. Distinct from the private `profile_preferences` discovery filters; users curate what's public on their profile. Optional "Copy from search filters" button to seed from existing prefs.
 
 ### Communication features
 
 - [ ] **Message reactions, reply-to threading, in-room message search**.
 - [ ] **Link previews in chat** — server-fetched OG metadata, cached.
 - [ ] **Lightbox swipe-to-close + pinch-to-zoom** (`components/chat/Lightbox.tsx`).
+- [x] **Channel-leave double-confirmation** — in-app `ConfirmDialog` followed by browser `beforeunload` dialog when navigating away from a channel via the in-app interceptor. Suppressed by a `bypassBeforeUnloadRef` set inside `confirmLeave` so the listener short-circuits once the user has already confirmed.
 
 ### Group / channel admin
 
@@ -207,12 +210,17 @@
 - [ ] **Browse card double-action cleanup** — card is a `<Link>` and the contact button blocks navigation via `e.preventDefault()`; replace with explicit two-action layout to remove the gestural ambiguity on mobile.
 - [ ] **Contacts search results separation** — currently mixed with the established-contacts sections; render a dedicated search-results view above the lists or as a switch.
 - [ ] **Manual screen-reader pass** — VoiceOver on iOS Safari + macOS Safari across every authenticated route; fix labels, redundant announcements, role/link semantics. Deferred from PR #88 because it requires a hands-on device session.
+- [x] **Distance "Cualquiera/Any/Qualquer" label → `∞ km`** — at the slider's max value, the localized "Any" label was visually long in ES/PT and read as a word rather than a quantity. Replaced by the `∞ km` glyph across all three locales (the symbol carries enough meaning that no per-locale word is needed).
+- [x] **Camera capture on profile avatar + gallery file inputs** — onboarding photo and chat composer already had `capture` attributes; the profile edit page's avatar and showcase-photo `<input type="file">`s were missing them. Added `capture="user"` (front camera) on both since these are typically self-photos.
+- [x] **Contacts page pending-requests section** — verified that `pending.length > 0` already gates the section so it disappears at zero. No code change; recorded here so the audit isn't lost.
 
 ### i18n cleanup
 
 - [ ] **Hardcoded `"en"` in `chatHelpers.ts`** `toLocaleDateString` calls — replace with `useLocale()`.
 - [ ] **Hardcoded English distance strings** in browse ("km away", "< 1 km away") — move to `messages/*.json`.
 - [ ] **BottomNav label wrap test** — verify ES/PT labels don't wrap at 360px viewport width.
+- [ ] **Locale picker on unauthenticated pages** — `/login`, `/register`, `/forgot-password`, `/reset-password`. Today the locale comes from URL prefix or `Accept-Language`; add a small picker on the auth shell that rewrites the URL prefix so users can correct a wrong guess before logging in. On register success, persist the chosen locale to `profile_preferences.locale`.
+- [ ] **Locale-aware `DateOfBirthPicker` field order** — the three selects are hardcoded DD/MM/YYYY; some locales (notably `en-US`) expect MM/DD/YYYY. Read `useLocale()` and reorder the selects.
 
 ### Performance
 
@@ -223,6 +231,7 @@
 
 ### Polish
 
+- [ ] **Admin user list shows real presence** — current admin panel column is moderation `status` (`active` / `suspended` / `banned`); add an online dot + "last seen X ago" sourced from `users.last_seen_at` and the Redis presence keyset so admins can identify currently-active users at a glance.
 - [ ] **Branded `not-found.tsx`** per locale.
 - [ ] **`app/manifest.ts`** for PWA add-to-home.
 - [ ] **Pull-to-refresh** on chat list and browse.
