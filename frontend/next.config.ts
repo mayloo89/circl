@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 import type { RemotePattern } from "next/dist/shared/lib/image-config";
+import createMDX from "@next/mdx";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+const withMDX = createMDX();
 
 // Allow images from localhost in dev. In production, the image host is
 // configured via NEXT_PUBLIC_IMAGE_HOSTNAME (set as a Docker build arg).
@@ -48,4 +50,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withNextIntl(nextConfig);
+export default withMDX(withNextIntl(nextConfig));

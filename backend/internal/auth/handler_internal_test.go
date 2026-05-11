@@ -21,7 +21,7 @@ func (m *mockAuthInternal) Login(_ context.Context, _, _ string) (*User, error) 
 	return m.user, m.loginErr
 }
 
-func (m *mockAuthInternal) Register(_ context.Context, _, _ string) (*User, error) {
+func (m *mockAuthInternal) Register(_ context.Context, _ RegistrationInput) (*User, error) {
 	return m.user, m.registerErr
 }
 
@@ -49,7 +49,7 @@ func TestLoginHandler_TokenGenerateError(t *testing.T) {
 // a message regardless of token generation.
 func TestRegisterHandler_NoTokenIssued(t *testing.T) {
 	h := NewHandler(&mockAuthInternal{user: &User{ID: "1", Email: "u@u.com"}}, "secret", time.Hour)
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"u@u.com","password":"pass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"u@u.com","password":"pass","accept_terms":true}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

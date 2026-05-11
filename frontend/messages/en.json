@@ -81,7 +81,25 @@
     "backToSignIn": "Back to sign in",
     "dobMonth": "MM",
     "dobDay": "DD",
-    "dobYear": "YYYY"
+    "dobYear": "YYYY",
+    "consentLabel": "I have read and agree to the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "consentRequired": "You must accept the Terms and Privacy Policy to create an account."
+  },
+  "footer": {
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "guidelines": "Community",
+    "safety": "Safety",
+    "copyright": "© {year} Circl",
+    "navAriaLabel": "Legal links"
+  },
+  "legal": {
+    "lastUpdated": "Last updated: {date}",
+    "draftBanner": "Draft — pending legal review before launch.",
+    "terms": { "title": "Terms of Service" },
+    "privacy": { "title": "Privacy Policy" },
+    "guidelines": { "title": "Community Guidelines" },
+    "safety": { "title": "Safety" }
   },
   "forgotPassword": {
     "title": "Reset password",

@@ -27,6 +27,12 @@ const AUTH_PAGES = [
   "/verify-email",
 ]
 
+// Legal/policy pages must be reachable to anyone — including unauthenticated
+// visitors arriving from the registration consent links — and must not
+// redirect logged-in users back to home, so they're treated as a separate
+// public-readable bucket from AUTH_PAGES.
+const PUBLIC_PAGES = ["/terms", "/privacy", "/guidelines", "/safety"]
+
 function getLocale(pathname: string): string {
   return (
     routing.locales.find(
@@ -57,8 +63,9 @@ export default auth((req) => {
   const { pathname } = req.nextUrl
   const localePath = stripLocale(pathname)
   const isAuthPage = AUTH_PAGES.some((p) => localePath.startsWith(p))
+  const isPublicPage = PUBLIC_PAGES.some((p) => localePath.startsWith(p))
 
-  if (!isLoggedIn && !isAuthPage) {
+  if (!isLoggedIn && !isAuthPage && !isPublicPage) {
     const locale = getLocale(pathname)
     return addCSP(NextResponse.redirect(new URL(`/${locale}/login`, req.url)))
   }

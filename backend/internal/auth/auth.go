@@ -21,6 +21,11 @@ const (
 	maxPasswordLen = 128
 )
 
+// CurrentPolicyVersion is the version recorded against new users when they
+// accept the legal terms at registration. Bump only when the published policy
+// text changes in a way that requires re-consent from existing users.
+const CurrentPolicyVersion = "v1"
+
 const deletionGracePeriod = 30 * 24 * time.Hour
 
 var (
@@ -40,10 +45,30 @@ type User struct {
 	Reactivated bool // true when login automatically restored a soft-deleted account
 }
 
+// CreateUserInput captures the fields the auth service writes when a new
+// account is created, including the legal-consent record collected at
+// registration time.
+type CreateUserInput struct {
+	Email                 string
+	PasswordHash          string
+	AcceptedTermsAt       time.Time
+	AcceptedPrivacyAt     time.Time
+	AcceptedPolicyVersion string
+}
+
+// RegistrationInput is the service-level payload for Register. The service
+// hashes the password and stamps the consent timestamps before delegating to
+// the store.
+type RegistrationInput struct {
+	Email                 string
+	Password              string
+	AcceptedPolicyVersion string
+}
+
 // Store is the data-access interface required by the auth service.
 type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (*userRecord, error)
-	CreateUser(ctx context.Context, email, passwordHash string) (*userRecord, error)
+	CreateUser(ctx context.Context, in CreateUserInput) (*userRecord, error)
 	GetUserByID(ctx context.Context, userID string) (*userRecord, error)
 	UpdatePassword(ctx context.Context, userID, newHash string) error
 	DeleteUser(ctx context.Context, userID string) error
@@ -78,7 +103,7 @@ type EmailFlowService interface {
 // Authenticator is the interface the login/register handler depends on.
 type Authenticator interface {
 	Login(ctx context.Context, email, password string) (*User, error)
-	Register(ctx context.Context, email, password string) (*User, error)
+	Register(ctx context.Context, in RegistrationInput) (*User, error)
 }
 
 // userRecord is the internal DB representation of an authenticated user.
@@ -160,21 +185,29 @@ func (s *Service) Login(ctx context.Context, emailAddr, password string) (*User,
 
 // Register creates a new local user account and returns the created user.
 // It does not issue a JWT — the caller (handler) sends a verification email
-// and returns a "check your email" response.
-func (s *Service) Register(ctx context.Context, emailAddr, password string) (*User, error) {
-	if err := validateEmail(emailAddr); err != nil {
+// and returns a "check your email" response. The legal-consent timestamps are
+// stamped server-side at the moment the row is written.
+func (s *Service) Register(ctx context.Context, in RegistrationInput) (*User, error) {
+	if err := validateEmail(in.Email); err != nil {
 		return nil, err
 	}
-	if err := validatePassword(password); err != nil {
+	if err := validatePassword(in.Password); err != nil {
 		return nil, err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	record, err := s.store.CreateUser(ctx, emailAddr, string(hash))
+	now := time.Now()
+	record, err := s.store.CreateUser(ctx, CreateUserInput{
+		Email:                 in.Email,
+		PasswordHash:          string(hash),
+		AcceptedTermsAt:       now,
+		AcceptedPrivacyAt:     now,
+		AcceptedPolicyVersion: in.AcceptedPolicyVersion,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -34,7 +34,7 @@ func (m *mockAuth) Login(_ context.Context, _, _ string) (*auth.User, error) {
 	return m.user, m.loginErr
 }
 
-func (m *mockAuth) Register(_ context.Context, _, _ string) (*auth.User, error) {
+func (m *mockAuth) Register(_ context.Context, _ auth.RegistrationInput) (*auth.User, error) {
 	return m.user, m.registerErr
 }
 
@@ -247,7 +247,7 @@ func (m *mockProfileStore) AcceptedContactIDs(_ context.Context, _ string) ([]st
 func TestRegisterHandler_Success(t *testing.T) {
 	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
 
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"new@example.com","password":"securepass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"new@example.com","password":"securepass","accept_terms":true}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -264,7 +264,7 @@ func TestRegisterHandler_UsernameTaken(t *testing.T) {
 		auth.WithProfileStore(ps),
 	)
 
-	body := `{"email":"new@example.com","password":"securepass","username":"taken_user","date_of_birth":"1990-01-01"}`
+	body := `{"email":"new@example.com","password":"securepass","username":"taken_user","date_of_birth":"1990-01-01","accept_terms":true}`
 	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -277,7 +277,7 @@ func TestRegisterHandler_UsernameTaken(t *testing.T) {
 func TestRegisterHandler_EmailTaken(t *testing.T) {
 	h := newHandler(&mockAuth{registerErr: auth.ErrEmailTaken})
 
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"taken@example.com","password":"securepass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"taken@example.com","password":"securepass","accept_terms":true}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -289,7 +289,7 @@ func TestRegisterHandler_EmailTaken(t *testing.T) {
 func TestRegisterHandler_InvalidInput(t *testing.T) {
 	h := newHandler(&mockAuth{registerErr: auth.ErrInvalidInput})
 
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"bad","password":"short"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"bad","password":"short","accept_terms":true}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -301,12 +301,30 @@ func TestRegisterHandler_InvalidInput(t *testing.T) {
 func TestRegisterHandler_InternalError(t *testing.T) {
 	h := newHandler(&mockAuth{registerErr: errors.New("unexpected error")})
 
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"user@example.com","password":"securepass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"user@example.com","password":"securepass","accept_terms":true}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestRegisterHandler_TermsNotAccepted(t *testing.T) {
+	h := newHandler(&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}})
+
+	for _, body := range []string{
+		`{"email":"new@example.com","password":"securepass","accept_terms":false}`,
+		`{"email":"new@example.com","password":"securepass"}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("body %s: status = %d, want %d", body, rec.Code, http.StatusBadRequest)
+		}
+		assertJSONField(t, rec.Body.Bytes(), "code", "terms_not_accepted")
 	}
 }
 

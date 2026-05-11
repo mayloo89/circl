@@ -513,7 +513,11 @@ func newTestHandler(pool *pgxpool.Pool, authSvc *auth.Service, profileStore prof
 			req.Username = "u_" + strings.ReplaceAll(local, ".", "_")
 		}
 
-		user, err := authSvc.Register(r.Context(), req.Email, req.Password)
+		user, err := authSvc.Register(r.Context(), auth.RegistrationInput{
+			Email:                 req.Email,
+			Password:              req.Password,
+			AcceptedPolicyVersion: auth.CurrentPolicyVersion,
+		})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}) //nolint:errcheck

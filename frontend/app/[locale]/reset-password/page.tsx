@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 
 import { Link, useRouter } from "@/i18n/navigation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
+import Footer from "@/components/Footer"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -127,16 +128,19 @@ export default function ResetPasswordPage() {
   const tc = useTranslations("common")
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950">
-      <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-white">{t("title")}</h2>
-          <p className="mt-2 text-center text-sm text-gray-400">{t("subtitle")}</p>
+    <div className="flex min-h-screen flex-col bg-gray-950">
+      <main className="flex flex-1 items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
+          <div>
+            <h2 className="text-center text-3xl font-bold text-white">{t("title")}</h2>
+            <p className="mt-2 text-center text-sm text-gray-400">{t("subtitle")}</p>
+          </div>
+          <Suspense fallback={<p className="text-center text-sm text-gray-400">{tc("loading")}</p>}>
+            <ResetPasswordForm />
+          </Suspense>
         </div>
-        <Suspense fallback={<p className="text-center text-sm text-gray-400">{tc("loading")}</p>}>
-          <ResetPasswordForm />
-        </Suspense>
-      </div>
+      </main>
+      <Footer />
     </div>
   )
 }
