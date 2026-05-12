@@ -48,6 +48,7 @@ const (
 	CodeUsernameTaken      = "username_taken"
 	CodePasswordTooLong    = "password_too_long"
 	CodeInvalidToken       = "invalid_token"
+	CodeTermsNotAccepted   = "terms_not_accepted"
 
 	// Contacts
 	CodeSelfContact    = "self_contact"

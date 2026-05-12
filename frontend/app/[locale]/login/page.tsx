@@ -7,6 +7,7 @@ import { Link, useRouter } from "@/i18n/navigation"
 
 import { loginSchema } from "@/lib/validation"
 import PasswordField from "@/components/ui/PasswordField"
+import Footer from "@/components/Footer"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -89,7 +90,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950">
+    <div className="flex min-h-screen flex-col bg-gray-950">
 
       {reactivated && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
@@ -112,6 +113,7 @@ export default function LoginPage() {
         </div>
       )}
 
+      <main className="flex flex-1 items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
           <h2 className="text-center text-3xl font-bold text-white">Circl</h2>
@@ -199,6 +201,8 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
+      </main>
+      <Footer />
     </div>
   )
 }

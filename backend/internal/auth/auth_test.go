@@ -24,11 +24,11 @@ func (m *mockStore) GetUserByEmail(_ context.Context, _ string) (*userRecord, er
 	return m.record, m.getErr
 }
 
-func (m *mockStore) CreateUser(_ context.Context, emailAddr, _ string) (*userRecord, error) {
+func (m *mockStore) CreateUser(_ context.Context, in CreateUserInput) (*userRecord, error) {
 	if m.createErr != nil {
 		return nil, m.createErr
 	}
-	return &userRecord{ID: "new-uuid", Email: emailAddr, Status: "active"}, nil
+	return &userRecord{ID: "new-uuid", Email: in.Email, Status: "active"}, nil
 }
 
 func (m *mockStore) GetUserByID(_ context.Context, _ string) (*userRecord, error) {
@@ -208,10 +208,18 @@ func TestService_Login_AccountDeleted_PastGrace(t *testing.T) {
 
 // --- Register ---
 
+func registerInput(email, password string) RegistrationInput {
+	return RegistrationInput{
+		Email:                 email,
+		Password:              password,
+		AcceptedPolicyVersion: CurrentPolicyVersion,
+	}
+}
+
 func TestService_Register_Success(t *testing.T) {
 	svc := NewService(&mockStore{}, noop, "")
 
-	user, err := svc.Register(t.Context(), "new@example.com", "Secure1pass")
+	user, err := svc.Register(t.Context(), registerInput("new@example.com", "Secure1pass"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -223,7 +231,7 @@ func TestService_Register_Success(t *testing.T) {
 func TestService_Register_InvalidEmail(t *testing.T) {
 	svc := NewService(&mockStore{}, noop, "")
 
-	_, err := svc.Register(t.Context(), "not-an-email", "securepass")
+	_, err := svc.Register(t.Context(), registerInput("not-an-email", "securepass"))
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -232,7 +240,7 @@ func TestService_Register_InvalidEmail(t *testing.T) {
 func TestService_Register_PasswordTooShort(t *testing.T) {
 	svc := NewService(&mockStore{}, noop, "")
 
-	_, err := svc.Register(t.Context(), "user@example.com", "short")
+	_, err := svc.Register(t.Context(), registerInput("user@example.com", "short"))
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -246,7 +254,7 @@ func TestService_Register_PasswordTooLong(t *testing.T) {
 		longPass[i] = 'a'
 	}
 
-	_, err := svc.Register(t.Context(), "user@example.com", string(longPass))
+	_, err := svc.Register(t.Context(), registerInput("user@example.com", string(longPass)))
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -255,9 +263,30 @@ func TestService_Register_PasswordTooLong(t *testing.T) {
 func TestService_Register_EmailTaken(t *testing.T) {
 	svc := NewService(&mockStore{createErr: ErrEmailTaken}, noop, "")
 
-	_, err := svc.Register(t.Context(), "taken@example.com", "Secure1pass")
+	_, err := svc.Register(t.Context(), registerInput("taken@example.com", "Secure1pass"))
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("got %v, want ErrEmailTaken", err)
+	}
+}
+
+func TestService_Register_StampsConsentTimestamps(t *testing.T) {
+	captured := &mockStoreCapture{}
+	svc := NewService(captured, noop, "")
+
+	before := time.Now()
+	if _, err := svc.Register(t.Context(), registerInput("new@example.com", "Secure1pass")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	after := time.Now()
+
+	if captured.in.AcceptedTermsAt.Before(before) || captured.in.AcceptedTermsAt.After(after) {
+		t.Errorf("AcceptedTermsAt = %v, want between %v and %v", captured.in.AcceptedTermsAt, before, after)
+	}
+	if !captured.in.AcceptedTermsAt.Equal(captured.in.AcceptedPrivacyAt) {
+		t.Errorf("AcceptedTermsAt = %v != AcceptedPrivacyAt = %v", captured.in.AcceptedTermsAt, captured.in.AcceptedPrivacyAt)
+	}
+	if captured.in.AcceptedPolicyVersion != CurrentPolicyVersion {
+		t.Errorf("AcceptedPolicyVersion = %q, want %q", captured.in.AcceptedPolicyVersion, CurrentPolicyVersion)
 	}
 }
 
@@ -569,6 +598,18 @@ func TestValidatePassword(t *testing.T) {
 }
 
 // --- extended mocks for token-based tests ---
+
+// mockStoreCapture records the CreateUser input so tests can assert on the
+// consent timestamps the service stamps server-side.
+type mockStoreCapture struct {
+	mockStore
+	in CreateUserInput
+}
+
+func (m *mockStoreCapture) CreateUser(_ context.Context, in CreateUserInput) (*userRecord, error) {
+	m.in = in
+	return &userRecord{ID: "new-uuid", Email: in.Email, Status: "active"}, nil
+}
 
 type mockStoreWithReset struct {
 	*mockStore

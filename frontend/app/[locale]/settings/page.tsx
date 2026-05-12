@@ -14,6 +14,7 @@ import Modal from "@/components/ui/Modal"
 import PasswordField from "@/components/ui/PasswordField"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
 import Toggle from "@/components/ui/Toggle"
+import Footer from "@/components/Footer"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -778,6 +779,10 @@ export default function SettingsPage() {
           <BlockedUsersSection token={token} />
           <PasswordSection token={token} />
           <DeleteAccountSection token={token} />
+        </div>
+
+        <div className="-mx-4 mt-10">
+          <Footer />
         </div>
       </div>
     </div>

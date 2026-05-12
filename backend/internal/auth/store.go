@@ -208,12 +208,13 @@ func (s *pgStore) AnonymizeUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-func (s *pgStore) CreateUser(ctx context.Context, email, passwordHash string) (*userRecord, error) {
+func (s *pgStore) CreateUser(ctx context.Context, in CreateUserInput) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, provider, status)
-		 VALUES ($1, $2, 'local', 'active')
+		`INSERT INTO users (email, password_hash, provider, status,
+		                     terms_accepted_at, privacy_accepted_at, accepted_policy_version)
+		 VALUES ($1, $2, 'local', 'active', $3, $4, $5)
 		 RETURNING id, email, password_hash, status, role, email_verified_at, deleted_at`,
-		email, passwordHash,
+		in.Email, in.PasswordHash, in.AcceptedTermsAt, in.AcceptedPrivacyAt, in.AcceptedPolicyVersion,
 	)
 	var u userRecord
 	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Status, &u.Role, &u.EmailVerifiedAt, &u.DeletedAt); err != nil {

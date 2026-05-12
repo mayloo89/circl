@@ -128,7 +128,7 @@ func TestPgStore_CreateUser_Success(t *testing.T) {
 		}},
 	}}
 
-	record, err := store.CreateUser(t.Context(), "new@example.com", "$2a$10$hash")
+	record, err := store.CreateUser(t.Context(), CreateUserInput{Email: "new@example.com", PasswordHash: "$2a$10$hash", AcceptedTermsAt: time.Now(), AcceptedPrivacyAt: time.Now(), AcceptedPolicyVersion: CurrentPolicyVersion})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestPgStore_CreateUser_EmailTaken(t *testing.T) {
 		}},
 	}}
 
-	_, err := store.CreateUser(t.Context(), "taken@example.com", "hash")
+	_, err := store.CreateUser(t.Context(), CreateUserInput{Email: "taken@example.com", PasswordHash: "hash", AcceptedTermsAt: time.Now(), AcceptedPrivacyAt: time.Now(), AcceptedPolicyVersion: CurrentPolicyVersion})
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("got %v, want ErrEmailTaken", err)
 	}
@@ -155,7 +155,7 @@ func TestPgStore_CreateUser_QueryError(t *testing.T) {
 		row: &mockRow{scanFn: func(_ ...any) error { return errors.New("db error") }},
 	}}
 
-	_, err := store.CreateUser(t.Context(), "user@example.com", "hash")
+	_, err := store.CreateUser(t.Context(), CreateUserInput{Email: "user@example.com", PasswordHash: "hash", AcceptedTermsAt: time.Now(), AcceptedPrivacyAt: time.Now(), AcceptedPolicyVersion: CurrentPolicyVersion})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -517,7 +517,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register new user", func(t *testing.T) {
-		user, err := svc.Register(t.Context(), email, "Secure1pass")
+		user, err := svc.Register(t.Context(), RegistrationInput{Email: email, Password: "Secure1pass", AcceptedPolicyVersion: CurrentPolicyVersion})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -550,7 +550,7 @@ func TestStore_Integration(t *testing.T) {
 	})
 
 	t.Run("register duplicate email returns ErrEmailTaken", func(t *testing.T) {
-		_, err := svc.Register(t.Context(), email, "Other1pass")
+		_, err := svc.Register(t.Context(), RegistrationInput{Email: email, Password: "Other1pass", AcceptedPolicyVersion: CurrentPolicyVersion})
 		if !errors.Is(err, ErrEmailTaken) {
 			t.Errorf("got %v, want ErrEmailTaken", err)
 		}

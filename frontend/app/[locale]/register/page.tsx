@@ -8,6 +8,8 @@ import { registerSchema } from "@/lib/validation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
 import PasswordField from "@/components/ui/PasswordField"
 import DateOfBirthPicker from "@/components/ui/DateOfBirthPicker"
+import Checkbox from "@/components/ui/Checkbox"
+import Footer from "@/components/Footer"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -36,6 +38,10 @@ export default function RegisterPage() {
   const [submitError, setSubmitError] = useState("")
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
+
+  const [acceptTerms, setAcceptTerms] = useState(false)
+  const [consentError, setConsentError] = useState<string | undefined>(undefined)
+  const consentRef = useRef<HTMLInputElement>(null)
 
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [usernameChecking, setUsernameChecking] = useState(false)
@@ -101,6 +107,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitError("")
+    setConsentError(undefined)
 
     const parsed = registerSchema.safeParse({ email, password, confirm, username, date_of_birth: dateOfBirth })
     if (!parsed.success) {
@@ -110,6 +117,12 @@ export default function RegisterPage() {
         if (!errors[path]) errors[path] = issue.message
       }
       setFieldErrors(errors)
+      return
+    }
+
+    if (!acceptTerms) {
+      setConsentError(t("consentRequired"))
+      consentRef.current?.focus()
       return
     }
 
@@ -123,6 +136,7 @@ export default function RegisterPage() {
           password: parsed.data.password,
           username: parsed.data.username,
           date_of_birth: parsed.data.date_of_birth,
+          accept_terms: true,
         }),
       })
 
@@ -138,6 +152,11 @@ export default function RegisterPage() {
       if (res.status === 429) { setSubmitError(t("rateLimited")); return }
       if (res.status === 400) {
         const body = await res.json()
+        if (body.code === "terms_not_accepted") {
+          setConsentError(t("consentRequired"))
+          consentRef.current?.focus()
+          return
+        }
         setSubmitError(body.error ?? t("invalidInput"))
         return
       }
@@ -153,7 +172,8 @@ export default function RegisterPage() {
 
   if (registered) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+      <div className="flex min-h-screen flex-col bg-gray-950">
+        <main className="flex flex-1 items-center justify-center px-4 py-8">
         <div className="w-full max-w-md space-y-6 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-wash/50 ring-1 ring-brand-strong/60">
             <svg className="h-8 w-8 text-brand-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
@@ -184,12 +204,15 @@ export default function RegisterPage() {
             {t("backToSignIn")}
           </Link>
         </div>
+        </main>
+        <Footer />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950">
+    <div className="flex min-h-screen flex-col bg-gray-950">
+      <main className="flex flex-1 items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
           <h2 className="text-center text-3xl font-bold text-white">{t("title")}</h2>
@@ -302,6 +325,39 @@ export default function RegisterPage() {
               error={fieldErrors.confirm}
               autoComplete="new-password"
             />
+
+            <Checkbox
+              ref={consentRef}
+              id="accept_terms"
+              checked={acceptTerms}
+              onChange={(e) => {
+                setAcceptTerms(e.target.checked)
+                if (e.target.checked) setConsentError(undefined)
+              }}
+              error={consentError}
+              label={t.rich("consentLabel", {
+                terms: (chunks) => (
+                  <Link
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-muted underline hover:text-brand-subtle"
+                  >
+                    {chunks}
+                  </Link>
+                ),
+                privacy: (chunks) => (
+                  <Link
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-muted underline hover:text-brand-subtle"
+                  >
+                    {chunks}
+                  </Link>
+                ),
+              })}
+            />
           </div>
 
           <button
@@ -320,6 +376,8 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+      </main>
+      <Footer />
     </div>
   )
 }

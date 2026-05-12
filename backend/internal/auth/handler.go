@@ -95,6 +95,7 @@ type registerRequest struct {
 	Password    string `json:"password"`
 	Username    string `json:"username"`
 	DateOfBirth string `json:"date_of_birth"` // "YYYY-MM-DD"
+	AcceptTerms bool   `json:"accept_terms"`
 }
 
 type userResponse struct {
@@ -325,8 +326,16 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "email and password are required")
 			return
 		}
+		if !req.AcceptTerms {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeTermsNotAccepted, "you must accept the terms and privacy policy to register")
+			return
+		}
 
-		user, err := auth.Register(r.Context(), req.Email, req.Password)
+		user, err := auth.Register(r.Context(), RegistrationInput{
+			Email:                 req.Email,
+			Password:              req.Password,
+			AcceptedPolicyVersion: CurrentPolicyVersion,
+		})
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrInvalidInput):
