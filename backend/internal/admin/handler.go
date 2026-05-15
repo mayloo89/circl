@@ -18,13 +18,30 @@ type handler struct {
 	presence PresenceLookupFunc
 }
 
+// HandlerOption configures optional admin sub-routers.
+type HandlerOption func(*handlerConfig)
+
+type handlerConfig struct {
+	appeals http.Handler
+}
+
+// WithAppealsHandler mounts an admin-only sub-router at /admin/appeals. The
+// caller supplies the handler so this package doesn't import appeals.
+func WithAppealsHandler(h http.Handler) HandlerOption {
+	return func(c *handlerConfig) { c.appeals = h }
+}
+
 // NewHandler returns an http.Handler covering all admin routes.
 // All routes require the caller to be an admin (checked via RequireAdmin middleware).
 // Must be mounted behind RequireAuth so the admin flag is already in context.
 //
 // presence may be nil; in that case the user list omits live presence
 // (legacy behavior) and existing tests don't need to wire it up.
-func NewHandler(svc *Service, presence PresenceLookupFunc) http.Handler {
+func NewHandler(svc *Service, presence PresenceLookupFunc, opts ...HandlerOption) http.Handler {
+	cfg := &handlerConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
 	h := &handler{svc: svc, presence: presence}
 	r := chi.NewRouter()
 	r.Use(middleware.RequireAdmin)
@@ -35,6 +52,10 @@ func NewHandler(svc *Service, presence PresenceLookupFunc) http.Handler {
 	r.Post("/channels", h.createChannel)
 	r.Put("/channels/{id}", h.updateChannel)
 	r.Delete("/channels/{id}", h.deleteChannel)
+
+	if cfg.appeals != nil {
+		r.Mount("/appeals", cfg.appeals)
+	}
 
 	// Super-admin-only routes.
 	r.Group(func(r chi.Router) {

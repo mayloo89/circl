@@ -93,6 +93,22 @@
     "copyright": "© {year} Circl",
     "navAriaLabel": "Links legais"
   },
+  "appeal": {
+    "title": "Apelar a suspensão da sua conta",
+    "subtitle": "Conte à equipe de revisão por que você acredita que essa decisão deveria ser reconsiderada. A equipe lê cada apelo.",
+    "bodyLabel": "Seu apelo",
+    "bodyPlaceholder": "Descreva o que aconteceu e por que acha que a decisão deveria ser reconsiderada…",
+    "submit": "Enviar apelo",
+    "submitting": "Enviando…",
+    "submitted": "Recebemos seu apelo. A equipe de revisão entrará em contato por e-mail com uma decisão.",
+    "alreadyResolvedHeading": "Este apelo já foi resolvido",
+    "alreadyResolvedBody": "Seu apelo foi {status}. Verifique seu e-mail para ver a decisão e os próximos passos.",
+    "invalidTokenHeading": "Link inválido ou expirado",
+    "invalidTokenBody": "Este link de apelo expirou ou não é mais válido. Se ainda precisa de ajuda, escreva para info.circl.ar@gmail.com.",
+    "expiresAt": "O link expira: {date}",
+    "statusApproved": "aprovado",
+    "statusDenied": "negado"
+  },
   "legal": {
     "lastUpdated": "Última atualização: {date}",
     "draftBanner": "Rascunho — requer revisão jurídica antes do lançamento.",
@@ -521,11 +537,15 @@
     "descriptionLabel": "Descrição (opcional)",
     "descriptionPlaceholder": "Forneça detalhes adicionais…",
     "submit": "Enviar denúncia",
+    "priorityNotice": "Denúncias de CSAM ou imagens íntimas não consensuais vão direto para a fila prioritária.",
     "reasons": {
       "harassment": "Assédio",
       "spam": "Spam",
       "inappropriateContent": "Conteúdo inapropriado",
       "fakeProfile": "Perfil falso",
+      "nonConsensualIntimateImages": "Imagens íntimas não consensuais (NCII)",
+      "digitalGenderViolence": "Violência digital de gênero (Ley Olimpia)",
+      "csam": "Conteúdo sexual envolvendo menores (CSAM)",
       "other": "Outro"
     }
   },

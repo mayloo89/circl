@@ -71,6 +71,9 @@ const (
 	CodeChannelNameTaken    = "channel_name_taken"
 	CodeUserNotFound        = "user_not_found"
 
+	// Appeals
+	CodeAppealAlreadyResolved = "appeal_already_resolved"
+
 	// Push
 	CodeServiceUnavailable = "service_unavailable"
 )

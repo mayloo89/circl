@@ -115,17 +115,21 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 	apierror.WriteJSON(w, http.StatusCreated, report)
 }
 
-// ListReports handles GET /reports (admin only).
+// ListReports handles GET /reports?status=&priority= (admin only).
 func (m *Manager) ListReports(w http.ResponseWriter, r *http.Request) {
-	status := r.URL.Query().Get("status")
-
-	reports, err := m.svc.List(r.Context(), status)
+	reports, err := m.svc.List(r.Context(), ListFilter{
+		Status:   r.URL.Query().Get("status"),
+		Priority: r.URL.Query().Get("priority"),
+	})
 	if err != nil {
-		if errors.Is(err, ErrInvalidStatus) {
+		switch {
+		case errors.Is(err, ErrInvalidStatus):
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid status")
-			return
+		case errors.Is(err, ErrInvalidPriority):
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid priority")
+		default:
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		}
-		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		return
 	}
 

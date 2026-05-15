@@ -386,7 +386,10 @@ func TestUpdateUserStatus_Suspend_Success(t *testing.T) {
 }
 
 func TestUpdateUserStatus_Ban_Success(t *testing.T) {
-	store := &mockStore{suspension: &admin.Suspension{ID: "s-1"}}
+	store := &mockStore{
+		user:       &admin.UserRecord{ID: "u-1", Email: "u@example.com", Status: "active"},
+		suspension: &admin.Suspension{ID: "s-1"},
+	}
 	h := newHandler(store)
 
 	body := `{"action":"ban","reason":"severe violation"}`

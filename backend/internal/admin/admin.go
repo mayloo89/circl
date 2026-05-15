@@ -99,15 +99,29 @@ type Store interface {
 	SetUserRole(ctx context.Context, userID, role string) error
 }
 
+// SuspensionNotifier is the optional hook called after a successful suspension
+// or ban. The notifier is responsible for creating the appeal record and
+// emailing the user the appeal link. Failures are logged by the notifier and
+// must not block the suspension — admin already saw the action succeed.
+type SuspensionNotifier interface {
+	NotifyOfSuspension(ctx context.Context, user UserRecord, suspension Suspension)
+}
+
 // Service wraps the admin Store with business logic.
 type Service struct {
-	store Store
+	store    Store
+	notifier SuspensionNotifier
 }
 
 // NewService creates a Service backed by the given Store.
 func NewService(store Store) *Service {
 	return &Service{store: store}
 }
+
+// SetSuspensionNotifier wires the appeal hook used by SuspendUser and BanUser.
+// Done as a setter rather than a constructor option because the notifier
+// depends on services initialised after the admin store.
+func (s *Service) SetSuspensionNotifier(n SuspensionNotifier) { s.notifier = n }
 
 // IsActiveUser implements middleware.UserStatusChecker.
 func (s *Service) IsActiveUser(ctx context.Context, userID string) (bool, error) {
@@ -132,17 +146,35 @@ func (s *Service) SuspendUser(ctx context.Context, userID, reason string, durati
 	if err := s.store.SetUserStatus(ctx, userID, "suspended"); err != nil {
 		return err
 	}
-	_, err = s.store.CreateSuspension(ctx, userID, until, reason, adminID)
-	return err
+	susp, err := s.store.CreateSuspension(ctx, userID, until, reason, adminID)
+	if err != nil {
+		return err
+	}
+	s.notifySuspension(ctx, *u, *susp)
+	return nil
 }
 
 // BanUser permanently sets the user's status to 'banned' and records the action.
 func (s *Service) BanUser(ctx context.Context, userID, reason, adminID string) error {
+	u, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
 	if err := s.store.SetUserStatus(ctx, userID, "banned"); err != nil {
 		return err
 	}
-	_, err := s.store.CreateSuspension(ctx, userID, nil, reason, adminID)
-	return err
+	susp, err := s.store.CreateSuspension(ctx, userID, nil, reason, adminID)
+	if err != nil {
+		return err
+	}
+	s.notifySuspension(ctx, *u, *susp)
+	return nil
+}
+
+func (s *Service) notifySuspension(ctx context.Context, user UserRecord, susp Suspension) {
+	if s.notifier != nil {
+		s.notifier.NotifyOfSuspension(ctx, user, susp)
+	}
 }
 
 // GetStats returns aggregate counts for the admin dashboard.

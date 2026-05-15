@@ -13,6 +13,9 @@ interface ReportDialogProps {
 }
 
 const REASON_VALUES = [
+  { value: "csam", key: "csam" },
+  { value: "non_consensual_intimate_images", key: "nonConsensualIntimateImages" },
+  { value: "digital_gender_violence", key: "digitalGenderViolence" },
   { value: "harassment", key: "harassment" },
   { value: "spam", key: "spam" },
   { value: "inappropriate_content", key: "inappropriateContent" },
@@ -47,6 +50,9 @@ export default function ReportDialog({
         <h2 className="text-lg font-semibold text-white">{t("title")}</h2>
         <p className="mt-2 text-sm text-gray-400">
           {t("subtitle")}
+        </p>
+        <p className="mt-3 rounded-md bg-rose-950 border border-rose-900 px-3 py-2 text-xs text-rose-200">
+          {t("priorityNotice")}
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>

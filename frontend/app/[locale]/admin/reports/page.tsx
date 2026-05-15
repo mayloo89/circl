@@ -15,6 +15,7 @@ interface Report {
   reported_name: string
   reported_avatar: string
   reason: string
+  priority: string
   description: string
   status: string
   created_at: string
@@ -30,10 +31,24 @@ const STATUS_LABELS: Record<string, string> = {
   dismissed: "Dismissed",
 }
 
+const PRIORITY_TABS = ["", "critical", "high", "normal"] as const
+const PRIORITY_LABELS: Record<string, string> = {
+  "": "Any priority",
+  critical: "Critical",
+  high: "High",
+  normal: "Normal",
+}
+
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-orange-900 text-orange-300",
   reviewed: "bg-green-900 text-green-300",
   dismissed: "bg-gray-800 text-gray-400",
+}
+
+const PRIORITY_BADGE: Record<string, string> = {
+  critical: "bg-rose-900 text-rose-200 ring-1 ring-rose-700",
+  high: "bg-amber-900 text-amber-200",
+  normal: "bg-gray-800 text-gray-400",
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -41,6 +56,9 @@ const REASON_LABELS: Record<string, string> = {
   spam: "Spam",
   inappropriate_content: "Inappropriate content",
   fake_profile: "Fake profile",
+  non_consensual_intimate_images: "Non-consensual intimate images",
+  digital_gender_violence: "Digital gender violence",
+  csam: "CSAM",
   other: "Other",
 }
 
@@ -192,6 +210,7 @@ export default function AdminReportsPage() {
   const { data: session } = useSession()
   const [reports, setReports] = useState<Report[]>([])
   const [statusFilter, setStatusFilter] = useState<string>("pending")
+  const [priorityFilter, setPriorityFilter] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [reviewTarget, setReviewTarget] = useState<Report | null>(null)
@@ -203,6 +222,7 @@ export default function AdminReportsPage() {
     try {
       const params = new URLSearchParams()
       if (statusFilter) params.set("status", statusFilter)
+      if (priorityFilter) params.set("priority", priorityFilter)
       const res = await fetch(`${API_URL}/reports?${params}`, {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       })
@@ -214,7 +234,7 @@ export default function AdminReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [session, statusFilter])
+  }, [session, statusFilter, priorityFilter])
 
   useEffect(() => { fetchReports() }, [fetchReports])
 
@@ -223,20 +243,34 @@ export default function AdminReportsPage() {
       <h1 className="text-2xl font-bold text-white mb-6">Reports</h1>
 
       {/* Status tabs */}
-      <div className="flex gap-1 mb-6 rounded-lg bg-gray-900 p-1 w-fit ring-1 ring-gray-800">
-        {STATUS_TABS.map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`rounded px-4 py-1.5 text-sm font-medium transition-colors ${
-              statusFilter === s
-                ? "bg-brand-primary text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            {STATUS_LABELS[s]}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex gap-1 rounded-lg bg-gray-900 p-1 ring-1 ring-gray-800">
+          {STATUS_TABS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`rounded px-4 py-1.5 text-sm font-medium transition-colors ${
+                statusFilter === s
+                  ? "bg-brand-primary text-white"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value)}
+          aria-label="Filter by priority"
+          className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+        >
+          {PRIORITY_TABS.map((p) => (
+            <option key={p} value={p}>
+              {PRIORITY_LABELS[p]}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
@@ -246,6 +280,7 @@ export default function AdminReportsPage() {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-900 text-xs uppercase tracking-wider text-gray-500">
             <tr>
+              <th className="px-4 py-3">Priority</th>
               <th className="px-4 py-3">Reported user</th>
               <th className="px-4 py-3">Reason</th>
               <th className="px-4 py-3">Status</th>
@@ -257,6 +292,7 @@ export default function AdminReportsPage() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="bg-gray-950">
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
@@ -266,13 +302,18 @@ export default function AdminReportsPage() {
               ))
             ) : reports.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500 bg-gray-950">
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500 bg-gray-950">
                   No reports found
                 </td>
               </tr>
             ) : (
               reports.map((r) => (
                 <tr key={r.id} className="bg-gray-950 hover:bg-gray-900">
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGE[r.priority] ?? PRIORITY_BADGE.normal}`}>
+                      {PRIORITY_LABELS[r.priority] ?? r.priority}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <p className="text-gray-100 font-medium">{r.reported_name || "—"}</p>
                     <p className="text-xs text-gray-500">{r.reported_email}</p>

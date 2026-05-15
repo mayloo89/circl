@@ -93,11 +93,12 @@ func scanReport(r *Report) func(dest ...any) error {
 		*dest[1].(*string) = r.ReporterID
 		*dest[2].(*string) = r.ReportedUserID
 		*dest[3].(*string) = r.Reason
-		*dest[4].(*string) = r.Description
-		*dest[5].(*string) = r.Status
-		*dest[6].(*time.Time) = r.CreatedAt
-		*dest[7].(**time.Time) = r.ReviewedAt
-		*dest[8].(**string) = r.ReviewedBy
+		*dest[4].(*string) = r.Priority
+		*dest[5].(*string) = r.Description
+		*dest[6].(*string) = r.Status
+		*dest[7].(*time.Time) = r.CreatedAt
+		*dest[8].(**time.Time) = r.ReviewedAt
+		*dest[9].(**string) = r.ReviewedBy
 		return nil
 	}
 }
@@ -122,7 +123,7 @@ func TestStore_Create_Success(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	got, err := s.Create(context.Background(), "u-1", "u-2", "harassment", "Test description")
+	got, err := s.Create(context.Background(), "u-1", "u-2", "harassment", PriorityNormal, "Test description")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -154,7 +155,7 @@ func TestStore_Create_WithReviewedFields(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	got, err := s.Create(context.Background(), "u-1", "u-2", "spam", "")
+	got, err := s.Create(context.Background(), "u-1", "u-2", "spam", PriorityNormal, "")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -176,7 +177,7 @@ func TestStore_Create_StoreError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.Create(context.Background(), "u-1", "u-2", "spam", "")
+	_, err := s.Create(context.Background(), "u-1", "u-2", "spam", PriorityNormal, "")
 	if err == nil {
 		t.Fatal("Create() expected error")
 	}
@@ -254,7 +255,7 @@ func TestStore_List_All(t *testing.T) {
 		data: make([][]any, len(reports)),
 	}
 	for i, r := range reports {
-		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedAvatar, r.Reason, r.Description, r.Status, r.CreatedAt, nil, nil}
+		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
 	}
 
 	q := &mockReportQuerier{
@@ -264,7 +265,7 @@ func TestStore_List_All(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	got, err := s.List(context.Background(), "")
+	got, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -280,7 +281,7 @@ func TestStore_List_WithStatusFilter(t *testing.T) {
 	}
 	rows := &mockReportRows{data: make([][]any, len(reports))}
 	for i, r := range reports {
-		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedAvatar, r.Reason, r.Description, r.Status, r.CreatedAt, nil, nil}
+		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
 	}
 
 	q := &mockReportQuerier{
@@ -290,7 +291,7 @@ func TestStore_List_WithStatusFilter(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	got, err := s.List(context.Background(), "pending")
+	got, err := s.List(context.Background(), ListFilter{Status: "pending"})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -309,7 +310,7 @@ func TestStore_List_Empty(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	got, err := s.List(context.Background(), "")
+	got, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -326,7 +327,7 @@ func TestStore_List_StoreError(t *testing.T) {
 	}
 	s := &pgStore{db: q}
 
-	_, err := s.List(context.Background(), "")
+	_, err := s.List(context.Background(), ListFilter{})
 	if err == nil {
 		t.Fatal("List() expected error")
 	}

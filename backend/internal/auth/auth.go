@@ -91,6 +91,28 @@ type AccountManager interface {
 	DeleteAccount(ctx context.Context, userID, password string) error
 }
 
+// AgeAttestation captures the evidence trail that a user claimed they were of
+// legal age at registration. The row is preserved across hard-delete (the
+// users FK is ON DELETE SET NULL) because the attestation outlives the
+// account it created — investigators need to be able to prove what we knew
+// and when.
+type AgeAttestation struct {
+	UserID        string
+	UserEmail     string
+	AttestedAge   int
+	IP            string
+	UserAgent     string
+	DateOfBirth   *time.Time
+	PolicyVersion string
+}
+
+// AgeAuditStore is the optional dependency that, when wired in, makes the
+// register handler log each successful registration to the
+// age_verification_audit table.
+type AgeAuditStore interface {
+	LogAgeAttestation(ctx context.Context, in AgeAttestation) error
+}
+
 // EmailFlowService handles password reset and email verification.
 type EmailFlowService interface {
 	ForgotPassword(ctx context.Context, emailAddr, frontendURL string) error

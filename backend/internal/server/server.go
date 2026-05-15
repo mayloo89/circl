@@ -55,6 +55,7 @@ type Config struct {
 	Reports       http.Handler
 	Push          http.Handler
 	Admin         http.Handler
+	Appeals       http.Handler // public /appeal/{token}; nil disables
 	LocalStorage  http.Handler // nil in production
 	Test          http.Handler // nil unless TEST_ENDPOINTS_ENABLED
 }
@@ -91,6 +92,12 @@ func New(cfg Config) http.Handler {
 
 	r.Mount("/auth", cfg.Auth)
 	r.Handle("/profiles/available", cfg.Available)
+
+	// /appeal/{token} is intentionally un-authenticated — the locked-out user
+	// it serves cannot log in. Auth is provided by the single-use token.
+	if cfg.Appeals != nil {
+		r.Mount("/appeal", cfg.Appeals)
+	}
 
 	// SSE stream — auth is handled inside the handler via ?token= query param
 	// because the browser EventSource API does not support custom headers.

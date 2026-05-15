@@ -54,6 +54,13 @@ func NewStore(pool *pgxpool.Pool) Store {
 	return &pgStore{db: &pgxQuerier{pool: pool}}
 }
 
+// NewAgeAuditStore returns an AgeAuditStore backed by the given pool. Kept
+// separate from Store so unit-test fakes don't have to implement the audit
+// method.
+func NewAgeAuditStore(pool *pgxpool.Pool) AgeAuditStore {
+	return &pgStore{db: &pgxQuerier{pool: pool}}
+}
+
 func (s *pgStore) GetUserByEmail(ctx context.Context, email string) (*userRecord, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT id, email, password_hash, status, role, email_verified_at, deleted_at
@@ -300,6 +307,30 @@ func (s *pgStore) GetEmailVerification(ctx context.Context, tokenHash string) (*
 		return nil, fmt.Errorf("query email verification: %w", err)
 	}
 	return &r, nil
+}
+
+// LogAgeAttestation persists the evidence that a registering user claimed
+// they were of legal age. We accept the IP as a string so the caller can pass
+// the result of clientIP() directly; an empty string is stored as NULL.
+func (s *pgStore) LogAgeAttestation(ctx context.Context, in AgeAttestation) error {
+	var ip any
+	if in.IP != "" {
+		ip = in.IP
+	}
+	var dob any
+	if in.DateOfBirth != nil {
+		dob = *in.DateOfBirth
+	}
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO age_verification_audit
+		   (user_id, user_email, attested_age, ip, user_agent, date_of_birth, policy_version)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		in.UserID, in.UserEmail, in.AttestedAge, ip, in.UserAgent, dob, in.PolicyVersion,
+	)
+	if err != nil {
+		return fmt.Errorf("log age attestation: %w", err)
+	}
+	return nil
 }
 
 // MarkEmailVerified marks the verification record as used and sets email_verified_at

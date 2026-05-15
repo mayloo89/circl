@@ -26,6 +26,10 @@ const (
 	defaultLoginIPWindow    = 15 * time.Minute
 	defaultRegisterIPLimit  = 10
 	defaultRegisterIPWindow = time.Hour
+
+	// minAgeYears is the age claimed by accept_terms; recorded verbatim in
+	// the age-verification audit trail.
+	minAgeYears = 18
 )
 
 // LoginLocker tracks consecutive login failures per account and enforces lockouts.
@@ -54,6 +58,7 @@ type handlerConfig struct {
 	frontendURL      string
 	profileStore     profiles.Store
 	refreshStore     RefreshTokenStore
+	ageAuditStore    AgeAuditStore
 }
 
 func WithLocker(l LoginLocker) HandlerOption { return func(c *handlerConfig) { c.locker = l } }
@@ -82,6 +87,12 @@ func WithEmailFlow(svc EmailFlowService, frontendURL string) HandlerOption {
 // WithProfileStore enables profile seeding at registration time (username + DOB).
 func WithProfileStore(s profiles.Store) HandlerOption {
 	return func(c *handlerConfig) { c.profileStore = s }
+}
+
+// WithAgeAuditStore enables age-attestation audit logging on registration.
+// When unset (e.g. in unit tests) the handler skips the audit silently.
+func WithAgeAuditStore(s AgeAuditStore) HandlerOption {
+	return func(c *handlerConfig) { c.ageAuditStore = s }
 }
 
 type loginRequest struct {
@@ -349,11 +360,13 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 		}
 
 		// Seed the profile with username and date of birth if a profile store is configured.
+		var dobPtr *time.Time
 		if cfg.profileStore != nil && (req.Username != "" || req.DateOfBirth != "") {
 			in := profiles.ProfileInput{Username: req.Username}
 			if req.DateOfBirth != "" {
 				if dob, err := time.Parse("2006-01-02", req.DateOfBirth); err == nil {
 					in.DateOfBirth = &dob
+					dobPtr = &dob
 				}
 			}
 			if _, err := cfg.profileStore.Upsert(r.Context(), user.ID, in); err != nil {
@@ -366,6 +379,29 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 				}
 				zerolog.Ctx(r.Context()).Warn().Err(err).Str("user_id", user.ID).Msg("auth: seed profile failed")
 				// Non-fatal: account exists, user can set profile later.
+			}
+		} else if req.DateOfBirth != "" {
+			if dob, err := time.Parse("2006-01-02", req.DateOfBirth); err == nil {
+				dobPtr = &dob
+			}
+		}
+
+		// Persist the age attestation evidence (IP, UA, DOB, timestamp) so the
+		// trust-and-safety audit trail survives even after the account is
+		// hard-deleted. Failure is logged but not surfaced — the account is
+		// already created and the attestation row is best-effort evidence.
+		if cfg.ageAuditStore != nil {
+			err := cfg.ageAuditStore.LogAgeAttestation(r.Context(), AgeAttestation{
+				UserID:        user.ID,
+				UserEmail:     user.Email,
+				AttestedAge:   minAgeYears,
+				IP:            clientIP(r),
+				UserAgent:     r.UserAgent(),
+				DateOfBirth:   dobPtr,
+				PolicyVersion: CurrentPolicyVersion,
+			})
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Str("user_id", user.ID).Msg("auth: log age attestation failed")
 			}
 		}
 
