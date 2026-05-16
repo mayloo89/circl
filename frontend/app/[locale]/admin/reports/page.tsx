@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react"
 import { useCallback, useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
+import { Link } from "@/i18n/navigation"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -13,6 +14,7 @@ interface Report {
   reported_user_id: string
   reported_email: string
   reported_name: string
+  reported_username: string
   reported_avatar: string
   reason: string
   priority: string
@@ -117,7 +119,19 @@ function ReviewModal({
 
         <div className="rounded bg-gray-800 p-4 space-y-1 text-sm">
           <p className="text-gray-400">
-            <span className="text-gray-200 font-medium">Reported user:</span> {report.reported_name || report.reported_email}
+            <span className="text-gray-200 font-medium">Reported user:</span>{" "}
+            {report.reported_username ? (
+              <Link
+                href={`/profile/${report.reported_username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-muted hover:underline"
+              >
+                {report.reported_name || report.reported_username} ↗
+              </Link>
+            ) : (
+              <span>{report.reported_name || report.reported_email}</span>
+            )}
           </p>
           <p className="text-gray-400">
             <span className="text-gray-200 font-medium">Reason:</span> {REASON_LABELS[report.reason] ?? report.reason}
@@ -315,7 +329,16 @@ export default function AdminReportsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-100 font-medium">{r.reported_name || "—"}</p>
+                    {r.reported_username ? (
+                      <Link
+                        href={`/profile/${r.reported_username}`}
+                        className="text-gray-100 font-medium hover:text-brand-muted transition-colors"
+                      >
+                        {r.reported_name || r.reported_username}
+                      </Link>
+                    ) : (
+                      <p className="text-gray-100 font-medium">{r.reported_name || "—"}</p>
+                    )}
                     <p className="text-xs text-gray-500">{r.reported_email}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-300">

@@ -255,7 +255,7 @@ func TestStore_List_All(t *testing.T) {
 		data: make([][]any, len(reports)),
 	}
 	for i, r := range reports {
-		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
+		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedUsername, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
 	}
 
 	q := &mockReportQuerier{
@@ -281,7 +281,7 @@ func TestStore_List_WithStatusFilter(t *testing.T) {
 	}
 	rows := &mockReportRows{data: make([][]any, len(reports))}
 	for i, r := range reports {
-		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
+		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedUsername, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
 	}
 
 	q := &mockReportQuerier{

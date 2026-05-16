@@ -87,21 +87,24 @@ type Report struct {
 	ReviewedBy     *string    `json:"reviewed_by,omitempty"`
 }
 
-// ReportWithUserInfo includes reported user details for display.
+// ReportWithUserInfo includes reported user details for display. Username is
+// exposed alongside email/name so the admin UI can link directly to
+// /profile/{username} for review.
 type ReportWithUserInfo struct {
-	ID             string     `json:"id"`
-	ReporterID     string     `json:"reporter_id"`
-	ReportedUserID string     `json:"reported_user_id"`
-	ReportedEmail  string     `json:"reported_email"`
-	ReportedName   string     `json:"reported_name"`
-	ReportedAvatar string     `json:"reported_avatar"`
-	Reason         string     `json:"reason"`
-	Priority       string     `json:"priority"`
-	Description    string     `json:"description"`
-	Status         string     `json:"status"`
-	CreatedAt      time.Time  `json:"created_at"`
-	ReviewedAt     *time.Time `json:"reviewed_at,omitzero"`
-	ReviewedBy     *string    `json:"reviewed_by,omitempty"`
+	ID               string     `json:"id"`
+	ReporterID       string     `json:"reporter_id"`
+	ReportedUserID   string     `json:"reported_user_id"`
+	ReportedEmail    string     `json:"reported_email"`
+	ReportedName     string     `json:"reported_name"`
+	ReportedUsername string     `json:"reported_username"`
+	ReportedAvatar   string     `json:"reported_avatar"`
+	Reason           string     `json:"reason"`
+	Priority         string     `json:"priority"`
+	Description      string     `json:"description"`
+	Status           string     `json:"status"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ReviewedAt       *time.Time `json:"reviewed_at,omitzero"`
+	ReviewedBy       *string    `json:"reviewed_by,omitempty"`
 }
 
 // ListFilter narrows a report list query. Zero-valued fields are ignored.

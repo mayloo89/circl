@@ -88,6 +88,7 @@ func (s *pgStore) List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo,
 		SELECT r.id, r.reporter_id, r.reported_user_id,
 		       u.email AS reported_email,
 		       COALESCE(NULLIF(p.display_name, ''), u.email) AS reported_name,
+		       COALESCE(p.username, '') AS reported_username,
 		       COALESCE(p.avatar_url, '') AS reported_avatar,
 		       r.reason, r.priority, r.description, r.status, r.created_at, r.reviewed_at, r.reviewed_by
 		FROM reports r
@@ -123,7 +124,7 @@ func (s *pgStore) List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo,
 	var results []ReportWithUserInfo
 	for rows.Next() {
 		var r ReportWithUserInfo
-		if err := rows.Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.ReportedEmail, &r.ReportedName, &r.ReportedAvatar,
+		if err := rows.Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.ReportedEmail, &r.ReportedName, &r.ReportedUsername, &r.ReportedAvatar,
 			&r.Reason, &r.Priority, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy); err != nil {
 			return nil, fmt.Errorf("scan report: %w", err)
 		}
