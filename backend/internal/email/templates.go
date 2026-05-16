@@ -39,6 +39,74 @@ func AccountDeletionMessage(to, loginURL string) Message {
 	}
 }
 
+// AppealMessage returns the email sent when a user is suspended or banned.
+// The appeal link routes to /appeal/{token} on the frontend, which the
+// locked-out user can reach without logging in.
+func AppealMessage(to, appealURL, reason string, permanent bool) Message {
+	subject := "Your Circl account has been suspended"
+	headline := "Your account has been suspended"
+	intro := "Your Circl account has been suspended following a review of activity that may violate our community guidelines."
+	if permanent {
+		subject = "Your Circl account has been banned"
+		headline = "Your account has been banned"
+		intro = "Your Circl account has been permanently banned following a review of activity that violates our community guidelines."
+	}
+	reasonBlock := ""
+	if reason != "" {
+		reasonBlock = fmt.Sprintf(`<p style="color:#666;font-size:13px"><strong>Reason given:</strong> %s</p>`, reason)
+	}
+	return Message{
+		To:      to,
+		Subject: subject,
+		HTML: fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+  <h2>%s</h2>
+  <p>%s</p>
+  %s
+  <p>If you believe this is a mistake, you can submit an appeal. Our team reviews every appeal individually. This link expires in <strong>30 days</strong>.</p>
+  <a href="%s" style="display:inline-block;padding:12px 24px;background:#6366f1;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Submit an appeal</a>
+  <p style="margin-top:24px;color:#666;font-size:13px">If you have questions, contact us at info.circl.ar@gmail.com.</p>
+</body>
+</html>`, headline, intro, reasonBlock, appealURL),
+		Text: fmt.Sprintf("%s\n\n%s\n\nIf you believe this is a mistake, submit an appeal here (link expires in 30 days):\n\n%s\n\nQuestions: info.circl.ar@gmail.com", headline, intro, appealURL),
+	}
+}
+
+// AppealResolutionMessage returns the email sent once admin approves or
+// denies an appeal. Approved appeals reactivate the account; denied appeals
+// leave the suspension in place.
+func AppealResolutionMessage(to, loginURL, note string, approved bool) Message {
+	subject := "Update on your Circl appeal"
+	headline := "Your appeal was approved"
+	body := "We have reviewed your appeal and reactivated your account. You can log in again now."
+	cta := fmt.Sprintf(`<a href="%s" style="display:inline-block;padding:12px 24px;background:#6366f1;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Sign in</a>`, loginURL)
+	if !approved {
+		headline = "Your appeal was denied"
+		body = "We have reviewed your appeal and our decision stands."
+		cta = ""
+	}
+	noteBlock := ""
+	if note != "" {
+		noteBlock = fmt.Sprintf(`<p style="color:#444"><strong>Note from the review team:</strong> %s</p>`, note)
+	}
+	return Message{
+		To:      to,
+		Subject: subject,
+		HTML: fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+  <h2>%s</h2>
+  <p>%s</p>
+  %s
+  %s
+  <p style="margin-top:24px;color:#666;font-size:13px">If you have questions, contact us at info.circl.ar@gmail.com.</p>
+</body>
+</html>`, headline, body, noteBlock, cta),
+		Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\nQuestions: info.circl.ar@gmail.com", headline, body, note),
+	}
+}
+
 // EmailVerificationMessage returns the email sent to verify a new account.
 func EmailVerificationMessage(to, verifyURL string) Message {
 	return Message{

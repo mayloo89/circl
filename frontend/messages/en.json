@@ -101,6 +101,22 @@
     "guidelines": { "title": "Community Guidelines" },
     "safety": { "title": "Safety" }
   },
+  "appeal": {
+    "title": "Appeal your account suspension",
+    "subtitle": "Tell the review team why you believe this decision should be reconsidered. The team reads every appeal.",
+    "bodyLabel": "Your appeal",
+    "bodyPlaceholder": "Describe what happened and why you believe the decision should be reconsidered…",
+    "submit": "Submit appeal",
+    "submitting": "Submitting…",
+    "submitted": "Your appeal was received. The review team will email you with a decision.",
+    "alreadyResolvedHeading": "This appeal has already been resolved",
+    "alreadyResolvedBody": "Your appeal was {status}. Check your email for our decision and any next steps.",
+    "invalidTokenHeading": "Link expired or invalid",
+    "invalidTokenBody": "This appeal link has expired or is no longer valid. If you still need help, contact info.circl.ar@gmail.com.",
+    "expiresAt": "Link expires: {date}",
+    "statusApproved": "approved",
+    "statusDenied": "denied"
+  },
   "forgotPassword": {
     "title": "Reset password",
     "subtitle": "Enter your email and we'll send you a reset link.",
@@ -526,6 +542,9 @@
       "spam": "Spam",
       "inappropriateContent": "Inappropriate content",
       "fakeProfile": "Fake profile",
+      "nonConsensualIntimateImages": "Non-consensual intimate images (NCII)",
+      "digitalGenderViolence": "Digital gender violence (Ley Olimpia)",
+      "csam": "Sexual content involving minors (CSAM)",
       "other": "Other"
     }
   },

@@ -257,6 +257,75 @@ func TestRegisterHandler_Success(t *testing.T) {
 	assertJSONFieldNonEmpty(t, rec.Body.Bytes(), "message")
 }
 
+type mockAgeAuditStore struct {
+	called bool
+	last   auth.AgeAttestation
+	err    error
+}
+
+func (m *mockAgeAuditStore) LogAgeAttestation(_ context.Context, in auth.AgeAttestation) error {
+	m.called = true
+	m.last = in
+	return m.err
+}
+
+func TestRegisterHandler_LogsAgeAttestation(t *testing.T) {
+	store := &mockAgeAuditStore{}
+	h := newHandler(
+		&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}},
+		auth.WithAgeAuditStore(store),
+	)
+
+	body := `{"email":"new@example.com","password":"securepass","accept_terms":true,"date_of_birth":"1990-01-02"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
+	req.Header.Set("User-Agent", "test-agent/1.0")
+	req.Header.Set("X-Forwarded-For", "203.0.113.5")
+	req.RemoteAddr = "127.0.0.1:1234"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if !store.called {
+		t.Fatal("expected LogAgeAttestation to be called")
+	}
+	if store.last.UserID != "new-uuid" {
+		t.Errorf("UserID = %q, want new-uuid", store.last.UserID)
+	}
+	if store.last.AttestedAge != 18 {
+		t.Errorf("AttestedAge = %d, want 18", store.last.AttestedAge)
+	}
+	if store.last.IP != "203.0.113.5" {
+		t.Errorf("IP = %q, want 203.0.113.5", store.last.IP)
+	}
+	if store.last.UserAgent != "test-agent/1.0" {
+		t.Errorf("UserAgent = %q, want test-agent/1.0", store.last.UserAgent)
+	}
+	if store.last.DateOfBirth == nil || store.last.DateOfBirth.Year() != 1990 {
+		t.Errorf("DateOfBirth = %v, want 1990 row", store.last.DateOfBirth)
+	}
+	if store.last.PolicyVersion != auth.CurrentPolicyVersion {
+		t.Errorf("PolicyVersion = %q, want %q", store.last.PolicyVersion, auth.CurrentPolicyVersion)
+	}
+}
+
+func TestRegisterHandler_AgeAuditFailureNonFatal(t *testing.T) {
+	store := &mockAgeAuditStore{err: errors.New("db down")}
+	h := newHandler(
+		&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}},
+		auth.WithAgeAuditStore(store),
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"email":"new@example.com","password":"securepass","accept_terms":true}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d — audit failure must not block registration", rec.Code, http.StatusCreated)
+	}
+}
+
 func TestRegisterHandler_UsernameTaken(t *testing.T) {
 	ps := &mockProfileStore{upsertErr: profiles.ErrUsernameTaken}
 	h := newHandler(

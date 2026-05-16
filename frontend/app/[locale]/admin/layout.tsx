@@ -28,6 +28,7 @@ export default async function AdminLayout({
           <SidebarLink href="/admin">Dashboard</SidebarLink>
           <SidebarLink href="/admin/users">Users</SidebarLink>
           <SidebarLink href="/admin/reports">Reports</SidebarLink>
+          <SidebarLink href="/admin/appeals">Appeals</SidebarLink>
           <SidebarLink href="/admin/channels">Channels</SidebarLink>
         </nav>
       </aside>

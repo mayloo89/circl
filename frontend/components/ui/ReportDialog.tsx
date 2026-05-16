@@ -13,6 +13,9 @@ interface ReportDialogProps {
 }
 
 const REASON_VALUES = [
+  { value: "csam", key: "csam" },
+  { value: "non_consensual_intimate_images", key: "nonConsensualIntimateImages" },
+  { value: "digital_gender_violence", key: "digitalGenderViolence" },
   { value: "harassment", key: "harassment" },
   { value: "spam", key: "spam" },
   { value: "inappropriate_content", key: "inappropriateContent" },

@@ -10,15 +10,18 @@ import (
 
 // mockStore is a test double for reports.Store.
 type mockStore struct {
-	report     *reports.Report
-	reportList []reports.ReportWithUserInfo
-	createErr  error
-	getErr     error
-	listErr    error
-	updateErr  error
+	report       *reports.Report
+	reportList   []reports.ReportWithUserInfo
+	createErr    error
+	getErr       error
+	listErr      error
+	updateErr    error
+	lastPriority string
+	lastFilter   reports.ListFilter
 }
 
-func (m *mockStore) Create(_ context.Context, _, _, _, _ string) (*reports.Report, error) {
+func (m *mockStore) Create(_ context.Context, _, _, _, priority, _ string) (*reports.Report, error) {
+	m.lastPriority = priority
 	return m.report, m.createErr
 }
 
@@ -26,7 +29,8 @@ func (m *mockStore) GetByID(_ context.Context, _ string) (*reports.Report, error
 	return m.report, m.getErr
 }
 
-func (m *mockStore) List(_ context.Context, _ string) ([]reports.ReportWithUserInfo, error) {
+func (m *mockStore) List(_ context.Context, f reports.ListFilter) ([]reports.ReportWithUserInfo, error) {
+	m.lastFilter = f
 	return m.reportList, m.listErr
 }
 
@@ -104,7 +108,7 @@ func TestService_List_Success(t *testing.T) {
 	expected := []reports.ReportWithUserInfo{{ID: "r-1"}}
 	svc := newService(&mockStore{reportList: expected})
 
-	got, err := svc.List(t.Context(), "")
+	got, err := svc.List(t.Context(), reports.ListFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -115,32 +119,97 @@ func TestService_List_Success(t *testing.T) {
 
 func TestService_List_WithStatusFilter(t *testing.T) {
 	expected := []reports.ReportWithUserInfo{{ID: "r-1"}}
-	svc := newService(&mockStore{reportList: expected})
+	store := &mockStore{reportList: expected}
+	svc := newService(store)
 
-	got, err := svc.List(t.Context(), reports.StatusPending)
+	got, err := svc.List(t.Context(), reports.ListFilter{Status: reports.StatusPending})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(got) != 1 {
 		t.Errorf("expected 1 report, got %d", len(got))
 	}
+	if store.lastFilter.Status != reports.StatusPending {
+		t.Errorf("expected status %q passed to store, got %q", reports.StatusPending, store.lastFilter.Status)
+	}
+}
+
+func TestService_List_WithPriorityFilter(t *testing.T) {
+	store := &mockStore{}
+	svc := newService(store)
+
+	if _, err := svc.List(t.Context(), reports.ListFilter{Priority: reports.PriorityCritical}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.lastFilter.Priority != reports.PriorityCritical {
+		t.Errorf("expected priority passed to store, got %q", store.lastFilter.Priority)
+	}
 }
 
 func TestService_List_InvalidStatus(t *testing.T) {
 	svc := newService(&mockStore{})
 
-	_, err := svc.List(t.Context(), "invalid_status")
+	_, err := svc.List(t.Context(), reports.ListFilter{Status: "invalid_status"})
 	if !errors.Is(err, reports.ErrInvalidStatus) {
 		t.Errorf("expected ErrInvalidStatus, got: %v", err)
+	}
+}
+
+func TestService_List_InvalidPriority(t *testing.T) {
+	svc := newService(&mockStore{})
+
+	_, err := svc.List(t.Context(), reports.ListFilter{Priority: "panic"})
+	if !errors.Is(err, reports.ErrInvalidPriority) {
+		t.Errorf("expected ErrInvalidPriority, got: %v", err)
 	}
 }
 
 func TestService_List_StoreError(t *testing.T) {
 	svc := newService(&mockStore{listErr: errors.New("db error")})
 
-	_, err := svc.List(t.Context(), "")
+	_, err := svc.List(t.Context(), reports.ListFilter{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_Create_DerivesPriority(t *testing.T) {
+	cases := []struct {
+		reason   string
+		priority string
+	}{
+		{reports.ReasonCSAM, reports.PriorityCritical},
+		{reports.ReasonNCII, reports.PriorityCritical},
+		{reports.ReasonGenderViolence, reports.PriorityHigh},
+		{reports.ReasonHarassment, reports.PriorityNormal},
+		{reports.ReasonOther, reports.PriorityNormal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.reason, func(t *testing.T) {
+			store := &mockStore{report: &reports.Report{ID: "r"}}
+			svc := newService(store)
+			if _, err := svc.Create(t.Context(), "u-1", "u-2", tc.reason, ""); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if store.lastPriority != tc.priority {
+				t.Errorf("reason %q: got priority %q, want %q", tc.reason, store.lastPriority, tc.priority)
+			}
+		})
+	}
+}
+
+func TestPriorityFor(t *testing.T) {
+	if reports.PriorityFor(reports.ReasonCSAM) != reports.PriorityCritical {
+		t.Error("CSAM should be critical")
+	}
+	if reports.PriorityFor(reports.ReasonNCII) != reports.PriorityCritical {
+		t.Error("NCII should be critical")
+	}
+	if reports.PriorityFor(reports.ReasonGenderViolence) != reports.PriorityHigh {
+		t.Error("gender violence should be high")
+	}
+	if reports.PriorityFor("anything-else") != reports.PriorityNormal {
+		t.Error("unknown reason should default to normal")
 	}
 }
 

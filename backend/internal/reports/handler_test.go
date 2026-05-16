@@ -69,7 +69,7 @@ type mockHandlerStore struct {
 	getByIDErr  error
 }
 
-func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _ string) (*reports.Report, error) {
+func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
 	return m.report, m.createErr
 }
 
@@ -77,7 +77,7 @@ func (m *mockHandlerStore) GetByID(_ context.Context, _ string) (*reports.Report
 	return m.report, m.getByIDErr
 }
 
-func (m *mockHandlerStore) List(_ context.Context, _ string) ([]reports.ReportWithUserInfo, error) {
+func (m *mockHandlerStore) List(_ context.Context, _ reports.ListFilter) ([]reports.ReportWithUserInfo, error) {
 	return m.reportsList, m.listErr
 }
 
@@ -328,6 +328,39 @@ func TestListReports_InvalidStatus(t *testing.T) {
 	h := reports.NewHandler(mgr)
 
 	req := adminAuthedRequest(httptest.NewRequest(http.MethodGet, "/?status=invalid", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestListReports_PriorityFilter(t *testing.T) {
+	items := []reports.ReportWithUserInfo{
+		{ID: "r-1", Reason: reports.ReasonNCII, Priority: reports.PriorityCritical, Status: "pending"},
+	}
+	store := &mockHandlerStore{reportsList: items}
+	svc := reports.NewService(store)
+	mgr := reports.NewManager(svc)
+	h := reports.NewHandler(mgr)
+
+	req := adminAuthedRequest(httptest.NewRequest(http.MethodGet, "/?priority=critical", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestListReports_InvalidPriority(t *testing.T) {
+	store := &mockHandlerStore{}
+	svc := reports.NewService(store)
+	mgr := reports.NewManager(svc)
+	h := reports.NewHandler(mgr)
+
+	req := adminAuthedRequest(httptest.NewRequest(http.MethodGet, "/?priority=panic", nil))
 	rec := httptest.NewRecorder()
 	serve(h, req, rec)
 

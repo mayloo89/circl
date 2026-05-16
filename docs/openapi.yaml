@@ -134,13 +134,53 @@ components:
     Report:
       type: object
       properties:
-        id:          { type: string, format: uuid }
-        reporter_id: { type: string, format: uuid }
-        target_id:   { type: string, format: uuid }
-        target_type: { type: string, enum: [user, message] }
-        reason:      { type: string }
+        id:                { type: string, format: uuid }
+        reporter_id:       { type: string, format: uuid }
+        reported_user_id:  { type: string, format: uuid }
+        reported_email:    { type: string, format: email }
+        reported_name:     { type: string }
+        reported_avatar:   { type: string }
+        reason:
+          type: string
+          enum:
+            - harassment
+            - spam
+            - inappropriate_content
+            - fake_profile
+            - non_consensual_intimate_images
+            - digital_gender_violence
+            - csam
+            - other
+        priority:    { type: string, enum: [normal, high, critical] }
+        description: { type: string }
         status:      { type: string, enum: [pending, reviewed, dismissed] }
         created_at:  { type: string, format: date-time }
+        reviewed_at: { type: [string, "null"], format: date-time }
+        reviewed_by: { type: [string, "null"], format: uuid }
+
+    Appeal:
+      type: object
+      properties:
+        id:              { type: string, format: uuid }
+        user_id:         { type: string, format: uuid }
+        suspension_id:   { type: string, format: uuid }
+        status:          { type: string, enum: [open, submitted, approved, denied, expired] }
+        body:            { type: string }
+        expires_at:      { type: string, format: date-time }
+        submitted_at:    { type: [string, "null"], format: date-time }
+        resolved_at:     { type: [string, "null"], format: date-time }
+        resolved_by:     { type: [string, "null"], format: uuid }
+        resolution_note: { type: string }
+        created_at:      { type: string, format: date-time }
+
+    AppealPublicView:
+      type: object
+      description: The un-authenticated view returned from `/appeal/{token}`.
+      properties:
+        status:          { type: string, enum: [open, submitted, approved, denied, expired] }
+        body:            { type: string }
+        expires_at:      { type: string, format: date-time }
+        resolution_note: { type: string }
 
     AdminUser:
       type: object
@@ -1259,10 +1299,16 @@ paths:
     get:
       tags: [Reports]
       summary: List reports (admin only)
+      description: |
+        Returns reports ordered critical → high → normal, then newest-first.
+        Filterable by status and priority.
       parameters:
         - in: query
           name: status
           schema: { type: string, enum: [pending, reviewed, dismissed] }
+        - in: query
+          name: priority
+          schema: { type: string, enum: [normal, high, critical] }
       responses:
         "200":
           description: Report list.
@@ -1276,22 +1322,38 @@ paths:
     post:
       tags: [Reports]
       summary: Submit a report
+      description: |
+        Priority is derived server-side from the reason —
+        `csam` and `non_consensual_intimate_images` are routed to the critical
+        queue, `digital_gender_violence` (Ley Olimpia) to the high queue,
+        everything else to normal.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [target_id, target_type, reason]
+              required: [reported_user_id, reason]
               properties:
-                target_id:   { type: string, format: uuid }
-                target_type: { type: string, enum: [user, message] }
-                reason:      { type: string }
+                reported_user_id: { type: string, format: uuid }
+                reason:
+                  type: string
+                  enum:
+                    - harassment
+                    - spam
+                    - inappropriate_content
+                    - fake_profile
+                    - non_consensual_intimate_images
+                    - digital_gender_violence
+                    - csam
+                    - other
+                description: { type: string }
       responses:
         "201":
           description: Report submitted.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /reports/{id}/status:
     put:
@@ -1317,6 +1379,116 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Appeals ───────────────────────────────────────────────────────────────────
+  # The public /appeal/{token} routes are intentionally un-authenticated — the
+  # suspended user they serve cannot log in. Auth is provided by the single-use
+  # 30-day token emailed at suspension time.
+
+  /appeal/{token}:
+    get:
+      tags: [Appeals]
+      summary: Fetch an appeal by token (un-authenticated)
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Appeal view.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppealPublicView" }
+        "404":
+          description: Invalid or expired token.
+    post:
+      tags: [Appeals]
+      summary: Submit an appeal statement (un-authenticated)
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  maxLength: 4096
+      responses:
+        "200":
+          description: Appeal recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppealPublicView" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: Invalid or expired token.
+        "409":
+          description: Appeal already resolved.
+
+  /admin/appeals:
+    get:
+      tags: [Appeals]
+      summary: List appeals (admin only)
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, submitted, approved, denied, expired] }
+      responses:
+        "200":
+          description: Appeal list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Appeal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/appeals/{id}:
+    put:
+      tags: [Appeals]
+      summary: Resolve an appeal (admin only)
+      description: |
+        Status `approved` reactivates the user. `denied` leaves the suspension
+        in place. The user is emailed the outcome plus any note in either
+        case.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [approved, denied] }
+                note:   { type: string }
+      responses:
+        "200":
+          description: Appeal resolved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appeal" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Appeal already resolved.
 
   # ── Push notifications ────────────────────────────────────────────────────────
 

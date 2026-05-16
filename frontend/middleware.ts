@@ -31,7 +31,7 @@ const AUTH_PAGES = [
 // visitors arriving from the registration consent links — and must not
 // redirect logged-in users back to home, so they're treated as a separate
 // public-readable bucket from AUTH_PAGES.
-const PUBLIC_PAGES = ["/terms", "/privacy", "/guidelines", "/safety"]
+const PUBLIC_PAGES = ["/terms", "/privacy", "/guidelines", "/safety", "/appeal"]
 
 function getLocale(pathname: string): string {
   return (

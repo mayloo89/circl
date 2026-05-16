@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -41,14 +42,14 @@ func NewStore(pool *pgxpool.Pool) Store {
 }
 
 // Create inserts a new report.
-func (s *pgStore) Create(ctx context.Context, reporterID, reportedUserID, reason, description string) (*Report, error) {
+func (s *pgStore) Create(ctx context.Context, reporterID, reportedUserID, reason, priority, description string) (*Report, error) {
 	var r Report
 	err := s.db.QueryRow(ctx, `
-		INSERT INTO reports (reporter_id, reported_user_id, reason, description)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, reporter_id, reported_user_id, reason, description, status, created_at, reviewed_at, reviewed_by`,
-		reporterID, reportedUserID, reason, description,
-	).Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.Reason, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy)
+		INSERT INTO reports (reporter_id, reported_user_id, reason, priority, description)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, reporter_id, reported_user_id, reason, priority, description, status, created_at, reviewed_at, reviewed_by`,
+		reporterID, reportedUserID, reason, priority, description,
+	).Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.Reason, &r.Priority, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -64,11 +65,11 @@ func (s *pgStore) Create(ctx context.Context, reporterID, reportedUserID, reason
 func (s *pgStore) GetByID(ctx context.Context, id string) (*Report, error) {
 	var r Report
 	err := s.db.QueryRow(ctx, `
-		SELECT id, reporter_id, reported_user_id, reason, description, status, created_at, reviewed_at, reviewed_by
+		SELECT id, reporter_id, reported_user_id, reason, priority, description, status, created_at, reviewed_at, reviewed_by
 		FROM reports
 		WHERE id = $1`,
 		id,
-	).Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.Reason, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy)
+	).Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.Reason, &r.Priority, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -79,29 +80,42 @@ func (s *pgStore) GetByID(ctx context.Context, id string) (*Report, error) {
 	return &r, nil
 }
 
-// List returns all reports with optional status filter, newest first.
-func (s *pgStore) List(ctx context.Context, status string) ([]ReportWithUserInfo, error) {
+// List returns reports matching the filter. Ordering is critical → high →
+// normal, then newest-first, so admin always sees the worst items at the top
+// of the table without needing client-side sorting.
+func (s *pgStore) List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo, error) {
 	query := `
 		SELECT r.id, r.reporter_id, r.reported_user_id,
 		       u.email AS reported_email,
 		       COALESCE(NULLIF(p.display_name, ''), u.email) AS reported_name,
+		       COALESCE(p.username, '') AS reported_username,
 		       COALESCE(p.avatar_url, '') AS reported_avatar,
-		       r.reason, r.description, r.status, r.created_at, r.reviewed_at, r.reviewed_by
+		       r.reason, r.priority, r.description, r.status, r.created_at, r.reviewed_at, r.reviewed_by
 		FROM reports r
 		JOIN users u ON u.id = r.reported_user_id
 		LEFT JOIN profiles p ON p.user_id = u.id`
 
-	var rows pgx.Rows
-	var err error
-
-	if status != "" {
-		query += ` WHERE r.status = $1 ORDER BY r.created_at DESC`
-		rows, err = s.db.Query(ctx, query, status)
-	} else {
-		query += ` ORDER BY r.created_at DESC`
-		rows, err = s.db.Query(ctx, query)
+	var conds []string
+	var args []any
+	if f.Status != "" {
+		args = append(args, f.Status)
+		conds = append(conds, fmt.Sprintf("r.status = $%d", len(args)))
 	}
+	if f.Priority != "" {
+		args = append(args, f.Priority)
+		conds = append(conds, fmt.Sprintf("r.priority = $%d", len(args)))
+	}
+	if len(conds) > 0 {
+		query += " WHERE " + strings.Join(conds, " AND ")
+	}
+	query += ` ORDER BY CASE r.priority
+	                       WHEN 'critical' THEN 0
+	                       WHEN 'high'     THEN 1
+	                       ELSE                 2
+	                    END,
+	                    r.created_at DESC`
 
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list reports: %w", err)
 	}
@@ -110,8 +124,8 @@ func (s *pgStore) List(ctx context.Context, status string) ([]ReportWithUserInfo
 	var results []ReportWithUserInfo
 	for rows.Next() {
 		var r ReportWithUserInfo
-		if err := rows.Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.ReportedEmail, &r.ReportedName, &r.ReportedAvatar,
-			&r.Reason, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy); err != nil {
+		if err := rows.Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.ReportedEmail, &r.ReportedName, &r.ReportedUsername, &r.ReportedAvatar,
+			&r.Reason, &r.Priority, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy); err != nil {
 			return nil, fmt.Errorf("scan report: %w", err)
 		}
 		results = append(results, r)
@@ -132,9 +146,9 @@ func (s *pgStore) UpdateStatus(ctx context.Context, id, status, reviewedBy strin
 		UPDATE reports
 		SET status = $2, reviewed_at = NOW(), reviewed_by = $3
 		WHERE id = $1
-		RETURNING id, reporter_id, reported_user_id, reason, description, status, created_at, reviewed_at, reviewed_by`,
+		RETURNING id, reporter_id, reported_user_id, reason, priority, description, status, created_at, reviewed_at, reviewed_by`,
 		id, status, reviewedBy,
-	).Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.Reason, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy)
+	).Scan(&r.ID, &r.ReporterID, &r.ReportedUserID, &r.Reason, &r.Priority, &r.Description, &r.Status, &r.CreatedAt, &r.ReviewedAt, &r.ReviewedBy)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

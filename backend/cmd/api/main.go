@@ -14,12 +14,14 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog"
 
 	"github.com/hibiken/asynq"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/mayloo89/circl/backend/internal/admin"
+	"github.com/mayloo89/circl/backend/internal/appeals"
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
@@ -124,6 +126,7 @@ func main() {
 	}
 
 	authStore := auth.NewStore(pool)
+	ageAuditStore := auth.NewAgeAuditStore(pool)
 	authSvc := auth.NewService(authStore, mailer, frontendURL)
 
 	profileStore := profiles.NewStore(pool)
@@ -172,7 +175,26 @@ func main() {
 		auth.WithEmailFlow(authSvc, frontendURL),
 		auth.WithProfileStore(profileStore),
 		auth.WithRefreshTokenStore(refreshStore),
+		auth.WithAgeAuditStore(ageAuditStore),
 	)
+
+	// Appeals: separate sub-service for the suspension-appeal flow. The
+	// reactivator is the admin service so an approved appeal flips the user
+	// back to 'active' without admin needing to act twice.
+	appealStore := appeals.NewStore(pool)
+	appealSvc := appeals.NewService(appealStore, adminSvc)
+	appealsPublicHandler := appeals.NewPublicHandler(appealSvc)
+	appealsAdminHandler := appeals.NewAdminHandler(appealSvc)
+
+	// Whenever admin suspends or bans a user, mint an appeal token, store it,
+	// and email the user the appeal link. Errors are logged but never block
+	// the moderation action — admin already saw it succeed.
+	adminSvc.SetSuspensionNotifier(suspensionNotifier{
+		svc:         appealSvc,
+		mailer:      mailer,
+		frontendURL: frontendURL,
+		log:         log,
+	})
 
 	reportMgr := reports.NewManager(reportSvc,
 		reports.WithModerator(adminSvc),
@@ -408,7 +430,7 @@ func main() {
 		}
 		return out, nil
 	}
-	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup)
+	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup, admin.WithAppealsHandler(appealsAdminHandler))
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
@@ -449,6 +471,7 @@ func main() {
 		Reports:       reportsHandler,
 		Push:          pushHandler,
 		Admin:         adminHandler,
+		Appeals:       appealsPublicHandler,
 		LocalStorage:  localStorageHandler,
 		Test:          testHandler,
 	})
@@ -593,4 +616,32 @@ func (p presencePrivacy) HidePresenceByIDs(ctx context.Context, userIDs []string
 		}
 	}
 	return out, nil
+}
+
+// suspensionNotifier implements admin.SuspensionNotifier: it mints an appeal
+// token via the appeals service and emails the user the appeal link. Errors
+// are logged — never surfaced — because the suspension itself already
+// succeeded and admin should not have to retry on a flaky downstream.
+type suspensionNotifier struct {
+	svc         *appeals.Service
+	mailer      email.Sender
+	frontendURL string
+	log         zerolog.Logger
+}
+
+func (n suspensionNotifier) NotifyOfSuspension(ctx context.Context, user admin.UserRecord, susp admin.Suspension) {
+	bgCtx := context.WithoutCancel(ctx)
+	logger := n.log.With().Str("component", "appeals").Str("user_id", user.ID).Str("suspension_id", susp.ID).Logger()
+	go func() {
+		plainToken, _, err := n.svc.CreateForSuspension(bgCtx, user.ID, susp.ID)
+		if err != nil {
+			logger.Error().Err(err).Msg("appeals: create token failed")
+			return
+		}
+		appealURL := n.frontendURL + "/appeal/" + plainToken
+		msg := email.AppealMessage(user.Email, appealURL, susp.Reason, susp.SuspendedUntil == nil)
+		if err := n.mailer.Send(bgCtx, msg); err != nil {
+			logger.Warn().Err(err).Msg("appeals: send appeal email failed")
+		}
+	}()
 }
