@@ -51,9 +51,6 @@ export default function ReportDialog({
         <p className="mt-2 text-sm text-gray-400">
           {t("subtitle")}
         </p>
-        <p className="mt-3 rounded-md bg-rose-950 border border-rose-900 px-3 py-2 text-xs text-rose-200">
-          {t("priorityNotice")}
-        </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label htmlFor="reason" className="block text-sm font-medium text-gray-300">

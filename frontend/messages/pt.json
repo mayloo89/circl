@@ -537,7 +537,6 @@
     "descriptionLabel": "Descrição (opcional)",
     "descriptionPlaceholder": "Forneça detalhes adicionais…",
     "submit": "Enviar denúncia",
-    "priorityNotice": "Denúncias de CSAM ou imagens íntimas não consensuais vão direto para a fila prioritária.",
     "reasons": {
       "harassment": "Assédio",
       "spam": "Spam",

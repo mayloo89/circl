@@ -537,7 +537,6 @@
     "descriptionLabel": "Description (optional)",
     "descriptionPlaceholder": "Provide additional details…",
     "submit": "Submit Report",
-    "priorityNotice": "Reports of CSAM or non-consensual intimate images go straight to our priority queue.",
     "reasons": {
       "harassment": "Harassment",
       "spam": "Spam",

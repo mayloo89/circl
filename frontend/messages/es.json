@@ -537,7 +537,6 @@
     "descriptionLabel": "Descripción (opcional)",
     "descriptionPlaceholder": "Proporciona detalles adicionales…",
     "submit": "Enviar reporte",
-    "priorityNotice": "Los reportes de CSAM o de imágenes íntimas sin consentimiento ingresan a la cola prioritaria.",
     "reasons": {
       "harassment": "Acoso",
       "spam": "Spam",
