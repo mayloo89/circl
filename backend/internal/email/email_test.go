@@ -26,7 +26,7 @@ func TestConsoleSender_Send(t *testing.T) {
 // --- Templates ---
 
 func TestPasswordResetMessage(t *testing.T) {
-	msg := email.PasswordResetMessage("user@example.com", "https://example.com/reset?token=abc")
+	msg := email.PasswordResetMessage("https://app.example", "user@example.com", "https://example.com/reset?token=abc")
 	if msg.To != "user@example.com" {
 		t.Errorf("To = %q, want %q", msg.To, "user@example.com")
 	}
@@ -42,7 +42,7 @@ func TestPasswordResetMessage(t *testing.T) {
 }
 
 func TestEmailVerificationMessage(t *testing.T) {
-	msg := email.EmailVerificationMessage("user@example.com", "https://example.com/verify?token=xyz")
+	msg := email.EmailVerificationMessage("https://app.example", "user@example.com", "https://example.com/verify?token=xyz")
 	if msg.To != "user@example.com" {
 		t.Errorf("To = %q, want %q", msg.To, "user@example.com")
 	}

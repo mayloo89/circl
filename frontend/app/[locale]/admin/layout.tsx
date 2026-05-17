@@ -19,8 +19,15 @@ export default async function AdminLayout({
       {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r border-gray-800 bg-gray-900">
         <div className="px-5 py-4 border-b border-gray-800">
-          <Link href="/" className="text-base font-bold text-white hover:text-gray-300">
-            Circl
+          <Link href="/" aria-label="Circl" className="flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead */}
+            <img
+              src="/branding/logo-dark.svg"
+              alt=""
+              width={100}
+              height={28}
+              className="h-7 w-auto"
+            />
           </Link>
           <p className="mt-0.5 text-xs font-medium text-brand-muted uppercase tracking-wider">Admin</p>
         </div>

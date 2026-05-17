@@ -162,8 +162,15 @@ export default function Sidebar() {
       {/* Logo + collapse toggle */}
       <div className={`flex h-16 items-center border-b border-gray-800 ${collapsed ? "justify-center px-0" : "justify-between px-4"}`}>
         {!collapsed && (
-          <Link href="/" className="text-xl font-bold text-white hover:text-gray-200">
-            Circl
+          <Link href="/" aria-label="Circl" className="flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead */}
+            <img
+              src="/branding/logo-dark.svg"
+              alt=""
+              width={120}
+              height={32}
+              className="h-8 w-auto"
+            />
           </Link>
         )}
         <button
