@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "gen:favicons": "node scripts/generate-favicons.mjs"
   },
   "dependencies": {
     "@swc/helpers": "^0.5.21",
@@ -43,6 +44,8 @@
     "eslint-config-next": "16.1.1",
     "jsdom": "^29.0.1",
     "msw": "^2.12.14",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.2"

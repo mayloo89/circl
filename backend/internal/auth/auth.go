@@ -279,7 +279,7 @@ func (s *Service) DeleteAccount(ctx context.Context, userID, password string) er
 	loginURL := s.frontendURL + "/login"
 	bgCtx := context.WithoutCancel(ctx)
 	go func() {
-		_ = s.mailer.Send(bgCtx, email.AccountDeletionMessage(record.Email, loginURL))
+		_ = s.mailer.Send(bgCtx, email.AccountDeletionMessage(s.frontendURL, record.Email, loginURL))
 	}()
 	return nil
 }
@@ -303,7 +303,7 @@ func (s *Service) ForgotPassword(ctx context.Context, emailAddr, frontendURL str
 	}
 
 	resetURL := frontendURL + "/reset-password?token=" + plaintext
-	_ = s.mailer.Send(ctx, email.PasswordResetMessage(record.Email, resetURL))
+	_ = s.mailer.Send(ctx, email.PasswordResetMessage(s.frontendURL, record.Email, resetURL))
 	return nil
 }
 
@@ -350,7 +350,7 @@ func (s *Service) SendVerificationEmail(ctx context.Context, userID, userEmail, 
 	}
 
 	verifyURL := frontendURL + "/verify-email?token=" + plaintext
-	return s.mailer.Send(ctx, email.EmailVerificationMessage(userEmail, verifyURL))
+	return s.mailer.Send(ctx, email.EmailVerificationMessage(s.frontendURL, userEmail, verifyURL))
 }
 
 // ResendVerification looks up the user by email and resends the verification email.

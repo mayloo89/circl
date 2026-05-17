@@ -53,8 +53,15 @@ export default function TopBar() {
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="flex h-14 items-center px-4">
-        <Link href="/" className="text-base font-bold text-white">
-          Circl
+        <Link href="/" aria-label="Circl" className="flex items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead */}
+          <img
+            src="/branding/mark.svg"
+            alt=""
+            width={28}
+            height={28}
+            className="h-7 w-7"
+          />
         </Link>
 
         <span className="ml-3 text-sm font-medium text-gray-400">

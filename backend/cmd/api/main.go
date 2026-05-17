@@ -402,7 +402,7 @@ func main() {
 		Store:           exportStore,
 		Source:          exportSource,
 		Storage:         fileStorage,
-		Mailer:          exportMailer{sender: mailer},
+		Mailer:          exportMailer{sender: mailer, frontendURL: frontendURL},
 		Enqueue: func(ctx context.Context, requestID, userID string) error {
 			return worker.EnqueueExportUser(ctx, workerClient, worker.ExportPayload{
 				RequestID: requestID,
@@ -657,17 +657,20 @@ type suspensionNotifier struct {
 }
 
 // exportMailer adapts the in-tree email.Sender to exports.Mailer without
-// pulling the email package into the exports tests.
+// pulling the email package into the exports tests. frontendURL is the
+// public base URL of the SPA — used by the templates to resolve the brand
+// header image.
 type exportMailer struct {
-	sender email.Sender
+	sender      email.Sender
+	frontendURL string
 }
 
 func (m exportMailer) SendReadyEmail(ctx context.Context, to, downloadURL string, expiresAt time.Time) error {
-	return m.sender.Send(ctx, email.ExportReadyMessage(to, downloadURL, expiresAt))
+	return m.sender.Send(ctx, email.ExportReadyMessage(m.frontendURL, to, downloadURL, expiresAt))
 }
 
 func (m exportMailer) SendFailedEmail(ctx context.Context, to string) error {
-	return m.sender.Send(ctx, email.ExportFailedMessage(to))
+	return m.sender.Send(ctx, email.ExportFailedMessage(m.frontendURL, to))
 }
 
 func (n suspensionNotifier) NotifyOfSuspension(ctx context.Context, user admin.UserRecord, susp admin.Suspension) {
@@ -680,7 +683,7 @@ func (n suspensionNotifier) NotifyOfSuspension(ctx context.Context, user admin.U
 			return
 		}
 		appealURL := n.frontendURL + "/appeal/" + plainToken
-		msg := email.AppealMessage(user.Email, appealURL, susp.Reason, susp.SuspendedUntil == nil)
+		msg := email.AppealMessage(n.frontendURL, user.Email, appealURL, susp.Reason, susp.SuspendedUntil == nil)
 		if err := n.mailer.Send(bgCtx, msg); err != nil {
 			logger.Warn().Err(err).Msg("appeals: send appeal email failed")
 		}
