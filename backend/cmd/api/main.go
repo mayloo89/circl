@@ -32,6 +32,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/logger"
 	"github.com/mayloo89/circl/backend/internal/metrics"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/moderation"
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
 	"github.com/mayloo89/circl/backend/internal/profiles"
@@ -394,6 +395,18 @@ func main() {
 
 	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore, config.EnvIntOrDefault("IMAGE_MAX_PX", 0), log)
 
+	// Image moderation pipeline. Hash-list check (extensible to StopNCII /
+	// PhotoDNA feeds), bounded heuristics, NSFW classifier seam (NoopClassifier
+	// by default until the NudeNet/Rekognition adapter lands).
+	hashStore := moderation.NewPgHashStore(pool)
+	moderatorChain := moderation.NewChain(
+		moderation.NewHashList(hashStore),
+		moderation.NewHeuristic(),
+		moderation.NewNSFW(nil, 0),
+	)
+	imageProcessor.SetModeration(moderatorChain, uploadStore)
+	moderationAdminHandler := moderation.NewAdminHandler(moderation.NewAdminStore(pool), hashStore)
+
 	// Data export (Habeas Data / GDPR Art. 20) — request → asynq build → email.
 	apiPublicURL := config.EnvOrDefault("API_PUBLIC_URL", "http://localhost:"+port)
 	exportStore := exports.NewStore(pool)
@@ -455,7 +468,10 @@ func main() {
 		}
 		return out, nil
 	}
-	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup, admin.WithAppealsHandler(appealsAdminHandler))
+	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup,
+		admin.WithAppealsHandler(appealsAdminHandler),
+		admin.WithModerationHandler(moderationAdminHandler),
+	)
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 

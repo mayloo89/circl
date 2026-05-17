@@ -69,6 +69,9 @@ func (m *mockStore) SetThumbnailKey(_ context.Context, id, key string) error {
 	return nil
 }
 
+func (m *mockStore) MarkApproved(_ context.Context, _ string) error  { return nil }
+func (m *mockStore) MarkRejected(_ context.Context, _, _, _, _ string) error { return nil }
+
 type mockStorage struct{}
 
 func (m *mockStorage) GenerateUploadURL(_ context.Context, params storage.UploadParams) (*storage.UploadResult, error) {

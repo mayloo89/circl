@@ -78,6 +78,9 @@ const (
 	CodeExportAlreadyPending = "export_already_pending"
 	CodeExportNotReady       = "export_not_ready"
 
+	// Image moderation
+	CodeUploadRejectedModeration = "upload_rejected_moderation"
+
 	// Push
 	CodeServiceUnavailable = "service_unavailable"
 )
