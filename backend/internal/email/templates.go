@@ -1,6 +1,50 @@
 package email
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
+
+// ExportReadyMessage returns the email sent when a user's data export is
+// ready to download (Habeas Data / GDPR Art. 20). The download URL embeds a
+// single-use 14-day token; the body restates the expiry so the user is not
+// surprised when the link stops working.
+func ExportReadyMessage(to, downloadURL string, expiresAt time.Time) Message {
+	expires := expiresAt.UTC().Format("2006-01-02")
+	return Message{
+		To:      to,
+		Subject: "Your Circl data export is ready",
+		HTML: fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+  <h2>Your data export is ready</h2>
+  <p>The data export you requested is ready. The link below expires on <strong>%s</strong>.</p>
+  <a href="%s" style="display:inline-block;padding:12px 24px;background:#6366f1;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Download your data</a>
+  <p style="margin-top:24px;color:#666;font-size:13px">The download is a single zip with a machine-readable JSON (<code>data.json</code>) and your media. If the link expires you can request a new export from Settings.</p>
+  <p style="color:#666;font-size:13px">Questions: info.circl.ar@gmail.com.</p>
+</body>
+</html>`, expires, downloadURL),
+		Text: fmt.Sprintf("Your Circl data export is ready.\n\nDownload here (expires %s):\n\n%s\n\nIf the link expires you can request a new export from Settings.\n\nQuestions: info.circl.ar@gmail.com", expires, downloadURL),
+	}
+}
+
+// ExportFailedMessage returns the email sent when the data-export build fails
+// so the user knows to retry rather than wait indefinitely.
+func ExportFailedMessage(to string) Message {
+	return Message{
+		To:      to,
+		Subject: "Your Circl data export could not be prepared",
+		HTML: `<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+  <h2>We couldn't prepare your data export</h2>
+  <p>Something went wrong while building the data export you requested. No action was taken on your account — you can try again from Settings.</p>
+  <p style="margin-top:24px;color:#666;font-size:13px">If this keeps happening, reply to this email or contact info.circl.ar@gmail.com.</p>
+</body>
+</html>`,
+		Text: "We couldn't prepare your data export.\n\nNo action was taken on your account. Please try again from Settings; if this keeps happening, contact info.circl.ar@gmail.com.",
+	}
+}
 
 // PasswordResetMessage returns the email sent when a user requests a password reset.
 func PasswordResetMessage(to, resetURL string) Message {

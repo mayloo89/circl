@@ -48,10 +48,15 @@ func NewServer(redisOpt asynq.RedisClientOpt, concurrency int, log zerolog.Logge
 }
 
 // Start registers task handlers and begins processing. It is non-blocking.
-func (s *Server) Start(processor *ImageProcessor) error {
+// exportHandler may be nil — in that case the export queue is skipped (useful
+// for tests and one-off deployments that don't ship the data-export feature).
+func (s *Server) Start(processor *ImageProcessor, exportHandler *ExportHandler) error {
 	mux := asynq.NewServeMux()
 	mux.Use(otelMiddleware)
 	mux.HandleFunc(TaskProcessImage, processor.Handle)
+	if exportHandler != nil {
+		mux.HandleFunc(TaskExportUser, exportHandler.Handle)
+	}
 	return s.s.Start(mux)
 }
 

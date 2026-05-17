@@ -28,6 +28,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/db"
 	"github.com/mayloo89/circl/backend/internal/email"
+	"github.com/mayloo89/circl/backend/internal/exports"
 	"github.com/mayloo89/circl/backend/internal/logger"
 	"github.com/mayloo89/circl/backend/internal/metrics"
 	"github.com/mayloo89/circl/backend/internal/middleware"
@@ -392,8 +393,32 @@ func main() {
 	})
 
 	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore, config.EnvIntOrDefault("IMAGE_MAX_PX", 0), log)
+
+	// Data export (Habeas Data / GDPR Art. 20) — request → asynq build → email.
+	apiPublicURL := config.EnvOrDefault("API_PUBLIC_URL", "http://localhost:"+port)
+	exportStore := exports.NewStore(pool)
+	exportSource := exports.NewSource(pool)
+	exportSvc := exports.NewService(exports.Config{
+		Store:           exportStore,
+		Source:          exportSource,
+		Storage:         fileStorage,
+		Mailer:          exportMailer{sender: mailer},
+		Enqueue: func(ctx context.Context, requestID, userID string) error {
+			return worker.EnqueueExportUser(ctx, workerClient, worker.ExportPayload{
+				RequestID: requestID,
+				UserID:    userID,
+			})
+		},
+		StoragePrefix:   "exports/",
+		DownloadURLBase: apiPublicURL + "/account/export",
+		Log:             log,
+	})
+	exportHandler := worker.NewExportHandler(exportSvc, log)
+	exportAuthedHandler := exports.NewAuthedHandler(exportSvc)
+	exportDownloadHandler := exports.NewDownloadHandler(exportSvc)
+
 	workerServer := worker.NewServer(redisConnOpt, 4, log)
-	if err := workerServer.Start(imageProcessor); err != nil {
+	if err := workerServer.Start(imageProcessor, exportHandler); err != nil {
 		log.Fatal().Err(err).Msg("worker server failed to start")
 	}
 	defer workerServer.Shutdown()
@@ -470,10 +495,12 @@ func main() {
 		Upload:        uploadHandler,
 		Reports:       reportsHandler,
 		Push:          pushHandler,
-		Admin:         adminHandler,
-		Appeals:       appealsPublicHandler,
-		LocalStorage:  localStorageHandler,
-		Test:          testHandler,
+		Admin:          adminHandler,
+		Appeals:        appealsPublicHandler,
+		Export:         exportAuthedHandler,
+		ExportDownload: exportDownloadHandler,
+		LocalStorage:   localStorageHandler,
+		Test:           testHandler,
 	})
 
 	srv := &http.Server{
@@ -627,6 +654,20 @@ type suspensionNotifier struct {
 	mailer      email.Sender
 	frontendURL string
 	log         zerolog.Logger
+}
+
+// exportMailer adapts the in-tree email.Sender to exports.Mailer without
+// pulling the email package into the exports tests.
+type exportMailer struct {
+	sender email.Sender
+}
+
+func (m exportMailer) SendReadyEmail(ctx context.Context, to, downloadURL string, expiresAt time.Time) error {
+	return m.sender.Send(ctx, email.ExportReadyMessage(to, downloadURL, expiresAt))
+}
+
+func (m exportMailer) SendFailedEmail(ctx context.Context, to string) error {
+	return m.sender.Send(ctx, email.ExportFailedMessage(to))
 }
 
 func (n suspensionNotifier) NotifyOfSuspension(ctx context.Context, user admin.UserRecord, susp admin.Suspension) {

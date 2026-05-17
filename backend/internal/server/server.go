@@ -56,6 +56,13 @@ type Config struct {
 	Push          http.Handler
 	Admin         http.Handler
 	Appeals       http.Handler // public /appeal/{token}; nil disables
+	// Data exports (Habeas Data / GDPR Art. 20). Export mounts at
+	// /users/me/exports behind RequireAuth; ExportDownload mounts at
+	// /account/export and is un-authenticated by design — the path token is
+	// the credential, and the user might have lost their session by the time
+	// the ready email lands.
+	Export         http.Handler
+	ExportDownload http.Handler
 	LocalStorage  http.Handler // nil in production
 	Test          http.Handler // nil unless TEST_ENDPOINTS_ENABLED
 }
@@ -99,6 +106,12 @@ func New(cfg Config) http.Handler {
 		r.Mount("/appeal", cfg.Appeals)
 	}
 
+	// /account/export/{token} is intentionally un-authenticated — the user
+	// downloads with the single-use token from their ready email.
+	if cfg.ExportDownload != nil {
+		r.Mount("/account/export", cfg.ExportDownload)
+	}
+
 	// SSE stream — auth is handled inside the handler via ?token= query param
 	// because the browser EventSource API does not support custom headers.
 	r.Handle("/notifications/stream", cfg.Notifications)
@@ -119,6 +132,9 @@ func New(cfg Config) http.Handler {
 		g.Mount("/reports", cfg.Reports)
 		g.Mount("/push", cfg.Push)
 		g.Mount("/admin", cfg.Admin)
+		if cfg.Export != nil {
+			g.Mount("/users/me/exports", cfg.Export)
+		}
 	})
 
 	// Local file serving — only mounted when LocalStorage is not nil
