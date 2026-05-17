@@ -16,6 +16,8 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog"
+
+	"github.com/mayloo89/circl/backend/internal/moderation"
 )
 
 // --- Test doubles ---
@@ -55,6 +57,11 @@ func (f *fakeStorage) PutObject(_ context.Context, key, contentType string, r io
 	f.objects[key] = string(data)
 	f.lastPutKey = key
 	f.lastPutType = contentType
+	return nil
+}
+
+func (f *fakeStorage) Delete(_ context.Context, key string) error {
+	delete(f.objects, key)
 	return nil
 }
 
@@ -451,6 +458,10 @@ func (b *brokenReadStorage) PutObject(_ context.Context, _, _ string, _ io.Reade
 	return nil
 }
 
+func (b *brokenReadStorage) Delete(_ context.Context, _ string) error {
+	return nil
+}
+
 type errReadCloser struct{}
 
 func (e *errReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("read error") }
@@ -498,6 +509,10 @@ func (c *countingPutStorage) PutObject(ctx context.Context, key, contentType str
 		return errors.New("put failed")
 	}
 	return c.inner.PutObject(ctx, key, contentType, r, size)
+}
+
+func (c *countingPutStorage) Delete(ctx context.Context, key string) error {
+	return c.inner.Delete(ctx, key)
 }
 
 // --- Original resize ---
@@ -571,5 +586,121 @@ func TestProcess_ResizesOversizedPNG(t *testing.T) {
 	b := img.Bounds()
 	if b.Dx() > 50 || b.Dy() > 50 {
 		t.Errorf("stored PNG dimensions %dx%d exceed imageMaxPx=50", b.Dx(), b.Dy())
+	}
+}
+
+// --- moderation integration ---
+
+// fakeModerator returns whatever decision it was constructed with.
+type fakeModerator struct {
+	decision moderation.Decision
+	err      error
+}
+
+func (f *fakeModerator) Check(_ context.Context, _ moderation.Input) (moderation.Decision, error) {
+	return f.decision, f.err
+}
+func (f *fakeModerator) Name() string { return "fake" }
+
+// fakeModerationStore captures MarkApproved / MarkRejected calls.
+type fakeModerationStore struct {
+	approvedID   string
+	rejectedID   string
+	rejectedCode string
+}
+
+func (f *fakeModerationStore) MarkApproved(_ context.Context, id string) error {
+	f.approvedID = id
+	return nil
+}
+func (f *fakeModerationStore) MarkRejected(_ context.Context, id, code, _, _ string) error {
+	f.rejectedID = id
+	f.rejectedCode = code
+	return nil
+}
+
+func TestProcess_ModerationApprovesContinuesPipeline(t *testing.T) {
+	key := "chat-attachment/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{decision: moderation.Allow()}, modStore)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-1", StorageKey: key, ContentType: "image/png",
+	})
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if modStore.approvedID != "u-1" {
+		t.Errorf("expected MarkApproved(u-1), got %q", modStore.approvedID)
+	}
+	if store.thumbnailKey == "" {
+		t.Error("expected thumbnail to be generated after approval")
+	}
+	if _, ok := st.objects[key]; !ok {
+		t.Error("original should remain in storage after approval")
+	}
+}
+
+func TestProcess_ModerationRejectsDeletesOriginal(t *testing.T) {
+	key := "chat-attachment/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{
+		decision: moderation.Reject(moderation.CodeHashMatch, "test reason", "fake"),
+	}, modStore)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-2", StorageKey: key, ContentType: "image/png",
+	})
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if modStore.rejectedID != "u-2" {
+		t.Errorf("expected MarkRejected(u-2), got %q", modStore.rejectedID)
+	}
+	if modStore.rejectedCode != moderation.CodeHashMatch {
+		t.Errorf("rejected code = %q, want hash_match", modStore.rejectedCode)
+	}
+	if _, ok := st.objects[key]; ok {
+		t.Error("original should be deleted after rejection")
+	}
+	if store.thumbnailKey != "" {
+		t.Error("thumbnail should NOT be generated after rejection")
+	}
+}
+
+func TestProcess_ModerationErrorFailsOpen(t *testing.T) {
+	// A flaky classifier should not block the upload — moderator errors are
+	// logged and the pipeline proceeds. This protects the user from outages
+	// in a downstream NSFW model.
+	key := "chat-attachment/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{err: errors.New("classifier down")}, modStore)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-3", StorageKey: key, ContentType: "image/png",
+	})
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if modStore.rejectedID != "" {
+		t.Error("expected no rejection on moderator error")
+	}
+	if store.thumbnailKey == "" {
+		t.Error("expected thumbnail to be generated despite moderator error")
 	}
 }

@@ -18,6 +18,8 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
+
+	"github.com/mayloo89/circl/backend/internal/moderation"
 )
 
 // TaskProcessImage is the task type name for background image processing.
@@ -41,11 +43,19 @@ type ImageProcessPayload struct {
 type ProcessingStorage interface {
 	GetObject(ctx context.Context, key string) (io.ReadCloser, error)
 	PutObject(ctx context.Context, key, contentType string, r io.Reader, size int64) error
+	Delete(ctx context.Context, key string) error
 }
 
 // ThumbnailStore is the minimal persistence interface the worker needs.
 type ThumbnailStore interface {
 	SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error
+}
+
+// ModerationStore is the optional interface for recording moderation
+// outcomes. Wired in via SetModeration; absent in tests that don't need it.
+type ModerationStore interface {
+	MarkApproved(ctx context.Context, uploadID string) error
+	MarkRejected(ctx context.Context, uploadID, code, reason, source string) error
 }
 
 // ImageProcessor handles the image:process task.
@@ -54,6 +64,8 @@ type ImageProcessor struct {
 	store      ThumbnailStore
 	imageMaxPx int
 	log        zerolog.Logger
+	moderator  moderation.Moderator // nil disables async moderation
+	modStore   ModerationStore      // nil disables async moderation
 }
 
 // NewImageProcessor creates an ImageProcessor. imageMaxPx caps the longest
@@ -68,6 +80,14 @@ func NewImageProcessor(st ProcessingStorage, store ThumbnailStore, imageMaxPx in
 		imageMaxPx: imageMaxPx,
 		log:        log.With().Str("component", "image_worker").Logger(),
 	}
+}
+
+// SetModeration wires the async moderation step. When both args are non-nil,
+// every processed image runs through the moderator after decoding; rejections
+// delete the storage object and mark the upload via modStore.
+func (p *ImageProcessor) SetModeration(m moderation.Moderator, store ModerationStore) {
+	p.moderator = m
+	p.modStore = store
 }
 
 // EnqueueProcessImage enqueues a process-image task using the given client.
@@ -114,6 +134,45 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 	img, err := decodeImage(payload.ContentType, raw)
 	if err != nil {
 		return fmt.Errorf("decode image: %w", err)
+	}
+
+	// Async moderation runs after decode (so we have dimensions) and before
+	// any further storage I/O. A rejection deletes the original from storage,
+	// marks the row, and short-circuits. Moderator errors are logged and
+	// treated as allow — we don't block uploads on a flaky classifier.
+	if p.moderator != nil && p.modStore != nil {
+		bounds := img.Bounds()
+		decision, modErr := p.moderator.Check(ctx, moderation.Input{
+			ContentType: payload.ContentType,
+			SizeBytes:   int64(len(raw)),
+			Width:       bounds.Dx(),
+			Height:      bounds.Dy(),
+			Hash:        moderation.HashFor(raw),
+			Bytes:       raw,
+		})
+		if modErr != nil {
+			p.log.Warn().Err(modErr).Str("upload_id", payload.UploadID).Msg("moderator error; failing open")
+		} else if !decision.Allowed {
+			p.log.Info().
+				Str("upload_id", payload.UploadID).
+				Str("code", decision.Code).
+				Str("source", decision.Source).
+				Msg("upload rejected by moderation")
+			if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
+				// Best-effort: the rejection mark is the source of truth. Failure
+				// to delete leaves an orphaned object that the storage GC sweep
+				// will clean up; we never serve it because the public URL is
+				// derived from a row whose moderation_status is 'rejected'.
+				p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete rejected upload failed")
+			}
+			if markErr := p.modStore.MarkRejected(ctx, payload.UploadID, decision.Code, decision.Reason, decision.Source); markErr != nil {
+				return fmt.Errorf("mark rejected: %w", markErr)
+			}
+			return nil
+		} else if markErr := p.modStore.MarkApproved(ctx, payload.UploadID); markErr != nil {
+			// Approval is a soft signal — log and continue with thumbnail.
+			p.log.Warn().Err(markErr).Str("upload_id", payload.UploadID).Msg("mark approved failed")
+		}
 	}
 
 	// For JPEG and PNG: resize if oversized, then re-encode to strip all

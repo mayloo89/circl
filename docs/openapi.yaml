@@ -1287,7 +1287,10 @@ paths:
     post:
       tags: [Uploads]
       summary: Confirm upload completed
-      description: Marks the upload as committed and triggers image processing.
+      description: |
+        Marks the upload as committed and triggers async image processing
+        (EXIF strip, thumbnail, moderation pipeline). The client should poll
+        `GET /uploads/{id}` to learn the moderation outcome.
       parameters:
         - in: path
           name: id
@@ -1304,6 +1307,91 @@ paths:
                   url: { type: string, format: uri }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /uploads/{id}:
+    get:
+      tags: [Uploads]
+      summary: Get the owner-only view of an upload
+      description: |
+        Returns the full upload row (status, thumbnail, moderation outcome).
+        Used by the frontend to poll for the moderation result after confirming
+        — a `moderation_status` of `rejected` carries the human-readable
+        `moderation_reason` to surface to the uploader.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Upload row.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:                { type: string, format: uuid }
+                  status:            { type: string, enum: [pending, committed, failed] }
+                  moderation_status: { type: string, enum: [pending, approved, rejected, skipped] }
+                  moderation_code:   { type: string }
+                  moderation_reason: { type: string }
+                  thumbnail_key:     { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/moderation:
+    get:
+      tags: [Moderation]
+      summary: List rejected uploads (admin only)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Rejected uploads, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    upload_id:    { type: string, format: uuid }
+                    user_id:      { type: string, format: uuid }
+                    user_email:   { type: string, format: email }
+                    storage_key:  { type: string }
+                    filename:     { type: string }
+                    content_type: { type: string }
+                    size_bytes:   { type: integer }
+                    code:         { type: string }
+                    reason:       { type: string }
+                    moderated_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/moderation/hashes:
+    post:
+      tags: [Moderation]
+      summary: Add a SHA-256 to the local block list (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hash, reason]
+              properties:
+                hash:   { type: string, description: "Hex-encoded SHA-256 of the image bytes." }
+                source: { type: string, default: local }
+                reason: { type: string }
+      responses:
+        "204":
+          description: Hash added (idempotent — re-adding the same hash is a no-op).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   # ── Reports ───────────────────────────────────────────────────────────────────
 

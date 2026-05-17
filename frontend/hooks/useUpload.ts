@@ -24,6 +24,36 @@ const ALLOWED_TYPES: Record<UploadCategory, string[]> = {
   gallery: ["image/jpeg", "image/png", "image/webp"],
 }
 
+// pollModeration GETs the upload row until moderation completes or the
+// timeout elapses. Returns the final verdict so the caller can show the
+// rejection reason. Failing open ("approved") on poll error is intentional
+// — a flaky API call should not look like a content rejection to the user.
+async function pollModeration(
+  uploadID: string,
+  token: string,
+): Promise<{ status: "approved" | "rejected" | "pending"; reason?: string }> {
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${API_URL}/uploads/${uploadID}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const status = data.moderation_status as string
+        if (status === "approved" || status === "skipped") return { status: "approved" }
+        if (status === "rejected") {
+          return { status: "rejected", reason: data.moderation_reason }
+        }
+      }
+    } catch {
+      // Network blip — retry on the next tick.
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return { status: "approved" } // timeout → fail open
+}
+
 function formatBytes(bytes: number): string {
   /* v8 ignore next 2 — KB branch unreachable: all category limits are ≥ 1 MB */
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
@@ -102,6 +132,19 @@ export function useUpload(token: string | undefined) {
         return null
       }
       const result: UploadResult = await confirmRes.json()
+
+      // Step 4: Poll the moderation outcome. The image pipeline runs async
+      // in the worker; for the small images we accept here it completes
+      // within ~1s. If moderation rejected the upload we surface the reason
+      // in the user's locale rather than letting them stare at a broken URL.
+      if (file.type.startsWith("image/")) {
+        const verdict = await pollModeration(upload_id, token)
+        if (verdict.status === "rejected") {
+          setError(verdict.reason || "Upload was rejected by content moderation.")
+          return null
+        }
+      }
+
       return result
     } catch {
       setError("Upload failed.")

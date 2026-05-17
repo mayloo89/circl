@@ -17,7 +17,35 @@ func NewHandler(svc *Service) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/request", requestHandler(svc))
 	r.Post("/{id}/confirm", confirmHandler(svc))
+	r.Get("/{id}", getHandler(svc))
 	return r
+}
+
+// GET /uploads/{id} returns the owner-only view of an upload row. The
+// frontend polls this after confirm to discover the moderation outcome — a
+// rejected status carries the human-readable reason for the user.
+func getHandler(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
+			return
+		}
+		uploadID := chi.URLParam(r, "id")
+		u, err := svc.GetUploadForUser(r.Context(), uploadID, userID)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrNotFound):
+				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "upload not found")
+			case errors.Is(err, ErrForbidden):
+				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
+			default:
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			}
+			return
+		}
+		apierror.WriteJSON(w, http.StatusOK, u)
+	}
 }
 
 // POST /uploads/request

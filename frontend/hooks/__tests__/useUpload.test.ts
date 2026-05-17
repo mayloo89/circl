@@ -15,6 +15,12 @@ const successHandlers = [
   http.post(`${API}/uploads/uid-1/confirm`, () =>
     HttpResponse.json({ upload_id: "uid-1", storage_key: "photos/a.jpg", url: "http://cdn/a.jpg" })
   ),
+  // After confirm, useUpload polls GET /uploads/{id} for moderation outcome.
+  // Default to an approved verdict so the existing success-path tests pass
+  // without the 5s poll timeout firing.
+  http.get(`${API}/uploads/uid-1`, () =>
+    HttpResponse.json({ id: "uid-1", moderation_status: "approved" })
+  ),
 ]
 
 function makeFile(name = "photo.jpg", type = "image/jpeg", size = 1024): File {
@@ -161,6 +167,25 @@ describe("useUpload", () => {
     })
     expect(res!).toBeNull()
     expect(result.current.error).toBe("Upload failed.")
+  })
+
+  it("surfaces the moderation rejection reason after a rejected upload", async () => {
+    server.use(
+      http.get(`${API}/uploads/uid-1`, () =>
+        HttpResponse.json({
+          id: "uid-1",
+          moderation_status: "rejected",
+          moderation_reason: "matched a known-bad content fingerprint",
+        })
+      )
+    )
+    const { result } = renderHook(() => useUpload("token"))
+    let res: Awaited<ReturnType<typeof result.current.upload>>
+    await act(async () => {
+      res = await result.current.upload(makeFile(), "avatar")
+    })
+    expect(res!).toBeNull()
+    expect(result.current.error).toMatch(/known-bad content fingerprint/i)
   })
 
   it("accepts chat-attachment category with pdf type", async () => {

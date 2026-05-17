@@ -21,17 +21,21 @@ var (
 
 // Upload represents a tracked file upload.
 type Upload struct {
-	ID           string     `json:"id"`
-	UserID       string     `json:"user_id"`
-	StorageKey   string     `json:"storage_key"`
-	Filename     string     `json:"filename"`
-	ContentType  string     `json:"content_type"`
-	SizeBytes    int64      `json:"size_bytes"`
-	Category     string     `json:"category"`
-	Status       string     `json:"status"` // "pending" or "committed"
-	ThumbnailKey *string    `json:"thumbnail_key,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	CommittedAt  *time.Time `json:"committed_at,omitzero"`
+	ID               string     `json:"id"`
+	UserID           string     `json:"user_id"`
+	StorageKey       string     `json:"storage_key"`
+	Filename         string     `json:"filename"`
+	ContentType      string     `json:"content_type"`
+	SizeBytes        int64      `json:"size_bytes"`
+	Category         string     `json:"category"`
+	Status           string     `json:"status"` // "pending" | "committed" | "failed"
+	ThumbnailKey     *string    `json:"thumbnail_key,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	CommittedAt      *time.Time `json:"committed_at,omitzero"`
+	ModerationStatus string     `json:"moderation_status"`           // "pending" | "approved" | "rejected" | "skipped"
+	ModerationCode   string     `json:"moderation_code,omitempty"`   // populated only on rejection
+	ModerationReason string     `json:"moderation_reason,omitempty"` // populated only on rejection
+	ModeratedAt      *time.Time `json:"moderated_at,omitzero"`
 }
 
 // Store is the persistence contract for uploads.
@@ -40,6 +44,12 @@ type Store interface {
 	GetByID(ctx context.Context, id string) (*Upload, error)
 	Commit(ctx context.Context, id string) error
 	SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error
+	// MarkApproved records that moderation cleared the upload.
+	MarkApproved(ctx context.Context, id string) error
+	// MarkRejected records a moderation rejection and flips uploads.status
+	// to 'failed' (the storage object is gone). source is the originating
+	// moderator (e.g. "hashlist:local", "heuristic", "nsfw").
+	MarkRejected(ctx context.Context, id, code, reason, source string) error
 }
 
 // Service is the application-layer that coordinates the storage provider
@@ -137,6 +147,19 @@ type ConfirmUploadOutput struct {
 	StorageKey string `json:"storage_key"`
 	URL        string `json:"url"`
 	Status     string `json:"status"`
+}
+
+// GetUploadForUser returns an upload by id, scoped to the caller. Used by
+// the frontend to poll the moderation outcome after confirming.
+func (s *Service) GetUploadForUser(ctx context.Context, uploadID, userID string) (*Upload, error) {
+	u, err := s.store.GetByID(ctx, uploadID)
+	if err != nil {
+		return nil, err
+	}
+	if u.UserID != userID {
+		return nil, ErrForbidden
+	}
+	return u, nil
 }
 
 // ConfirmUpload marks a pending upload as committed. The caller must own
