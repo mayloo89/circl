@@ -359,7 +359,7 @@ func TestServer_StartAndShutdown(t *testing.T) {
 	mr := miniredis.RunT(t)
 	srv := NewServer(asynq.RedisClientOpt{Addr: mr.Addr()}, 2, zerolog.Nop())
 	proc := NewImageProcessor(newFakeStorage("", ""), &fakeStore{}, 0, zerolog.Nop())
-	if err := srv.Start(proc); err != nil {
+	if err := srv.Start(proc, nil); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
 	srv.Shutdown() // must not panic

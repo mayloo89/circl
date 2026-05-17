@@ -628,6 +628,117 @@ function LanguageSection({ token }: { token: string | undefined }) {
 // Delete account section
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Data export section (Habeas Data / GDPR Art. 20)
+// ---------------------------------------------------------------------------
+
+interface ExportStatusResponse {
+  status: "none" | "pending" | "processing" | "ready" | "failed" | "expired"
+  requested_at?: string
+  completed_at?: string
+  expires_at?: string
+}
+
+function DataExportSection({ token }: { token: string | undefined }) {
+  const t = useTranslations("settings")
+  const tc = useTranslations("common")
+  const [status, setStatus] = useState<ExportStatusResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [requesting, setRequesting] = useState(false)
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(`${API_URL}/users/me/exports`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data: ExportStatusResponse = await res.json()
+        if (!cancelled) setStatus(data)
+      } catch {
+        // Best-effort — the user can still request a new export.
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    setLoading(true)
+    load()
+    return () => { cancelled = true }
+  }, [token])
+
+  async function requestExport() {
+    setRequesting(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_URL}/users/me/exports`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      })
+      if (res.status === 409) {
+        setError(t("dataExportAlreadyPending"))
+        return
+      }
+      if (res.status === 429) {
+        setError(t("dataExportRateLimited"))
+        return
+      }
+      if (!res.ok) {
+        setError(tc("unknownError"))
+        return
+      }
+      const data: ExportStatusResponse = await res.json()
+      setStatus(data)
+    } catch {
+      setError(tc("networkError"))
+    } finally {
+      setRequesting(false)
+    }
+  }
+
+  const isBuilding = status?.status === "pending" || status?.status === "processing"
+  const isReady = status?.status === "ready"
+
+  return (
+    <section aria-labelledby="data-export-heading">
+      <h2 id="data-export-heading" className="mb-4 text-base font-semibold text-white">
+        {t("dataExport")}
+      </h2>
+      <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
+        <div className="flex items-start justify-between gap-4 px-5 py-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-200">{t("dataExportTitle")}</p>
+            <p className="mt-0.5 text-xs text-gray-500">{t("dataExportDesc")}</p>
+
+            {loading ? null : isBuilding ? (
+              <p className="mt-3 text-xs text-amber-300">{t("dataExportPreparing")}</p>
+            ) : isReady && status?.expires_at ? (
+              <p className="mt-3 text-xs text-green-300">
+                {t("dataExportReadyEmailed", { date: new Date(status.expires_at).toLocaleDateString() })}
+              </p>
+            ) : status?.status === "failed" ? (
+              <p className="mt-3 text-xs text-red-400">{t("dataExportFailed")}</p>
+            ) : null}
+
+            {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={requesting}
+            disabled={loading || isBuilding}
+            onClick={requestExport}
+          >
+            {isReady ? t("dataExportRequestAgain") : t("dataExportRequest")}
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function DeleteAccountSection({ token }: { token: string | undefined }) {
   const t = useTranslations("settings")
   const tc = useTranslations("common")
@@ -778,6 +889,7 @@ export default function SettingsPage() {
           <PrivacySection token={token} />
           <BlockedUsersSection token={token} />
           <PasswordSection token={token} />
+          <DataExportSection token={token} />
           <DeleteAccountSection token={token} />
         </div>
 

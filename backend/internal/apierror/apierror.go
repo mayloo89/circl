@@ -74,6 +74,10 @@ const (
 	// Appeals
 	CodeAppealAlreadyResolved = "appeal_already_resolved"
 
+	// Exports (Habeas Data / GDPR Art. 20)
+	CodeExportAlreadyPending = "export_already_pending"
+	CodeExportNotReady       = "export_not_ready"
+
 	// Push
 	CodeServiceUnavailable = "service_unavailable"
 )
