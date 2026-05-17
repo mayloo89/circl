@@ -399,10 +399,24 @@ func main() {
 	// PhotoDNA feeds), bounded heuristics, NSFW classifier seam (NoopClassifier
 	// by default until the NudeNet/Rekognition adapter lands).
 	hashStore := moderation.NewPgHashStore(pool)
+	// NSFW classifier. When MODERATION_API_URL is set, we hit the NudeNet
+	// sidecar; otherwise the NoopClassifier keeps the pipeline running with
+	// hash + heuristic checks only (dev / no-sidecar deployments).
+	var nsfwClassifier moderation.NSFWClassifier
+	if moderationURL := config.EnvOrDefault("MODERATION_API_URL", ""); moderationURL != "" {
+		nsfwClassifier = moderation.NewHTTPNSFWClassifier(moderation.HTTPClassifierConfig{
+			BaseURL: moderationURL,
+		})
+		log.Info().Str("url", moderationURL).Msg("nsfw classifier: NudeNet sidecar enabled")
+	} else {
+		log.Info().Msg("nsfw classifier: noop (MODERATION_API_URL unset)")
+	}
+	nsfwThreshold := config.EnvFloatOrDefault("NSFW_THRESHOLD", moderation.DefaultNSFWThreshold)
+
 	moderatorChain := moderation.NewChain(
 		moderation.NewHashList(hashStore),
 		moderation.NewHeuristic(),
-		moderation.NewNSFW(nil, 0),
+		moderation.NewNSFW(nsfwClassifier, nsfwThreshold),
 	)
 	imageProcessor.SetModeration(moderatorChain, uploadStore)
 	moderationAdminHandler := moderation.NewAdminHandler(moderation.NewAdminStore(pool), hashStore)

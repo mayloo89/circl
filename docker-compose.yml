@@ -50,6 +50,24 @@ services:
     environment:
       MP_MAX_MESSAGES: 500
 
+  # NSFW image-moderation sidecar. Python service that wraps NudeNet behind
+  # a tiny HTTP API. The Go backend hits POST /classify to score uploaded
+  # images and rejects them when the score exceeds NSFW_THRESHOLD.
+  # Set MODERATION_API_URL=http://localhost:8081 in the backend's env to
+  # enable; if the var is unset, the backend falls back to NoopClassifier.
+  moderation:
+    build: ./ops/moderation
+    ports:
+      - "8081:8000"
+    environment:
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   loki:
     image: grafana/loki:3.4.2
     ports:
