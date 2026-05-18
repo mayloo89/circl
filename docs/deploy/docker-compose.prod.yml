@@ -1,0 +1,142 @@
+# Generic production compose for Circl.
+#
+# Copy this file (and the matching .env.prod.example) into a local,
+# gitignored `deploy/` folder and customise for your host:
+#
+#   mkdir -p deploy
+#   cp docs/deploy/docker-compose.prod.yml deploy/
+#   cp docs/deploy/.env.prod.example       deploy/.env.prod
+#   docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml up -d --build
+#
+# Architecture:
+#   - postgres and redis have no exposed ports (internal docker network only).
+#   - backend and frontend bind to 127.0.0.1 so the host's reverse proxy is
+#     the only entry point. Adjust if you proxy from another host.
+#   - moderation (NudeNet sidecar) is reached at http://moderation:8000.
+#     If you don't run it, leave MODERATION_API_URL unset in .env.prod and
+#     comment out the service block + the `depends_on: moderation` clause
+#     below — the backend falls back to a NoopClassifier.
+#   - Uploads live in a named volume (`uploads_data`) and are served by the
+#     backend at /uploads/files/. No S3 needed for a single-host deploy.
+#   - No observability stack here — too heavy for many deploys. The backend
+#     auto-falls-back to a no-op exporter when OTEL_EXPORTER_OTLP_ENDPOINT
+#     is unset.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-circl_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-circl_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-circl_user} -d ${POSTGRES_DB:-circl_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NSFW image-moderation sidecar (Python + FastAPI + NudeNet on ONNX).
+  # The backend POSTs to http://moderation:8000/classify when
+  # MODERATION_API_URL is set in .env.prod. The Dockerfile warms the model
+  # cache at build time so the first request after `up -d --build` doesn't
+  # pay the model-download cost. Remove this service if you don't want
+  # automatic NSFW screening (leaving MODERATION_API_URL unset; the
+  # hash-list + heuristic detectors still run).
+  moderation:
+    build: ../ops/moderation
+    restart: always
+    environment:
+      LOG_LEVEL: WARNING
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: ./.env.prod
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - uploads_data:/app/data
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      moderation:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* values are baked into the browser bundle at build
+        # time. A change to DOMAIN requires `up -d --build frontend`.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+        NEXT_PUBLIC_WS_URL: wss://${DOMAIN}/api
+        NEXT_PUBLIC_IMAGE_HOSTNAME: ${DOMAIN}
+        NEXT_PUBLIC_IMAGE_PROTOCOL: https
+        NEXT_PUBLIC_IMAGE_UNOPTIMIZED: "true"
+    environment:
+      BACKEND_URL: http://backend:8080
+      AUTH_URL: https://${DOMAIN}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NODE_ENV: production
+      # Next.js v16 standalone binds to the value of HOSTNAME rather than
+      # defaulting to 0.0.0.0. Without this it attaches to the container
+      # ID hostname and the Dockerfile healthcheck never connects.
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Overrides the Dockerfile healthcheck (BusyBox wget against localhost,
+    # which resolves to IPv6 ::1 first — but Next.js standalone only binds
+    # to IPv4 0.0.0.0, so the loopback HTTP probe gets "Connection refused"
+    # even though external traffic via the bridge works fine). Checking for
+    # the next-server process is the reliable liveness signal here.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f next-server >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
