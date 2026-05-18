@@ -57,7 +57,10 @@ func (n *NSFW) Check(ctx context.Context, in Input) (Decision, error) {
 		return Decision{}, err
 	}
 	if res.Probability >= n.threshold {
-		return Reject(CodeNSFWDetected, "explicit-content classifier flagged this image", n.Name()), nil
+		d := Reject(CodeNSFWDetected, "explicit-content classifier flagged this image", n.Name())
+		d.Score = res.Probability
+		d.Categories = res.Categories
+		return d, nil
 	}
 	return Allow(), nil
 }

@@ -169,12 +169,13 @@ describe("useUpload", () => {
     expect(result.current.error).toBe("Upload failed.")
   })
 
-  it("surfaces the moderation rejection reason after a rejected upload", async () => {
+  it("surfaces the moderation rejection as structured state after a rejected upload", async () => {
     server.use(
       http.get(`${API}/uploads/uid-1`, () =>
         HttpResponse.json({
           id: "uid-1",
           moderation_status: "rejected",
+          moderation_code: "nsfw_detected",
           moderation_reason: "matched a known-bad content fingerprint",
         })
       )
@@ -185,7 +186,34 @@ describe("useUpload", () => {
       res = await result.current.upload(makeFile(), "avatar")
     })
     expect(res!).toBeNull()
-    expect(result.current.error).toMatch(/known-bad content fingerprint/i)
+    // The generic `error` string is intentionally NOT set — moderation
+    // rejections route through `rejection` so consumers can render the
+    // dedicated localized modal instead of an ambiguous inline error.
+    expect(result.current.error).toBe("")
+    expect(result.current.rejection).toEqual({
+      code: "nsfw_detected",
+      reason: "matched a known-bad content fingerprint",
+    })
+  })
+
+  it("clearRejection resets the rejection state for the next attempt", async () => {
+    server.use(
+      http.get(`${API}/uploads/uid-1`, () =>
+        HttpResponse.json({
+          id: "uid-1",
+          moderation_status: "rejected",
+          moderation_code: "nsfw_detected",
+          moderation_reason: "x",
+        })
+      )
+    )
+    const { result } = renderHook(() => useUpload("token"))
+    await act(async () => {
+      await result.current.upload(makeFile(), "avatar")
+    })
+    expect(result.current.rejection).not.toBeNull()
+    act(() => result.current.clearRejection())
+    expect(result.current.rejection).toBeNull()
   })
 
   it("accepts chat-attachment category with pdf type", async () => {

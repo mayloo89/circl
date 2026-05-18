@@ -50,6 +50,13 @@ type Decision struct {
 	Reason string
 	// Source records which moderator made the call (for the audit trail).
 	Source string
+	// Score is the classifier confidence in [0, 1]. Populated by NSFW
+	// rejections; zero for moderators that don't have a probability (hash
+	// list, heuristics).
+	Score float64
+	// Categories are per-region labels the classifier returned (e.g.
+	// "FEMALE_BREAST_EXPOSED"). Populated by NSFW rejections; nil otherwise.
+	Categories []string
 }
 
 // Allow is the canonical "no objection" decision.

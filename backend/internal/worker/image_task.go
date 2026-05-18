@@ -20,6 +20,7 @@ import (
 	"golang.org/x/image/webp"
 
 	"github.com/mayloo89/circl/backend/internal/moderation"
+	"github.com/mayloo89/circl/backend/internal/uploads"
 )
 
 // TaskProcessImage is the task type name for background image processing.
@@ -55,7 +56,7 @@ type ThumbnailStore interface {
 // outcomes. Wired in via SetModeration; absent in tests that don't need it.
 type ModerationStore interface {
 	MarkApproved(ctx context.Context, uploadID string) error
-	MarkRejected(ctx context.Context, uploadID, code, reason, source string) error
+	MarkRejected(ctx context.Context, rec uploads.RejectionRecord) error
 }
 
 // ImageProcessor handles the image:process task.
@@ -153,19 +154,33 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 		if modErr != nil {
 			p.log.Warn().Err(modErr).Str("upload_id", payload.UploadID).Msg("moderator error; failing open")
 		} else if !decision.Allowed {
+			retain := retainFileFor(decision.Code)
 			p.log.Info().
 				Str("upload_id", payload.UploadID).
 				Str("code", decision.Code).
 				Str("source", decision.Source).
+				Float64("score", decision.Score).
+				Bool("retain_file", retain).
 				Msg("upload rejected by moderation")
-			if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
-				// Best-effort: the rejection mark is the source of truth. Failure
-				// to delete leaves an orphaned object that the storage GC sweep
-				// will clean up; we never serve it because the public URL is
-				// derived from a row whose moderation_status is 'rejected'.
-				p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete rejected upload failed")
+			if !retain {
+				if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
+					// Best-effort: the rejection mark is the source of truth. Failure
+					// to delete leaves an orphaned object that the storage GC sweep
+					// will clean up; we never serve it because the public URL is
+					// derived from a row whose moderation_status is 'rejected'.
+					p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete rejected upload failed")
+				}
 			}
-			if markErr := p.modStore.MarkRejected(ctx, payload.UploadID, decision.Code, decision.Reason, decision.Source); markErr != nil {
+			rec := uploads.RejectionRecord{
+				UploadID:     payload.UploadID,
+				Code:         decision.Code,
+				Reason:       decision.Reason,
+				Source:       decision.Source,
+				Score:        decision.Score,
+				Categories:   decision.Categories,
+				FileRetained: retain,
+			}
+			if markErr := p.modStore.MarkRejected(ctx, rec); markErr != nil {
 				return fmt.Errorf("mark rejected: %w", markErr)
 			}
 			return nil
@@ -205,6 +220,22 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 		return fmt.Errorf("set thumbnail key: %w", err)
 	}
 	return nil
+}
+
+// retainFileFor decides whether to keep the storage object for admin review
+// after a rejection. NSFW and heuristic rejections are legal-to-store adult
+// content (or benign metadata edge cases) — keep them so admins can verify
+// false positives. Hash-list matches target CSAM / NCII feeds; we must purge
+// those immediately and never expose them to the admin UI.
+func retainFileFor(code string) bool {
+	switch code {
+	case moderation.CodeNSFWDetected,
+		moderation.CodeSizeOutOfBounds,
+		moderation.CodeAspectOutOfBounds:
+		return true
+	default:
+		return false
+	}
 }
 
 // thumbnailKey returns the storage key for the thumbnail of storageKey.
