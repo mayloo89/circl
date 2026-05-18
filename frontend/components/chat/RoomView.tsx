@@ -9,6 +9,7 @@ import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type SendOpts } from "@/hooks/useChat"
 import { usePresence, formatLastSeen } from "@/hooks/usePresence"
 import { useUpload } from "@/hooks/useUpload"
+import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import type { AnyMessage, EphemeralMode, HistoryMessage } from "@/types/chat"
 import { sameCalendarDay, formatDaySeparator, isFirstInGroup, isLastInGroup } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
@@ -142,7 +143,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   const [showFab, setShowFab] = useState(false)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
-  const { upload, uploading } = useUpload(token)
+  const { upload, uploading, rejection, clearRejection } = useUpload(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
   const isMultiRoom = room?.type === "group" || room?.type === "channel"
@@ -757,6 +758,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
           </aside>
         )}
       </div>
+      <UploadRejectionModal rejection={rejection} onClose={clearRejection} />
     </div>
   )
 }

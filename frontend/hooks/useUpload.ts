@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 
+import type { UploadRejection } from "@/components/upload/UploadRejectionModal"
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 export interface UploadResult {
@@ -24,14 +26,17 @@ const ALLOWED_TYPES: Record<UploadCategory, string[]> = {
   gallery: ["image/jpeg", "image/png", "image/webp"],
 }
 
+interface ModerationVerdict {
+  status: "approved" | "rejected" | "pending"
+  code?: string
+  reason?: string
+}
+
 // pollModeration GETs the upload row until moderation completes or the
 // timeout elapses. Returns the final verdict so the caller can show the
 // rejection reason. Failing open ("approved") on poll error is intentional
 // — a flaky API call should not look like a content rejection to the user.
-async function pollModeration(
-  uploadID: string,
-  token: string,
-): Promise<{ status: "approved" | "rejected" | "pending"; reason?: string }> {
+async function pollModeration(uploadID: string, token: string): Promise<ModerationVerdict> {
   const deadline = Date.now() + 5000
   while (Date.now() < deadline) {
     try {
@@ -43,7 +48,11 @@ async function pollModeration(
         const status = data.moderation_status as string
         if (status === "approved" || status === "skipped") return { status: "approved" }
         if (status === "rejected") {
-          return { status: "rejected", reason: data.moderation_reason }
+          return {
+            status: "rejected",
+            code: data.moderation_code,
+            reason: data.moderation_reason,
+          }
         }
       }
     } catch {
@@ -69,6 +78,7 @@ function formatBytes(bytes: number): string {
 export function useUpload(token: string | undefined) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState("")
+  const [rejection, setRejection] = useState<UploadRejection | null>(null)
 
   async function upload(
     file: File,
@@ -89,6 +99,7 @@ export function useUpload(token: string | undefined) {
 
     setUploading(true)
     setError("")
+    setRejection(null)
 
     try {
       // Step 1: Request upload URL.
@@ -135,12 +146,13 @@ export function useUpload(token: string | undefined) {
 
       // Step 4: Poll the moderation outcome. The image pipeline runs async
       // in the worker; for the small images we accept here it completes
-      // within ~1s. If moderation rejected the upload we surface the reason
-      // in the user's locale rather than letting them stare at a broken URL.
+      // within ~1s. Rejections surface as a structured `rejection` value
+      // (not an `error` string) so consumers can render the dedicated
+      // localized modal instead of a generic inline error.
       if (file.type.startsWith("image/")) {
         const verdict = await pollModeration(upload_id, token)
         if (verdict.status === "rejected") {
-          setError(verdict.reason || "Upload was rejected by content moderation.")
+          setRejection({ code: verdict.code ?? "unknown", reason: verdict.reason })
           return null
         }
       }
@@ -154,5 +166,5 @@ export function useUpload(token: string | undefined) {
     }
   }
 
-  return { upload, uploading, error }
+  return { upload, uploading, error, rejection, clearRejection: () => setRejection(null) }
 }

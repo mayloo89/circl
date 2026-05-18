@@ -1348,6 +1348,10 @@ paths:
         - in: query
           name: limit
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: code
+          description: Optional code filter (e.g. `nsfw_detected`, `hash_match`).
+          schema: { type: string }
       responses:
         "200":
           description: Rejected uploads, newest first.
@@ -1358,18 +1362,56 @@ paths:
                 items:
                   type: object
                   properties:
-                    upload_id:    { type: string, format: uuid }
-                    user_id:      { type: string, format: uuid }
-                    user_email:   { type: string, format: email }
-                    storage_key:  { type: string }
-                    filename:     { type: string }
-                    content_type: { type: string }
-                    size_bytes:   { type: integer }
-                    code:         { type: string }
-                    reason:       { type: string }
-                    moderated_at: { type: string, format: date-time }
+                    upload_id:     { type: string, format: uuid }
+                    user_id:       { type: string, format: uuid }
+                    user_email:    { type: string, format: email }
+                    storage_key:   { type: string }
+                    filename:      { type: string }
+                    content_type:  { type: string }
+                    size_bytes:    { type: integer }
+                    code:          { type: string }
+                    reason:        { type: string }
+                    moderated_at:  { type: string, format: date-time }
+                    score:
+                      type: [number, "null"]
+                      description: Classifier confidence (0–1). Null for non-classifier rejections (hash, heuristic).
+                    categories:
+                      type: array
+                      items: { type: string }
+                      description: Per-region labels from the classifier (NSFW only).
+                    file_retained:
+                      type: boolean
+                      description: |
+                        Whether the storage object is still available via
+                        `/admin/moderation/{id}/image`. Hash-list matches are
+                        always false (purged immediately by policy).
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/moderation/{id}/image:
+    get:
+      tags: [Moderation]
+      summary: Stream the retained original of a rejected upload (admin only)
+      description: |
+        Returns the raw image bytes with the original `Content-Type`. Available
+        only when the listing's `file_retained` is true — hash-list matches
+        return 410 Gone because they are purged on rejection per the CSAM /
+        NCII legal posture.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Image bytes.
+          content:
+            image/*: {}
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410":
+          description: File was purged by policy and cannot be reviewed.
 
   /admin/moderation/hashes:
     post:

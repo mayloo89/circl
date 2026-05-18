@@ -16,6 +16,19 @@
     "passwordRequired": "La contraseña es requerida.",
     "back": "Volver"
   },
+  "uploadRejection": {
+    "title": "Imagen rechazada",
+    "intro": "No pudimos subir tu imagen porque no cumple las normas de la comunidad.",
+    "fallback": "Probá con otra imagen.",
+    "reasonLabel": "Motivo",
+    "code_nsfw_detected": "Detectamos contenido explícito. Esta plataforma está dirigida a una audiencia adulta pero los espacios públicos (perfil, búsqueda, canales) son SFW; el contenido íntimo solo es válido en álbumes privados con consentimiento.",
+    "code_hash_match": "Esta imagen coincide con material prohibido en nuestras listas de bloqueo. Si creés que es un error, podés contactarnos.",
+    "code_size_out_of_bounds": "El tamaño o las dimensiones de la imagen no cumplen los requisitos.",
+    "code_aspect_ratio_out_of_bounds": "La proporción de la imagen es atípica y fue rechazada por el filtro automático.",
+    "code_unknown": "La imagen no pasó la moderación automática.",
+    "guidelinesLink": "Ver normas de la comunidad",
+    "dismiss": "Entendido"
+  },
   "nav": {
     "browse": "Explorar",
     "messages": "Mensajes",
@@ -402,7 +415,26 @@
     "confirmDelete": "¿Estás seguro de querer eliminar permanentemente a este usuario? Esta acción no se puede deshacer.",
     "noReports": "No se encontraron reportes.",
     "reviewReport": "Revisar",
-    "resolve": "Resolver"
+    "resolve": "Resolver",
+    "moderation": "Moderación",
+    "moderationTitle": "Moderación de imágenes",
+    "moderationSubtitle": "Imágenes rechazadas por el clasificador automático. Las coincidencias con la lista de bloqueo se eliminan inmediatamente y no se muestran acá.",
+    "moderationEmpty": "No hay imágenes rechazadas para revisar.",
+    "moderationCodeAll": "Todos los códigos",
+    "moderationCodeNsfw": "NSFW",
+    "moderationCodeHash": "Lista de bloqueo",
+    "moderationCodeSize": "Tamaño",
+    "moderationCodeAspect": "Proporción",
+    "moderationColPreview": "Vista previa",
+    "moderationColUser": "Usuario",
+    "moderationColCode": "Código",
+    "moderationColScore": "Score",
+    "moderationColCategories": "Categorías",
+    "moderationColReason": "Motivo",
+    "moderationColTime": "Fecha",
+    "moderationViewFull": "Ver original",
+    "moderationFilePurged": "Archivo eliminado por política",
+    "moderationLoadError": "No se pudo cargar la cola de moderación."
   },
   "channels": {
     "title": "Canales",
