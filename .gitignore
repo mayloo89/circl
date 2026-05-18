@@ -14,6 +14,7 @@ coverage
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Go
 bin/
@@ -42,6 +43,9 @@ CLAUDE.local.md
 # Local CI script
 run-ci-local.sh
 
-# Deployment config (Pi / YunoHost) — kept local, never committed
-deploy/
+# Operator-specific deploy config (each maintainer keeps their own copy:
+# their domain, their nginx specifics, their secrets). The committed
+# generic templates live in docs/deploy/. The leading slash anchors this
+# to the repo root so docs/deploy/ is NOT excluded.
+/deploy/
 .env.prod
