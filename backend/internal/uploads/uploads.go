@@ -38,6 +38,22 @@ type Upload struct {
 	ModeratedAt      *time.Time `json:"moderated_at,omitzero"`
 }
 
+// RejectionRecord carries everything the store needs to persist a moderation
+// rejection. Score and Categories are populated only by the NSFW classifier;
+// the hash-list and heuristic detectors leave them at their zero values.
+// FileRetained tells the store whether the storage object was kept (true) or
+// purged (false) — when false, uploads.status flips to 'failed' since the
+// public URL would point at a missing object.
+type RejectionRecord struct {
+	UploadID     string
+	Code         string
+	Reason       string
+	Source       string
+	Score        float64
+	Categories   []string
+	FileRetained bool
+}
+
 // Store is the persistence contract for uploads.
 type Store interface {
 	Create(ctx context.Context, u *Upload) error
@@ -46,10 +62,21 @@ type Store interface {
 	SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error
 	// MarkApproved records that moderation cleared the upload.
 	MarkApproved(ctx context.Context, id string) error
-	// MarkRejected records a moderation rejection and flips uploads.status
-	// to 'failed' (the storage object is gone). source is the originating
-	// moderator (e.g. "hashlist:local", "heuristic", "nsfw").
-	MarkRejected(ctx context.Context, id, code, reason, source string) error
+	// MarkRejected records a moderation rejection. Source is the originating
+	// moderator (e.g. "hashlist:local", "heuristic", "nsfw"). When
+	// rec.FileRetained is false the upload's lifecycle status flips to
+	// 'failed' (the storage object was purged); when true it stays
+	// 'committed' so the admin review tools can still load the file.
+	MarkRejected(ctx context.Context, rec RejectionRecord) error
+	// ListExpiredRetained returns rejected uploads whose retention window
+	// has elapsed and whose storage object is still kept for admin review.
+	// limit <= 0 falls back to a sensible default in the implementation.
+	ListExpiredRetained(ctx context.Context, before time.Time, limit int) ([]RetainedRejection, error)
+	// ClearRetention flips moderation_file_retained to FALSE and the
+	// lifecycle status to 'failed' after the cleanup worker has purged the
+	// storage object. Idempotent — re-running on an already-cleared row is
+	// a no-op.
+	ClearRetention(ctx context.Context, uploadID string) error
 }
 
 // Service is the application-layer that coordinates the storage provider

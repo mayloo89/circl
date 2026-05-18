@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/mayloo89/circl/backend/internal/moderation"
+	"github.com/mayloo89/circl/backend/internal/uploads"
 )
 
 // --- Test doubles ---
@@ -604,18 +605,24 @@ func (f *fakeModerator) Name() string { return "fake" }
 
 // fakeModerationStore captures MarkApproved / MarkRejected calls.
 type fakeModerationStore struct {
-	approvedID   string
-	rejectedID   string
-	rejectedCode string
+	approvedID         string
+	rejectedID         string
+	rejectedCode       string
+	rejectedScore      float64
+	rejectedCategories []string
+	rejectedRetained   bool
 }
 
 func (f *fakeModerationStore) MarkApproved(_ context.Context, id string) error {
 	f.approvedID = id
 	return nil
 }
-func (f *fakeModerationStore) MarkRejected(_ context.Context, id, code, _, _ string) error {
-	f.rejectedID = id
-	f.rejectedCode = code
+func (f *fakeModerationStore) MarkRejected(_ context.Context, rec uploads.RejectionRecord) error {
+	f.rejectedID = rec.UploadID
+	f.rejectedCode = rec.Code
+	f.rejectedScore = rec.Score
+	f.rejectedCategories = rec.Categories
+	f.rejectedRetained = rec.FileRetained
 	return nil
 }
 
@@ -702,5 +709,57 @@ func TestProcess_ModerationErrorFailsOpen(t *testing.T) {
 	}
 	if store.thumbnailKey == "" {
 		t.Error("expected thumbnail to be generated despite moderator error")
+	}
+}
+
+func TestProcess_NSFWRejectionRetainsFileAndScore(t *testing.T) {
+	// NSFW rejections keep the file around for admin review (false-positive
+	// auditing) and persist the classifier score + per-region categories.
+	key := "chat-attachment/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	decision := moderation.Reject(moderation.CodeNSFWDetected, "explicit", "nsfw")
+	decision.Score = 0.94
+	decision.Categories = []string{"FEMALE_BREAST_EXPOSED", "BUTTOCKS_EXPOSED"}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{decision: decision}, modStore)
+
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-nsfw", StorageKey: key, ContentType: "image/png",
+	}); err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if !modStore.rejectedRetained {
+		t.Error("nsfw rejection should retain the storage object")
+	}
+	if _, ok := st.objects[key]; !ok {
+		t.Error("storage object should still be present after nsfw rejection")
+	}
+	if modStore.rejectedScore != 0.94 {
+		t.Errorf("rejected score = %v, want 0.94", modStore.rejectedScore)
+	}
+	if len(modStore.rejectedCategories) != 2 {
+		t.Errorf("expected 2 categories, got %v", modStore.rejectedCategories)
+	}
+}
+
+func TestRetainFileForPolicy(t *testing.T) {
+	// Hash-list matches must be purged immediately (CSAM / NCII policy);
+	// every other code keeps the file for the admin-review retention window.
+	cases := map[string]bool{
+		moderation.CodeHashMatch:         false,
+		moderation.CodeNSFWDetected:      true,
+		moderation.CodeSizeOutOfBounds:   true,
+		moderation.CodeAspectOutOfBounds: true,
+		"unknown_code":                   false,
+	}
+	for code, want := range cases {
+		if got := retainFileFor(code); got != want {
+			t.Errorf("retainFileFor(%q) = %v, want %v", code, got, want)
+		}
 	}
 }

@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { useRouter, Link } from "@/i18n/navigation"
 
 import { useUpload } from "@/hooks/useUpload"
+import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
@@ -346,7 +347,7 @@ export default function ProfilePage() {
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-  const { upload, uploading: uploadingAvatar, error: uploadError } = useUpload(session?.accessToken)
+  const { upload, uploading: uploadingAvatar, error: uploadError, rejection, clearRejection } = useUpload(session?.accessToken)
 
   const isDirty = profile !== null && (
     username !== (profile.username ?? "") ||
@@ -959,6 +960,7 @@ export default function ProfilePage() {
         />
 
       </div>
+      <UploadRejectionModal rejection={rejection} onClose={clearRejection} />
     </div>
   )
 }

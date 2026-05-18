@@ -419,7 +419,7 @@ func main() {
 		moderation.NewNSFW(nsfwClassifier, nsfwThreshold),
 	)
 	imageProcessor.SetModeration(moderatorChain, uploadStore)
-	moderationAdminHandler := moderation.NewAdminHandler(moderation.NewAdminStore(pool), hashStore)
+	moderationAdminHandler := moderation.NewAdminHandler(moderation.NewAdminStore(pool), hashStore, fileStorage)
 
 	// Data export (Habeas Data / GDPR Art. 20) — request → asynq build → email.
 	apiPublicURL := config.EnvOrDefault("API_PUBLIC_URL", "http://localhost:"+port)
@@ -460,13 +460,17 @@ func main() {
 	}, log)
 	ephemeralCleaner.Start(appCtx)
 
-	// Daily purge of accounts past the 30-day deletion grace period.
+	// Daily purge of accounts past the 30-day deletion grace period and of
+	// rejected upload files past their admin-review retention window.
+	moderationRetentionDays := config.EnvIntOrDefault("MODERATION_REJECTED_RETENTION_DAYS", worker.DefaultModerationRetentionDays)
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		worker.PurgeDeletedAccounts(appCtx, log, authStore, fileStorage)
+		worker.PurgeExpiredModerationFiles(appCtx, log, uploadStore, fileStorage, moderationRetentionDays)
 		for range ticker.C {
 			worker.PurgeDeletedAccounts(appCtx, log, authStore, fileStorage)
+			worker.PurgeExpiredModerationFiles(appCtx, log, uploadStore, fileStorage, moderationRetentionDays)
 		}
 	}()
 
