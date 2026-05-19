@@ -22,6 +22,12 @@ const (
 	CategoryAvatar         Category = "avatar"
 	CategoryChatAttachment Category = "chat-attachment"
 	CategoryGallery        Category = "gallery"
+	// CategoryAlbumPrivate is the upload category for photos inside an
+	// owner's private album. They are stored under `album-private/...` so
+	// the public-URL prefix never overlaps with the always-public
+	// `gallery/...` path; the albums layer gates access via the
+	// private_album_grants table.
+	CategoryAlbumPrivate Category = "album-private"
 )
 
 // allowedTypes maps each category to its permitted MIME types.
@@ -44,6 +50,11 @@ var allowedTypes = map[Category][]string{
 		"image/png",
 		"image/webp",
 	},
+	CategoryAlbumPrivate: {
+		"image/jpeg",
+		"image/png",
+		"image/webp",
+	},
 }
 
 // maxSizes maps each category to its maximum file size in bytes.
@@ -51,6 +62,7 @@ var maxSizes = map[Category]int64{
 	CategoryAvatar:         5 * 1024 * 1024,  // 5 MB
 	CategoryChatAttachment: 50 * 1024 * 1024, // 50 MB
 	CategoryGallery:        10 * 1024 * 1024, // 10 MB
+	CategoryAlbumPrivate:   15 * 1024 * 1024, // 15 MB — higher than gallery since private albums tend to host higher-fidelity originals
 }
 
 // ParseCategory converts a string to a Category, returning an error if invalid.

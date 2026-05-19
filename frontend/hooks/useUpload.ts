@@ -12,18 +12,20 @@ export interface UploadResult {
   url: string
 }
 
-type UploadCategory = "avatar" | "chat-attachment" | "gallery"
+type UploadCategory = "avatar" | "chat-attachment" | "gallery" | "album-private"
 
 const MAX_SIZES: Record<UploadCategory, number> = {
   avatar: 5 * 1024 * 1024,
   "chat-attachment": 50 * 1024 * 1024,
   gallery: 10 * 1024 * 1024,
+  "album-private": 15 * 1024 * 1024,
 }
 
 const ALLOWED_TYPES: Record<UploadCategory, string[]> = {
   avatar: ["image/jpeg", "image/png", "image/webp"],
   "chat-attachment": ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "application/pdf"],
   gallery: ["image/jpeg", "image/png", "image/webp"],
+  "album-private": ["image/jpeg", "image/png", "image/webp"],
 }
 
 interface ModerationVerdict {

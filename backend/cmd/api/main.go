@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/mayloo89/circl/backend/internal/admin"
+	"github.com/mayloo89/circl/backend/internal/albums"
 	"github.com/mayloo89/circl/backend/internal/appeals"
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/chat"
@@ -385,11 +386,12 @@ func main() {
 	}
 	workerClient := worker.NewClient(redisConnOpt)
 	defer workerClient.Close() //nolint:errcheck
-	uploadSvc.SetEnqueuer(func(ctx context.Context, uploadID, storageKey, contentType string) error {
+	uploadSvc.SetEnqueuer(func(ctx context.Context, uploadID, storageKey, contentType, category string) error {
 		return worker.EnqueueProcessImage(ctx, workerClient, worker.ImageProcessPayload{
 			UploadID:    uploadID,
 			StorageKey:  storageKey,
 			ContentType: contentType,
+			Category:    category,
 		})
 	})
 
@@ -474,7 +476,35 @@ func main() {
 		}
 	}()
 
+	// albumsStore is wired before albumsSvc so the daily expiry ticker can
+	// run without a dependency on the full service.
+	albumsStore := albums.NewStore(pool)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		if err := albumsStore.ExpireAlbumGrants(appCtx); err != nil {
+			log.Error().Err(err).Msg("expire album grants failed")
+		}
+		for range ticker.C {
+			if err := albumsStore.ExpireAlbumGrants(appCtx); err != nil {
+				log.Error().Err(err).Msg("expire album grants failed")
+			}
+		}
+	}()
+
 	uploadHandler := uploads.NewHandler(uploadSvc)
+
+	// Private albums — owners group uploads (category 'album-private')
+	// into named albums and explicitly grant access to specific contacts.
+	// Photos still flow through the moderation pipeline; access is gated by
+	// active grants and every photo render is recorded in the access log.
+	albumsSvc := albums.NewService(albumsStore, fileStorage, albumMediaAdapter{uploads: uploadSvc}, log)
+	albumsSvc.SetChatBridge(albumChatBridge{
+		store: chatStore,
+		hub:   chatHub,
+		log:   log,
+	})
+	albumsHandler := albums.NewHandler(albumsSvc, fileStorage)
 	adminPresenceLookup := func(ctx context.Context, ids []string) (map[string]admin.UserPresence, error) {
 		info, err := presenceStore.GetPresence(ctx, ids)
 		if err != nil {
@@ -527,6 +557,7 @@ func main() {
 		ChatWS:        chatWSHandler,
 		Presence:      presenceHandler,
 		Upload:        uploadHandler,
+		Albums:        albumsHandler,
 		Reports:       reportsHandler,
 		Push:          pushHandler,
 		Admin:          adminHandler,
@@ -705,6 +736,87 @@ func (m exportMailer) SendReadyEmail(ctx context.Context, to, downloadURL string
 
 func (m exportMailer) SendFailedEmail(ctx context.Context, to string) error {
 	return m.sender.Send(ctx, email.ExportFailedMessage(m.frontendURL, to))
+}
+
+// albumMediaAdapter adapts uploads.Service to the albums.MediaResolver
+// interface (renaming GetUploadForUser → GetForOwner). Kept as a thin
+// wrapper rather than aliasing the method on uploads.Service so the
+// albums package stays decoupled from the uploads name shape.
+type albumMediaAdapter struct {
+	uploads *uploads.Service
+}
+
+func (a albumMediaAdapter) GetForOwner(ctx context.Context, uploadID, ownerID string) (*uploads.Upload, error) {
+	return a.uploads.GetUploadForUser(ctx, uploadID, ownerID)
+}
+
+// albumChatBridge implements albums.ChatBridge by talking to the chat
+// store + hub. Lives in main.go so the albums package never imports the
+// chat package directly.
+type albumChatBridge struct {
+	store chat.Store
+	hub   *chat.Hub
+	log   zerolog.Logger
+}
+
+func (b albumChatBridge) RoomPeer(ctx context.Context, roomID, callerID string) (string, error) {
+	room, err := b.store.GetRoom(ctx, roomID)
+	if err != nil {
+		return "", albums.ErrNotFound
+	}
+	if room.Type != chat.RoomTypeDM {
+		return "", albums.ErrInvalidRequest
+	}
+	members, err := b.store.ListMembers(ctx, roomID)
+	if err != nil {
+		return "", err
+	}
+	var callerFound bool
+	var peer string
+	for _, m := range members {
+		if m == callerID {
+			callerFound = true
+			continue
+		}
+		peer = m
+	}
+	if !callerFound || peer == "" {
+		return "", albums.ErrForbidden
+	}
+	return peer, nil
+}
+
+func (b albumChatBridge) SaveAlbumShareMessage(ctx context.Context, roomID, senderID, payload string) error {
+	msg, err := b.store.SaveMessage(ctx, chat.SaveMessageParams{
+		RoomID:   roomID,
+		SenderID: senderID,
+		Type:     chat.MessageTypeAlbumShare,
+		Content:  payload,
+	})
+	if err != nil {
+		return err
+	}
+	// Same envelope shape the chat handler emits for plain messages so
+	// the frontend's existing new_message subscriber renders it without
+	// any special-case wiring (the bubble component switches on type).
+	data, err := json.Marshal(map[string]any{
+		"event":             "new_message",
+		"type":              msg.Type,
+		"id":                msg.ID,
+		"room_id":           msg.RoomID,
+		"sender_id":         msg.SenderID,
+		"sender_name":       msg.SenderName,
+		"sender_avatar_url": msg.SenderAvatarURL,
+		"content":           msg.Content,
+		"created_at":        msg.CreatedAt,
+	})
+	if err != nil {
+		return err
+	}
+	if err := b.hub.Publish(ctx, roomID, data); err != nil {
+		b.log.Warn().Err(err).Str("room_id", roomID).Msg("albums: publish album_share failed")
+	}
+	return nil
 }
 
 func (n suspensionNotifier) NotifyOfSuspension(ctx context.Context, user admin.UserRecord, susp admin.Suspension) {

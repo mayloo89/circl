@@ -77,6 +77,17 @@ function LastMessagePreview({ msg }: { msg: MessageSummary }) {
           File
         </span>
       )
+    case "album_share":
+      return (
+        <span className="flex items-center gap-1">
+          <svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          Album
+        </span>
+      )
     default:
       return <>{msg.content || ""}</>
   }

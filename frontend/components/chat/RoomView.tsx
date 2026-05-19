@@ -17,6 +17,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import PresenceDot from "@/components/ui/PresenceDot"
 import Skeleton from "@/components/ui/Skeleton"
 import ChatInput from "@/components/chat/ChatInput"
+import ShareAlbumDialog from "@/components/albums/ShareAlbumDialog"
 import DateSeparator from "@/components/chat/DateSeparator"
 import GroupMembersPanel from "@/components/chat/GroupMembersPanel"
 import Lightbox from "@/components/chat/Lightbox"
@@ -141,6 +142,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   const isAtBottomRef = useRef(true)
   const didInitialScrollRef = useRef(false)
   const [showFab, setShowFab] = useState(false)
+  const [shareAlbumOpen, setShareAlbumOpen] = useState(false)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
   const { upload, uploading, rejection, clearRejection } = useUpload(token)
@@ -687,7 +689,17 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
             inputRef={inputRef}
             disableAttach={room?.type === "channel"}
             disableEphemeral={room?.type === "channel"}
+            onShareAlbum={room?.type === "dm" ? () => setShareAlbumOpen(true) : undefined}
           />
+          {token && roomId && room?.type === "dm" && (
+            <ShareAlbumDialog
+              open={shareAlbumOpen}
+              token={token}
+              roomID={roomId}
+              onClose={() => setShareAlbumOpen(false)}
+              onShared={() => setShareAlbumOpen(false)}
+            />
+          )}
         </div>
 
         {/* Members sidebar — only for group / channel */}

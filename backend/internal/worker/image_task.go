@@ -32,10 +32,16 @@ const (
 )
 
 // ImageProcessPayload carries the data needed to process an uploaded image.
+//
+// Category mirrors uploads.category and selects the moderation context —
+// `album-private` uploads run through the chain with `ContextPrivate`,
+// which makes the NSFW detector tag-not-block. Empty falls back to public
+// semantics so callers that haven't been updated keep their old behaviour.
 type ImageProcessPayload struct {
 	UploadID    string `json:"upload_id"`
 	StorageKey  string `json:"storage_key"`
 	ContentType string `json:"content_type"`
+	Category    string `json:"category,omitempty"`
 }
 
 // ProcessingStorage is the subset of the storage interface required by the
@@ -150,6 +156,7 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 			Height:      bounds.Dy(),
 			Hash:        moderation.HashFor(raw),
 			Bytes:       raw,
+			Context:     moderationContextFor(payload.Category),
 		})
 		if modErr != nil {
 			p.log.Warn().Err(modErr).Str("upload_id", payload.UploadID).Msg("moderator error; failing open")
@@ -220,6 +227,16 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 		return fmt.Errorf("set thumbnail key: %w", err)
 	}
 	return nil
+}
+
+// moderationContextFor maps an upload category to the moderation context
+// the chain runs in. Private-album uploads use ContextPrivate so the NSFW
+// detector tags-not-blocks; everything else stays on the public default.
+func moderationContextFor(category string) string {
+	if category == "album-private" {
+		return moderation.ContextPrivate
+	}
+	return moderation.ContextPublic
 }
 
 // retainFileFor decides whether to keep the storage object for admin review
