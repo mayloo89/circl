@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/storage"
@@ -40,6 +42,7 @@ func getHandler(svc *Service) http.HandlerFunc {
 			case errors.Is(err, ErrForbidden):
 				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 			default:
+				zerolog.Ctx(r.Context()).Error().Err(err).Msg("uploads: get upload failed")
 				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
@@ -85,6 +88,7 @@ func requestHandler(svc *Service) http.HandlerFunc {
 				errors.Is(err, storage.ErrInvalidFilename):
 				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
 			default:
+				zerolog.Ctx(r.Context()).Error().Err(err).Msg("uploads: request failed")
 				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
@@ -119,6 +123,7 @@ func confirmHandler(svc *Service) http.HandlerFunc {
 			case errors.Is(err, ErrNotPending):
 				apierror.Write(w, http.StatusConflict, apierror.CodeInvalidRequest, "upload already confirmed")
 			default:
+				zerolog.Ctx(r.Context()).Error().Err(err).Msg("uploads: confirm upload failed")
 				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return

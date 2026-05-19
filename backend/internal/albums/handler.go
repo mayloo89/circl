@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
@@ -41,7 +42,7 @@ func NewHandler(svc *Service, store storage.Storage) http.Handler {
 	return r
 }
 
-func writeServiceError(w http.ResponseWriter, err error) {
+func writeServiceError(r *http.Request, w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "not found")
@@ -54,6 +55,7 @@ func writeServiceError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrSelfGrant):
 		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "cannot grant access to yourself")
 	default:
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg("albums: unexpected error")
 		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 	}
 }
@@ -84,7 +86,7 @@ func createAlbum(svc *Service) http.HandlerFunc {
 		}
 		a, err := svc.CreateAlbum(r.Context(), uid, req.Name, req.Description)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		a.Role = "owner"
@@ -100,7 +102,7 @@ func listMyAlbums(svc *Service) http.HandlerFunc {
 		}
 		rows, err := svc.ListMyAlbums(r.Context(), uid)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, rows)
@@ -115,7 +117,7 @@ func listSharedAlbums(svc *Service) http.HandlerFunc {
 		}
 		rows, err := svc.ListSharedWithMe(r.Context(), uid)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, rows)
@@ -130,7 +132,7 @@ func getAlbum(svc *Service) http.HandlerFunc {
 		}
 		a, err := svc.GetAlbum(r.Context(), uid, chi.URLParam(r, "id"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, a)
@@ -157,7 +159,7 @@ func updateAlbum(svc *Service) http.HandlerFunc {
 			Description: req.Description,
 		})
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, a)
@@ -171,7 +173,7 @@ func deleteAlbum(svc *Service) http.HandlerFunc {
 			return
 		}
 		if err := svc.DeleteAlbum(r.Context(), uid, chi.URLParam(r, "id")); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -186,7 +188,7 @@ func listPhotos(svc *Service) http.HandlerFunc {
 		}
 		rows, err := svc.ListPhotos(r.Context(), uid, chi.URLParam(r, "id"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, rows)
@@ -208,7 +210,7 @@ func addPhoto(svc *Service) http.HandlerFunc {
 			return
 		}
 		if err := svc.AddPhoto(r.Context(), uid, chi.URLParam(r, "id"), req.UploadID); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -222,7 +224,7 @@ func removePhoto(svc *Service) http.HandlerFunc {
 			return
 		}
 		if err := svc.RemovePhoto(r.Context(), uid, chi.URLParam(r, "id"), chi.URLParam(r, "uploadID")); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -237,11 +239,12 @@ func streamPhoto(svc *Service, store storage.Storage) http.HandlerFunc {
 		}
 		key, contentType, err := svc.StreamPhoto(r.Context(), uid, chi.URLParam(r, "id"), chi.URLParam(r, "uploadID"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		obj, err := store.GetObject(r.Context(), key)
 		if err != nil {
+			zerolog.Ctx(r.Context()).Error().Err(err).Msg("albums: failed to fetch photo from storage")
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "failed to fetch photo")
 			return
 		}
@@ -262,7 +265,7 @@ func listGrants(svc *Service) http.HandlerFunc {
 		}
 		rows, err := svc.ListGrants(r.Context(), uid, chi.URLParam(r, "id"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, rows)
@@ -285,7 +288,7 @@ func inviteGrant(svc *Service) http.HandlerFunc {
 		}
 		g, err := svc.InviteUser(r.Context(), uid, chi.URLParam(r, "id"), req.GranteeID)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusCreated, g)
@@ -300,7 +303,7 @@ func requestGrant(svc *Service) http.HandlerFunc {
 		}
 		g, err := svc.RequestAccess(r.Context(), uid, chi.URLParam(r, "id"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusCreated, g)
@@ -315,7 +318,7 @@ func acceptGrant(svc *Service) http.HandlerFunc {
 		}
 		g, err := svc.AcceptGrant(r.Context(), uid, chi.URLParam(r, "grantID"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, g)
@@ -330,7 +333,7 @@ func denyGrant(svc *Service) http.HandlerFunc {
 		}
 		g, err := svc.DenyGrant(r.Context(), uid, chi.URLParam(r, "grantID"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, g)
@@ -357,7 +360,7 @@ func shareInChat(svc *Service) http.HandlerFunc {
 		}
 		a, g, err := svc.ShareInChatRoom(r.Context(), uid, chi.URLParam(r, "id"), req.RoomID)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusCreated, response{Album: a, Grant: g})
@@ -372,7 +375,7 @@ func revokeGrant(svc *Service) http.HandlerFunc {
 		}
 		g, err := svc.RevokeGrant(r.Context(), uid, chi.URLParam(r, "grantID"))
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(r, w, err)
 			return
 		}
 		apierror.WriteJSON(w, http.StatusOK, g)
