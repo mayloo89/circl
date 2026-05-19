@@ -18,6 +18,9 @@ interface ChatInputProps {
   inputRef?: React.RefObject<HTMLTextAreaElement | null>
   disableAttach?: boolean
   disableEphemeral?: boolean
+  /** Optional handler — when set, a "share album" icon button appears next
+   * to the file attach button. RoomView only wires this for DM rooms. */
+  onShareAlbum?: () => void
 }
 
 export default function ChatInput({
@@ -31,6 +34,7 @@ export default function ChatInput({
   inputRef,
   disableAttach = false,
   disableEphemeral = false,
+  onShareAlbum,
 }: ChatInputProps) {
   const t = useTranslations("chatRoom")
   const ephemeralLabels: Record<EphemeralMode, string> = {
@@ -124,6 +128,33 @@ export default function ChatInput({
               )}
             </button>
           </>
+        )}
+
+        {onShareAlbum && !disableAttach && (
+          <button
+            type="button"
+            onClick={onShareAlbum}
+            disabled={!connected}
+            aria-label={t("shareAlbum")}
+            title={t("shareAlbum")}
+            className="flex-none cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </button>
         )}
 
         {/* Ephemeral mode button */}

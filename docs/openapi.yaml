@@ -213,6 +213,45 @@ components:
         avatar_url:  { type: [string, "null"], format: uri }
         created_at:  { type: string, format: date-time }
 
+    Album:
+      type: object
+      properties:
+        id:              { type: string, format: uuid }
+        owner_id:        { type: string, format: uuid }
+        name:            { type: string }
+        description:     { type: string }
+        cover_upload_id: { type: [string, "null"], format: uuid }
+        photo_count:     { type: integer, minimum: 0 }
+        created_at:      { type: string, format: date-time }
+        updated_at:      { type: string, format: date-time }
+        cover_url:       { type: string, description: "Relative URL of the gated cover-photo stream. Empty when no cover is set." }
+        role:            { type: string, enum: [owner, viewer, ""] }
+
+    AlbumPhoto:
+      type: object
+      properties:
+        upload_id:    { type: string, format: uuid }
+        album_id:     { type: string, format: uuid }
+        position:     { type: integer }
+        added_at:     { type: string, format: date-time }
+        filename:     { type: string }
+        content_type: { type: string }
+        url:          { type: string, description: "Relative URL of the gated stream endpoint (`/albums/{id}/photos/{upload_id}/file`)." }
+
+    AlbumGrant:
+      type: object
+      properties:
+        id:            { type: string, format: uuid }
+        album_id:      { type: string, format: uuid }
+        granter_id:    { type: string, format: uuid }
+        grantee_id:    { type: string, format: uuid }
+        status:        { type: string, enum: [pending, active, denied, revoked] }
+        source:        { type: string, enum: [invite, request, chat] }
+        requested_at:  { type: string, format: date-time }
+        granted_at:    { type: [string, "null"], format: date-time }
+        revoked_at:    { type: [string, "null"], format: date-time }
+        counterparty:  { type: string, format: uuid, description: "The other party's user id from the caller's perspective." }
+
   responses:
     Unauthorized:
       description: Missing or invalid access token.
@@ -1339,6 +1378,254 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Private albums ───────────────────────────────────────────────────────────
+
+  /albums:
+    post:
+      tags: [Albums]
+      summary: Create a private album (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:        { type: string, maxLength: 100 }
+                description: { type: string, maxLength: 500 }
+      responses:
+        "201":
+          description: Album row.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Album" } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /albums/me:
+    get:
+      tags: [Albums]
+      summary: List the caller's own albums.
+      responses:
+        "200":
+          description: Array of albums where the caller is the owner.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Album" }
+
+  /albums/shared-with-me:
+    get:
+      tags: [Albums]
+      summary: List albums other users have actively granted to the caller.
+      responses:
+        "200":
+          description: Array of albums (role = "viewer").
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Album" }
+
+  /albums/{id}:
+    get:
+      tags: [Albums]
+      summary: Get one album (caller must be owner or have an active grant).
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: Album row with `role` set to "owner" or "viewer".
+          content: { application/json: { schema: { $ref: "#/components/schemas/Album" } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Albums]
+      summary: Update name, description, or cover (owner only).
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:            { type: string, maxLength: 100 }
+                description:     { type: string, maxLength: 500 }
+                cover_upload_id: { type: string, format: uuid }
+                clear_cover:     { type: boolean }
+      responses:
+        "200": { description: Updated album row. }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Albums]
+      summary: Delete the album (owner only) — cascades to photos, grants and view log.
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /albums/{id}/photos:
+    get:
+      tags: [Albums]
+      summary: List photos in an album (owner or active grantee).
+      description: |
+        Logs a viewer-listing event (NULL `upload_id`) when the caller is a
+        viewer so the owner can audit access.
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: Array of photos with relative stream URLs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlbumPhoto" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Albums]
+      summary: Attach an existing `album-private` upload to the album (owner only).
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [upload_id]
+              properties: { upload_id: { type: string, format: uuid } }
+      responses:
+        "204": { description: Attached. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /albums/{id}/photos/{uploadID}:
+    delete:
+      tags: [Albums]
+      summary: Detach a photo from the album (owner only). Does not delete the upload itself.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: uploadID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Detached. }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /albums/{id}/photos/{uploadID}/file:
+    get:
+      tags: [Albums]
+      summary: Stream the photo bytes (gated by active grant or owner).
+      description: |
+        Returns the raw image bytes. Logs a per-photo view event for viewers.
+        `Cache-Control: private, max-age=60` keeps the viewer's browser cache
+        short so a revoke takes effect within ~60 s on the next render.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: uploadID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Image bytes.
+          content: { "image/*": {} }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /albums/{id}/grants:
+    get:
+      tags: [Albums]
+      summary: List grants for an album. Owner sees all; grantees see only their own row.
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: Array of grants.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlbumGrant" }
+
+  /albums/{id}/grants/invite:
+    post:
+      tags: [Albums]
+      summary: Owner invites a contact (push). Grant starts pending; grantee accepts via /accept.
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantee_id]
+              properties: { grantee_id: { type: string, format: uuid } }
+      responses:
+        "201": { description: "New grant (status=pending, source=invite)." }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: "An open grant already exists for this user." }
+
+  /albums/{id}/grants/request:
+    post:
+      tags: [Albums]
+      summary: Viewer requests access (pull). Owner accepts via /accept.
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "201": { description: "New grant (status=pending, source=request)." }
+        "409": { description: "An open grant already exists." }
+
+  /albums/{id}/share-in-chat:
+    post:
+      tags: [Albums]
+      summary: Owner shares the album in a DM. Auto-creates an active grant; posts an `album_share` chat message.
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [room_id]
+              properties: { room_id: { type: string, format: uuid } }
+      responses:
+        "201":
+          description: Created. Returns the album reference and the resulting grant.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  album: { $ref: "#/components/schemas/Album" }
+                  grant: { $ref: "#/components/schemas/AlbumGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /albums/grants/{grantID}/accept:
+    post:
+      tags: [Albums]
+      summary: Accept a pending grant. Caller must be the other party (grantee for invite, owner for request).
+      parameters: [{ in: path, name: grantID, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: "Updated grant (status=active)." }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /albums/grants/{grantID}/deny:
+    post:
+      tags: [Albums]
+      summary: Deny a pending grant. Same authorisation as /accept.
+      parameters: [{ in: path, name: grantID, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: "Updated grant (status=denied)." }
+
+  /albums/grants/{grantID}/revoke:
+    post:
+      tags: [Albums]
+      summary: Revoke an active grant. Either party may revoke.
+      description: |
+        Forward-only — viewers may have cached photos in their browser that
+        revoke cannot reach. The UI surfaces this caveat before submitting.
+      parameters: [{ in: path, name: grantID, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: "Updated grant (status=revoked)." }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /admin/moderation:
     get:

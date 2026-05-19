@@ -52,6 +52,7 @@ type Config struct {
 	ChatWS        http.Handler
 	Presence      http.Handler
 	Upload        http.Handler
+	Albums        http.Handler
 	Reports       http.Handler
 	Push          http.Handler
 	Admin         http.Handler
@@ -129,6 +130,9 @@ func New(cfg Config) http.Handler {
 		g.Mount("/chat", cfg.Chat)
 		g.Mount("/presence", cfg.Presence)
 		g.Mount("/uploads", cfg.Upload)
+		if cfg.Albums != nil {
+			g.Mount("/albums", cfg.Albums)
+		}
 		g.Mount("/reports", cfg.Reports)
 		g.Mount("/push", cfg.Push)
 		g.Mount("/admin", cfg.Admin)

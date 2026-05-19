@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 import type { AnyMessage } from "@/types/chat"
 import { formatExpiry, expiryColorClass } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
+import AlbumShareBubble from "@/components/chat/AlbumShareBubble"
 
 interface MessageBubbleProps {
   msg: AnyMessage
@@ -40,7 +41,8 @@ export default function MessageBubble({
   const hasMedia =
     ("thumbnail_url" in msg && msg.thumbnail_url) ||
     (msg.type === "image" && msg.content && !isViewOnce) ||
-    (msg.type === "video" && !isViewOnce)
+    (msg.type === "video" && !isViewOnce) ||
+    msg.type === "album_share"
 
   const bubbleClass = hasMedia
     ? "overflow-hidden p-0"
@@ -184,6 +186,8 @@ export default function MessageBubble({
                   </svg>
                   <span className="truncate underline">{msg.content.split("/").pop() ?? "attachment"}</span>
                 </a>
+              ) : msg.type === "album_share" ? (
+                <AlbumShareBubble content={msg.content} isOwn={isOwn} />
               ) : (
                 msg.content
               )}

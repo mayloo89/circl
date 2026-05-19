@@ -12,10 +12,11 @@ const (
 	RoomTypeGroup   = "group"
 	RoomTypeChannel = "channel"
 
-	MessageTypeText  = "text"
-	MessageTypeImage = "image"
-	MessageTypeVideo = "video"
-	MessageTypeFile  = "file"
+	MessageTypeText       = "text"
+	MessageTypeImage      = "image"
+	MessageTypeVideo      = "video"
+	MessageTypeFile       = "file"
+	MessageTypeAlbumShare = "album_share"
 
 	// TTL label constants for ephemeral messages.
 	TTL15Min  = "15m"
