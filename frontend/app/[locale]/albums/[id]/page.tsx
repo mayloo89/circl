@@ -28,7 +28,6 @@ export default function AlbumDetailPage() {
   const [album, setAlbum] = useState<Album | null>(null)
   const [photos, setPhotos] = useState<AlbumPhoto[] | null>(null)
   const [loadError, setLoadError] = useState<"forbidden" | "other" | null>(null)
-  const [requestSent, setRequestSent] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [lightboxPhoto, setLightboxPhoto] = useState<AlbumPhoto | null>(null)
@@ -95,29 +94,19 @@ export default function AlbumDetailPage() {
     }
   }
 
-  async function requestAccess() {
-    if (!token) return
-    try {
-      await albumsApi.requestAccess(token, albumID)
-      setRequestSent(true)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
-      if (msg.toLowerCase().includes("already")) setRequestSent(true)
-    }
-  }
-
   if (loadError === "forbidden") {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 px-4 py-12 text-center">
-        <h1 className="text-lg font-semibold text-white">{t("noAccess")}</h1>
-        {requestSent ? (
-          <p className="text-sm text-gray-400">{t("requestSent")}</p>
-        ) : (
-          <Button variant="primary" onClick={requestAccess} disabled={!token}>
-            {t("requestAccess")}
+      <Modal open onClose={() => router.replace("/albums")}>
+        <div className="flex flex-col items-center gap-4 px-2 py-2 text-center">
+          <svg className="h-10 w-10 text-gray-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+          <p className="text-base font-semibold text-white">{t("noAccess")}</p>
+          <Button variant="secondary" onClick={() => router.replace("/albums")}>
+            {tc("back")}
           </Button>
-        )}
-      </div>
+        </div>
+      </Modal>
     )
   }
 
