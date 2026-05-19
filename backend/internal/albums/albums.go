@@ -129,6 +129,18 @@ type Store interface {
 	ExpireAlbumGrants(ctx context.Context) error
 
 	LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error
+	ListViews(ctx context.Context, albumID string, limit, offset int) ([]ViewRecord, error)
+}
+
+// ViewRecord is one row from the private_album_views log, enriched with
+// human-readable names for the admin surface.
+type ViewRecord struct {
+	AlbumID    string    `json:"album_id"`
+	AlbumName  string    `json:"album_name"`
+	ViewerID   string    `json:"viewer_id"`
+	ViewerName string    `json:"viewer_name"`
+	UploadID   *string   `json:"upload_id,omitzero"`
+	ViewedAt   time.Time `json:"viewed_at"`
 }
 
 // ChatBridge persists and broadcasts a chat message of type 'album_share'
@@ -348,28 +360,29 @@ func (s *Service) ListPhotos(ctx context.Context, callerID, albumID string) ([]P
 	return photos, nil
 }
 
-// StreamPhoto returns the storage key and content type for a photo if the
-// caller has access. The handler then calls storage.GetObject and streams
-// the bytes back. Records a per-photo view for non-owner callers.
-func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID string) (key, contentType string, err error) {
+// StreamPhoto returns the storage key, content type, and caller role for a
+// photo if the caller has access. The handler streams the bytes and applies
+// a deterrence watermark for viewer-role callers. Records a per-photo view
+// for non-owner callers.
+func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID string) (key, contentType, role string, err error) {
 	a, err := s.store.GetAlbum(ctx, albumID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	role, err := s.roleFor(ctx, callerID, a)
+	role, err = s.roleFor(ctx, callerID, a)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if role == "" {
-		return "", "", ErrForbidden
+		return "", "", "", ErrForbidden
 	}
 	u, err := s.media.GetForOwner(ctx, uploadID, a.OwnerID)
 	if err != nil {
-		return "", "", ErrNotFound
+		return "", "", "", ErrNotFound
 	}
 	photo, err := s.store.GetPhoto(ctx, albumID, uploadID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if role == "viewer" {
 		uID := uploadID
@@ -378,7 +391,7 @@ func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID s
 		}
 	}
 	_ = photo
-	return u.StorageKey, u.ContentType, nil
+	return u.StorageKey, u.ContentType, role, nil
 }
 
 // InviteUser opens a 'pending' grant for grantee (owner → push). Returns

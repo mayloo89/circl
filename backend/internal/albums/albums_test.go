@@ -213,6 +213,10 @@ func (s *fakeStore) LogView(_ context.Context, albumID, viewerID string, uploadI
 	return nil
 }
 
+func (s *fakeStore) ListViews(_ context.Context, _ string, _, _ int) ([]albums.ViewRecord, error) {
+	return nil, nil
+}
+
 type fakeMedia struct {
 	owner    string
 	category string

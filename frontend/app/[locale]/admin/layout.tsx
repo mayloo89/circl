@@ -37,6 +37,7 @@ export default async function AdminLayout({
           <SidebarLink href="/admin/reports">Reports</SidebarLink>
           <SidebarLink href="/admin/appeals">Appeals</SidebarLink>
           <SidebarLink href="/admin/moderation">Moderation</SidebarLink>
+          <SidebarLink href="/admin/albums">Albums</SidebarLink>
           <SidebarLink href="/admin/channels">Channels</SidebarLink>
         </nav>
       </aside>

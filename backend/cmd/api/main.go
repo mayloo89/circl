@@ -504,7 +504,9 @@ func main() {
 		hub:   chatHub,
 		log:   log,
 	})
-	albumsHandler := albums.NewHandler(albumsSvc, fileStorage)
+	albumsHandler := albums.NewHandler(albumsSvc, fileStorage,
+		albums.WithLimiter(limiter),
+	)
 	adminPresenceLookup := func(ctx context.Context, ids []string) (map[string]admin.UserPresence, error) {
 		info, err := presenceStore.GetPresence(ctx, ids)
 		if err != nil {
@@ -519,6 +521,7 @@ func main() {
 	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup,
 		admin.WithAppealsHandler(appealsAdminHandler),
 		admin.WithModerationHandler(moderationAdminHandler),
+		admin.WithAlbumsHandler(albums.NewAdminHandler(albumsStore)),
 	)
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
