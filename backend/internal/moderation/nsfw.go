@@ -46,9 +46,22 @@ func NewNSFW(classifier NSFWClassifier, threshold float64) *NSFW {
 func (n *NSFW) Name() string { return "nsfw" }
 
 // Check runs the classifier on the bytes and rejects if probability exceeds
-// the configured threshold. Errors from the classifier are returned so the
-// orchestrator can decide; the typical policy is fail-open.
+// the configured threshold. Private-context inputs (e.g. album-private
+// uploads) never reject on NSFW — explicit content is the legitimate use
+// case there, and the consent gate sits one layer up at the album-grant
+// level. Hash-list matches and heuristic rejections still apply, so this
+// is a narrow relaxation, not a moderation bypass. Errors from the
+// classifier are returned so the orchestrator can decide; the typical
+// policy is fail-open.
 func (n *NSFW) Check(ctx context.Context, in Input) (Decision, error) {
+	if in.Context == ContextPrivate {
+		// Tag-not-block for private surfaces — explicit content is allowed
+		// because the recipient has consented via an album grant. The
+		// classifier score is intentionally discarded for now; a future
+		// migration can persist it for audit if we want to flag
+		// "very-high-confidence NSFW even in private albums" for follow-up.
+		return Allow(), nil
+	}
 	if len(in.Bytes) == 0 {
 		return Decision{}, ErrInputMissing
 	}

@@ -362,7 +362,7 @@ func TestConfirmUpload_EnqueuerCalled(t *testing.T) {
 	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	var enqueuedUploadID string
-	svc.SetEnqueuer(func(_ context.Context, uploadID, _, _ string) error {
+	svc.SetEnqueuer(func(_ context.Context, uploadID, _, _, _ string) error {
 		enqueuedUploadID = uploadID
 		return nil
 	})
@@ -387,7 +387,7 @@ func TestConfirmUpload_EnqueuerCalled(t *testing.T) {
 func TestConfirmUpload_EnqueuerError_DoesNotFail(t *testing.T) {
 	store := newMockStore()
 	svc := NewService(store, &mockStorage{}, zerolog.Nop())
-	svc.SetEnqueuer(func(_ context.Context, _, _, _ string) error {
+	svc.SetEnqueuer(func(_ context.Context, _, _, _, _ string) error {
 		return errors.New("redis down")
 	})
 
@@ -483,7 +483,7 @@ func TestConfirmUpload_NonImageDoesNotEnqueue(t *testing.T) {
 	svc := NewService(store, &mockStorage{}, zerolog.Nop())
 
 	enqueued := false
-	svc.SetEnqueuer(func(_ context.Context, _, _, _ string) error {
+	svc.SetEnqueuer(func(_ context.Context, _, _, _, _ string) error {
 		enqueued = true
 		return nil
 	})

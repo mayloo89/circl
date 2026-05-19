@@ -84,7 +84,7 @@ type Store interface {
 type Service struct {
 	store   Store
 	storage storage.Storage
-	enqueue func(ctx context.Context, uploadID, storageKey, contentType string) error
+	enqueue func(ctx context.Context, uploadID, storageKey, contentType, category string) error
 	log     zerolog.Logger
 }
 
@@ -100,7 +100,7 @@ func NewService(store Store, st storage.Storage, log zerolog.Logger) *Service {
 // SetEnqueuer registers a function that enqueues a background processing task
 // after an image upload is confirmed. The function is called asynchronously
 // and errors are logged but do not fail the confirm request.
-func (s *Service) SetEnqueuer(fn func(ctx context.Context, uploadID, storageKey, contentType string) error) {
+func (s *Service) SetEnqueuer(fn func(ctx context.Context, uploadID, storageKey, contentType, category string) error) {
 	s.enqueue = fn
 }
 
@@ -209,7 +209,7 @@ func (s *Service) ConfirmUpload(ctx context.Context, uploadID, userID string) (*
 	}
 
 	if s.enqueue != nil && strings.HasPrefix(u.ContentType, "image/") {
-		if err := s.enqueue(ctx, u.ID, u.StorageKey, u.ContentType); err != nil {
+		if err := s.enqueue(ctx, u.ID, u.StorageKey, u.ContentType, u.Category); err != nil {
 			s.log.Warn().Err(err).Str("upload_id", u.ID).Msg("enqueue image processing failed")
 		}
 	}

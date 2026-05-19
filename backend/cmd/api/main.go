@@ -386,11 +386,12 @@ func main() {
 	}
 	workerClient := worker.NewClient(redisConnOpt)
 	defer workerClient.Close() //nolint:errcheck
-	uploadSvc.SetEnqueuer(func(ctx context.Context, uploadID, storageKey, contentType string) error {
+	uploadSvc.SetEnqueuer(func(ctx context.Context, uploadID, storageKey, contentType, category string) error {
 		return worker.EnqueueProcessImage(ctx, workerClient, worker.ImageProcessPayload{
 			UploadID:    uploadID,
 			StorageKey:  storageKey,
 			ContentType: contentType,
+			Category:    category,
 		})
 	})
 

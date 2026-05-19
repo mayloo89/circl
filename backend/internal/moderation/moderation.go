@@ -31,6 +31,17 @@ const (
 	CodeNSFWDetected      = "nsfw_detected"
 )
 
+// Context names describe the surface the upload is destined for. Different
+// surfaces have different content policies — the NSFW classifier blocks
+// explicit content on public surfaces, but only tags it on private albums
+// (where the recipient has explicitly consented via a grant). Hash-list
+// matches (CSAM / NCII) and heuristic checks always block, regardless of
+// context — they're legal floors, not surface-policy.
+const (
+	ContextPublic  = "public"
+	ContextPrivate = "private"
+)
+
 // Status values written to `uploads.moderation_status`.
 const (
 	StatusPending  = "pending"
@@ -73,6 +84,9 @@ func Reject(code, reason, source string) Decision {
 // Heuristic from dimensions) can be passed an empty slice. Hash is
 // precomputed once at the orchestration layer to avoid every moderator
 // hashing the bytes again.
+//
+// Context tags the destination surface (ContextPublic / ContextPrivate).
+// Empty defaults to public, so pre-existing callers keep their semantics.
 type Input struct {
 	ContentType string
 	SizeBytes   int64
@@ -80,6 +94,7 @@ type Input struct {
 	Height      int
 	Hash        string
 	Bytes       []byte
+	Context     string
 }
 
 // HashFor returns the hex-encoded SHA-256 of b. Exposed so the orchestration

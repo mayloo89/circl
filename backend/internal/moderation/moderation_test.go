@@ -240,3 +240,34 @@ func TestNSFW_EmptyBytesErrors(t *testing.T) {
 		t.Errorf("err = %v, want ErrInputMissing", err)
 	}
 }
+
+func TestNSFW_PrivateContextSkipsRejection(t *testing.T) {
+	// Private-album uploads run with ContextPrivate. Even if the classifier
+	// would have flagged the image as explicit, NSFW.Check must return
+	// Allow() — the consent gate sits one layer up at the album-grant level.
+	n := moderation.NewNSFW(fakeClassifier{prob: 0.99}, 0.8)
+	d, err := n.Check(t.Context(), moderation.Input{
+		Bytes:   []byte("x"),
+		Context: moderation.ContextPrivate,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !d.Allowed {
+		t.Errorf("private context with high score should allow, got reject: %s", d.Reason)
+	}
+}
+
+func TestNSFW_PrivateContextSkipsEmptyBytesCheck(t *testing.T) {
+	// Private context short-circuits before the input validation, so callers
+	// that haven't decoded the image yet can still funnel through without
+	// getting ErrInputMissing.
+	n := moderation.NewNSFW(fakeClassifier{}, 0.8)
+	d, err := n.Check(t.Context(), moderation.Input{Context: moderation.ContextPrivate})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !d.Allowed {
+		t.Error("expected allow")
+	}
+}
