@@ -49,12 +49,15 @@ export default function ChatInput({
   }
   const [input, setInput] = useState("")
   const [showEphemeralMenu, setShowEphemeralMenu] = useState(false)
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const internalInputRef = useRef<HTMLTextAreaElement>(null)
   const effectiveRef = inputRef ?? internalInputRef
   const ephemeralMenuRef = useRef<HTMLDivElement>(null)
+  const attachMenuRef = useRef<HTMLDivElement>(null)
   useMenuKeyboard({ open: showEphemeralMenu, containerRef: ephemeralMenuRef, onClose: () => setShowEphemeralMenu(false) })
+  useMenuKeyboard({ open: showAttachMenu, containerRef: attachMenuRef, onClose: () => setShowAttachMenu(false) })
 
   function autoResize(el: HTMLTextAreaElement) {
     el.style.height = "auto"
@@ -109,52 +112,71 @@ export default function ChatInput({
               className="hidden"
               onChange={handleFileChange}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!connected || uploading}
-              aria-label={t("attachFile")}
-              title={t("attachFile")}
-              className="flex-none cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover"
-            >
-              {uploading ? (
-                <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              )}
-            </button>
-          </>
-        )}
+            <div className="relative flex-none">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onShareAlbum) {
+                    setShowAttachMenu((v) => !v)
+                  } else {
+                    fileInputRef.current?.click()
+                  }
+                }}
+                disabled={!connected || uploading}
+                aria-label={t("attachFile")}
+                aria-haspopup={onShareAlbum ? "menu" : undefined}
+                aria-expanded={onShareAlbum ? showAttachMenu : undefined}
+                title={t("attachFile")}
+                className="cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+              >
+                {uploading ? (
+                  <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                )}
+              </button>
 
-        {onShareAlbum && !disableAttach && (
-          <button
-            type="button"
-            onClick={onShareAlbum}
-            disabled={!connected}
-            aria-label={t("shareAlbum")}
-            title={t("shareAlbum")}
-            className="flex-none cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-hover"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
-              aria-hidden="true"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="9" cy="9" r="2" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-          </button>
+              {onShareAlbum && showAttachMenu && (
+                <div
+                  ref={attachMenuRef}
+                  role="menu"
+                  aria-label={t("attachFile")}
+                  className="absolute bottom-full left-0 mb-2 w-48 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-xl"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }}
+                    className="flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover"
+                  >
+                    <svg className="h-4 w-4 flex-none text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    {t("attachFile")}
+                  </button>
+                  <div className="border-t border-gray-700/60" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { onShareAlbum(); setShowAttachMenu(false) }}
+                    className="flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover"
+                  >
+                    <svg className="h-4 w-4 flex-none text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="9" cy="9" r="2" />
+                      <path d="M21 15l-5-5L5 21" />
+                    </svg>
+                    {t("shareAlbum")}
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Ephemeral mode button */}
