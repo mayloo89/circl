@@ -94,10 +94,10 @@ export default function AlbumsPage() {
         </div>
       )}
 
-      {state.kind === "ok" && state.albums.length > 0 && token && (
+      {state.kind === "ok" && state.albums.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {state.albums.map((a) => (
-            <AlbumCard key={a.id} album={a} token={token} />
+            <AlbumCard key={a.id} album={a} />
           ))}
         </div>
       )}

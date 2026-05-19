@@ -23,9 +23,9 @@ func (s *pgStore) CreateAlbum(ctx context.Context, ownerID, name, description st
 	err := s.db.QueryRow(ctx, `
 		INSERT INTO private_albums (owner_id, name, description)
 		VALUES ($1, $2, $3)
-		RETURNING id, owner_id, name, description, cover_upload_id, photo_count, created_at, updated_at`,
+		RETURNING id, owner_id, name, description, photo_count, created_at, updated_at`,
 		ownerID, name, description,
-	).Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.CoverUploadID, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt)
+	).Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("albums: create: %w", err)
 	}
@@ -35,10 +35,10 @@ func (s *pgStore) CreateAlbum(ctx context.Context, ownerID, name, description st
 func (s *pgStore) GetAlbum(ctx context.Context, albumID string) (*Album, error) {
 	var a Album
 	err := s.db.QueryRow(ctx, `
-		SELECT id, owner_id, name, description, cover_upload_id, photo_count, created_at, updated_at
+		SELECT id, owner_id, name, description, photo_count, created_at, updated_at
 		  FROM private_albums
 		 WHERE id = $1`, albumID,
-	).Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.CoverUploadID, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt)
+	).Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -50,7 +50,7 @@ func (s *pgStore) GetAlbum(ctx context.Context, albumID string) (*Album, error) 
 
 func (s *pgStore) ListAlbumsByOwner(ctx context.Context, ownerID string) ([]Album, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT id, owner_id, name, description, cover_upload_id, photo_count, created_at, updated_at
+		SELECT id, owner_id, name, description, photo_count, created_at, updated_at
 		  FROM private_albums
 		 WHERE owner_id = $1
 		 ORDER BY created_at DESC`, ownerID)
@@ -63,7 +63,7 @@ func (s *pgStore) ListAlbumsByOwner(ctx context.Context, ownerID string) ([]Albu
 
 func (s *pgStore) ListAlbumsSharedWith(ctx context.Context, granteeID string) ([]Album, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT a.id, a.owner_id, a.name, a.description, a.cover_upload_id, a.photo_count, a.created_at, a.updated_at
+		SELECT a.id, a.owner_id, a.name, a.description, a.photo_count, a.created_at, a.updated_at
 		  FROM private_albums a
 		  JOIN private_album_grants g ON g.album_id = a.id
 		 WHERE g.grantee_id = $1
@@ -76,18 +76,17 @@ func (s *pgStore) ListAlbumsSharedWith(ctx context.Context, granteeID string) ([
 	return scanAlbums(rows)
 }
 
-func (s *pgStore) UpdateAlbum(ctx context.Context, albumID, name, description string, coverUploadID *string) (*Album, error) {
+func (s *pgStore) UpdateAlbum(ctx context.Context, albumID, name, description string) (*Album, error) {
 	var a Album
 	err := s.db.QueryRow(ctx, `
 		UPDATE private_albums
 		   SET name = $2,
 		       description = $3,
-		       cover_upload_id = $4,
 		       updated_at = NOW()
 		 WHERE id = $1
-		 RETURNING id, owner_id, name, description, cover_upload_id, photo_count, created_at, updated_at`,
-		albumID, name, description, coverUploadID,
-	).Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.CoverUploadID, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt)
+		 RETURNING id, owner_id, name, description, photo_count, created_at, updated_at`,
+		albumID, name, description,
+	).Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -144,13 +143,11 @@ func (s *pgStore) RemovePhoto(ctx context.Context, albumID, uploadID string) err
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	// Clear cover if we just deleted the cover photo.
 	if _, err := tx.Exec(ctx, `
 		UPDATE private_albums
-		   SET photo_count    = GREATEST(photo_count - 1, 0),
-		       cover_upload_id = CASE WHEN cover_upload_id = $2 THEN NULL ELSE cover_upload_id END,
-		       updated_at      = NOW()
-		 WHERE id = $1`, albumID, uploadID); err != nil {
+		   SET photo_count = GREATEST(photo_count - 1, 0),
+		       updated_at  = NOW()
+		 WHERE id = $1`, albumID); err != nil {
 		return fmt.Errorf("albums: drop count: %w", err)
 	}
 	return tx.Commit(ctx)
@@ -333,7 +330,7 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	out := []Album{}
 	for rows.Next() {
 		var a Album
-		if err := rows.Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.CoverUploadID, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("albums: scan: %w", err)
 		}
 		out = append(out, a)

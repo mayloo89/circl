@@ -139,10 +139,8 @@ func getAlbum(svc *Service) http.HandlerFunc {
 
 func updateAlbum(svc *Service) http.HandlerFunc {
 	type request struct {
-		Name          *string `json:"name,omitempty"`
-		Description   *string `json:"description,omitempty"`
-		CoverUploadID *string `json:"cover_upload_id,omitempty"`
-		ClearCover    bool    `json:"clear_cover,omitempty"`
+		Name        *string `json:"name,omitempty"`
+		Description *string `json:"description,omitempty"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid, ok := userID(r, w)
@@ -155,10 +153,8 @@ func updateAlbum(svc *Service) http.HandlerFunc {
 			return
 		}
 		a, err := svc.UpdateAlbum(r.Context(), uid, chi.URLParam(r, "id"), AlbumPatch{
-			Name:          req.Name,
-			Description:   req.Description,
-			CoverUploadID: req.CoverUploadID,
-			ClearCover:    req.ClearCover,
+			Name:        req.Name,
+			Description: req.Description,
 		})
 		if err != nil {
 			writeServiceError(w, err)

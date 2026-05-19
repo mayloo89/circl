@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react"
 import { useTranslations } from "next-intl"
 
-import AuthedImage from "@/components/admin/AuthedImage"
 import Button from "@/components/ui/Button"
 import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
-import { absoluteAlbumURL, albumsApi, type Album } from "@/lib/albums"
+import { albumsApi, type Album } from "@/lib/albums"
 
 interface Props {
   open: boolean
@@ -95,16 +94,25 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
                 key={a.id}
                 className="flex items-center gap-3 rounded border border-gray-800 bg-gray-950 p-2"
               >
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-gray-900">
-                  {a.cover_url ? (
-                    <AuthedImage
-                      src={absoluteAlbumURL(a.cover_url)}
-                      token={token}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : null}
-                </div>
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-12 w-12 flex-none items-center justify-center rounded bg-brand-accent/15 text-brand-accent"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-6 w-6"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{a.name}</p>
                   <p className="text-xs text-gray-500">{t("photoCount", { count: a.photo_count })}</p>

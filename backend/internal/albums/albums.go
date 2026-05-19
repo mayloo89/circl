@@ -106,7 +106,7 @@ type Store interface {
 	GetAlbum(ctx context.Context, albumID string) (*Album, error)
 	ListAlbumsByOwner(ctx context.Context, ownerID string) ([]Album, error)
 	ListAlbumsSharedWith(ctx context.Context, granteeID string) ([]Album, error)
-	UpdateAlbum(ctx context.Context, albumID, name, description string, coverUploadID *string) (*Album, error)
+	UpdateAlbum(ctx context.Context, albumID, name, description string) (*Album, error)
 	DeleteAlbum(ctx context.Context, albumID string) error
 
 	AddPhoto(ctx context.Context, albumID, uploadID string, position int) error
@@ -203,9 +203,6 @@ func (s *Service) GetAlbum(ctx context.Context, callerID, albumID string) (*Albu
 		return nil, ErrForbidden
 	}
 	a.Role = role
-	if a.CoverUploadID != nil {
-		a.CoverURL = "/albums/" + a.ID + "/photos/" + *a.CoverUploadID + "/file"
-	}
 	return a, nil
 }
 
@@ -217,9 +214,6 @@ func (s *Service) ListMyAlbums(ctx context.Context, ownerID string) ([]Album, er
 	}
 	for i := range rows {
 		rows[i].Role = "owner"
-		if rows[i].CoverUploadID != nil {
-			rows[i].CoverURL = "/albums/" + rows[i].ID + "/photos/" + *rows[i].CoverUploadID + "/file"
-		}
 	}
 	return rows, nil
 }
@@ -232,19 +226,14 @@ func (s *Service) ListSharedWithMe(ctx context.Context, granteeID string) ([]Alb
 	}
 	for i := range rows {
 		rows[i].Role = "viewer"
-		if rows[i].CoverUploadID != nil {
-			rows[i].CoverURL = "/albums/" + rows[i].ID + "/photos/" + *rows[i].CoverUploadID + "/file"
-		}
 	}
 	return rows, nil
 }
 
-// UpdateAlbum patches name / description / cover. Only the owner may update.
+// AlbumPatch is the partial update for an album. Only the owner may update.
 type AlbumPatch struct {
-	Name          *string
-	Description   *string
-	CoverUploadID *string // pointer-to-pointer semantics emulated via separate ClearCover flag
-	ClearCover    bool
+	Name        *string
+	Description *string
 }
 
 func (s *Service) UpdateAlbum(ctx context.Context, callerID, albumID string, patch AlbumPatch) (*Album, error) {
@@ -267,18 +256,7 @@ func (s *Service) UpdateAlbum(ctx context.Context, callerID, albumID string, pat
 	if patch.Description != nil {
 		desc = strings.TrimSpace(*patch.Description)
 	}
-	cover := a.CoverUploadID
-	switch {
-	case patch.ClearCover:
-		cover = nil
-	case patch.CoverUploadID != nil:
-		// Validate the cover refers to a photo that's in this album.
-		if _, err := s.store.GetPhoto(ctx, albumID, *patch.CoverUploadID); err != nil {
-			return nil, ErrInvalidRequest
-		}
-		cover = patch.CoverUploadID
-	}
-	return s.store.UpdateAlbum(ctx, albumID, name, desc, cover)
+	return s.store.UpdateAlbum(ctx, albumID, name, desc)
 }
 
 // DeleteAlbum removes the album and cascades to photos + grants + views.
@@ -477,13 +455,11 @@ func buildAlbumSharePayload(a *Album) string {
 		AlbumID    string `json:"album_id"`
 		Name       string `json:"name"`
 		PhotoCount int    `json:"photo_count"`
-		CoverURL   string `json:"cover_url,omitempty"`
 		OwnerID    string `json:"owner_id"`
 	}{
 		AlbumID:    a.ID,
 		Name:       a.Name,
 		PhotoCount: a.PhotoCount,
-		CoverURL:   a.CoverURL,
 		OwnerID:    a.OwnerID,
 	})
 	return string(out)
@@ -522,9 +498,6 @@ func (s *Service) ShareInChat(ctx context.Context, ownerID, albumID, granteeID s
 			return nil, nil, err
 		}
 		g = created
-	}
-	if a.CoverUploadID != nil {
-		a.CoverURL = "/albums/" + a.ID + "/photos/" + *a.CoverUploadID + "/file"
 	}
 	return a, g, nil
 }

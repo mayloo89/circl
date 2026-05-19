@@ -78,14 +78,13 @@ func (s *fakeStore) ListAlbumsSharedWith(_ context.Context, granteeID string) ([
 	return out, nil
 }
 
-func (s *fakeStore) UpdateAlbum(_ context.Context, id, name, description string, cover *string) (*albums.Album, error) {
+func (s *fakeStore) UpdateAlbum(_ context.Context, id, name, description string) (*albums.Album, error) {
 	a, ok := s.albums[id]
 	if !ok {
 		return nil, albums.ErrNotFound
 	}
 	a.Name = name
 	a.Description = description
-	a.CoverUploadID = cover
 	a.UpdatedAt = time.Now()
 	c := *a
 	return &c, nil

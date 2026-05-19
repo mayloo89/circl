@@ -9,11 +9,9 @@ export interface Album {
   owner_id: string
   name: string
   description: string
-  cover_upload_id?: string | null
   photo_count: number
   created_at: string
   updated_at: string
-  cover_url?: string
   role?: "owner" | "viewer" | ""
 }
 
@@ -72,7 +70,7 @@ export const albumsApi = {
   get: (token: string, id: string) => authedJSON<Album>(token, `/albums/${id}`),
   create: (token: string, name: string, description: string) =>
     authedJSON<Album>(token, "/albums", { method: "POST", body: JSON.stringify({ name, description }) }),
-  update: (token: string, id: string, patch: Partial<{ name: string; description: string; cover_upload_id: string; clear_cover: boolean }>) =>
+  update: (token: string, id: string, patch: Partial<{ name: string; description: string }>) =>
     authedJSON<Album>(token, `/albums/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   remove: (token: string, id: string) =>
     authedJSON<void>(token, `/albums/${id}`, { method: "DELETE" }),
