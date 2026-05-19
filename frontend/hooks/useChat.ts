@@ -34,7 +34,7 @@ export interface TypingUser {
 /** Maps userId → timestamp (ms) of their last read event. */
 export type ReadReceipts = Map<string, number>
 
-const chatMessageTypes = new Set(["text", "image", "video", "file"])
+const chatMessageTypes = new Set(["text", "image", "video", "file", "album_share"])
 
 /**
  * Manages the WebSocket connection for a single chat room.
