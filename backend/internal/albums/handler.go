@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -272,9 +273,18 @@ func listGrants(svc *Service) http.HandlerFunc {
 	}
 }
 
+// grantExpiryPresets maps the string preset clients send to a duration.
+// "none" or any unrecognised value → nil (no expiry).
+var grantExpiryPresets = map[string]time.Duration{
+	"24h": 24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+	"30d": 30 * 24 * time.Hour,
+}
+
 func inviteGrant(svc *Service) http.HandlerFunc {
 	type request struct {
 		GranteeID string `json:"grantee_id"`
+		ExpiresIn string `json:"expires_in"` // "24h" | "7d" | "30d" | "none" | ""
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid, ok := userID(r, w)
@@ -286,7 +296,12 @@ func inviteGrant(svc *Service) http.HandlerFunc {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
-		g, err := svc.InviteUser(r.Context(), uid, chi.URLParam(r, "id"), req.GranteeID)
+		var expiresAt *time.Time
+		if d, ok := grantExpiryPresets[req.ExpiresIn]; ok {
+			t := time.Now().Add(d)
+			expiresAt = &t
+		}
+		g, err := svc.InviteUser(r.Context(), uid, chi.URLParam(r, "id"), req.GranteeID, expiresAt)
 		if err != nil {
 			writeServiceError(r, w, err)
 			return
@@ -342,7 +357,8 @@ func denyGrant(svc *Service) http.HandlerFunc {
 
 func shareInChat(svc *Service) http.HandlerFunc {
 	type request struct {
-		RoomID string `json:"room_id"`
+		RoomID    string `json:"room_id"`
+		ExpiresIn string `json:"expires_in"` // "24h" | "7d" | "30d" | "none" | ""
 	}
 	type response struct {
 		Album *Album `json:"album"`
@@ -358,7 +374,12 @@ func shareInChat(svc *Service) http.HandlerFunc {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
 			return
 		}
-		a, g, err := svc.ShareInChatRoom(r.Context(), uid, chi.URLParam(r, "id"), req.RoomID)
+		var expiresAt *time.Time
+		if d, ok := grantExpiryPresets[req.ExpiresIn]; ok {
+			t := time.Now().Add(d)
+			expiresAt = &t
+		}
+		a, g, err := svc.ShareInChatRoom(r.Context(), uid, chi.URLParam(r, "id"), req.RoomID, expiresAt)
 		if err != nil {
 			writeServiceError(r, w, err)
 			return

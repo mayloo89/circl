@@ -14,7 +14,7 @@ import Skeleton from "@/components/ui/Skeleton"
 import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import { useUpload } from "@/hooks/useUpload"
 import { useRouter } from "@/i18n/navigation"
-import { absoluteAlbumURL, albumsApi, type Album, type AlbumPhoto } from "@/lib/albums"
+import { absoluteAlbumURL, albumsApi, type Album, type AlbumPhoto, type Grant } from "@/lib/albums"
 
 export default function AlbumDetailPage() {
   const params = useParams<{ id: string }>()
@@ -27,6 +27,7 @@ export default function AlbumDetailPage() {
 
   const [album, setAlbum] = useState<Album | null>(null)
   const [photos, setPhotos] = useState<AlbumPhoto[] | null>(null)
+  const [viewerGrant, setViewerGrant] = useState<Grant | null>(null)
   const [loadError, setLoadError] = useState<"forbidden" | "other" | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -39,11 +40,19 @@ export default function AlbumDetailPage() {
     if (!token || !albumID) return
     let cancelled = false
     setLoadError(null)
-    Promise.all([albumsApi.get(token, albumID), albumsApi.listPhotos(token, albumID)])
-      .then(([a, p]) => {
+    Promise.all([
+      albumsApi.get(token, albumID),
+      albumsApi.listPhotos(token, albumID),
+      albumsApi.listGrants(token, albumID).catch(() => [] as Grant[]),
+    ])
+      .then(([a, p, grants]) => {
         if (cancelled) return
         setAlbum(a)
         setPhotos(p)
+        if (a.role === "viewer") {
+          const own = grants.find((g) => g.status === "active")
+          setViewerGrant(own ?? null)
+        }
       })
       .catch((err) => {
         if (cancelled) return
@@ -165,7 +174,11 @@ export default function AlbumDetailPage() {
         }`}
         role="note"
       >
-        {isOwner ? t("ownerNotice") : t("viewerNotice")}
+        {isOwner
+          ? t("ownerNotice")
+          : viewerGrant?.expires_at
+          ? t("viewerNoticeExpiry", { date: new Date(viewerGrant.expires_at).toLocaleDateString() })
+          : t("viewerNotice")}
       </p>
 
       {uploadErr && (

@@ -59,6 +59,11 @@ type Album struct {
 	// "viewer" (active grant), or "" (no relationship — only relevant for
 	// the request-access flow).
 	Role string `json:"role,omitempty"`
+	// OwnerName and OwnerAvatarURL are populated on the shared-with-me
+	// listing so the viewer can see whose album it is without a second
+	// request.
+	OwnerName      string `json:"owner_name,omitempty"`
+	OwnerAvatarURL string `json:"owner_avatar_url,omitempty"`
 }
 
 // Photo is one upload pinned to an album. URL is the gated URL the
@@ -87,6 +92,7 @@ type Grant struct {
 	RequestedAt time.Time  `json:"requested_at"`
 	GrantedAt   *time.Time `json:"granted_at,omitzero"`
 	RevokedAt   *time.Time `json:"revoked_at,omitzero"`
+	ExpiresAt   *time.Time `json:"expires_at,omitzero"`
 	// Counterparty is the OTHER user's id from the caller's perspective —
 	// for the owner this is the grantee, for the grantee this is the
 	// granter. Saves the frontend a join when rendering "members" lists.
@@ -114,12 +120,13 @@ type Store interface {
 	ListPhotos(ctx context.Context, albumID string) ([]Photo, error)
 	GetPhoto(ctx context.Context, albumID, uploadID string) (*Photo, error)
 
-	CreateGrant(ctx context.Context, albumID, granterID, granteeID, status, source string) (*Grant, error)
+	CreateGrant(ctx context.Context, albumID, granterID, granteeID, status, source string, expiresAt *time.Time) (*Grant, error)
 	GetGrant(ctx context.Context, grantID string) (*Grant, error)
 	UpdateGrantStatus(ctx context.Context, grantID, status string) (*Grant, error)
 	ListGrantsByAlbum(ctx context.Context, albumID string) ([]Grant, error)
 	FindOpenGrant(ctx context.Context, albumID, granteeID string) (*Grant, error)
 	HasActiveGrant(ctx context.Context, albumID, viewerID string) (bool, error)
+	ExpireAlbumGrants(ctx context.Context) error
 
 	LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error
 }
@@ -377,7 +384,8 @@ func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID s
 // InviteUser opens a 'pending' grant for grantee (owner → push). Returns
 // ErrGrantExists if another open grant for the pair already exists; the
 // caller can choose to revive that one via accept-from-grantee instead.
-func (s *Service) InviteUser(ctx context.Context, ownerID, albumID, granteeID string) (*Grant, error) {
+// expiresAt is optional; nil means no expiry.
+func (s *Service) InviteUser(ctx context.Context, ownerID, albumID, granteeID string, expiresAt *time.Time) (*Grant, error) {
 	if ownerID == granteeID {
 		return nil, ErrSelfGrant
 	}
@@ -391,7 +399,7 @@ func (s *Service) InviteUser(ctx context.Context, ownerID, albumID, granteeID st
 	if existing, err := s.store.FindOpenGrant(ctx, albumID, granteeID); err == nil && existing != nil {
 		return nil, ErrGrantExists
 	}
-	g, err := s.store.CreateGrant(ctx, albumID, ownerID, granteeID, GrantPending, SourceInvite)
+	g, err := s.store.CreateGrant(ctx, albumID, ownerID, granteeID, GrantActive, SourceInvite, expiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +423,7 @@ func (s *Service) RequestAccess(ctx context.Context, requesterID, albumID string
 	if existing, err := s.store.FindOpenGrant(ctx, albumID, requesterID); err == nil && existing != nil {
 		return nil, ErrGrantExists
 	}
-	g, err := s.store.CreateGrant(ctx, albumID, requesterID, requesterID, GrantPending, SourceRequest)
+	g, err := s.store.CreateGrant(ctx, albumID, requesterID, requesterID, GrantPending, SourceRequest, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -428,8 +436,8 @@ func (s *Service) RequestAccess(ctx context.Context, requesterID, albumID string
 
 // ShareInChatRoom resolves the DM room's peer, ensures the peer has an
 // active grant, and persists + broadcasts an 'album_share' chat message
-// containing the album reference payload.
-func (s *Service) ShareInChatRoom(ctx context.Context, ownerID, albumID, roomID string) (*Album, *Grant, error) {
+// containing the album reference payload. expiresAt is optional.
+func (s *Service) ShareInChatRoom(ctx context.Context, ownerID, albumID, roomID string, expiresAt *time.Time) (*Album, *Grant, error) {
 	if s.chat == nil {
 		return nil, nil, ErrInvalidRequest
 	}
@@ -437,7 +445,7 @@ func (s *Service) ShareInChatRoom(ctx context.Context, ownerID, albumID, roomID 
 	if err != nil {
 		return nil, nil, err
 	}
-	a, g, err := s.ShareInChat(ctx, ownerID, albumID, peerID)
+	a, g, err := s.ShareInChat(ctx, ownerID, albumID, peerID, expiresAt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -466,8 +474,9 @@ func buildAlbumSharePayload(a *Album) string {
 }
 
 // ShareInChat opens (or reuses) an active grant for grantee with
-// source='chat'. Used by ShareInChatRoom and by tests.
-func (s *Service) ShareInChat(ctx context.Context, ownerID, albumID, granteeID string) (*Album, *Grant, error) {
+// source='chat'. expiresAt is optional; nil means permanent access.
+// Used by ShareInChatRoom and by tests.
+func (s *Service) ShareInChat(ctx context.Context, ownerID, albumID, granteeID string, expiresAt *time.Time) (*Album, *Grant, error) {
 	if ownerID == granteeID {
 		return nil, nil, ErrSelfGrant
 	}
@@ -493,7 +502,7 @@ func (s *Service) ShareInChat(ctx context.Context, ownerID, albumID, granteeID s
 			g = updated
 		}
 	} else {
-		created, err := s.store.CreateGrant(ctx, albumID, ownerID, granteeID, GrantActive, SourceChat)
+		created, err := s.store.CreateGrant(ctx, albumID, ownerID, granteeID, GrantActive, SourceChat, expiresAt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -502,24 +511,21 @@ func (s *Service) ShareInChat(ctx context.Context, ownerID, albumID, granteeID s
 	return a, g, nil
 }
 
-// AcceptGrant moves a 'pending' grant to 'active'. The caller must be the
-// party who didn't initiate the grant: for source='invite' the grantee
-// accepts; for source='request' the owner accepts.
+// AcceptGrant moves a 'pending' request-access grant to 'active'. Only
+// the album owner may accept; source must be 'request'.
 func (s *Service) AcceptGrant(ctx context.Context, callerID, grantID string) (*Grant, error) {
 	g, err := s.store.GetGrant(ctx, grantID)
 	if err != nil {
 		return nil, err
 	}
-	if g.Status != GrantPending {
+	if g.Status != GrantPending || g.Source != SourceRequest {
 		return nil, ErrInvalidRequest
 	}
 	a, err := s.store.GetAlbum(ctx, g.AlbumID)
 	if err != nil {
 		return nil, err
 	}
-	allowed := (g.Source == SourceInvite && callerID == g.GranteeID) ||
-		(g.Source == SourceRequest && callerID == a.OwnerID)
-	if !allowed {
+	if callerID != a.OwnerID {
 		return nil, ErrForbidden
 	}
 	updated, err := s.store.UpdateGrantStatus(ctx, grantID, GrantActive)
@@ -527,32 +533,26 @@ func (s *Service) AcceptGrant(ctx context.Context, callerID, grantID string) (*G
 		return nil, err
 	}
 	if s.notifier != nil {
-		other := g.GranteeID
-		if callerID == g.GranteeID {
-			other = a.OwnerID
-		}
-		s.notifier.AlbumGrantAccepted(ctx, other, callerID, g.AlbumID, a.Name)
+		s.notifier.AlbumGrantAccepted(ctx, g.GranteeID, callerID, g.AlbumID, a.Name)
 	}
 	return updated, nil
 }
 
-// DenyGrant closes a 'pending' grant with status='denied'. Mirror of
-// AcceptGrant — same authorisation rules apply.
+// DenyGrant closes a 'pending' request-access grant with status='denied'.
+// Only the album owner may deny; source must be 'request'.
 func (s *Service) DenyGrant(ctx context.Context, callerID, grantID string) (*Grant, error) {
 	g, err := s.store.GetGrant(ctx, grantID)
 	if err != nil {
 		return nil, err
 	}
-	if g.Status != GrantPending {
+	if g.Status != GrantPending || g.Source != SourceRequest {
 		return nil, ErrInvalidRequest
 	}
 	a, err := s.store.GetAlbum(ctx, g.AlbumID)
 	if err != nil {
 		return nil, err
 	}
-	allowed := (g.Source == SourceInvite && callerID == g.GranteeID) ||
-		(g.Source == SourceRequest && callerID == a.OwnerID)
-	if !allowed {
+	if callerID != a.OwnerID {
 		return nil, ErrForbidden
 	}
 	return s.store.UpdateGrantStatus(ctx, grantID, GrantDenied)

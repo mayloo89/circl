@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,17 +64,29 @@ func (s *pgStore) ListAlbumsByOwner(ctx context.Context, ownerID string) ([]Albu
 
 func (s *pgStore) ListAlbumsSharedWith(ctx context.Context, granteeID string) ([]Album, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT a.id, a.owner_id, a.name, a.description, a.photo_count, a.created_at, a.updated_at
+		SELECT a.id, a.owner_id, a.name, a.description, a.photo_count, a.created_at, a.updated_at,
+		       COALESCE(p.display_name, p.username, ''),
+		       COALESCE(p.avatar_url, '')
 		  FROM private_albums a
 		  JOIN private_album_grants g ON g.album_id = a.id
+		  LEFT JOIN profiles p ON p.user_id = a.owner_id
 		 WHERE g.grantee_id = $1
 		   AND g.status = 'active'
+		   AND (g.expires_at IS NULL OR g.expires_at > NOW())
 		 ORDER BY g.granted_at DESC NULLS LAST, a.created_at DESC`, granteeID)
 	if err != nil {
 		return nil, fmt.Errorf("albums: list shared: %w", err)
 	}
 	defer rows.Close()
-	return scanAlbums(rows)
+	out := []Album{}
+	for rows.Next() {
+		var a Album
+		if err := rows.Scan(&a.ID, &a.OwnerID, &a.Name, &a.Description, &a.PhotoCount, &a.CreatedAt, &a.UpdatedAt, &a.OwnerName, &a.OwnerAvatarURL); err != nil {
+			return nil, fmt.Errorf("albums: scan shared: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 func (s *pgStore) UpdateAlbum(ctx context.Context, albumID, name, description string) (*Album, error) {
@@ -192,32 +205,26 @@ func (s *pgStore) GetPhoto(ctx context.Context, albumID, uploadID string) (*Phot
 	return &p, nil
 }
 
-func (s *pgStore) CreateGrant(ctx context.Context, albumID, granterID, granteeID, status, source string) (*Grant, error) {
+func (s *pgStore) CreateGrant(ctx context.Context, albumID, granterID, granteeID, status, source string, expiresAt *time.Time) (*Grant, error) {
 	var g Grant
-	var grantedAt any
 	if status == GrantActive {
-		grantedAt = "NOW()"
-	}
-	// Branch on whether we set granted_at at creation time. Use a single
-	// query with conditional column rather than two queries.
-	if grantedAt != nil {
 		err := s.db.QueryRow(ctx, `
-			INSERT INTO private_album_grants (album_id, granter_id, grantee_id, status, source, granted_at)
-			VALUES ($1, $2, $3, $4, $5, NOW())
-			RETURNING id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at`,
-			albumID, granterID, granteeID, status, source,
-		).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt)
+			INSERT INTO private_album_grants (album_id, granter_id, grantee_id, status, source, granted_at, expires_at)
+			VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+			RETURNING id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at, expires_at`,
+			albumID, granterID, granteeID, status, source, expiresAt,
+		).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt, &g.ExpiresAt)
 		if err != nil {
 			return nil, fmt.Errorf("albums: create grant: %w", err)
 		}
 		return &g, nil
 	}
 	err := s.db.QueryRow(ctx, `
-		INSERT INTO private_album_grants (album_id, granter_id, grantee_id, status, source)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at`,
-		albumID, granterID, granteeID, status, source,
-	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt)
+		INSERT INTO private_album_grants (album_id, granter_id, grantee_id, status, source, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at, expires_at`,
+		albumID, granterID, granteeID, status, source, expiresAt,
+	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt, &g.ExpiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("albums: create grant: %w", err)
 	}
@@ -227,10 +234,10 @@ func (s *pgStore) CreateGrant(ctx context.Context, albumID, granterID, granteeID
 func (s *pgStore) GetGrant(ctx context.Context, grantID string) (*Grant, error) {
 	var g Grant
 	err := s.db.QueryRow(ctx, `
-		SELECT id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at
+		SELECT id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at, expires_at
 		  FROM private_album_grants
 		 WHERE id = $1`, grantID,
-	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt)
+	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt, &g.ExpiresAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -251,9 +258,9 @@ func (s *pgStore) UpdateGrantStatus(ctx context.Context, grantID, status string)
 		       granted_at = CASE WHEN $2 = 'active'  AND granted_at IS NULL THEN NOW() ELSE granted_at END,
 		       revoked_at = CASE WHEN $2 = 'revoked' AND revoked_at IS NULL THEN NOW() ELSE revoked_at END
 		 WHERE id = $1
-		 RETURNING id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at`,
+		 RETURNING id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at, expires_at`,
 		grantID, status,
-	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt)
+	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt, &g.ExpiresAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -265,7 +272,7 @@ func (s *pgStore) UpdateGrantStatus(ctx context.Context, grantID, status string)
 
 func (s *pgStore) ListGrantsByAlbum(ctx context.Context, albumID string) ([]Grant, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at
+		SELECT id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at, expires_at
 		  FROM private_album_grants
 		 WHERE album_id = $1
 		 ORDER BY requested_at DESC`, albumID)
@@ -276,7 +283,7 @@ func (s *pgStore) ListGrantsByAlbum(ctx context.Context, albumID string) ([]Gran
 	out := []Grant{}
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt, &g.ExpiresAt); err != nil {
 			return nil, fmt.Errorf("albums: scan grant: %w", err)
 		}
 		out = append(out, g)
@@ -287,12 +294,13 @@ func (s *pgStore) ListGrantsByAlbum(ctx context.Context, albumID string) ([]Gran
 func (s *pgStore) FindOpenGrant(ctx context.Context, albumID, granteeID string) (*Grant, error) {
 	var g Grant
 	err := s.db.QueryRow(ctx, `
-		SELECT id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at
+		SELECT id, album_id, granter_id, grantee_id, status, source, requested_at, granted_at, revoked_at, expires_at
 		  FROM private_album_grants
 		 WHERE album_id = $1 AND grantee_id = $2
 		   AND status IN ('pending', 'active')
+		   AND (expires_at IS NULL OR expires_at > NOW())
 		 LIMIT 1`, albumID, granteeID,
-	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt)
+	).Scan(&g.ID, &g.AlbumID, &g.GranterID, &g.GranteeID, &g.Status, &g.Source, &g.RequestedAt, &g.GrantedAt, &g.RevokedAt, &g.ExpiresAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -307,13 +315,27 @@ func (s *pgStore) HasActiveGrant(ctx context.Context, albumID, viewerID string) 
 	err := s.db.QueryRow(ctx, `
 		SELECT COUNT(*)
 		  FROM private_album_grants
-		 WHERE album_id = $1 AND grantee_id = $2 AND status = 'active'`,
+		 WHERE album_id = $1 AND grantee_id = $2 AND status = 'active'
+		   AND (expires_at IS NULL OR expires_at > NOW())`,
 		albumID, viewerID,
 	).Scan(&n)
 	if err != nil {
 		return false, fmt.Errorf("albums: has active grant: %w", err)
 	}
 	return n > 0, nil
+}
+
+func (s *pgStore) ExpireAlbumGrants(ctx context.Context) error {
+	_, err := s.db.Exec(ctx, `
+		UPDATE private_album_grants
+		   SET status = 'revoked'
+		 WHERE status = 'active'
+		   AND expires_at IS NOT NULL
+		   AND expires_at <= NOW()`)
+	if err != nil {
+		return fmt.Errorf("albums: expire grants: %w", err)
+	}
+	return nil
 }
 
 func (s *pgStore) LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error {

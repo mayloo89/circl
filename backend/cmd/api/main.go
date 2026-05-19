@@ -476,13 +476,29 @@ func main() {
 		}
 	}()
 
+	// albumsStore is wired before albumsSvc so the daily expiry ticker can
+	// run without a dependency on the full service.
+	albumsStore := albums.NewStore(pool)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		if err := albumsStore.ExpireAlbumGrants(appCtx); err != nil {
+			log.Error().Err(err).Msg("expire album grants failed")
+		}
+		for range ticker.C {
+			if err := albumsStore.ExpireAlbumGrants(appCtx); err != nil {
+				log.Error().Err(err).Msg("expire album grants failed")
+			}
+		}
+	}()
+
 	uploadHandler := uploads.NewHandler(uploadSvc)
 
 	// Private albums — owners group uploads (category 'album-private')
 	// into named albums and explicitly grant access to specific contacts.
 	// Photos still flow through the moderation pipeline; access is gated by
 	// active grants and every photo render is recorded in the access log.
-	albumsSvc := albums.NewService(albums.NewStore(pool), fileStorage, albumMediaAdapter{uploads: uploadSvc}, log)
+	albumsSvc := albums.NewService(albumsStore, fileStorage, albumMediaAdapter{uploads: uploadSvc}, log)
 	albumsSvc.SetChatBridge(albumChatBridge{
 		store: chatStore,
 		hub:   chatHub,

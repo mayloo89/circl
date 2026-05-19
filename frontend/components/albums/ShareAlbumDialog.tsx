@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl"
 import Button from "@/components/ui/Button"
 import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
-import { albumsApi, type Album } from "@/lib/albums"
+import { albumsApi, type Album, type GrantExpiryPreset } from "@/lib/albums"
 
 interface Props {
   open: boolean
@@ -26,6 +26,7 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
   const t = useTranslations("albums")
   const [albums, setAlbums] = useState<Album[] | null>(null)
   const [submittingID, setSubmittingID] = useState<string | null>(null)
+  const [expiresIn, setExpiresIn] = useState<GrantExpiryPreset>("none")
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
     setSubmittingID(album.id)
     setError("")
     try {
-      await albumsApi.shareInChat(token, album.id, roomID)
+      await albumsApi.shareInChat(token, album.id, roomID, expiresIn)
       onShared()
       onClose()
     } catch (err) {
@@ -56,6 +57,13 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
     } finally {
       setSubmittingID(null)
     }
+  }
+
+  const expiryPresetKeys: Record<GrantExpiryPreset, string> = {
+    "24h": t("expiryPreset24h"),
+    "7d": t("expiryPreset7d"),
+    "30d": t("expiryPreset30d"),
+    none: t("expiryPresetNone"),
   }
 
   if (!open) return null
@@ -69,6 +77,24 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
         <div>
           <h2 className="text-lg font-semibold text-white">{t("shareInChat")}</h2>
           <p className="mt-1 text-xs text-gray-500">{t("shareInChatHint")}</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-gray-500">{t("expiryLabel")}:</span>
+          {(["24h", "7d", "30d", "none"] as GrantExpiryPreset[]).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => setExpiresIn(preset)}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                expiresIn === preset
+                  ? "bg-brand-accent text-white"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+              }`}
+            >
+              {expiryPresetKeys[preset]}
+            </button>
+          ))}
         </div>
 
         {error && (

@@ -13,6 +13,8 @@ export interface Album {
   created_at: string
   updated_at: string
   role?: "owner" | "viewer" | ""
+  owner_name?: string
+  owner_avatar_url?: string
 }
 
 export interface AlbumPhoto {
@@ -38,8 +40,11 @@ export interface Grant {
   requested_at: string
   granted_at?: string | null
   revoked_at?: string | null
+  expires_at?: string | null
   counterparty?: string
 }
+
+export type GrantExpiryPreset = "24h" | "7d" | "30d" | "none"
 
 async function authedJSON<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -82,8 +87,8 @@ export const albumsApi = {
     authedJSON<void>(token, `/albums/${id}/photos/${uploadID}`, { method: "DELETE" }),
 
   listGrants: (token: string, id: string) => authedJSON<Grant[]>(token, `/albums/${id}/grants`),
-  invite: (token: string, id: string, granteeID: string) =>
-    authedJSON<Grant>(token, `/albums/${id}/grants/invite`, { method: "POST", body: JSON.stringify({ grantee_id: granteeID }) }),
+  invite: (token: string, id: string, granteeID: string, expiresIn: GrantExpiryPreset = "none") =>
+    authedJSON<Grant>(token, `/albums/${id}/grants/invite`, { method: "POST", body: JSON.stringify({ grantee_id: granteeID, expires_in: expiresIn }) }),
   requestAccess: (token: string, id: string) =>
     authedJSON<Grant>(token, `/albums/${id}/grants/request`, { method: "POST" }),
   accept: (token: string, grantID: string) =>
@@ -93,10 +98,10 @@ export const albumsApi = {
   revoke: (token: string, grantID: string) =>
     authedJSON<Grant>(token, `/albums/grants/${grantID}/revoke`, { method: "POST" }),
 
-  shareInChat: (token: string, id: string, roomID: string) =>
+  shareInChat: (token: string, id: string, roomID: string, expiresIn: GrantExpiryPreset = "none") =>
     authedJSON<{ album: Album; grant: Grant }>(token, `/albums/${id}/share-in-chat`, {
       method: "POST",
-      body: JSON.stringify({ room_id: roomID }),
+      body: JSON.stringify({ room_id: roomID, expires_in: expiresIn }),
     }),
 }
 
