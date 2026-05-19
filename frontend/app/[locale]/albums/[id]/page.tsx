@@ -9,6 +9,7 @@ import AuthedImage from "@/components/admin/AuthedImage"
 import MembersPanel from "@/components/albums/MembersPanel"
 import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
+import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
 import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import { useUpload } from "@/hooks/useUpload"
@@ -21,6 +22,7 @@ export default function AlbumDetailPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const t = useTranslations("albums")
+  const tc = useTranslations("common")
   const token = session?.accessToken
 
   const [album, setAlbum] = useState<Album | null>(null)
@@ -29,6 +31,7 @@ export default function AlbumDetailPage() {
   const [requestSent, setRequestSent] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [lightboxPhoto, setLightboxPhoto] = useState<AlbumPhoto | null>(null)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const { upload, uploading, rejection, clearRejection, error: uploadErr } = useUpload(token)
@@ -200,18 +203,27 @@ export default function AlbumDetailPage() {
               key={p.upload_id}
               className="group relative aspect-square overflow-hidden rounded-lg bg-gray-900 ring-1 ring-gray-800"
             >
-              <AuthedImage
-                src={absoluteAlbumURL(p.url)}
-                token={token!}
-                alt={p.filename}
-                className="h-full w-full object-cover"
-              />
+              {/* Full-area button opens the lightbox — no nested buttons */}
+              <button
+                type="button"
+                onClick={() => setLightboxPhoto(p)}
+                aria-label={t("viewPhoto")}
+                className="absolute inset-0 h-full w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-inset"
+              >
+                <AuthedImage
+                  key={p.upload_id}
+                  src={absoluteAlbumURL(p.url)}
+                  token={token!}
+                  alt={p.filename}
+                  className="h-full w-full object-cover"
+                />
+              </button>
               {isOwner && (
                 <button
                   type="button"
                   onClick={() => removePhoto(p.upload_id)}
                   aria-label={t("removePhoto")}
-                  className="absolute right-1.5 top-1.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity hover:bg-rose-700 group-hover:opacity-100 focus:opacity-100"
+                  className="absolute right-1.5 top-1.5 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity hover:bg-rose-700 group-hover:opacity-100 focus:opacity-100"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -236,6 +248,28 @@ export default function AlbumDetailPage() {
       )}
 
       {isOwner && token && <MembersPanel albumID={albumID} token={token} />}
+
+      {lightboxPhoto && (
+        <Modal open onClose={() => setLightboxPhoto(null)}>
+          <button
+            type="button"
+            aria-label={tc("close")}
+            onClick={() => setLightboxPhoto(null)}
+            className="absolute right-4 top-4 z-10 cursor-pointer rounded-full p-2 text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50"
+          >
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <AuthedImage
+            key={lightboxPhoto.upload_id}
+            src={absoluteAlbumURL(lightboxPhoto.url)}
+            token={token!}
+            alt={lightboxPhoto.filename}
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+          />
+        </Modal>
+      )}
 
       <UploadRejectionModal rejection={rejection} onClose={clearRejection} />
 

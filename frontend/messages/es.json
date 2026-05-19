@@ -40,6 +40,7 @@
     "photoCount": "{count, plural, =0 {Sin fotos} =1 {1 foto} other {# fotos}}",
     "addPhoto": "Agregar fotos",
     "removePhoto": "Quitar del álbum",
+    "viewPhoto": "Ver foto",
     "members": "Miembros",
     "invite": "Invitar contacto",
     "invitePlaceholder": "Elegí un contacto…",
