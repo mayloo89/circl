@@ -56,6 +56,7 @@
     "acceptInvite": "Aceptar",
     "denyInvite": "Rechazar",
     "noAccess": "No tenés acceso a este álbum.",
+    "noAccessHint": "El dueño todavía no compartió este álbum con vos.",
     "requestAccess": "Pedir acceso",
     "requestSent": "Acceso solicitado — esperando al dueño.",
     "viewerNotice": "Estás viendo como invitado. El dueño puede revocar el acceso en cualquier momento.",

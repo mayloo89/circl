@@ -11,7 +11,6 @@ import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
-import { useToast } from "@/components/ui/Toast"
 import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import { useUpload } from "@/hooks/useUpload"
 import { useRouter } from "@/i18n/navigation"
@@ -24,7 +23,6 @@ export default function AlbumDetailPage() {
   const router = useRouter()
   const t = useTranslations("albums")
   const tc = useTranslations("common")
-  const { toast } = useToast()
   const token = session?.accessToken
 
   const [album, setAlbum] = useState<Album | null>(null)
@@ -96,13 +94,6 @@ export default function AlbumDetailPage() {
     }
   }
 
-  useEffect(() => {
-    if (loadError === "forbidden") {
-      toast(t("noAccess"), "error")
-      router.back()
-    }
-  }, [loadError]) // eslint-disable-line react-hooks/exhaustive-deps
-
   if (loadError === "other") {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 text-center">
@@ -113,14 +104,32 @@ export default function AlbumDetailPage() {
 
   if (!album || photos === null) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 8 }, (_, i) => (
-            <Skeleton key={i} className="aspect-square w-full rounded-lg" />
-          ))}
+      <>
+        <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+          <Skeleton className="h-8 w-64" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {Array.from({ length: 8 }, (_, i) => (
+              <Skeleton key={i} className="aspect-square w-full rounded-lg" />
+            ))}
+          </div>
         </div>
-      </div>
+        {loadError === "forbidden" && (
+          <Modal open onClose={() => router.back()}>
+            <div
+              className="w-full max-w-sm rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-semibold text-white">{t("noAccess")}</h2>
+              <p className="mt-2 text-sm text-gray-400">{t("noAccessHint")}</p>
+              <div className="mt-5 flex justify-end">
+                <Button variant="ghost" size="sm" onClick={() => router.back()}>
+                  {tc("back")}
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </>
     )
   }
 
