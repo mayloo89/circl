@@ -62,17 +62,17 @@ export default function AlbumShareBubble({ content, isOwn }: Props) {
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-wider text-gray-500">
-          {t("messageBubbleCaption")}
-        </p>
         <p className="truncate text-sm font-medium text-white">{payload.name}</p>
-        <p className="text-xs text-gray-500">{t("photoCount", { count: payload.photo_count })}</p>
-        <Link
-          href={`/albums/${payload.album_id}`}
-          className="mt-1 inline-block text-xs font-medium text-brand-accent hover:underline"
-        >
-          {t("messageBubbleOpen")} →
-        </Link>
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+          <span>{t("photoCount", { count: payload.photo_count })}</span>
+          <span aria-hidden="true">·</span>
+          <Link
+            href={`/albums/${payload.album_id}`}
+            className="font-medium text-brand-accent hover:underline"
+          >
+            {t("messageBubbleOpen")} →
+          </Link>
+        </p>
       </div>
     </div>
   )
