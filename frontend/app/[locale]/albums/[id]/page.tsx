@@ -11,6 +11,7 @@ import Button from "@/components/ui/Button"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
+import { useToast } from "@/components/ui/Toast"
 import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import { useUpload } from "@/hooks/useUpload"
 import { useRouter } from "@/i18n/navigation"
@@ -23,6 +24,7 @@ export default function AlbumDetailPage() {
   const router = useRouter()
   const t = useTranslations("albums")
   const tc = useTranslations("common")
+  const { toast } = useToast()
   const token = session?.accessToken
 
   const [album, setAlbum] = useState<Album | null>(null)
@@ -94,21 +96,12 @@ export default function AlbumDetailPage() {
     }
   }
 
-  if (loadError === "forbidden") {
-    return (
-      <Modal open onClose={() => router.back()}>
-        <div className="flex flex-col items-center gap-4 px-2 py-2 text-center">
-          <svg className="h-10 w-10 text-gray-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-          </svg>
-          <p className="text-base font-semibold text-white">{t("noAccess")}</p>
-          <Button variant="secondary" onClick={() => router.back()}>
-            {tc("back")}
-          </Button>
-        </div>
-      </Modal>
-    )
-  }
+  useEffect(() => {
+    if (loadError === "forbidden") {
+      toast(t("noAccess"), "error")
+      router.back()
+    }
+  }, [loadError]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadError === "other") {
     return (
