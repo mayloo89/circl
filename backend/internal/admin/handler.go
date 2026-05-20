@@ -66,7 +66,6 @@ func NewHandler(svc *Service, presence PresenceLookupFunc, opts ...HandlerOption
 	if cfg.moderation != nil {
 		r.Mount("/moderation", cfg.moderation)
 	}
-
 	// Super-admin-only routes.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireSuperAdmin)

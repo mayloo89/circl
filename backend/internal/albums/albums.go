@@ -128,7 +128,6 @@ type Store interface {
 	HasActiveGrant(ctx context.Context, albumID, viewerID string) (bool, error)
 	ExpireAlbumGrants(ctx context.Context) error
 
-	LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error
 }
 
 // ChatBridge persists and broadcasts a chat message of type 'album_share'
@@ -266,7 +265,7 @@ func (s *Service) UpdateAlbum(ctx context.Context, callerID, albumID string, pat
 	return s.store.UpdateAlbum(ctx, albumID, name, desc)
 }
 
-// DeleteAlbum removes the album and cascades to photos + grants + views.
+// DeleteAlbum removes the album and cascades to photos + grants.
 // Only the owner may delete.
 func (s *Service) DeleteAlbum(ctx context.Context, callerID, albumID string) error {
 	a, err := s.store.GetAlbum(ctx, albumID)
@@ -338,47 +337,34 @@ func (s *Service) ListPhotos(ctx context.Context, callerID, albumID string) ([]P
 	for i := range photos {
 		photos[i].URL = "/albums/" + albumID + "/photos/" + photos[i].UploadID + "/file"
 	}
-	// Listing-view log (NULL upload_id) so the owner sees who opened the
-	// album even if they never tap a specific photo.
-	if role == "viewer" {
-		if err := s.store.LogView(ctx, albumID, callerID, nil); err != nil {
-			s.log.Warn().Err(err).Str("album_id", albumID).Str("viewer_id", callerID).Msg("log view failed")
-		}
-	}
 	return photos, nil
 }
 
-// StreamPhoto returns the storage key and content type for a photo if the
-// caller has access. The handler then calls storage.GetObject and streams
-// the bytes back. Records a per-photo view for non-owner callers.
-func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID string) (key, contentType string, err error) {
+// StreamPhoto returns the storage key, content type, and caller role for a
+// photo if the caller has access. The handler streams the bytes and applies
+// a deterrence watermark for viewer-role callers.
+func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID string) (key, contentType, role string, err error) {
 	a, err := s.store.GetAlbum(ctx, albumID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	role, err := s.roleFor(ctx, callerID, a)
+	role, err = s.roleFor(ctx, callerID, a)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if role == "" {
-		return "", "", ErrForbidden
+		return "", "", "", ErrForbidden
 	}
 	u, err := s.media.GetForOwner(ctx, uploadID, a.OwnerID)
 	if err != nil {
-		return "", "", ErrNotFound
+		return "", "", "", ErrNotFound
 	}
 	photo, err := s.store.GetPhoto(ctx, albumID, uploadID)
 	if err != nil {
-		return "", "", err
-	}
-	if role == "viewer" {
-		uID := uploadID
-		if err := s.store.LogView(ctx, albumID, callerID, &uID); err != nil {
-			s.log.Warn().Err(err).Str("album_id", albumID).Str("upload_id", uploadID).Str("viewer_id", callerID).Msg("log view failed")
-		}
+		return "", "", "", err
 	}
 	_ = photo
-	return u.StorageKey, u.ContentType, nil
+	return u.StorageKey, u.ContentType, role, nil
 }
 
 // InviteUser opens a 'pending' grant for grantee (owner → push). Returns

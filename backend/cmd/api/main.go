@@ -504,7 +504,9 @@ func main() {
 		hub:   chatHub,
 		log:   log,
 	})
-	albumsHandler := albums.NewHandler(albumsSvc, fileStorage)
+	albumsHandler := albums.NewHandler(albumsSvc, fileStorage,
+		albums.WithLimiter(limiter),
+	)
 	adminPresenceLookup := func(ctx context.Context, ids []string) (map[string]admin.UserPresence, error) {
 		info, err := presenceStore.GetPresence(ctx, ids)
 		if err != nil {

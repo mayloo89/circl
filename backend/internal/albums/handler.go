@@ -1,6 +1,8 @@
 package albums
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,10 +17,32 @@ import (
 	"github.com/mayloo89/circl/backend/internal/storage"
 )
 
+// RateLimiter is satisfied by *ratelimit.RedisLimiter.
+type RateLimiter interface {
+	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
+}
+
+type handlerConfig struct {
+	limiter RateLimiter
+}
+
+// HandlerOption configures NewHandler.
+type HandlerOption func(*handlerConfig)
+
+// WithLimiter sets a rate limiter for outgoing album invitations (20/day per granter).
+func WithLimiter(l RateLimiter) HandlerOption {
+	return func(c *handlerConfig) { c.limiter = l }
+}
+
 // NewHandler returns the chi router for the albums HTTP surface. Mount
 // behind requireAuth — every endpoint reads the caller from the auth
 // context and gates access through the service layer.
-func NewHandler(svc *Service, store storage.Storage) http.Handler {
+func NewHandler(svc *Service, store storage.Storage, opts ...HandlerOption) http.Handler {
+	cfg := &handlerConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
+
 	r := chi.NewRouter()
 	r.Post("/", createAlbum(svc))
 	r.Get("/me", listMyAlbums(svc))
@@ -30,10 +54,10 @@ func NewHandler(svc *Service, store storage.Storage) http.Handler {
 	r.Get("/{id}/photos", listPhotos(svc))
 	r.Post("/{id}/photos", addPhoto(svc))
 	r.Delete("/{id}/photos/{uploadID}", removePhoto(svc))
-	r.Get("/{id}/photos/{uploadID}/file", streamPhoto(svc, store))
+	r.Get("/{id}/photos/{uploadID}/file", streamPhoto(svc, store, cfg))
 
 	r.Get("/{id}/grants", listGrants(svc))
-	r.Post("/{id}/grants/invite", inviteGrant(svc))
+	r.Post("/{id}/grants/invite", inviteGrant(svc, cfg))
 	r.Post("/{id}/grants/request", requestGrant(svc))
 	r.Post("/grants/{grantID}/accept", acceptGrant(svc))
 	r.Post("/grants/{grantID}/deny", denyGrant(svc))
@@ -232,13 +256,13 @@ func removePhoto(svc *Service) http.HandlerFunc {
 	}
 }
 
-func streamPhoto(svc *Service, store storage.Storage) http.HandlerFunc {
+func streamPhoto(svc *Service, store storage.Storage, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid, ok := userID(r, w)
 		if !ok {
 			return
 		}
-		key, contentType, err := svc.StreamPhoto(r.Context(), uid, chi.URLParam(r, "id"), chi.URLParam(r, "uploadID"))
+		key, contentType, role, err := svc.StreamPhoto(r.Context(), uid, chi.URLParam(r, "id"), chi.URLParam(r, "uploadID"))
 		if err != nil {
 			writeServiceError(r, w, err)
 			return
@@ -250,6 +274,34 @@ func streamPhoto(svc *Service, store storage.Storage) http.HandlerFunc {
 			return
 		}
 		defer obj.Close()
+
+		// Owners receive the raw bytes. Viewers get a deterrence watermark
+		// stamped with their immutable user ID so unauthorized redistribution
+		// can be traced back regardless of later display-name changes.
+		if role == "viewer" {
+			data, wContentType, wErr := compositeWatermark(obj, contentType, uid, time.Now())
+			if wErr != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(wErr).Msg("albums: watermark failed, serving original")
+				// Fall through to serve the un-watermarked bytes from the
+				// already-consumed reader — re-fetch from storage.
+				obj.Close()
+				obj2, ferr := store.GetObject(r.Context(), key)
+				if ferr != nil {
+					apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "failed to fetch photo")
+					return
+				}
+				defer obj2.Close()
+				w.Header().Set("Content-Type", contentType)
+				w.Header().Set("Cache-Control", "private, max-age=60")
+				_, _ = io.Copy(w, obj2)
+				return
+			}
+			w.Header().Set("Content-Type", wContentType)
+			w.Header().Set("Cache-Control", "private, max-age=60")
+			_, _ = io.Copy(w, bytes.NewReader(data))
+			return
+		}
+
 		w.Header().Set("Content-Type", contentType)
 		// Private cache only — short max-age trades a little freshness on
 		// revoke for fewer round-trips while the viewer scrolls.
@@ -281,7 +333,7 @@ var grantExpiryPresets = map[string]time.Duration{
 	"30d": 30 * 24 * time.Hour,
 }
 
-func inviteGrant(svc *Service) http.HandlerFunc {
+func inviteGrant(svc *Service, cfg *handlerConfig) http.HandlerFunc {
 	type request struct {
 		GranteeID string `json:"grantee_id"`
 		ExpiresIn string `json:"expires_in"` // "24h" | "7d" | "30d" | "none" | ""
@@ -290,6 +342,16 @@ func inviteGrant(svc *Service) http.HandlerFunc {
 		uid, ok := userID(r, w)
 		if !ok {
 			return
+		}
+		if cfg.limiter != nil {
+			key := "rl:albums:invite:" + uid
+			allowed, err := cfg.limiter.Allow(r.Context(), key, 20, 24*time.Hour)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("albums: invite rate limiter error")
+			} else if !allowed {
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many invitations — try again tomorrow")
+				return
+			}
 		}
 		var req request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GranteeID == "" {
@@ -402,3 +464,4 @@ func revokeGrant(svc *Service) http.HandlerFunc {
 		apierror.WriteJSON(w, http.StatusOK, g)
 	}
 }
+

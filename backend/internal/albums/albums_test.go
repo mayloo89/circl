@@ -21,13 +21,6 @@ type fakeStore struct {
 	albums map[string]*albums.Album
 	photos map[string]*albums.Photo // key = albumID:uploadID
 	grants map[string]*albums.Grant
-	views  []view
-}
-
-type view struct {
-	albumID  string
-	viewerID string
-	uploadID *string
 }
 
 func newFakeStore() *fakeStore {
@@ -208,10 +201,6 @@ func (s *fakeStore) HasActiveGrant(_ context.Context, albumID, viewerID string) 
 	return false, nil
 }
 
-func (s *fakeStore) LogView(_ context.Context, albumID, viewerID string, uploadID *string) error {
-	s.views = append(s.views, view{albumID: albumID, viewerID: viewerID, uploadID: uploadID})
-	return nil
-}
 
 type fakeMedia struct {
 	owner    string
@@ -347,33 +336,6 @@ func TestService_AddPhoto_AcceptsAlbumPrivateCategory(t *testing.T) {
 	a, _ := svc.CreateAlbum(t.Context(), "u-1", "x", "")
 	if err := svc.AddPhoto(t.Context(), "u-1", a.ID, "up-1"); err != nil {
 		t.Fatalf("add photo: %v", err)
-	}
-}
-
-func TestService_ListPhotos_LogsViewerListing(t *testing.T) {
-	svc, store := newSvc(t, "u-1", string(storage.CategoryAlbumPrivate))
-	a, _ := svc.CreateAlbum(t.Context(), "u-1", "x", "")
-	_ = svc.AddPhoto(t.Context(), "u-1", a.ID, "up-1")
-
-	_, _ = svc.InviteUser(t.Context(), "u-1", a.ID, "u-2", nil)
-
-	// Viewer listing the album logs a NULL-upload_id view event.
-	if _, err := svc.ListPhotos(t.Context(), "u-2", a.ID); err != nil {
-		t.Fatalf("list photos: %v", err)
-	}
-	if len(store.views) != 1 {
-		t.Fatalf("views = %d, want 1", len(store.views))
-	}
-	if store.views[0].viewerID != "u-2" || store.views[0].uploadID != nil {
-		t.Errorf("view = %+v, want viewer=u-2 + null upload", store.views[0])
-	}
-
-	// Owner does NOT generate a view log (their access is not audited).
-	if _, err := svc.ListPhotos(t.Context(), "u-1", a.ID); err != nil {
-		t.Fatalf("owner list: %v", err)
-	}
-	if len(store.views) != 1 {
-		t.Errorf("views = %d, want 1 (owner shouldn't log)", len(store.views))
 	}
 }
 

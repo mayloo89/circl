@@ -146,6 +146,18 @@ export default function AlbumDetailPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
+      {!isOwner && (
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          {tc("back")}
+        </button>
+      )}
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold text-white">{album.name}</h1>

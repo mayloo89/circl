@@ -338,16 +338,6 @@ func (s *pgStore) ExpireAlbumGrants(ctx context.Context) error {
 	return nil
 }
 
-func (s *pgStore) LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error {
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO private_album_views (album_id, viewer_id, upload_id)
-		VALUES ($1, $2, $3)`, albumID, viewerID, uploadID)
-	if err != nil {
-		return fmt.Errorf("albums: log view: %w", err)
-	}
-	return nil
-}
-
 func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	out := []Album{}
 	for rows.Next() {
