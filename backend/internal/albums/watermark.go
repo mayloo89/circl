@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/gofont/gomono"
+	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 	"golang.org/x/image/webp"
@@ -22,11 +22,11 @@ import (
 var wmFace font.Face
 
 func init() {
-	tt, err := opentype.Parse(gomono.TTF)
+	tt, err := opentype.Parse(goregular.TTF)
 	if err != nil {
-		panic("albums: parse gomono: " + err.Error())
+		panic("albums: parse goregular: " + err.Error())
 	}
-	wmFace, err = opentype.NewFace(tt, &opentype.FaceOptions{Size: 11, DPI: 96})
+	wmFace, err = opentype.NewFace(tt, &opentype.FaceOptions{Size: 12, DPI: 144})
 	if err != nil {
 		panic("albums: new watermark face: " + err.Error())
 	}
