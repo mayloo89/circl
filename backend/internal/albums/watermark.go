@@ -77,10 +77,10 @@ func compositeWatermark(src io.Reader, contentType, uid string, t time.Time) ([]
 	stdDraw.Draw(out, bounds, img, bounds.Min, stdDraw.Src)
 
 	shortUID := uid
-	if len(shortUID) > 8 {
-		shortUID = shortUID[:8]
+	if len(shortUID) > 12 {
+		shortUID = shortUID[:12]
 	}
-	label := shortUID + " · " + t.UTC().Format("01-02 15:04")
+	label := shortUID + " · " + t.UTC().Format("2006-01-02 15:04 UTC")
 	drawWMPill(out, label, bounds.Dx(), bounds.Dy())
 
 	var buf bytes.Buffer
