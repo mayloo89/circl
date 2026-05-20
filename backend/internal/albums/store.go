@@ -351,12 +351,12 @@ func (s *pgStore) LogView(ctx context.Context, albumID, viewerID string, uploadI
 func (s *pgStore) ListViews(ctx context.Context, albumID string, limit, offset int) ([]ViewRecord, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT v.album_id, a.name,
-		       v.viewer_id, COALESCE(p.display_name, p.username, v.viewer_id),
+		       v.viewer_id, COALESCE(p.display_name, p.username, v.viewer_id::text),
 		       v.upload_id, v.viewed_at
 		  FROM private_album_views v
 		  JOIN private_albums a ON a.id = v.album_id
 		  LEFT JOIN profiles p ON p.user_id = v.viewer_id
-		 WHERE ($1 = '' OR v.album_id = $1)
+		 WHERE ($1 = '' OR v.album_id::text = $1)
 		 ORDER BY v.viewed_at DESC
 		 LIMIT $2 OFFSET $3`, albumID, limit, offset)
 	if err != nil {
