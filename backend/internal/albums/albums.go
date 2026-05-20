@@ -128,19 +128,6 @@ type Store interface {
 	HasActiveGrant(ctx context.Context, albumID, viewerID string) (bool, error)
 	ExpireAlbumGrants(ctx context.Context) error
 
-	LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error
-	ListViews(ctx context.Context, albumID string, limit, offset int) ([]ViewRecord, error)
-}
-
-// ViewRecord is one row from the private_album_views log, enriched with
-// human-readable names for the admin surface.
-type ViewRecord struct {
-	AlbumID    string    `json:"album_id"`
-	AlbumName  string    `json:"album_name"`
-	ViewerID   string    `json:"viewer_id"`
-	ViewerName string    `json:"viewer_name"`
-	UploadID   *string   `json:"upload_id,omitzero"`
-	ViewedAt   time.Time `json:"viewed_at"`
 }
 
 // ChatBridge persists and broadcasts a chat message of type 'album_share'
@@ -278,7 +265,7 @@ func (s *Service) UpdateAlbum(ctx context.Context, callerID, albumID string, pat
 	return s.store.UpdateAlbum(ctx, albumID, name, desc)
 }
 
-// DeleteAlbum removes the album and cascades to photos + grants + views.
+// DeleteAlbum removes the album and cascades to photos + grants.
 // Only the owner may delete.
 func (s *Service) DeleteAlbum(ctx context.Context, callerID, albumID string) error {
 	a, err := s.store.GetAlbum(ctx, albumID)
@@ -350,20 +337,12 @@ func (s *Service) ListPhotos(ctx context.Context, callerID, albumID string) ([]P
 	for i := range photos {
 		photos[i].URL = "/albums/" + albumID + "/photos/" + photos[i].UploadID + "/file"
 	}
-	// Listing-view log (NULL upload_id) so the owner sees who opened the
-	// album even if they never tap a specific photo.
-	if role == "viewer" {
-		if err := s.store.LogView(ctx, albumID, callerID, nil); err != nil {
-			s.log.Warn().Err(err).Str("album_id", albumID).Str("viewer_id", callerID).Msg("log view failed")
-		}
-	}
 	return photos, nil
 }
 
 // StreamPhoto returns the storage key, content type, and caller role for a
 // photo if the caller has access. The handler streams the bytes and applies
-// a deterrence watermark for viewer-role callers. Records a per-photo view
-// for non-owner callers.
+// a deterrence watermark for viewer-role callers.
 func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID string) (key, contentType, role string, err error) {
 	a, err := s.store.GetAlbum(ctx, albumID)
 	if err != nil {
@@ -383,12 +362,6 @@ func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID s
 	photo, err := s.store.GetPhoto(ctx, albumID, uploadID)
 	if err != nil {
 		return "", "", "", err
-	}
-	if role == "viewer" {
-		uID := uploadID
-		if err := s.store.LogView(ctx, albumID, callerID, &uID); err != nil {
-			s.log.Warn().Err(err).Str("album_id", albumID).Str("upload_id", uploadID).Str("viewer_id", callerID).Msg("log view failed")
-		}
 	}
 	_ = photo
 	return u.StorageKey, u.ContentType, role, nil

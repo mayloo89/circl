@@ -338,42 +338,6 @@ func (s *pgStore) ExpireAlbumGrants(ctx context.Context) error {
 	return nil
 }
 
-func (s *pgStore) LogView(ctx context.Context, albumID, viewerID string, uploadID *string) error {
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO private_album_views (album_id, viewer_id, upload_id)
-		VALUES ($1, $2, $3)`, albumID, viewerID, uploadID)
-	if err != nil {
-		return fmt.Errorf("albums: log view: %w", err)
-	}
-	return nil
-}
-
-func (s *pgStore) ListViews(ctx context.Context, albumID string, limit, offset int) ([]ViewRecord, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT v.album_id, a.name,
-		       v.viewer_id, COALESCE(p.display_name, p.username, v.viewer_id::text),
-		       v.upload_id, v.viewed_at
-		  FROM private_album_views v
-		  JOIN private_albums a ON a.id = v.album_id
-		  LEFT JOIN profiles p ON p.user_id = v.viewer_id
-		 WHERE ($1 = '' OR v.album_id::text = $1)
-		 ORDER BY v.viewed_at DESC
-		 LIMIT $2 OFFSET $3`, albumID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("albums: list views: %w", err)
-	}
-	defer rows.Close()
-	out := []ViewRecord{}
-	for rows.Next() {
-		var v ViewRecord
-		if err := rows.Scan(&v.AlbumID, &v.AlbumName, &v.ViewerID, &v.ViewerName, &v.UploadID, &v.ViewedAt); err != nil {
-			return nil, fmt.Errorf("albums: scan view: %w", err)
-		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
-}
-
 func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	out := []Album{}
 	for rows.Next() {

@@ -496,18 +496,7 @@
     "moderationLoadError": "Could not load moderation queue.",
     "noReports": "No reports found.",
     "reviewReport": "Review",
-    "resolve": "Resolve",
-    "albumViewsTitle": "Album access log",
-    "albumViewsSubtitle": "Every album listing and photo view by a non-owner viewer.",
-    "albumViewsFilterPlaceholder": "Filter by album ID…",
-    "albumViewsEmpty": "No view events found.",
-    "albumViewsColAlbum": "Album",
-    "albumViewsColViewer": "Viewer",
-    "albumViewsColEvent": "Event",
-    "albumViewsColTime": "Time",
-    "albumViewsPhoto": "Photo viewed",
-    "albumViewsListing": "Album opened",
-    "albumViewsLoadMore": "Load more"
+    "resolve": "Resolve"
   },
   "channels": {
     "title": "Channels",

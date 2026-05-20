@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -466,36 +465,3 @@ func revokeGrant(svc *Service) http.HandlerFunc {
 	}
 }
 
-// NewAdminHandler returns a router for admin-only album endpoints.
-// Mount behind RequireAdmin — the caller's role is already verified by the
-// admin middleware; these handlers perform no additional auth checks.
-func NewAdminHandler(store Store) http.Handler {
-	r := chi.NewRouter()
-	r.Get("/views", adminListViews(store))
-	return r
-}
-
-func adminListViews(store Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		albumID := r.URL.Query().Get("album_id")
-		limit := 50
-		offset := 0
-		if v := r.URL.Query().Get("limit"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
-				limit = n
-			}
-		}
-		if v := r.URL.Query().Get("offset"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-				offset = n
-			}
-		}
-		rows, err := store.ListViews(r.Context(), albumID, limit, offset)
-		if err != nil {
-			zerolog.Ctx(r.Context()).Error().Err(err).Msg("admin: list album views")
-			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
-			return
-		}
-		apierror.WriteJSON(w, http.StatusOK, rows)
-	}
-}

@@ -24,7 +24,6 @@ type HandlerOption func(*handlerConfig)
 type handlerConfig struct {
 	appeals    http.Handler
 	moderation http.Handler
-	albums     http.Handler
 }
 
 // WithAppealsHandler mounts an admin-only sub-router at /admin/appeals. The
@@ -37,12 +36,6 @@ func WithAppealsHandler(h http.Handler) HandlerOption {
 // The caller supplies the handler so this package doesn't import moderation.
 func WithModerationHandler(h http.Handler) HandlerOption {
 	return func(c *handlerConfig) { c.moderation = h }
-}
-
-// WithAlbumsHandler mounts an admin-only sub-router at /admin/albums. The
-// caller supplies the handler so this package doesn't import albums.
-func WithAlbumsHandler(h http.Handler) HandlerOption {
-	return func(c *handlerConfig) { c.albums = h }
 }
 
 // NewHandler returns an http.Handler covering all admin routes.
@@ -73,10 +66,6 @@ func NewHandler(svc *Service, presence PresenceLookupFunc, opts ...HandlerOption
 	if cfg.moderation != nil {
 		r.Mount("/moderation", cfg.moderation)
 	}
-	if cfg.albums != nil {
-		r.Mount("/albums", cfg.albums)
-	}
-
 	// Super-admin-only routes.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireSuperAdmin)

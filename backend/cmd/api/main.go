@@ -521,7 +521,6 @@ func main() {
 	adminHandler := admin.NewHandler(adminSvc, adminPresenceLookup,
 		admin.WithAppealsHandler(appealsAdminHandler),
 		admin.WithModerationHandler(moderationAdminHandler),
-		admin.WithAlbumsHandler(albums.NewAdminHandler(albumsStore)),
 	)
 
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
