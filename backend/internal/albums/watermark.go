@@ -76,11 +76,7 @@ func compositeWatermark(src io.Reader, contentType, uid string, t time.Time) ([]
 	out := image.NewRGBA(bounds)
 	stdDraw.Draw(out, bounds, img, bounds.Min, stdDraw.Src)
 
-	shortUID := uid
-	if len(shortUID) > 12 {
-		shortUID = shortUID[:12]
-	}
-	label := shortUID + " · " + t.UTC().Format("2006-01-02 15:04 UTC")
+	label := uid + " · " + t.UTC().Format("2006-01-02 15:04 UTC")
 	drawWMPill(out, label, bounds.Dx(), bounds.Dy())
 
 	var buf bytes.Buffer
