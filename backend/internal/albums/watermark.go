@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
+	stdDraw "image/draw"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"math"
 	"time"
 
+	xDraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
@@ -19,22 +20,31 @@ import (
 	"golang.org/x/image/webp"
 )
 
-var wmFace font.Face
+// wmScale is the SSAA factor: the pill is rendered wmScale× larger and then
+// scaled back down with CatmullRom, giving smooth glyphs and pill edges at the
+// original target size.
+const wmScale = 3
+
+var wmHiResFace font.Face
 
 func init() {
 	tt, err := opentype.Parse(goregular.TTF)
 	if err != nil {
 		panic("albums: parse goregular: " + err.Error())
 	}
-	wmFace, err = opentype.NewFace(tt, &opentype.FaceOptions{Size: 12, DPI: 144})
+	// Render at wmScale × DPI so the downscale produces the right final size.
+	wmHiResFace, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    11,
+		DPI:     96 * wmScale,
+		Hinting: font.HintingFull,
+	})
 	if err != nil {
 		panic("albums: new watermark face: " + err.Error())
 	}
 }
 
 // compositeWatermark overlays a semi-transparent pill label
-// ("<uid[:8]> · MM-DD HH:MM") at the bottom-right of the image
-// so unauthorized redistribution can be traced back to a specific viewer.
+// ("<uid[:8]> · MM-DD HH:MM") at the bottom-right of the image.
 // WebP input is decoded and re-encoded as JPEG (WebP encoding requires cgo).
 // Unrecognised content types are returned as-is without modification.
 func compositeWatermark(src io.Reader, contentType, uid string, t time.Time) ([]byte, string, error) {
@@ -64,7 +74,7 @@ func compositeWatermark(src io.Reader, contentType, uid string, t time.Time) ([]
 
 	bounds := img.Bounds()
 	out := image.NewRGBA(bounds)
-	draw.Draw(out, bounds, img, bounds.Min, draw.Src)
+	stdDraw.Draw(out, bounds, img, bounds.Min, stdDraw.Src)
 
 	shortUID := uid
 	if len(shortUID) > 8 {
@@ -87,53 +97,56 @@ func compositeWatermark(src io.Reader, contentType, uid string, t time.Time) ([]
 }
 
 const (
-	wmPadH   = 8  // horizontal padding inside pill
-	wmPadV   = 4  // vertical padding inside pill
-	wmRadius = 4  // corner radius
-	wmMargin = 10 // distance from image edge
+	wmPadH   = 8  // horizontal padding inside pill (target px)
+	wmPadV   = 4  // vertical padding inside pill (target px)
+	wmRadius = 4  // corner radius (target px)
+	wmMargin = 10 // distance from image edge (target px)
 )
 
 func drawWMPill(img *image.RGBA, label string, w, h int) {
-	metrics := wmFace.Metrics()
-	d := &font.Drawer{Face: wmFace}
+	s := wmScale
+	metrics := wmHiResFace.Metrics()
+
+	// Measure in hi-res pixels.
+	d := &font.Drawer{Face: wmHiResFace}
 	textW := int(d.MeasureString(label) >> 6)
 	textH := int((metrics.Ascent+metrics.Descent)>>6) + 1
+	pillW := textW + 2*wmPadH*s
+	pillH := textH + 2*wmPadV*s
 
-	pillW := textW + 2*wmPadH
-	pillH := textH + 2*wmPadV
-	x1 := w - wmMargin
-	y1 := h - wmMargin
-	x0 := x1 - pillW
-	y0 := y1 - pillH
-
-	fillRoundedRect(img, x0, y0, x1, y1, wmRadius, color.RGBA{0, 0, 0, 140})
-
+	// Render pill + text onto a transparent hi-res buffer.
+	hiRes := image.NewRGBA(image.Rect(0, 0, pillW, pillH))
+	fillRoundedRect(hiRes, 0, 0, pillW-1, pillH-1, wmRadius*s, color.RGBA{0, 0, 0, 140})
 	d = &font.Drawer{
-		Dst:  img,
+		Dst:  hiRes,
 		Src:  image.NewUniform(color.RGBA{255, 255, 255, 230}),
-		Face: wmFace,
+		Face: wmHiResFace,
 		Dot: fixed.Point26_6{
-			X: fixed.I(x0 + wmPadH),
-			Y: fixed.I(y0+wmPadV) + metrics.Ascent,
+			X: fixed.I(wmPadH * s),
+			Y: fixed.I(wmPadV*s) + metrics.Ascent,
 		},
 	}
 	d.DrawString(label)
+
+	// Scale down to target size with CatmullRom for smooth antialiasing.
+	tW, tH := pillW/s, pillH/s
+	scaled := image.NewRGBA(image.Rect(0, 0, tW, tH))
+	xDraw.CatmullRom.Scale(scaled, scaled.Bounds(), hiRes, hiRes.Bounds(), xDraw.Src, nil)
+
+	// Composite onto main image at bottom-right.
+	x1 := w - wmMargin
+	y1 := h - wmMargin
+	stdDraw.Draw(img, image.Rect(x1-tW, y1-tH, x1, y1), scaled, image.Point{}, stdDraw.Over)
 }
 
+// fillRoundedRect sets pixels inside a rounded rectangle directly (no blend)
+// so the alpha is preserved for later compositing.
 func fillRoundedRect(img *image.RGBA, x0, y0, x1, y1, r int, col color.RGBA) {
-	a := float64(col.A) / 255.0
 	for y := y0; y <= y1; y++ {
 		for x := x0; x <= x1; x++ {
-			if !inRoundedRect(x, y, x0, y0, x1, y1, r) {
-				continue
+			if inRoundedRect(x, y, x0, y0, x1, y1, r) {
+				img.SetRGBA(x, y, col)
 			}
-			dst := img.RGBAAt(x, y)
-			img.SetRGBA(x, y, color.RGBA{
-				R: uint8(float64(col.R)*a + float64(dst.R)*(1-a)),
-				G: uint8(float64(col.G)*a + float64(dst.G)*(1-a)),
-				B: uint8(float64(col.B)*a + float64(dst.B)*(1-a)),
-				A: 255,
-			})
 		}
 	}
 }
