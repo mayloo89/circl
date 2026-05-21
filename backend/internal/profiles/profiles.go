@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -268,13 +269,19 @@ type Store interface {
 
 // Service handles profile business logic.
 type Service struct {
-	store Store
+	store            Store
+	storagePublicURL string // non-empty: avatar/photo URLs must start with this prefix
 }
 
 // NewService creates a new profiles Service.
 func NewService(store Store) *Service {
 	return &Service{store: store}
 }
+
+// SetStoragePublicURL configures the expected URL prefix for uploaded media.
+// When set, UpdateAvatar and AddPhoto reject any URL that does not start with
+// this prefix, preventing users from embedding arbitrary external URLs.
+func (s *Service) SetStoragePublicURL(u string) { s.storagePublicURL = u }
 
 // GetMyProfile returns the profile (with photos) for the given user.
 // If no profile exists yet, an empty one is created automatically.
@@ -406,6 +413,9 @@ func (s *Service) SearchInterests(ctx context.Context, query string) ([]Interest
 
 // UpdateAvatar updates only the avatar URL for the given user.
 func (s *Service) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	if s.storagePublicURL != "" && !strings.HasPrefix(avatarURL, s.storagePublicURL) {
+		return fmt.Errorf("%w: avatar URL must be a storage URL", ErrInvalidInput)
+	}
 	return s.store.UpdateAvatar(ctx, userID, avatarURL)
 }
 
@@ -414,6 +424,9 @@ func (s *Service) UpdateAvatar(ctx context.Context, userID, avatarURL string) er
 func (s *Service) AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error) {
 	if url == "" {
 		return nil, fmt.Errorf("%w: url is required", ErrInvalidInput)
+	}
+	if s.storagePublicURL != "" && !strings.HasPrefix(url, s.storagePublicURL) {
+		return nil, fmt.Errorf("%w: photo URL must be a storage URL", ErrInvalidInput)
 	}
 	count, err := s.store.CountPhotos(ctx, userID)
 	if err != nil {

@@ -429,7 +429,7 @@ func TestService_ForgotPassword_KnownEmail(t *testing.T) {
 
 func TestService_ResetPassword_EmptyToken(t *testing.T) {
 	svc := NewService(&mockStore{}, noop, "")
-	err := svc.ResetPassword(t.Context(), "", "NewPass1")
+	_, err := svc.ResetPassword(t.Context(), "", "NewPass1")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}
@@ -437,7 +437,7 @@ func TestService_ResetPassword_EmptyToken(t *testing.T) {
 
 func TestService_ResetPassword_InvalidToken(t *testing.T) {
 	svc := NewService(&mockStore{}, noop, "") // GetPasswordReset returns "not found"
-	err := svc.ResetPassword(t.Context(), "badtoken", "NewPass1")
+	_, err := svc.ResetPassword(t.Context(), "badtoken", "NewPass1")
 	if !errors.Is(err, ErrInvalidToken) {
 		t.Errorf("got %v, want ErrInvalidToken", err)
 	}
@@ -456,7 +456,7 @@ func TestService_ResetPassword_WeakPassword(t *testing.T) {
 		},
 	}
 	svc := NewService(prs, noop, "")
-	err := svc.ResetPassword(t.Context(), "validtoken", "weak")
+	_, err := svc.ResetPassword(t.Context(), "validtoken", "weak")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("got %v, want ErrInvalidInput", err)
 	}

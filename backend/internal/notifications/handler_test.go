@@ -2,6 +2,7 @@ package notifications_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,10 +10,21 @@ import (
 	"time"
 
 	"github.com/mayloo89/circl/backend/internal/notifications"
-	"github.com/mayloo89/circl/backend/internal/token"
 )
 
-const testSecret = "supersecretfortesting-mustbe32chars!!"
+// mockRedeemer is a test double for notifications.TicketRedeemer.
+type mockRedeemer struct {
+	tickets map[string]string // ticket → userID
+}
+
+func (m *mockRedeemer) Redeem(_ context.Context, ticket string) (string, error) {
+	if uid, ok := m.tickets[ticket]; ok {
+		// Single-use: remove after redemption.
+		delete(m.tickets, ticket)
+		return uid, nil
+	}
+	return "", errors.New("invalid ticket")
+}
 
 // noFlusherWriter wraps an http.ResponseWriter without exposing http.Flusher,
 // so the handler's Flusher check can be exercised.
@@ -20,19 +32,19 @@ type noFlusherWriter struct {
 	rec *httptest.ResponseRecorder
 }
 
-func (n *noFlusherWriter) Header() http.Header          { return n.rec.Header() }
-func (n *noFlusherWriter) Write(b []byte) (int, error)  { return n.rec.Write(b) }
-func (n *noFlusherWriter) WriteHeader(code int)         { n.rec.WriteHeader(code) }
+func (n *noFlusherWriter) Header() http.Header         { return n.rec.Header() }
+func (n *noFlusherWriter) Write(b []byte) (int, error) { return n.rec.Write(b) }
+func (n *noFlusherWriter) WriteHeader(code int)        { n.rec.WriteHeader(code) }
 
 func TestSSEHandler_Headers(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	redeemer := &mockRedeemer{tickets: map[string]string{"tk-user1": "user-1"}}
+	handler := notifications.NewHandler(hub, redeemer)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
-	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?ticket=tk-user1", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -46,13 +58,13 @@ func TestSSEHandler_Headers(t *testing.T) {
 
 func TestSSEHandler_ConnectedEvent(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	redeemer := &mockRedeemer{tickets: map[string]string{"tk-user1": "user-1"}}
+	handler := notifications.NewHandler(hub, redeemer)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
-	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?ticket=tk-user1", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -63,13 +75,13 @@ func TestSSEHandler_ConnectedEvent(t *testing.T) {
 
 func TestSSEHandler_ReceivesNotification(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	redeemer := &mockRedeemer{tickets: map[string]string{"tk-user1": "user-1"}}
+	handler := notifications.NewHandler(hub, redeemer)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
-	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?ticket=tk-user1", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	go func() {
@@ -85,9 +97,10 @@ func TestSSEHandler_ReceivesNotification(t *testing.T) {
 	}
 }
 
-func TestSSEHandler_Unauthorized_MissingToken(t *testing.T) {
+func TestSSEHandler_Unauthorized_MissingTicket(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
+	redeemer := &mockRedeemer{tickets: map[string]string{}}
+	handler := notifications.NewHandler(hub, redeemer)
 
 	req := httptest.NewRequest(http.MethodGet, "/notifications/stream", nil)
 	rec := httptest.NewRecorder()
@@ -98,11 +111,12 @@ func TestSSEHandler_Unauthorized_MissingToken(t *testing.T) {
 	}
 }
 
-func TestSSEHandler_Unauthorized_InvalidToken(t *testing.T) {
+func TestSSEHandler_Unauthorized_InvalidTicket(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
+	redeemer := &mockRedeemer{tickets: map[string]string{}}
+	handler := notifications.NewHandler(hub, redeemer)
 
-	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token=bad.token.here", nil)
+	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?ticket=bad-ticket-here", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -113,11 +127,11 @@ func TestSSEHandler_Unauthorized_InvalidToken(t *testing.T) {
 
 func TestSSEHandler_ClientDisconnect(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	redeemer := &mockRedeemer{tickets: map[string]string{"tk-user1": "user-1"}}
+	handler := notifications.NewHandler(hub, redeemer)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?ticket=tk-user1", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	done := make(chan struct{})
@@ -138,10 +152,10 @@ func TestSSEHandler_ClientDisconnect(t *testing.T) {
 
 func TestSSEHandler_NoFlusher(t *testing.T) {
 	hub := notifications.NewHub()
-	handler := notifications.NewHandler(hub, testSecret)
-	tok, _ := token.Generate("user-1", token.RoleUser, testSecret, time.Hour)
+	redeemer := &mockRedeemer{tickets: map[string]string{"tk-user1": "user-1"}}
+	handler := notifications.NewHandler(hub, redeemer)
 
-	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?token="+tok, nil)
+	req := httptest.NewRequest(http.MethodGet, "/notifications/stream?ticket=tk-user1", nil)
 	rec := httptest.NewRecorder()
 	nf := &noFlusherWriter{rec: rec}
 	handler.ServeHTTP(nf, req)

@@ -72,14 +72,12 @@ func (m *Metrics) RegisterWSHub(hub WSCounter) {
 }
 
 // Handler returns an HTTP handler for the /metrics endpoint.
-// If token is non-empty, requests must carry Authorization: Bearer <token>.
+// Requests must carry Authorization: Bearer <token>. When token is empty the
+// handler always returns 403 — set METRICS_TOKEN to enable the endpoint.
 func (m *Metrics) Handler(token string) http.Handler {
 	h := promhttp.HandlerFor(m.reg, promhttp.HandlerOpts{Registry: m.reg})
-	if token == "" {
-		return h
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+token {
+		if token == "" || r.Header.Get("Authorization") != "Bearer "+token {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

@@ -13,8 +13,9 @@ import (
 func TestHandler_ServesMetrics(t *testing.T) {
 	m := metrics.New(nil)
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
 	rec := httptest.NewRecorder()
-	m.Handler("").ServeHTTP(rec, req)
+	m.Handler("test-token").ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
@@ -23,6 +24,16 @@ func TestHandler_ServesMetrics(t *testing.T) {
 	// Go runtime metrics are always present.
 	if !strings.Contains(string(body), "go_goroutines") {
 		t.Error("expected go_goroutines in metrics output")
+	}
+}
+
+func TestHandler_EmptyTokenForbidden(t *testing.T) {
+	m := metrics.New(nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	m.Handler("").ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 when METRICS_TOKEN is unset", rec.Code)
 	}
 }
 
@@ -73,8 +84,9 @@ func TestMiddleware_RecordsHTTPMetrics(t *testing.T) {
 
 	// Verify the counter was incremented by scraping /metrics.
 	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsReq.Header.Set("Authorization", "Bearer test-token")
 	metricsRec := httptest.NewRecorder()
-	m.Handler("").ServeHTTP(metricsRec, metricsReq)
+	m.Handler("test-token").ServeHTTP(metricsRec, metricsReq)
 
 	body, _ := io.ReadAll(metricsRec.Body)
 	if !strings.Contains(string(body), "circl_http_requests_total") {
@@ -89,8 +101,9 @@ func TestWSHub_ActiveConns(t *testing.T) {
 	m.RegisterWSHub(hub)
 
 	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsReq.Header.Set("Authorization", "Bearer test-token")
 	rec := httptest.NewRecorder()
-	m.Handler("").ServeHTTP(rec, metricsReq)
+	m.Handler("test-token").ServeHTTP(rec, metricsReq)
 
 	body, _ := io.ReadAll(rec.Body)
 	if !strings.Contains(string(body), "circl_websocket_active_connections 3") {

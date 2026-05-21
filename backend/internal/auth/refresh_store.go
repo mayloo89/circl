@@ -27,12 +27,12 @@ const (
 // RefreshTokenStore manages opaque refresh tokens backed by Redis.
 type RefreshTokenStore interface {
 	Create(ctx context.Context, hash, userID, role string, issuedAt time.Time, ttl time.Duration) error
-	Get(ctx context.Context, hash string) (*refreshTokenRecord, error)
+	Get(ctx context.Context, hash string) (*RefreshToken, error)
 	Delete(ctx context.Context, hash string) error
 	RevokeAllForUser(ctx context.Context, userID string) error
 }
 
-type refreshTokenRecord struct {
+type RefreshToken struct {
 	UserID   string        `json:"user_id"`
 	Role     string        `json:"role"`
 	IssuedAt time.Time     `json:"issued_at"`
@@ -49,7 +49,7 @@ func NewRedisRefreshStore(rdb *redis.Client) RefreshTokenStore {
 }
 
 func (s *redisRefreshStore) Create(ctx context.Context, hash, userID, role string, issuedAt time.Time, ttl time.Duration) error {
-	val, err := json.Marshal(refreshTokenRecord{UserID: userID, Role: role, IssuedAt: issuedAt, TTL: ttl})
+	val, err := json.Marshal(RefreshToken{UserID: userID, Role: role, IssuedAt: issuedAt, TTL: ttl})
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (s *redisRefreshStore) Create(ctx context.Context, hash, userID, role strin
 // Get retrieves the token record and validates it against any pending revocation.
 // Returns ErrInvalidToken when the token does not exist, has been deleted, or was
 // issued before a RevokeAllForUser call.
-func (s *redisRefreshStore) Get(ctx context.Context, hash string) (*refreshTokenRecord, error) {
+func (s *redisRefreshStore) Get(ctx context.Context, hash string) (*RefreshToken, error) {
 	raw, err := s.rdb.Get(ctx, rtKeyPrefix+hash).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil, ErrInvalidToken
@@ -68,7 +68,7 @@ func (s *redisRefreshStore) Get(ctx context.Context, hash string) (*refreshToken
 		return nil, err
 	}
 
-	var rt refreshTokenRecord
+	var rt RefreshToken
 	if err := json.Unmarshal(raw, &rt); err != nil {
 		return nil, err
 	}
