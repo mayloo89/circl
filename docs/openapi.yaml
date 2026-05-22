@@ -2,7 +2,7 @@ openapi: "3.1.0"
 
 info:
   title: Circl API
-  version: "3.0.0"
+  version: "3.1.0"
   description: |
     REST + WebSocket API for the Circl real-time chat platform.
 
@@ -82,6 +82,19 @@ components:
               url: { type: string, format: uri }
         locale:       { type: string, example: en }
         push_enabled: { type: boolean }
+        age:
+          type: [integer, "null"]
+          description: Computed age in years. Returned instead of raw date_of_birth for non-owners.
+        distance_km:
+          type: [number, "null"]
+          description: Distance from the requesting user in km. Null when unavailable or hidden.
+        location_text:  { type: [string, "null"] }
+        onboarded_at:   { type: [string, "null"], format: date-time }
+        looking_for_gender:
+          type: array
+          items: { type: string }
+        looking_for_age_min: { type: [integer, "null"], minimum: 18 }
+        looking_for_age_max: { type: [integer, "null"], maximum: 120 }
 
     Room:
       type: object
@@ -106,7 +119,7 @@ components:
         sender_id:    { type: string, format: uuid }
         type:
           type: string
-          enum: [text, image, video, file]
+          enum: [text, image, video, file, album_share]
         content:      { type: string }
         file_url:     { type: [string, "null"], format: uri }
         thumbnail_url: { type: [string, "null"], format: uri }
@@ -248,6 +261,7 @@ components:
         requested_at:  { type: string, format: date-time }
         granted_at:    { type: [string, "null"], format: date-time }
         revoked_at:    { type: [string, "null"], format: date-time }
+        expires_at:    { type: [string, "null"], format: date-time, description: "Null means the grant never expires." }
         counterparty:  { type: string, format: uuid, description: "The other party's user id from the caller's perspective." }
 
   responses:
@@ -290,6 +304,10 @@ tags:
   - name: Reports
   - name: Push
   - name: Admin
+  - name: Albums
+  - name: Moderation
+  - name: Exports
+  - name: Appeals
 
 paths:
 
@@ -592,6 +610,15 @@ paths:
                 date_of_birth: { type: string, format: date }
                 gender:        { type: string }
                 interests:     { type: array, items: { type: string } }
+                location_text:     { type: string }
+                latitude:          { type: number, format: double }
+                longitude:         { type: number, format: double }
+                mark_onboarded:    { type: boolean }
+                looking_for_gender:
+                  type: array
+                  items: { type: string }
+                looking_for_age_min: { type: integer, minimum: 18 }
+                looking_for_age_max: { type: integer, maximum: 120 }
       responses:
         "200":
           description: Updated profile.
@@ -631,8 +658,23 @@ paths:
               schema:
                 type: object
                 properties:
-                  locale:       { type: string }
+                  locale:       { type: string, example: en }
                   push_enabled: { type: boolean }
+                  min_age:      { type: [integer, "null"], minimum: 18 }
+                  max_age:      { type: [integer, "null"], maximum: 120 }
+                  max_distance_km: { type: [integer, "null"] }
+                  gender_preference:
+                    type: array
+                    items: { type: string }
+                  require_photo: { type: boolean }
+                  hide_distance_from_non_contacts: { type: boolean }
+                  hide_presence:         { type: boolean }
+                  hide_read_receipts:    { type: boolean }
+                  hide_typing_indicator: { type: boolean }
+                  notify_chat_messages:     { type: boolean }
+                  notify_contact_requests:  { type: boolean }
+                  notify_channel_mentions:  { type: boolean }
+                  notify_system:            { type: boolean }
         "401": { $ref: "#/components/responses/Unauthorized" }
     put:
       tags: [Profiles]
@@ -643,9 +685,25 @@ paths:
           application/json:
             schema:
               type: object
+              description: All fields are optional. Only supplied fields are written — omitting a field leaves its current value unchanged.
               properties:
                 locale:       { type: string, enum: [en, es, pt] }
                 push_enabled: { type: boolean }
+                min_age:      { type: [integer, "null"], minimum: 18 }
+                max_age:      { type: [integer, "null"], maximum: 120 }
+                max_distance_km: { type: [integer, "null"] }
+                gender_preference:
+                  type: array
+                  items: { type: string }
+                require_photo: { type: boolean }
+                hide_distance_from_non_contacts: { type: boolean }
+                hide_presence:         { type: boolean }
+                hide_read_receipts:    { type: boolean }
+                hide_typing_indicator: { type: boolean }
+                notify_chat_messages:     { type: boolean }
+                notify_contact_requests:  { type: boolean }
+                notify_channel_mentions:  { type: boolean }
+                notify_system:            { type: boolean }
       responses:
         "200":
           description: Preferences updated.
@@ -1096,7 +1154,7 @@ paths:
           description: Cursor — return messages older than this timestamp.
         - in: query
           name: limit
-          schema: { type: integer, default: 50 }
+          schema: { type: integer, default: 50, maximum: 200 }
       responses:
         "200":
           description: Message page.
@@ -1148,8 +1206,9 @@ paths:
       tags: [Chat]
       summary: WebSocket — real-time chat
       description: |
-        Upgrades the connection to WebSocket. Authentication is via `?token=<jwt>`
-        query parameter (the browser WebSocket API does not support custom headers).
+        Upgrades the connection to WebSocket. Authentication is via a
+        single-use `?ticket=` obtained from `POST /ws-ticket` (the browser
+        WebSocket API does not support custom headers).
 
         **Client → server frames**
         ```json
@@ -1174,10 +1233,10 @@ paths:
           required: true
           schema: { type: string, format: uuid }
         - in: query
-          name: token
+          name: ticket
           required: true
-          schema: { type: string }
-          description: Valid access JWT.
+          schema: { type: string, format: uuid }
+          description: Single-use ticket from `POST /ws-ticket`.
       responses:
         "101":
           description: Switching protocols — WebSocket connection established.
@@ -1227,8 +1286,9 @@ paths:
       tags: [Notifications]
       summary: SSE stream — real-time notifications
       description: |
-        Server-Sent Events stream. Authentication via `?token=<jwt>` query
-        parameter (the browser `EventSource` API does not support custom headers).
+        Server-Sent Events stream. Authentication via a single-use `?ticket=`
+        obtained from `POST /ws-ticket` (the browser `EventSource` API does
+        not support custom headers; see `POST /ws-ticket`).
 
         **Event types**
         - `new_message` — new chat message in a room the user is a member of
@@ -1238,9 +1298,10 @@ paths:
       security: []
       parameters:
         - in: query
-          name: token
+          name: ticket
           required: true
-          schema: { type: string }
+          schema: { type: string, format: uuid }
+          description: Single-use ticket from `POST /ws-ticket`.
       responses:
         "200":
           description: SSE stream (text/event-stream).
@@ -1248,6 +1309,31 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ── WebSocket / SSE ticket ────────────────────────────────────────────────────
+
+  /ws-ticket:
+    post:
+      tags: [Notifications]
+      summary: Issue a single-use auth ticket for WebSocket or SSE
+      description: |
+        Returns a single-use UUID ticket with a 60-second TTL. Pass it as
+        `?ticket=` when opening a WebSocket connection or SSE stream. The
+        ticket is consumed on first use — obtain a new one on each reconnect.
+      responses:
+        "200":
+          description: Single-use ticket.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket]
+                properties:
+                  ticket:
+                    type: string
+                    format: uuid
+                    description: Single-use 60-second ticket.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   # ── Presence ──────────────────────────────────────────────────────────────────
@@ -1312,6 +1398,10 @@ paths:
               properties:
                 content_type: { type: string, example: image/jpeg }
                 filename:     { type: string }
+                category:
+                  type: string
+                  enum: [avatar, gallery, chat-attachment, album-private]
+                  description: Upload category. Controls size limits and moderation behaviour.
       responses:
         "201":
           description: Pre-signed upload URL and upload ID.
@@ -1456,7 +1546,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Albums]
-      summary: Delete the album (owner only) — cascades to photos, grants and view log.
+      summary: Delete the album (owner only) — cascades to photos and grants.
       parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
       responses:
         "204": { description: Deleted. }
@@ -1466,9 +1556,6 @@ paths:
     get:
       tags: [Albums]
       summary: List photos in an album (owner or active grantee).
-      description: |
-        Logs a viewer-listing event (NULL `upload_id`) when the caller is a
-        viewer so the owner can audit access.
       parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
       responses:
         "200":
@@ -1512,7 +1599,8 @@ paths:
       tags: [Albums]
       summary: Stream the photo bytes (gated by active grant or owner).
       description: |
-        Returns the raw image bytes. Logs a per-photo view event for viewers.
+        Returns the raw image bytes. A semi-transparent watermark is composited
+        server-side for viewers (non-owners) to deter screenshot sharing.
         `Cache-Control: private, max-age=60` keeps the viewer's browser cache
         short so a revoke takes effect within ~60 s on the next render.
       parameters:
@@ -1542,7 +1630,11 @@ paths:
   /albums/{id}/grants/invite:
     post:
       tags: [Albums]
-      summary: Owner invites a contact (push). Grant starts pending; grantee accepts via /accept.
+      summary: Owner invites a contact. Grant is immediately active.
+      description: |
+        Creates an `active` grant directly — the invited contact gains
+        immediate access without needing to accept. Rate-limited to 20
+        invitations per granter per 24 hours.
       parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: true
@@ -1551,12 +1643,23 @@ paths:
             schema:
               type: object
               required: [grantee_id]
-              properties: { grantee_id: { type: string, format: uuid } }
+              properties:
+                grantee_id:  { type: string, format: uuid }
+                expires_in:
+                  type: string
+                  enum: [24h, 7d, 30d, none]
+                  default: none
+                  description: How long the grant remains active. Omit or pass `none` for no expiry.
       responses:
-        "201": { description: "New grant (status=pending, source=invite)." }
+        "201":
+          description: "New grant (status=active, source=invite)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlbumGrant" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { description: "An open grant already exists for this user." }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /albums/{id}/grants/request:
     post:
@@ -1579,7 +1682,13 @@ paths:
             schema:
               type: object
               required: [room_id]
-              properties: { room_id: { type: string, format: uuid } }
+              properties:
+                room_id: { type: string, format: uuid }
+                expires_in:
+                  type: string
+                  enum: [24h, 7d, 30d, none]
+                  default: none
+                  description: How long the auto-created grant remains active.
       responses:
         "201":
           description: Created. Returns the album reference and the resulting grant.
@@ -1596,7 +1705,11 @@ paths:
   /albums/grants/{grantID}/accept:
     post:
       tags: [Albums]
-      summary: Accept a pending grant. Caller must be the other party (grantee for invite, owner for request).
+      summary: Accept a pending access-request grant (owner only).
+      description: |
+        Accepts a grant with `source=request` — i.e. a viewer's access
+        request that is awaiting owner approval. Invite grants (`source=invite`)
+        are created already active and do not go through this flow.
       parameters: [{ in: path, name: grantID, required: true, schema: { type: string, format: uuid } }]
       responses:
         "200": { description: "Updated grant (status=active)." }

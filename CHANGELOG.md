@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **OpenAPI spec — full audit and update** (`docs/openapi.yaml` v3.1.0): added 17 missing or stale items. New: `POST /ws-ticket` endpoint; `Albums`, `Moderation`, `Exports`, `Appeals` tags. Fixed: `GET /notifications/stream` and `GET /chat/rooms/{id}/ws` both now document `?ticket=` (was `?token=JWT`); `Message.type` enum now includes `album_share`; `AlbumGrant` schema gains `expires_at`; `POST /albums/{id}/grants/invite` corrected (grants are immediately active, `expires_in` field added, 429 response added); `POST /albums/{id}/share-in-chat` gains `expires_in`; `POST /albums/grants/{grantID}/accept` clarified to only handle `source=request` grants; stale view-log references removed from album photo endpoints (view log was dropped in PR #110); `GET /chat/rooms/{id}/messages` `limit` capped to 200; `Profile` schema gains `age`, `distance_km`, `location_text`, `onboarded_at`, `looking_for_*` fields; `GET/PUT /profiles/me/preferences` schemas expanded to all 15 preference fields; `POST /uploads/request` gains `category` field.
+
 ### Security
 
 - **Trusted proxy / real IP middleware**: new `middleware.RealIP(cidrs)` + `middleware.ClientIP(r)` extract the real client IP from `X-Forwarded-For` / `X-Real-IP` only when the connection arrives from a configured CIDR (`TRUSTED_PROXIES` env var). When unset (default), `r.RemoteAddr` is used unconditionally, preventing rate-limit bypass via spoofed headers. Wired as the first middleware in the chain.
