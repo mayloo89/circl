@@ -650,6 +650,50 @@ func TestAddPhoto_StoreError(t *testing.T) {
 	}
 }
 
+func TestAddPhoto_StorageURLValidation(t *testing.T) {
+	svc := NewService(&mockStore{photo: &ProfilePhoto{ID: "ph-1", URL: "https://cdn.example.com/photo.jpg"}})
+	svc.SetStoragePublicURL("https://cdn.example.com/")
+
+	t.Run("allows storage URL", func(t *testing.T) {
+		_, err := svc.AddPhoto(t.Context(), "user-1", "https://cdn.example.com/photo.jpg")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rejects external URL", func(t *testing.T) {
+		_, err := svc.AddPhoto(t.Context(), "user-1", "https://evil.example.com/bad.jpg")
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("got %v, want ErrInvalidInput", err)
+		}
+	})
+}
+
+func TestUpdateAvatar_StorageURLValidation(t *testing.T) {
+	svc := NewService(&mockStore{})
+	svc.SetStoragePublicURL("https://cdn.example.com/")
+
+	t.Run("allows storage URL", func(t *testing.T) {
+		if err := svc.UpdateAvatar(t.Context(), "user-1", "https://cdn.example.com/avatar.jpg"); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rejects external URL", func(t *testing.T) {
+		err := svc.UpdateAvatar(t.Context(), "user-1", "https://tracking.evil.com/pixel.gif")
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("got %v, want ErrInvalidInput", err)
+		}
+	})
+
+	t.Run("no restriction when storagePublicURL unset", func(t *testing.T) {
+		svc2 := NewService(&mockStore{})
+		if err := svc2.UpdateAvatar(t.Context(), "user-1", "https://anything.example.com/img.jpg"); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
 // --- DeletePhoto ---
 
 func TestDeletePhoto_Success(t *testing.T) {

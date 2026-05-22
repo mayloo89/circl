@@ -31,6 +31,9 @@ type Config struct {
 	CORSOrigins []string
 
 	// Observability — all are optional (nil disables)
+	// RealIPMiddleware is inserted first so every subsequent middleware and
+	// handler sees the true client IP via middleware.ClientIP(r).
+	RealIPMiddleware func(http.Handler) http.Handler
 	// TracingMiddleware is inserted before RequestLogger so trace_id/span_id
 	// are available to the logger for log-trace correlation.
 	TracingMiddleware func(http.Handler) http.Handler
@@ -76,6 +79,9 @@ func New(cfg Config) http.Handler {
 
 	r := chi.NewRouter()
 
+	if cfg.RealIPMiddleware != nil {
+		r.Use(cfg.RealIPMiddleware)
+	}
 	if cfg.TracingMiddleware != nil {
 		r.Use(cfg.TracingMiddleware)
 	}
@@ -98,51 +104,59 @@ func New(cfg Config) http.Handler {
 		r.Get("/metrics", cfg.MetricsHandler.ServeHTTP)
 	}
 
-	r.Mount("/auth", cfg.Auth)
-	r.Handle("/profiles/available", cfg.Available)
+	// JSON API routes — body size is capped to prevent memory exhaustion.
+	// The /uploads/files local-storage path is excluded because it handles
+	// binary file uploads that apply their own per-category size limits.
+	r.Group(func(api chi.Router) {
+		api.Use(middleware.LimitRequestBody)
 
-	// /appeal/{token} is intentionally un-authenticated — the locked-out user
-	// it serves cannot log in. Auth is provided by the single-use token.
-	if cfg.Appeals != nil {
-		r.Mount("/appeal", cfg.Appeals)
-	}
+		api.Mount("/auth", cfg.Auth)
+		api.Handle("/profiles/available", cfg.Available)
 
-	// /account/export/{token} is intentionally un-authenticated — the user
-	// downloads with the single-use token from their ready email.
-	if cfg.ExportDownload != nil {
-		r.Mount("/account/export", cfg.ExportDownload)
-	}
-
-	// SSE stream — auth is handled inside the handler via ?token= query param
-	// because the browser EventSource API does not support custom headers.
-	r.Handle("/notifications/stream", cfg.Notifications)
-
-	// WebSocket endpoint — auth via single-use ?ticket= (from POST /ws-ticket).
-	r.Handle("/chat/rooms/{id}/ws", cfg.ChatWS)
-
-	// Protected routes — RequireAuth validates the Bearer JWT before forwarding.
-	r.Group(func(g chi.Router) {
-		g.Use(cfg.RequireAuth)
-		g.Handle("/ws-ticket", cfg.WSTicket)
-		g.Mount("/users/me", cfg.Account)
-		g.Mount("/profiles", cfg.Profile)
-		g.Mount("/", cfg.Contacts)
-		g.Mount("/chat", cfg.Chat)
-		g.Mount("/presence", cfg.Presence)
-		g.Mount("/uploads", cfg.Upload)
-		if cfg.Albums != nil {
-			g.Mount("/albums", cfg.Albums)
+		// /appeal/{token} is intentionally un-authenticated — the locked-out user
+		// it serves cannot log in. Auth is provided by the single-use token.
+		if cfg.Appeals != nil {
+			api.Mount("/appeal", cfg.Appeals)
 		}
-		g.Mount("/reports", cfg.Reports)
-		g.Mount("/push", cfg.Push)
-		g.Mount("/admin", cfg.Admin)
-		if cfg.Export != nil {
-			g.Mount("/users/me/exports", cfg.Export)
+
+		// /account/export/{token} is intentionally un-authenticated — the user
+		// downloads with the single-use token from their ready email.
+		if cfg.ExportDownload != nil {
+			api.Mount("/account/export", cfg.ExportDownload)
 		}
+
+		// SSE stream — auth is handled inside the handler via ?token= query param
+		// because the browser EventSource API does not support custom headers.
+		api.Handle("/notifications/stream", cfg.Notifications)
+
+		// WebSocket endpoint — auth via single-use ?ticket= (from POST /ws-ticket).
+		api.Handle("/chat/rooms/{id}/ws", cfg.ChatWS)
+
+		// Protected routes — RequireAuth validates the Bearer JWT before forwarding.
+		api.Group(func(g chi.Router) {
+			g.Use(cfg.RequireAuth)
+			g.Handle("/ws-ticket", cfg.WSTicket)
+			g.Mount("/users/me", cfg.Account)
+			g.Mount("/profiles", cfg.Profile)
+			g.Mount("/", cfg.Contacts)
+			g.Mount("/chat", cfg.Chat)
+			g.Mount("/presence", cfg.Presence)
+			g.Mount("/uploads", cfg.Upload)
+			if cfg.Albums != nil {
+				g.Mount("/albums", cfg.Albums)
+			}
+			g.Mount("/reports", cfg.Reports)
+			g.Mount("/push", cfg.Push)
+			g.Mount("/admin", cfg.Admin)
+			if cfg.Export != nil {
+				g.Mount("/users/me/exports", cfg.Export)
+			}
+		})
 	})
 
 	// Local file serving — only mounted when LocalStorage is not nil
-	// (i.e. when STORAGE_PROVIDER=local for development).
+	// (i.e. when STORAGE_PROVIDER=local for development). Not wrapped in
+	// LimitRequestBody because it handles binary uploads with per-category limits.
 	if cfg.LocalStorage != nil {
 		r.Mount("/uploads/files", cfg.LocalStorage)
 	}

@@ -1,7 +1,9 @@
 package notifications
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -10,30 +12,37 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
-	"github.com/mayloo89/circl/backend/internal/token"
 )
+
+// TicketRedeemer consumes a single-use ticket and returns the associated userID.
+// Tickets are deleted on first use and expire after a short TTL.
+type TicketRedeemer interface {
+	Redeem(ctx context.Context, ticket string) (string, error)
+}
+
+// ErrInvalidTicket is returned by a TicketRedeemer when the ticket does not
+// exist or has already been consumed.
+var ErrInvalidTicket = errors.New("invalid or expired ticket")
 
 // NewHandler returns an SSE handler for GET /notifications/stream.
 //
-// Clients authenticate via a ?token=<jwt> query parameter because the
-// browser EventSource API does not support custom request headers.
-func NewHandler(hub *Hub, jwtSecret string) http.HandlerFunc {
+// Clients authenticate via a ?ticket= query parameter. The ticket must be
+// obtained first from POST /ws-ticket (behind RequireAuth). Single-use tickets
+// avoid embedding long-lived JWTs in URLs where they would appear in server
+// access logs and browser history.
+func NewHandler(hub *Hub, redeemer TicketRedeemer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Validate token from query param.
-		tok := r.URL.Query().Get("token")
-		if tok == "" {
+		ticket := r.URL.Query().Get("ticket")
+		if ticket == "" {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
-		claims, err := token.Validate(tok, jwtSecret)
+		userID, err := redeemer.Redeem(r.Context(), ticket)
 		if err != nil {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
-		userID := claims.Subject
 
-		// Enrich the span created by the HTTP tracing middleware with SSE-specific
-		// attributes so it's easy to filter SSE connections in Tempo.
 		trace.SpanFromContext(r.Context()).SetAttributes(
 			attribute.String("user.id", userID),
 			attribute.String("sse.type", "notifications"),
@@ -53,7 +62,6 @@ func NewHandler(hub *Hub, jwtSecret string) http.HandlerFunc {
 		ch, unsub := hub.Subscribe(userID)
 		defer unsub()
 
-		// Initial event so the client knows the stream is live.
 		writeEvent(w, flusher, Event{Type: "connected"})
 
 		for {
@@ -61,7 +69,6 @@ func NewHandler(hub *Hub, jwtSecret string) http.HandlerFunc {
 			case e := <-ch:
 				writeEvent(w, flusher, e)
 			case <-time.After(25 * time.Second):
-				// SSE comment heartbeat — keeps TCP alive through proxies.
 				fmt.Fprintf(w, ": heartbeat\n\n")
 				flusher.Flush()
 			case <-r.Context().Done():

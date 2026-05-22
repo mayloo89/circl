@@ -116,7 +116,9 @@ type AgeAuditStore interface {
 // EmailFlowService handles password reset and email verification.
 type EmailFlowService interface {
 	ForgotPassword(ctx context.Context, emailAddr, frontendURL string) error
-	ResetPassword(ctx context.Context, token, newPassword string) error
+	// ResetPassword validates the token, replaces the password, and returns the
+	// affected userID so callers can revoke existing sessions.
+	ResetPassword(ctx context.Context, token, newPassword string) (userID string, err error)
 	SendVerificationEmail(ctx context.Context, userID, userEmail, frontendURL string) error
 	ResendVerification(ctx context.Context, emailAddr, frontendURL string) error
 	VerifyEmail(ctx context.Context, token string) error
@@ -217,7 +219,7 @@ func (s *Service) Register(ctx context.Context, in RegistrationInput) (*User, er
 		return nil, err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost+2)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
@@ -252,7 +254,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, n
 	if err := validatePassword(newPassword); err != nil {
 		return err
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost+2)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
@@ -307,33 +309,34 @@ func (s *Service) ForgotPassword(ctx context.Context, emailAddr, frontendURL str
 	return nil
 }
 
-// ResetPassword validates the token and replaces the user's password.
-func (s *Service) ResetPassword(ctx context.Context, plaintoken, newPassword string) error {
+// ResetPassword validates the token, replaces the user's password, and returns
+// the affected userID so the caller can revoke existing refresh tokens.
+func (s *Service) ResetPassword(ctx context.Context, plaintoken, newPassword string) (string, error) {
 	if plaintoken == "" {
-		return fmt.Errorf("%w: token is required", ErrInvalidInput)
+		return "", fmt.Errorf("%w: token is required", ErrInvalidInput)
 	}
 
 	tokenHash := hashToken(plaintoken)
 	record, err := s.store.GetPasswordReset(ctx, tokenHash)
 	if err != nil {
-		return ErrInvalidToken
+		return "", ErrInvalidToken
 	}
 	if record.UsedAt != nil || record.ExpiresAt.Before(time.Now()) {
-		return ErrInvalidToken
+		return "", ErrInvalidToken
 	}
 
 	if err := validatePassword(newPassword); err != nil {
-		return err
+		return "", err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost+2)
 	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
+		return "", fmt.Errorf("hash password: %w", err)
 	}
 	if err := s.store.UpdatePassword(ctx, record.UserID, string(hash)); err != nil {
-		return fmt.Errorf("update password: %w", err)
+		return "", fmt.Errorf("update password: %w", err)
 	}
-	return s.store.MarkPasswordResetUsed(ctx, record.ID)
+	return record.UserID, s.store.MarkPasswordResetUsed(ctx, record.ID)
 }
 
 // SendVerificationEmail generates a verification token and emails it to the user.

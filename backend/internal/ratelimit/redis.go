@@ -9,6 +9,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// incrWithTTL atomically increments a counter and sets TTL on first increment.
+// Using a Lua script ensures the INCR and EXPIRE are applied together — no
+// orphaned keys if the process exits between the two commands.
+var incrWithTTL = redis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`)
+
 // RedisLimiter implements a simple counter-based rate limiter backed by Redis.
 type RedisLimiter struct {
 	client *redis.Client
@@ -23,12 +34,9 @@ func NewRedisLimiter(client *redis.Client) *RedisLimiter {
 // the limit for the given window. The first increment also sets the TTL so the
 // key expires automatically after the window elapses.
 func (r *RedisLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
-	count, err := r.client.Incr(ctx, key).Result()
+	count, err := incrWithTTL.Run(ctx, r.client, []string{key}, int64(window.Seconds())).Int64()
 	if err != nil {
 		return false, fmt.Errorf("rate limit incr: %w", err)
-	}
-	if count == 1 {
-		r.client.Expire(ctx, key, window) //nolint:errcheck
 	}
 	return count <= int64(limit), nil
 }
@@ -50,12 +58,9 @@ func (r *RedisLimiter) IsLocked(ctx context.Context, key string, limit int) (boo
 // counter has now reached or exceeded limit. The window TTL is set on the first
 // increment only, so the lockout period is anchored to the first failure.
 func (r *RedisLimiter) RecordFailure(ctx context.Context, key string, limit int, window time.Duration) (locked bool, err error) {
-	count, err := r.client.Incr(ctx, key).Result()
+	count, err := incrWithTTL.Run(ctx, r.client, []string{key}, int64(window.Seconds())).Int64()
 	if err != nil {
 		return false, fmt.Errorf("rate limit incr: %w", err)
-	}
-	if count == 1 {
-		r.client.Expire(ctx, key, window) //nolint:errcheck
 	}
 	return count >= int64(limit), nil
 }

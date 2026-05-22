@@ -9,23 +9,23 @@ import (
 
 // stubRefreshStore is an in-memory RefreshTokenStore used in unit tests.
 type stubRefreshStore struct {
-	tokens   map[string]*refreshTokenRecord
+	tokens   map[string]*RefreshToken
 	revoked  map[string]int64 // userID → UnixNano
 }
 
 func newStubRefreshStore() *stubRefreshStore {
 	return &stubRefreshStore{
-		tokens:  make(map[string]*refreshTokenRecord),
+		tokens:  make(map[string]*RefreshToken),
 		revoked: make(map[string]int64),
 	}
 }
 
 func (s *stubRefreshStore) Create(_ context.Context, hash, userID, role string, issuedAt time.Time, ttl time.Duration) error {
-	s.tokens[hash] = &refreshTokenRecord{UserID: userID, Role: role, IssuedAt: issuedAt, TTL: ttl}
+	s.tokens[hash] = &RefreshToken{UserID: userID, Role: role, IssuedAt: issuedAt, TTL: ttl}
 	return nil
 }
 
-func (s *stubRefreshStore) Get(_ context.Context, hash string) (*refreshTokenRecord, error) {
+func (s *stubRefreshStore) Get(_ context.Context, hash string) (*RefreshToken, error) {
 	rt, ok := s.tokens[hash]
 	if !ok {
 		return nil, ErrInvalidToken

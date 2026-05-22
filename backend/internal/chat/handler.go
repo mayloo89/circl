@@ -370,7 +370,7 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 
 		limit := 50
 		if raw := r.URL.Query().Get("limit"); raw != "" {
-			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
 				limit = n
 			}
 		}
@@ -540,7 +540,7 @@ func updateGroupHandler(svc Manager) http.HandlerFunc {
 // GET /chat/rooms/{id}/members
 func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := middleware.UserIDFromContext(r.Context())
+		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
@@ -570,7 +570,6 @@ func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 		}
 
 		// For group/DM rooms, require the caller to be a member.
-		userID, _ := middleware.UserIDFromContext(r.Context())
 		member, err := svc.IsMember(r.Context(), roomID, userID)
 		if err != nil || !member {
 			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")

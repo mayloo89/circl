@@ -271,10 +271,12 @@ func (m *mockAgeAuditStore) LogAgeAttestation(_ context.Context, in auth.AgeAtte
 
 func TestRegisterHandler_LogsAgeAttestation(t *testing.T) {
 	store := &mockAgeAuditStore{}
-	h := newHandler(
+	inner := newHandler(
 		&mockAuth{user: &auth.User{ID: "new-uuid", Email: "new@example.com"}},
 		auth.WithAgeAuditStore(store),
 	)
+	// Wrap with RealIP so X-Forwarded-For is trusted from 127.0.0.0/8 (httptest default).
+	h := middleware.RealIP(middleware.ParseCIDRs("127.0.0.0/8"))(inner)
 
 	body := `{"email":"new@example.com","password":"securepass","accept_terms":true,"date_of_birth":"1990-01-02"}`
 	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(body))
@@ -560,13 +562,16 @@ func TestLoginHandler_EmailNotVerified(t *testing.T) {
 type mockEmailFlow struct {
 	forgotErr   error
 	resetErr    error
+	resetUserID string // returned by ResetPassword on success
 	sendVerErr  error
 	resendErr   error
 	verifyErr   error
 }
 
-func (m *mockEmailFlow) ForgotPassword(_ context.Context, _, _ string) error    { return m.forgotErr }
-func (m *mockEmailFlow) ResetPassword(_ context.Context, _, _ string) error     { return m.resetErr }
+func (m *mockEmailFlow) ForgotPassword(_ context.Context, _, _ string) error { return m.forgotErr }
+func (m *mockEmailFlow) ResetPassword(_ context.Context, _, _ string) (string, error) {
+	return m.resetUserID, m.resetErr
+}
 func (m *mockEmailFlow) SendVerificationEmail(_ context.Context, _, _, _ string) error {
 	return m.sendVerErr
 }
@@ -606,6 +611,28 @@ func TestResetPasswordHandler_Success(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestResetPasswordHandler_RevokesRefreshTokens(t *testing.T) {
+	rs := &mockRefreshTokenStore{}
+	h := auth.NewHandler(
+		&mockAuth{},
+		testSecret, testExpiry,
+		auth.WithEmailFlow(&mockEmailFlow{resetUserID: "user-123"}, "http://localhost:3000"),
+		auth.WithRefreshTokenStore(rs),
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/reset-password",
+		strings.NewReader(`{"token":"valid-token","password":"NewPass1"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if rs.revokeUserID != "user-123" {
+		t.Errorf("RevokeAllForUser called with %q, want user-123", rs.revokeUserID)
 	}
 }
 
@@ -881,4 +908,21 @@ func assertJSONFieldNonEmpty(t *testing.T, body []byte, key string) {
 	if m[key] == "" {
 		t.Errorf("%s is empty, want non-empty", key)
 	}
+}
+
+// mockRefreshTokenStore records revoke calls for use in handler tests.
+type mockRefreshTokenStore struct {
+	revokeUserID string
+}
+
+func (m *mockRefreshTokenStore) Create(_ context.Context, _, _, _ string, _ time.Time, _ time.Duration) error {
+	return nil
+}
+func (m *mockRefreshTokenStore) Get(_ context.Context, _ string) (*auth.RefreshToken, error) {
+	return nil, auth.ErrInvalidToken //nolint:nilnil
+}
+func (m *mockRefreshTokenStore) Delete(_ context.Context, _ string) error { return nil }
+func (m *mockRefreshTokenStore) RevokeAllForUser(_ context.Context, userID string) error {
+	m.revokeUserID = userID
+	return nil
 }

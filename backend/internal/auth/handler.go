@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -137,10 +136,10 @@ func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration,
 	r.Post("/refresh", refreshHandler(jwtSecret, tokenExpiry, cfg))
 	r.Post("/logout", logoutHandler(cfg))
 	if cfg.emailFlow != nil {
-		r.Post("/forgot-password", forgotPasswordHandler(cfg.emailFlow, cfg.frontendURL))
-		r.Post("/reset-password", resetPasswordHandler(cfg.emailFlow))
+		r.Post("/forgot-password", forgotPasswordHandler(cfg.emailFlow, cfg.frontendURL, cfg))
+		r.Post("/reset-password", resetPasswordHandler(cfg.emailFlow, cfg))
 		r.Post("/verify-email", verifyEmailHandler(cfg.emailFlow))
-		r.Post("/resend-verification", resendVerificationHandler(cfg.emailFlow, cfg.frontendURL))
+		r.Post("/resend-verification", resendVerificationHandler(cfg.emailFlow, cfg.frontendURL, cfg))
 	}
 	return r
 }
@@ -148,7 +147,7 @@ func NewHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration,
 func loginHandler(auth Authenticator, jwtSecret string, tokenExpiry time.Duration, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg.limiter != nil {
-			ip := clientIP(r)
+			ip := middleware.ClientIP(r)
 			allowed, err := cfg.limiter.Allow(r.Context(), "login:ip:"+ip, cfg.loginIPLimit, cfg.loginIPWindow)
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: ip rate limiter error")
@@ -318,7 +317,7 @@ func logoutHandler(cfg *handlerConfig) http.HandlerFunc {
 func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg.limiter != nil {
-			ip := clientIP(r)
+			ip := middleware.ClientIP(r)
 			allowed, err := cfg.limiter.Allow(r.Context(), "register:ip:"+ip, cfg.registerIPLimit, cfg.registerIPWindow)
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: ip rate limiter error")
@@ -395,7 +394,7 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 				UserID:        user.ID,
 				UserEmail:     user.Email,
 				AttestedAge:   minAgeYears,
-				IP:            clientIP(r),
+				IP:            middleware.ClientIP(r),
 				UserAgent:     r.UserAgent(),
 				DateOfBirth:   dobPtr,
 				PolicyVersion: CurrentPolicyVersion,
@@ -423,8 +422,18 @@ func registerHandler(auth Authenticator, cfg *handlerConfig) http.HandlerFunc {
 	}
 }
 
-func forgotPasswordHandler(svc EmailFlowService, frontendURL string) http.HandlerFunc {
+func forgotPasswordHandler(svc EmailFlowService, frontendURL string, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.limiter != nil {
+			ip := middleware.ClientIP(r)
+			allowed, err := cfg.limiter.Allow(r.Context(), "forgot:ip:"+ip, cfg.registerIPLimit, cfg.registerIPWindow)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: ip rate limiter error")
+			} else if !allowed {
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many requests")
+				return
+			}
+		}
 		var req struct {
 			Email string `json:"email"`
 		}
@@ -439,7 +448,7 @@ func forgotPasswordHandler(svc EmailFlowService, frontendURL string) http.Handle
 	}
 }
 
-func resetPasswordHandler(svc EmailFlowService) http.HandlerFunc {
+func resetPasswordHandler(svc EmailFlowService, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Token    string `json:"token"`
@@ -453,7 +462,8 @@ func resetPasswordHandler(svc EmailFlowService) http.HandlerFunc {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "token and password are required")
 			return
 		}
-		if err := svc.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+		userID, err := svc.ResetPassword(r.Context(), req.Token, req.Password)
+		if err != nil {
 			switch {
 			case errors.Is(err, ErrInvalidToken):
 				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidToken, "invalid or expired reset token")
@@ -463,6 +473,11 @@ func resetPasswordHandler(svc EmailFlowService) http.HandlerFunc {
 				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
 			return
+		}
+		if cfg.refreshStore != nil {
+			if err := cfg.refreshStore.RevokeAllForUser(r.Context(), userID); err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: revoke refresh tokens on password reset failed")
+			}
 		}
 		apierror.WriteJSON(w, http.StatusOK, map[string]string{"message": "password reset successfully"})
 	}
@@ -490,8 +505,18 @@ func verifyEmailHandler(svc EmailFlowService) http.HandlerFunc {
 	}
 }
 
-func resendVerificationHandler(svc EmailFlowService, frontendURL string) http.HandlerFunc {
+func resendVerificationHandler(svc EmailFlowService, frontendURL string, cfg *handlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.limiter != nil {
+			ip := middleware.ClientIP(r)
+			allowed, err := cfg.limiter.Allow(r.Context(), "resend:ip:"+ip, cfg.registerIPLimit, cfg.registerIPWindow)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).Msg("auth: ip rate limiter error")
+			} else if !allowed {
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many requests")
+				return
+			}
+		}
 		var req struct {
 			Email string `json:"email"`
 		}
@@ -503,23 +528,6 @@ func resendVerificationHandler(svc EmailFlowService, frontendURL string) http.Ha
 			"message": "if that email is registered and unverified you will receive a new verification link",
 		})
 	}
-}
-
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if before, _, ok := strings.Cut(xff, ","); ok {
-			return strings.TrimSpace(before)
-		}
-		return strings.TrimSpace(xff)
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 // AccountHandlerOption configures optional features on the account handler.

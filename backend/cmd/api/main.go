@@ -137,7 +137,6 @@ func main() {
 	profileHandler := profiles.NewHandler(profileSvc)
 
 	hub := notifications.NewHub()
-	notificationsHandler := notifications.NewHandler(hub, jwtSecret)
 
 	contactStore := contacts.NewStore(pool)
 	contactSvc := contacts.NewService(contactStore)
@@ -289,6 +288,9 @@ func main() {
 		log.Fatal().Str("provider", storageProvider).Msg("unknown storage provider")
 	}
 
+	// Now that fileStorage is set, lock down which URL prefix avatar/photo uploads must have.
+	profileSvc.SetStoragePublicURL(fileStorage.PublicURL(""))
+
 	chatStore := chat.NewStore(pool, fileStorage.PublicURL)
 	chatSvc := chat.NewService(chatStore)
 
@@ -324,6 +326,7 @@ func main() {
 	}
 
 	wsTicketStore := wsticket.NewStore(rdb)
+	notificationsHandler := notifications.NewHandler(hub, wsTicketStore)
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, wsTicketStore, func(recipientID, roomID string) {
 		notifyUser(recipientID, notifications.Event{
 			Type:    "new_message",
@@ -523,6 +526,7 @@ func main() {
 		admin.WithModerationHandler(moderationAdminHandler),
 	)
 
+	trustedCIDRs := middleware.ParseCIDRs(config.EnvOrDefault("TRUSTED_PROXIES", ""))
 	requireAuth := middleware.RequireAuth(jwtSecret, adminSvc)
 
 	var testHandler http.Handler
@@ -542,6 +546,7 @@ func main() {
 		Version:     config.EnvOrDefault("BUILD_VERSION", "dev"),
 		CORSOrigins: corsOrigins,
 
+		RealIPMiddleware:  middleware.RealIP(trustedCIDRs),
 		TracingMiddleware: tracing.HTTPMiddleware("circl-api"),
 		MetricsHandler:    m.Handler(config.EnvOrDefault("METRICS_TOKEN", "")),
 		MetricsMiddleware: m.Middleware(),

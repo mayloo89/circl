@@ -17,8 +17,9 @@ export type ContactEvent =
  * Opens an SSE connection to /notifications/stream and calls onEvent for each
  * message received. Reconnects automatically with exponential backoff on error.
  *
- * The token is passed as a query parameter because the browser EventSource API
- * does not support custom request headers.
+ * A short-lived single-use ticket is fetched from POST /ws-ticket before each
+ * connection attempt so the long-lived access token is never embedded in the
+ * SSE URL (where it would appear in server access logs and browser history).
  */
 export function useNotifications(
   token: string | undefined,
@@ -34,14 +35,36 @@ export function useNotifications(
   useEffect(() => {
     if (!token) return
 
+    const accessToken = token
     let es: EventSource | null = null
     let retryTimeout: ReturnType<typeof setTimeout> | null = null
     let retryDelay = 1000
     let cancelled = false
 
-    function connect() {
+    async function connect() {
       if (cancelled) return
-      es = new EventSource(`${API_URL}/notifications/stream?token=${token}`)
+
+      // Fetch a single-use ticket — avoids putting the JWT in the SSE URL.
+      let ticket: string
+      try {
+        const resp = await fetch(`${API_URL}/ws-ticket`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (!resp.ok) throw new Error(`ticket fetch ${resp.status}`)
+        const data = (await resp.json()) as { ticket: string }
+        ticket = data.ticket
+      } catch {
+        if (cancelled) return
+        retryTimeout = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 2, 30_000)
+          void connect()
+        }, retryDelay)
+        return
+      }
+
+      if (cancelled) return
+      es = new EventSource(`${API_URL}/notifications/stream?ticket=${ticket}`)
 
       es.onmessage = (msg) => {
         try {
@@ -55,9 +78,10 @@ export function useNotifications(
       es.onerror = () => {
         es?.close()
         if (cancelled) return
+        // Fetch a fresh ticket on each reconnect — tickets are single-use.
         retryTimeout = setTimeout(() => {
           retryDelay = Math.min(retryDelay * 2, 30_000)
-          connect()
+          void connect()
         }, retryDelay)
       }
 
@@ -66,7 +90,7 @@ export function useNotifications(
       }
     }
 
-    connect()
+    void connect()
 
     return () => {
       cancelled = true
