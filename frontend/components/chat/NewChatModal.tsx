@@ -113,7 +113,7 @@ export default function NewChatModal({ open, token, onClose, onCreated }: Props)
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-          <h2 className="text-base font-semibold text-white">{t("newChatTitle")}</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("newChatTitle")}</h2>
           <button
             type="button"
             aria-label={tc("close")}
@@ -138,7 +138,7 @@ export default function NewChatModal({ open, token, onClose, onCreated }: Props)
               placeholder={t("newChatSearchPlaceholder")}
               aria-label={t("newChatSearchPlaceholder")}
               autoFocus
-              className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-4 text-base text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+              className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-4 text-base text-foreground placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
             />
           </div>
 
@@ -167,7 +167,7 @@ export default function NewChatModal({ open, token, onClose, onCreated }: Props)
                       className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-800/60 disabled:cursor-wait disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover"
                     >
                       <Avatar src={c.avatar_url} name={c.display_name || "?"} size="sm" />
-                      <span className="flex-1 truncate text-sm text-white">
+                      <span className="flex-1 truncate text-sm text-foreground">
                         {c.display_name || c.username}
                       </span>
                       {isCreating && (

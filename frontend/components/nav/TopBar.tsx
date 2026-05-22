@@ -5,6 +5,7 @@ import { usePathname, Link } from "@/i18n/navigation"
 import { usePushContext } from "@/contexts/PushContext"
 import { useProfileContext } from "@/contexts/ProfileContext"
 import Avatar from "@/components/ui/Avatar"
+import ThemeToggle from "@/components/ui/ThemeToggle"
 
 function BellIcon({ muted }: { muted?: boolean }) {
   return (
@@ -73,7 +74,7 @@ export default function TopBar() {
             <button
               onClick={enable}
               aria-label={t("enablePush")}
-              className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
+              className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               <BellIcon muted />
             </button>
@@ -87,6 +88,8 @@ export default function TopBar() {
               <BellIcon />
             </button>
           )}
+
+          <ThemeToggle className="px-2 py-2" />
 
           <Link href="/profile" aria-label={t("profile")} className="rounded-full p-1.5">
             <Avatar

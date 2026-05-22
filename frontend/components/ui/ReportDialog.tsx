@@ -47,7 +47,7 @@ export default function ReportDialog({
         className="w-full max-w-sm rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-white">{t("title")}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("title")}</h2>
         <p className="mt-2 text-sm text-gray-400">
           {t("subtitle")}
         </p>
@@ -60,7 +60,7 @@ export default function ReportDialog({
               id="reason"
               name="reason"
               required
-              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
             >
               <option value="">{t("reasonPlaceholder")}</option>
               {REASON_VALUES.map((r) => (
@@ -78,7 +78,7 @@ export default function ReportDialog({
               id="description"
               name="description"
               rows={3}
-              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+              className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
               placeholder={t("descriptionPlaceholder")}
             />
           </div>

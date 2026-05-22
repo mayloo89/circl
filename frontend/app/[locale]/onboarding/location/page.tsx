@@ -162,7 +162,7 @@ export default function OnboardingLocationPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">{t("location.title")}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("location.title")}</h1>
         <p className="text-sm text-gray-400">{t("location.subtitle")}</p>
       </div>
 
@@ -181,7 +181,7 @@ export default function OnboardingLocationPage() {
             onBlur={() => setTimeout(() => setSuggestions([]), 150)}
             placeholder={t("location.placeholder")}
             autoComplete="off"
-            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-foreground placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
           />
           {suggestions.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl">
@@ -210,7 +210,7 @@ export default function OnboardingLocationPage() {
           type="button"
           onClick={handleGeolocate}
           disabled={locating}
-          className="flex items-center gap-2 text-sm text-brand-subtle hover:text-white disabled:opacity-50"
+          className="flex items-center gap-2 text-sm text-brand-subtle hover:text-foreground disabled:opacity-50"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />

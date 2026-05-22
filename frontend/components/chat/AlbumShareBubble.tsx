@@ -62,7 +62,7 @@ export default function AlbumShareBubble({ content, isOwn }: Props) {
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{payload.name}</p>
+        <p className="truncate text-sm font-medium text-foreground">{payload.name}</p>
         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
           <span>{t("photoCount", { count: payload.photo_count })}</span>
           <span aria-hidden="true">·</span>

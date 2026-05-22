@@ -228,7 +228,7 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
       )}
       <div className={innerClass}>
         <div className="flex items-center gap-2">
-          <h1 className={`flex-1 font-bold text-white ${isPane ? "text-xl" : "text-3xl"}`}>{t("title")}</h1>
+          <h1 className={`flex-1 font-bold text-foreground ${isPane ? "text-xl" : "text-3xl"}`}>{t("title")}</h1>
           <Button
             variant="primary"
             size="sm"
@@ -261,7 +261,7 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("search")}
             aria-label={t("search")}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-4 text-base text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+            className="w-full rounded-md border border-gray-600 bg-gray-800 py-2 pl-9 pr-4 text-base text-foreground placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
           />
         </div>
 
@@ -316,7 +316,7 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
                         color={room.type === "group" ? "indigo" : "gray"}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className={`truncate text-sm font-semibold ${isSelected ? "text-brand-primary" : "text-white"}`}>
+                        <p className={`truncate text-sm font-semibold ${isSelected ? "text-brand-primary" : "text-foreground"}`}>
                           {room.type === "dm" ? room.peer_name || "Unknown" : room.name}
                         </p>
                         {room.last_message && (

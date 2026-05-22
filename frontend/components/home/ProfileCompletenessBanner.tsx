@@ -64,7 +64,7 @@ export default function ProfileCompletenessBanner() {
     <div className="mx-4 mt-4 rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 p-4 lg:mx-0">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold text-foreground">
             {t("completeProfile")} — {percent}%
           </p>
           <p className="mt-0.5 text-xs text-gray-400">{t("completeProfileDesc")}</p>
@@ -106,7 +106,7 @@ export default function ProfileCompletenessBanner() {
       <div className="mt-3">
         <Link
           href={setupHref}
-          className="inline-flex items-center gap-1 rounded bg-brand-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover transition-colors"
+          className="inline-flex items-center gap-1 rounded bg-brand-primary px-3 py-1.5 text-xs font-medium text-foreground hover:bg-brand-hover transition-colors"
         >
           {t("continueSetup")}
           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

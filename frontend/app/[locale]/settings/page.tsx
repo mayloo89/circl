@@ -83,7 +83,7 @@ function NotificationsSection({ token }: { token: string | undefined }) {
 
   return (
     <section aria-labelledby="notifications-heading">
-      <h2 id="notifications-heading" className="mb-4 text-base font-semibold text-white">
+      <h2 id="notifications-heading" className="mb-4 text-base font-semibold text-foreground">
         {t("notifications")}
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
@@ -186,7 +186,7 @@ type PrivacyKey =
 function SymmetricBadge() {
   const t = useTranslations("settings")
   return (
-    <span className="rounded-full bg-brand-wash/60 px-2 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-brand-subtle ring-1 ring-brand-strong/40">
+    <span className="rounded-full bg-brand-primary/15 px-2 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-brand-strong ring-1 ring-brand-primary/30">
       {t("symmetric")}
     </span>
   )
@@ -242,7 +242,7 @@ function PrivacySection({ token }: { token: string | undefined }) {
 
   return (
     <section aria-labelledby="privacy-heading">
-      <h2 id="privacy-heading" className="mb-4 text-base font-semibold text-white">
+      <h2 id="privacy-heading" className="mb-4 text-base font-semibold text-foreground">
         {t("privacy")}
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
@@ -351,7 +351,7 @@ function BlockedUsersSection({ token }: { token: string | undefined }) {
 
   return (
     <section aria-labelledby="blocked-heading">
-      <h2 id="blocked-heading" className="mb-4 text-base font-semibold text-white">
+      <h2 id="blocked-heading" className="mb-4 text-base font-semibold text-foreground">
         {t("blockedUsers")}
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
@@ -478,7 +478,7 @@ function PasswordSection({ token }: { token: string | undefined }) {
 
   return (
     <section aria-labelledby="password-heading">
-      <h2 id="password-heading" className="mb-4 text-base font-semibold text-white">
+      <h2 id="password-heading" className="mb-4 text-base font-semibold text-foreground">
         {t("changePassword")}
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
@@ -592,7 +592,7 @@ function LanguageSection({ token }: { token: string | undefined }) {
 
   return (
     <section aria-labelledby="language-heading">
-      <h2 id="language-heading" className="mb-4 text-base font-semibold text-white">
+      <h2 id="language-heading" className="mb-4 text-base font-semibold text-foreground">
         {t("language")}
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
@@ -610,8 +610,8 @@ function LanguageSection({ token }: { token: string | undefined }) {
                 aria-pressed={locale === currentLocale}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover ${
                   locale === currentLocale
-                    ? "bg-brand-primary text-white"
-                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                    ? "bg-brand-primary text-foreground"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-foreground"
                 }`}
               >
                 {t(LOCALE_LABEL_KEYS[locale])}
@@ -703,7 +703,7 @@ function DataExportSection({ token }: { token: string | undefined }) {
 
   return (
     <section aria-labelledby="data-export-heading">
-      <h2 id="data-export-heading" className="mb-4 text-base font-semibold text-white">
+      <h2 id="data-export-heading" className="mb-4 text-base font-semibold text-foreground">
         {t("dataExport")}
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
@@ -810,7 +810,7 @@ function DeleteAccountSection({ token }: { token: string | undefined }) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-            <h2 className="text-base font-semibold text-white">{t("deleteModalTitle")}</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("deleteModalTitle")}</h2>
             <button
               type="button"
               aria-label={tc("close")}
@@ -881,7 +881,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-full bg-gray-950 px-4 py-10">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-8 text-2xl font-bold text-white">{t("title")}</h1>
+        <h1 className="mb-8 text-2xl font-bold text-foreground">{t("title")}</h1>
 
         <div className="flex flex-col gap-10">
           <NotificationsSection token={token} />

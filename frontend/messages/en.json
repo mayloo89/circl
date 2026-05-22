@@ -109,7 +109,9 @@
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "notifications": "Notifications",
-    "skipToContent": "Skip to main content"
+    "skipToContent": "Skip to main content",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
   },
   "login": {
     "title": "Sign in to your account",

@@ -44,7 +44,7 @@ export default function ProfileHeader({
         <Avatar src={profile.avatar_url} name={profile.display_name || "?"} size="xl" />
 
         <div>
-          <h2 className="text-xl font-bold text-white">{profile.display_name}</h2>
+          <h2 className="text-xl font-bold text-foreground">{profile.display_name}</h2>
           {profile.bio && (
             <p className="mt-1 max-w-xs text-sm text-gray-400">{profile.bio}</p>
           )}

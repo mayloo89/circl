@@ -48,7 +48,7 @@ export default function CreateAlbumDialog({ open, token, onClose, onCreated }: P
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700 space-y-4"
       >
-        <h2 className="text-lg font-semibold text-white">{t("create")}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("create")}</h2>
         <div className="space-y-1.5">
           <label htmlFor="album-name" className="block text-sm text-gray-300">
             {t("nameLabel")}
@@ -74,7 +74,7 @@ export default function CreateAlbumDialog({ open, token, onClose, onCreated }: P
             placeholder={t("descriptionPlaceholder")}
             maxLength={500}
             rows={3}
-            className="w-full rounded border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+            className="w-full rounded border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-foreground placeholder:text-gray-600 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
           />
         </div>
         {error && <p role="alert" className="text-sm text-red-400">{error}</p>}

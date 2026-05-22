@@ -83,7 +83,7 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-          <h2 className="text-base font-semibold text-white">{t("modalTitle")}</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("modalTitle")}</h2>
           <button type="button" onClick={handleClose} className="cursor-pointer text-gray-500 transition-colors hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded" aria-label={tc("close")}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -158,7 +158,7 @@ export default function ChannelsPage() {
 <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>
             <p className="mt-1 text-sm text-gray-500">{t("subtitle")}</p>
           </div>
           {isAdmin && (
@@ -210,7 +210,7 @@ export default function ChannelsPage() {
                 <li key={ch.id} className="flex items-center gap-4 px-5 py-4">
                   <Avatar name={ch.name} size="md" color="indigo" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-white"># {ch.name}</p>
+                    <p className="truncate text-sm font-semibold text-foreground"># {ch.name}</p>
                     {ch.description && (
                       <p className="mt-0.5 truncate text-xs text-gray-400">{ch.description}</p>
                     )}

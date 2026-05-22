@@ -59,7 +59,7 @@ export default function RangeSlider({
             disabled:opacity-40 disabled:cursor-not-allowed"
         />
       </div>
-      <span className="flex-none w-14 text-right text-sm font-medium text-white tabular-nums whitespace-nowrap">
+      <span className="flex-none w-14 text-right text-sm font-medium text-foreground tabular-nums whitespace-nowrap">
         {display}
       </span>
     </div>

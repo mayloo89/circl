@@ -57,7 +57,7 @@ function SidebarLink({
   return (
     <Link
       href={href}
-      className="block rounded px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+      className="block rounded px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-foreground transition-colors"
     >
       {children}
     </Link>

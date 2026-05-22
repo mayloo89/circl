@@ -99,7 +99,7 @@ export default function PendingRequestsWidget() {
             className="flex items-center gap-3 rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 p-3"
           >
             <Avatar src={req.avatar_url} name={req.display_name || "?"} size="md" />
-            <span className="flex-1 min-w-0 text-sm font-medium text-white truncate">
+            <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">
               {req.display_name}
             </span>
             <div className="flex gap-2 flex-none">

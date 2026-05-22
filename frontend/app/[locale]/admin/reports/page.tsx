@@ -115,7 +115,7 @@ function ReviewModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-lg rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Review report</h2>
+        <h2 className="text-base font-semibold text-foreground">Review report</h2>
 
         <div className="rounded bg-gray-800 p-4 space-y-1 text-sm">
           <p className="text-gray-400">
@@ -154,7 +154,7 @@ function ReviewModal({
                 onClick={() => setNewStatus(s)}
                 className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
                   newStatus === s
-                    ? "bg-brand-primary text-white"
+                    ? "bg-brand-primary text-foreground"
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                 }`}
               >
@@ -174,7 +174,7 @@ function ReviewModal({
                   onClick={() => setAction(a)}
                   className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
                     action === a
-                      ? "bg-brand-primary text-white"
+                      ? "bg-brand-primary text-foreground"
                       : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                   }`}
                 >
@@ -254,7 +254,7 @@ export default function AdminReportsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-6">Reports</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-6">Reports</h1>
 
       {/* Status tabs */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -265,7 +265,7 @@ export default function AdminReportsPage() {
               onClick={() => setStatusFilter(s)}
               className={`rounded px-4 py-1.5 text-sm font-medium transition-colors ${
                 statusFilter === s
-                  ? "bg-brand-primary text-white"
+                  ? "bg-brand-primary text-foreground"
                   : "text-gray-400 hover:text-gray-200"
               }`}
             >

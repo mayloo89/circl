@@ -94,7 +94,7 @@ export default function OnboardingInterestsPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">{t("interests.title")}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("interests.title")}</h1>
         <p className="text-sm text-gray-400">{t("interests.subtitle")}</p>
       </div>
 
@@ -111,7 +111,7 @@ export default function OnboardingInterestsPage() {
           }}
           placeholder={t("interests.placeholder")}
           disabled={interests.length >= MAX_INTERESTS}
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-foreground placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
         />
         {suggestions.length > 0 && (
           <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl">
@@ -135,14 +135,14 @@ export default function OnboardingInterestsPage() {
           {interests.map((tag) => (
             <span
               key={tag}
-              className="flex items-center gap-1.5 rounded-full bg-brand-wash/50 px-3 py-1.5 text-sm text-brand-subtle ring-1 ring-brand-strong/60"
+              className="flex items-center gap-1.5 rounded-full bg-brand-primary/15 px-3 py-1.5 text-sm font-medium text-brand-strong ring-1 ring-brand-primary/30"
             >
               {tag}
               <button
                 type="button"
                 onClick={() => removeInterest(tag)}
                 aria-label={`Remove ${tag}`}
-                className="text-brand-muted hover:text-white"
+                className="text-brand-muted hover:text-foreground"
               >
                 ×
               </button>

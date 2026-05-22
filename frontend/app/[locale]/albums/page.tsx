@@ -49,7 +49,7 @@ export default function AlbumsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("title")}</h1>
         <p className="max-w-2xl text-sm text-gray-400">{t("subtitle")}</p>
       </header>
 
@@ -131,8 +131,8 @@ function TabButton({
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition-colors ${
         active
-          ? "bg-brand-accent text-white ring-brand-accent"
-          : "bg-gray-900 text-gray-300 ring-gray-800 hover:bg-gray-800 hover:text-white"
+          ? "bg-brand-accent text-foreground ring-brand-accent"
+          : "bg-gray-900 text-gray-300 ring-gray-800 hover:bg-gray-800 hover:text-foreground"
       }`}
     >
       {children}

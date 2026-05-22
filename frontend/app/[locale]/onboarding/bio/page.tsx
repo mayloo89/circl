@@ -65,7 +65,7 @@ export default function OnboardingBioPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">{t("bio.title")}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("bio.title")}</h1>
         <p className="text-sm text-gray-400">{t("bio.subtitle")}</p>
       </div>
 
@@ -83,7 +83,7 @@ export default function OnboardingBioPage() {
           rows={5}
           maxLength={MAX_BIO}
           placeholder={t("bio.placeholder")}
-          className="w-full resize-none rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+          className="w-full resize-none rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-foreground placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
         />
       </div>
 

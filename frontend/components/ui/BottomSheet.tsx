@@ -37,7 +37,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
         className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col rounded-t-2xl bg-gray-900 ring-1 ring-gray-800 animate-slide-up"
       >
         <div className="flex flex-none items-center justify-between border-b border-gray-800 px-4 py-3">
-          {title && <p className="text-sm font-semibold text-white">{title}</p>}
+          {title && <p className="text-sm font-semibold text-foreground">{title}</p>}
           <button
             onClick={onClose}
             className="ml-auto cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"

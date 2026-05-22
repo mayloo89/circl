@@ -52,7 +52,7 @@ export default function PasswordField({
         <input
           id={id}
           type={visible ? "text" : "password"}
-          className={`block w-full rounded-md border bg-gray-800 px-3 py-2 pr-10 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${borderClass} ${className}`}
+          className={`block w-full rounded-md border bg-gray-800 px-3 py-2 pr-10 text-foreground placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${borderClass} ${className}`}
           {...props}
         />
         <button

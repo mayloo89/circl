@@ -81,7 +81,7 @@ export default function OnboardingPhotoPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">{t("photo.title")}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("photo.title")}</h1>
         <p className="text-sm text-gray-400">{t("photo.subtitle")}</p>
       </div>
 
@@ -105,7 +105,7 @@ export default function OnboardingPhotoPage() {
             </span>
           )}
           {uploading && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white">
+            <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-foreground">
               {t("uploading")}
             </span>
           )}
@@ -115,7 +115,7 @@ export default function OnboardingPhotoPage() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="text-xs text-gray-400 hover:text-white"
+            className="text-xs text-gray-400 hover:text-foreground"
           >
             {t("photo.changePhoto")}
           </button>

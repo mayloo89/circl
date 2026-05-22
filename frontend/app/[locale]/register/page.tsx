@@ -22,7 +22,7 @@ type FieldErrors = {
 }
 
 function fieldClass(error?: string) {
-  return `mt-1 block w-full rounded-md border ${error ? "border-red-500" : "border-gray-700"} bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${error ? "focus:border-red-400 focus:ring-red-400" : "focus:border-brand-hover focus:ring-brand-hover"}`
+  return `mt-1 block w-full rounded-md border ${error ? "border-red-500" : "border-gray-700"} bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${error ? "focus:border-red-400 focus:ring-red-400" : "focus:border-brand-hover focus:ring-brand-hover"}`
 }
 
 export default function RegisterPage() {
@@ -180,7 +180,7 @@ export default function RegisterPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-white">{t("checkEmail")}</h2>
+          <h2 className="text-2xl font-bold text-foreground">{t("checkEmail")}</h2>
           <p className="text-sm text-gray-400">
             {t("checkEmailDesc", { email })}
           </p>
@@ -215,7 +215,7 @@ export default function RegisterPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
-          <h2 className="text-center text-3xl font-bold text-white">{t("title")}</h2>
+          <h2 className="text-center text-3xl font-bold text-foreground">{t("title")}</h2>
           <p className="mt-2 text-center text-sm text-gray-400">{t("subtitle")}</p>
         </div>
 
@@ -363,7 +363,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading || !allRulesMet || usernameAvailable === false}
-            className="w-full rounded-md bg-brand-primary px-4 py-2 text-white hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="w-full rounded-md bg-brand-primary px-4 py-2 text-foreground hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             {loading ? t("submitting") : t("submit")}
           </button>

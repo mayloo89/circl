@@ -86,7 +86,7 @@ export default function ModerationAdminPage() {
   return (
     <div className="p-6 space-y-5">
       <header className="space-y-1">
-        <h1 className="text-xl font-semibold text-white">{t("moderationTitle")}</h1>
+        <h1 className="text-xl font-semibold text-foreground">{t("moderationTitle")}</h1>
         <p className="max-w-2xl text-sm text-gray-400">{t("moderationSubtitle")}</p>
       </header>
 
@@ -102,8 +102,8 @@ export default function ModerationAdminPage() {
               onClick={() => setCodeFilter(c)}
               className={`rounded-full px-3 py-1 text-xs ring-1 transition-colors ${
                 active
-                  ? "bg-brand-accent text-white ring-brand-accent"
-                  : "bg-gray-900 text-gray-300 ring-gray-800 hover:bg-gray-800 hover:text-white"
+                  ? "bg-brand-accent text-foreground ring-brand-accent"
+                  : "bg-gray-900 text-gray-300 ring-gray-800 hover:bg-gray-800 hover:text-foreground"
               }`}
             >
               {c === "" ? t("moderationCodeAll") : codeLabel(c)}

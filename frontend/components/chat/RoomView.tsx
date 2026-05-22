@@ -541,7 +541,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
               <button onClick={() => router.push(`/profile/${room.peer_username || room.peer_id}`)} className="flex flex-1 cursor-pointer items-center gap-3 transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded">
                 <Avatar src={room.peer_avatar_url} name={room.peer_name || "?"} size="md" />
                 <div className="flex flex-col text-left">
-                  <span className="text-sm font-medium text-white">{room.peer_name}</span>
+                  <span className="text-sm font-medium text-foreground">{room.peer_name}</span>
                   {room.peer_id && (
                     <div className="flex items-center gap-1.5">
                       <PresenceDot online={presence[room.peer_id]?.online ?? false} size="sm" />
@@ -575,7 +575,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
               >
                 <Avatar name={groupName || room.name || "G"} size="md" color="indigo" />
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-sm font-medium text-foreground">
                     {room.type === "channel" ? "# " : ""}{groupName || room.name}
                   </span>
                   <span className="text-xs text-gray-500">
@@ -750,12 +750,12 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
                             href={`/profile/${m.username}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`block truncate text-xs font-medium hover:underline ${online ? "text-white" : "text-gray-400"}`}
+                            className={`block truncate text-xs font-medium hover:underline ${online ? "text-foreground" : "text-gray-400"}`}
                           >
                             {m.display_name || m.username}
                           </a>
                         ) : (
-                          <p className={`truncate text-xs font-medium ${online ? "text-white" : "text-gray-400"}`}>
+                          <p className={`truncate text-xs font-medium ${online ? "text-foreground" : "text-gray-400"}`}>
                             {m.display_name || m.user_id}
                           </p>
                         )}

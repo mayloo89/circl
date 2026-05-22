@@ -8,7 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Light/dark mode toggle**: `ThemeContext` + `ThemeToggle` component; localStorage persistence with `prefers-color-scheme` fallback; FOUC-prevention inline script in `<head>`; toggle wired into `Sidebar` (with label when expanded) and `TopBar`; `suppressHydrationWarning` on `<html>`.
+
 ### Changed
+
+- **Brand palette — trans-flag blue + rose**: replaced the indigo + orange palette with `#2470B0` (primary blue) and `#D4607A` (accent rose) for light mode, `#3888CC` / `#E87090` for dark mode. Full blue-tinted light-surface gray scale (`--sys-gray-*`) so all `bg-gray-*` / `text-gray-*` / `border-gray-*` utilities adapt automatically without touching component files. `Button` `accent` variant updated from orange to brand rose.
+- **Light-mode contrast audit**: replaced `text-white` with `text-foreground` across 60+ components and pages where text sat on light surfaces. Fixed: chat input, report dialog textarea, toast info type, online member names in group sidebar, album members panel, all interest/badge tags (`bg-brand-primary/15 text-brand-strong ring-1 ring-brand-primary/30`), `Button` secondary variant gains `ring-1 ring-gray-500/60` so it is visible against light card surfaces.
+- **Branding assets regenerated**: `mark.svg`, `logo-dark.svg`, `logo-light.svg` circle fills updated to `#2470B0` / `#8C44A0` / `#D4607A`; all derived rasters (favicon.ico, PWA icons 192 + 512 maskable, OG image, Twitter card, social cover, email lockups) regenerated via `npm run gen:favicons`.
 
 - **OpenAPI spec — full audit and update** (`docs/openapi.yaml` v3.1.0): added 17 missing or stale items. New: `POST /ws-ticket` endpoint; `Albums`, `Moderation`, `Exports`, `Appeals` tags. Fixed: `GET /notifications/stream` and `GET /chat/rooms/{id}/ws` both now document `?ticket=` (was `?token=JWT`); `Message.type` enum now includes `album_share`; `AlbumGrant` schema gains `expires_at`; `POST /albums/{id}/grants/invite` corrected (grants are immediately active, `expires_in` field added, 429 response added); `POST /albums/{id}/share-in-chat` gains `expires_in`; `POST /albums/grants/{grantID}/accept` clarified to only handle `source=request` grants; stale view-log references removed from album photo endpoints (view log was dropped in PR #110); `GET /chat/rooms/{id}/messages` `limit` capped to 200; `Profile` schema gains `age`, `distance_km`, `location_text`, `onboarded_at`, `looking_for_*` fields; `GET/PUT /profiles/me/preferences` schemas expanded to all 15 preference fields; `POST /uploads/request` gains `category` field.
 

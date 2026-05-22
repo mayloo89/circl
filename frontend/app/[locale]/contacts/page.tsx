@@ -239,7 +239,7 @@ export default function ContactsPage() {
     <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
       <div className="w-full max-w-2xl space-y-8 px-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>
         </div>
 
         {error && (
@@ -256,7 +256,7 @@ export default function ContactsPage() {
 
         {pending.length > 0 && (
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 flex items-center text-lg font-semibold text-white">
+            <h2 className="mb-3 flex items-center text-lg font-semibold text-foreground">
               {t("pendingRequests")}
               <Badge count={pending.length} variant="pill" className="ml-2" />
             </h2>
@@ -280,7 +280,7 @@ export default function ContactsPage() {
 
         {sent.length > 0 && (
           <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 text-lg font-semibold text-white">{t("sentRequests")}</h2>
+            <h2 className="mb-3 text-lg font-semibold text-foreground">{t("sentRequests")}</h2>
             <ul className="divide-y divide-gray-700">
               {sent.map((r) => (
                 <ContactCard
@@ -299,7 +299,7 @@ export default function ContactsPage() {
         )}
 
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          <h2 className="mb-3 text-lg font-semibold text-white">{t("myContacts", { count: contacts.length })}</h2>
+          <h2 className="mb-3 text-lg font-semibold text-foreground">{t("myContacts", { count: contacts.length })}</h2>
           {contacts.length === 0 ? (
             <p className="text-sm text-gray-500">{t("noContacts")}</p>
           ) : (
