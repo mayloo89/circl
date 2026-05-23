@@ -3,10 +3,10 @@
 import Image from "next/image"
 
 const sizes = {
-  xs: { box: "h-6 w-6",   text: "text-xs",           px: 24, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-gray-600" },
-  sm: { box: "h-7 w-7",   text: "text-xs",           px: 28, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-gray-600" },
-  md: { box: "h-8 w-8",   text: "text-sm",           px: 32, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-gray-600" },
-  lg: { box: "h-10 w-10", text: "text-sm font-medium", px: 40, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-gray-600" },
+  xs: { box: "h-6 w-6",   text: "text-xs",           px: 24, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-brand-primary/40 dark:ring-gray-600" },
+  sm: { box: "h-7 w-7",   text: "text-xs",           px: 28, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-brand-primary/40 dark:ring-gray-600" },
+  md: { box: "h-8 w-8",   text: "text-sm",           px: 32, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-brand-primary/40 dark:ring-gray-600" },
+  lg: { box: "h-10 w-10", text: "text-sm font-medium", px: 40, ring: "ring-1 ring-gray-700", fallbackRing: "ring-1 ring-brand-primary/40 dark:ring-gray-600" },
   xl: { box: "h-24 w-24", text: "text-3xl",          px: 96, ring: "ring-2 ring-gray-700", fallbackRing: "ring-2 ring-gray-600" },
 }
 
@@ -37,7 +37,7 @@ export default function Avatar({ src, name, size = "md", color = "gray", classNa
 
   // bg-gray-700 collapses to near-white in light mode (inverted gray scale), so
   // use a brand-tinted surface that stays visible in both themes.
-  const bgClass      = color === "indigo" ? "bg-brand-strong"          : "bg-brand-primary/20 dark:bg-gray-700"
+  const bgClass      = color === "indigo" ? "bg-brand-strong"          : "bg-brand-primary/40 dark:bg-gray-700"
   const textClass    = color === "indigo" ? "text-white"               : "text-brand-primary dark:text-gray-300"
   const ringOverride = color === "indigo" ? "ring-1 ring-brand-primary" : fallbackRing
 
