@@ -174,10 +174,13 @@ export default function Sidebar() {
   return (
     <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-gray-800 bg-gray-900 transition-all duration-200 lg:flex ${w}`}>
       {/* Logo + collapse toggle */}
-      <div className={`flex h-16 items-center border-b border-gray-800 ${collapsed ? "justify-center px-0" : "justify-between px-4"}`}>
-        {!collapsed && (
-          <Link href="/" aria-label="Circl" className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead */}
+      <div className={`flex h-16 border-b border-gray-800 ${collapsed ? "flex-col items-center justify-center gap-1.5 px-0" : "items-center justify-between px-4"}`}>
+        <Link href="/" aria-label="Circl" className="flex items-center">
+          {collapsed ? (
+            // eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead
+            <img src="/branding/mark.svg" alt="" width={28} height={28} className="h-7 w-auto" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead
             <img
               src={theme === "dark" ? "/branding/logo-dark.svg" : "/branding/logo-light.svg"}
               alt=""
@@ -185,12 +188,12 @@ export default function Sidebar() {
               height={32}
               className="h-8 w-auto"
             />
-          </Link>
-        )}
+          )}
+        </Link>
         <button
           onClick={toggle}
           aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
-          className={`cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-hover ${collapsed ? "" : ""}`}
+          className="cursor-pointer rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-hover"
         >
           <CollapseIcon collapsed={collapsed} />
         </button>
