@@ -61,7 +61,7 @@ export default function ProfileCompletenessBanner() {
   }
 
   return (
-    <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-gray-800 dark:ring-white/[0.08] p-4">
+    <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground">

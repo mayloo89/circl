@@ -85,7 +85,7 @@ export default function PendingRequestsWidget() {
 
   return (
     <section aria-labelledby="pending-heading">
-      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-gray-800 dark:ring-white/[0.08] overflow-hidden">
+      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] overflow-hidden">
         <div className="px-4 py-3">
           <h2 id="pending-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <svg aria-hidden="true" className="h-4 w-4 flex-none text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

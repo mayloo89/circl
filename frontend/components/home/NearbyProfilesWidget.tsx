@@ -32,7 +32,7 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
   return (
     <Link
       href={`/profile/${profile.username}`}
-      className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/[0.06] transition-colors snap-start"
+      className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 bg-brand-primary/[0.04] dark:bg-transparent ring-1 ring-brand-primary/10 dark:ring-transparent hover:bg-brand-primary/[0.08] dark:hover:bg-white/[0.06] transition-colors snap-start"
     >
       <div className="relative h-12 w-12 flex-none rounded-full overflow-hidden ring-1 ring-brand-primary/30 dark:ring-white/[0.1]">
         {profile.avatar_url ? (
@@ -92,7 +92,7 @@ export default function NearbyProfilesWidget() {
 
   return (
     <section aria-labelledby="nearby-heading">
-      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-gray-800 dark:ring-white/[0.08] p-4">
+      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 id="nearby-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <svg aria-hidden="true" className="h-4 w-4 flex-none text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
