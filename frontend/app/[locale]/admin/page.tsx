@@ -21,7 +21,7 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
   return (
     <div className="rounded-lg bg-gray-900 ring-1 ring-gray-800 p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-2 text-3xl font-bold ${accent ?? "text-white"}`}>{value.toLocaleString()}</p>
+      <p className={`mt-2 text-3xl font-bold ${accent ?? "text-foreground"}`}>{value.toLocaleString()}</p>
     </div>
   )
 }
@@ -52,7 +52,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-8">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-8">Dashboard</h1>
 
       {error && (
         <p className="mb-6 text-sm text-red-400">{error}</p>

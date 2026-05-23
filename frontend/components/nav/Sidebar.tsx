@@ -12,6 +12,8 @@ import { useSidebar } from "@/contexts/SidebarContext"
 import { usePushContext } from "@/contexts/PushContext"
 import Avatar from "@/components/ui/Avatar"
 import Badge from "@/components/ui/Badge"
+import ThemeToggle from "@/components/ui/ThemeToggle"
+import { useTheme } from "@/contexts/ThemeContext"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 const LOCALE_SHORT: Record<Locale, string> = { es: "ES", en: "EN", pt: "PT" }
@@ -108,6 +110,7 @@ export default function Sidebar() {
   const { profile } = useProfileContext()
   const { collapsed, toggle } = useSidebar()
   const { permission, supported, enable, disable } = usePushContext()
+  const { theme } = useTheme()
   const pathname = usePathname()
   const router = useRouter()
   const currentLocale = useLocale() as Locale
@@ -176,7 +179,7 @@ export default function Sidebar() {
           <Link href="/" aria-label="Circl" className="flex items-center">
             {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead */}
             <img
-              src="/branding/logo-dark.svg"
+              src={theme === "dark" ? "/branding/logo-dark.svg" : "/branding/logo-light.svg"}
               alt=""
               width={120}
               height={32}
@@ -187,7 +190,7 @@ export default function Sidebar() {
         <button
           onClick={toggle}
           aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
-          className={`cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover ${collapsed ? "" : ""}`}
+          className={`cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-hover ${collapsed ? "" : ""}`}
         >
           <CollapseIcon collapsed={collapsed} />
         </button>
@@ -206,7 +209,7 @@ export default function Sidebar() {
               className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
                 isActive
                   ? "bg-brand-primary/10 text-brand-primary"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  : "text-gray-300 hover:bg-gray-700 hover:text-gray-100"
               }`}
             >
               <span className="relative flex-shrink-0">
@@ -249,7 +252,7 @@ export default function Sidebar() {
           className={`flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
             pathname === "/settings"
               ? "bg-brand-primary/10 text-brand-primary"
-              : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              : "text-gray-300 hover:bg-gray-700 hover:text-gray-100"
           }`}
         >
           <SettingsIcon />
@@ -263,7 +266,7 @@ export default function Sidebar() {
             aria-label={permission === "granted" ? t("disablePush") : t("enablePush")}
             title={collapsed ? (permission === "granted" ? t("disablePush") : t("enablePush")) : undefined}
             className={`cursor-pointer flex w-full items-center rounded-lg py-2.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-hover ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
-              permission === "granted" ? "text-green-400 hover:text-gray-400" : "text-gray-400 hover:text-white"
+              permission === "granted" ? "text-green-400 hover:text-gray-400" : "text-gray-400 hover:text-gray-100"
             }`}
           >
             <span className="flex-shrink-0">
@@ -301,7 +304,7 @@ export default function Sidebar() {
                   className={`rounded px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-brand-hover ${
                     locale === currentLocale
                       ? "bg-brand-primary text-white"
-                      : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                      : "text-gray-400 hover:bg-gray-700 hover:text-gray-100"
                   }`}
                 >
                   {LOCALE_SHORT[locale]}
@@ -310,6 +313,12 @@ export default function Sidebar() {
             </div>
           </div>
         )}
+
+        {/* Theme toggle */}
+        <ThemeToggle
+          showLabel={!collapsed}
+          className={`w-full ${collapsed ? "justify-center px-0" : "px-3"}`}
+        />
 
         {/* Sign out — always visible; icon-only when collapsed */}
         <button

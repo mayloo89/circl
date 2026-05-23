@@ -128,7 +128,7 @@ export default function AlbumDetailPage() {
               className="w-full max-w-sm rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-lg font-semibold text-white">{t("noAccess")}</h2>
+              <h2 className="text-lg font-semibold text-foreground">{t("noAccess")}</h2>
               <p className="mt-2 text-sm text-gray-400">{t("noAccessHint")}</p>
               <div className="mt-5 flex justify-end">
                 <Button variant="ghost" size="sm" onClick={() => router.back()}>
@@ -150,7 +150,7 @@ export default function AlbumDetailPage() {
         <button
           type="button"
           onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-foreground transition-colors"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -160,7 +160,7 @@ export default function AlbumDetailPage() {
       )}
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-white">{album.name}</h1>
+          <h1 className="truncate text-2xl font-bold text-foreground">{album.name}</h1>
           {album.description && <p className="mt-1 max-w-2xl text-sm text-gray-400">{album.description}</p>}
           <p className="mt-1 text-xs text-gray-500">{t("photoCount", { count: album.photo_count })}</p>
         </div>
@@ -271,7 +271,7 @@ export default function AlbumDetailPage() {
             type="button"
             aria-label={tc("close")}
             onClick={() => setLightboxPhoto(null)}
-            className="absolute right-4 top-4 z-10 cursor-pointer rounded-full p-2 text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50"
+            className="absolute right-4 top-4 z-10 cursor-pointer rounded-full p-2 text-foreground/70 transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-white/50"
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

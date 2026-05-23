@@ -18,7 +18,7 @@ export default function AlbumCard({ album }: Props) {
       className="group block overflow-hidden rounded-lg bg-gray-900 ring-1 ring-gray-800 transition-colors hover:ring-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
     >
       <div className="space-y-1 p-3">
-        <h3 className="truncate text-sm font-medium text-white">{album.name}</h3>
+        <h3 className="truncate text-sm font-medium text-foreground">{album.name}</h3>
         <p className="text-xs text-gray-500">{t("photoCount", { count: album.photo_count })}</p>
         {album.owner_name && (
           <div className="flex items-center gap-1.5 pt-1">

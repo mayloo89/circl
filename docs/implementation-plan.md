@@ -129,6 +129,8 @@
 
 - [x] **UX overhaul — visual rebrand** (PR #67): `next/font/google` Nunito (display) + DM Sans (body); Tailwind v4 brand tokens via `@theme` (`--color-brand-*`, `--radius-card`, `--radius-pill`, `--shadow-card/card-hover`); CSS custom properties in `globals.css`; `accent` Button variant for CTA orange (#F97316); browse cards use `rounded-card`/`shadow-card`; conversion CTAs (`SendRequestButton`, "Add contact", "Message") migrated to `variant="accent"`.
 
+- [x] **Light/dark mode + brand palette refresh** (PR #113): trans-flag blue (`#2470B0`) + rose (`#D4607A`) palette replacing indigo + orange; blue-tinted light-surface gray scale so all gray utilities adapt automatically; `ThemeContext` + `ThemeToggle` with localStorage persistence and `prefers-color-scheme` fallback; FOUC-prevention script in `<head>`; toggle in Sidebar and TopBar; full light-mode contrast audit replacing `text-white` with `text-foreground` across 60+ files; interest tags migrated to `bg-brand-primary/15 text-brand-strong`; `Button` secondary gains visible ring; branding SVGs and all derived rasters (favicon, PWA icons, OG/Twitter/social images) updated.
+
 - [x] **UX overhaul — navigation** (PR #68): `BottomNav` (mobile, 5 slots SVG icons + badges) + `Sidebar` (desktop ≥1024px) + `TopBar` (minimal mobile header); `ProfileContext` (single `/profiles/me` fetch per session); layout shell per breakpoint.
 
 - [x] **UX overhaul — home dashboard** (PR #69): replaced 3-button placeholder with `PendingRequestsWidget` + `NearbyProfilesWidget` (horizontal scroll) + `RecentConversationsWidget`; `ProfileCompletenessBanner` with progress bar (sessionStorage dismiss); `lib/profileCompleteness.ts` pure utility.

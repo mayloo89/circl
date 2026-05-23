@@ -77,7 +77,7 @@ export default function AppealPage({
     <div className="min-h-screen bg-gray-950">
       <article className="mx-auto max-w-xl px-4 py-10">
         <header className="mb-6">
-          <h1 className="font-display text-3xl font-bold text-white">{t("title")}</h1>
+          <h1 className="font-display text-3xl font-bold text-foreground">{t("title")}</h1>
           <p className="mt-2 text-sm text-gray-400">{t("subtitle")}</p>
         </header>
 

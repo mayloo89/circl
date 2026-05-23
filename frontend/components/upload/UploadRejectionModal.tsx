@@ -70,7 +70,7 @@ export default function UploadRejectionModal({ rejection, onClose }: Props) {
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-white">{t("title")}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("title")}</h2>
             <p className="mt-1 text-sm text-gray-300">{t("intro")}</p>
             <p className="mt-3 text-sm text-gray-200">{body}</p>
             <p className="mt-2 text-xs text-gray-500">{t("fallback")}</p>
@@ -86,7 +86,7 @@ export default function UploadRejectionModal({ rejection, onClose }: Props) {
         <div className="mt-5 flex items-center justify-between gap-3">
           <Link
             href="/guidelines"
-            className="text-xs text-gray-400 underline-offset-4 hover:text-white hover:underline"
+            className="text-xs text-gray-400 underline-offset-4 hover:text-foreground hover:underline"
           >
             {t("guidelinesLink")}
           </Link>

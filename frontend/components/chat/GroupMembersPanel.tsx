@@ -221,7 +221,7 @@ export default function GroupMembersPanel({
         >
           ←
         </button>
-        <h2 className="flex-1 text-sm font-semibold text-white">
+        <h2 className="flex-1 text-sm font-semibold text-foreground">
           {roomType === "channel" ? t("channelMembersTitle") : t("groupMembersTitle")}
         </h2>
       </div>
@@ -254,7 +254,7 @@ export default function GroupMembersPanel({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-foreground">
                 {roomType === "channel" ? "# " : ""}{roomName}
               </p>
               {roomType === "group" && isAdmin && (
@@ -283,7 +283,7 @@ export default function GroupMembersPanel({
               <li key={m.user_id} className="flex items-center gap-3 px-4 py-3">
                 <Avatar src={m.avatar_url} name={m.display_name || m.username || "?"} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-white">{m.display_name || m.username}</p>
+                  <p className="truncate text-sm text-foreground">{m.display_name || m.username}</p>
                   {m.is_admin && (
                     <p className="text-xs text-brand-muted">{t("admin")}</p>
                   )}
@@ -328,7 +328,7 @@ export default function GroupMembersPanel({
                     {contacts.map((c) => (
                       <li key={c.user_id} className="flex items-center gap-3 px-4 py-3">
                         <Avatar src={c.avatar_url} name={c.display_name || c.username || "?"} size="sm" />
-                        <span className="flex-1 truncate text-sm text-white">
+                        <span className="flex-1 truncate text-sm text-foreground">
                           {c.display_name || c.username}
                         </span>
                         <Button

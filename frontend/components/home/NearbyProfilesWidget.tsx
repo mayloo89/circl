@@ -47,7 +47,7 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
           <Avatar src="" name={profile.display_name || "?"} size="lg" className="!h-full !w-full !rounded-full" />
         )}
       </div>
-      <p className="w-full text-center text-xs font-medium text-white truncate leading-tight">
+      <p className="w-full text-center text-xs font-medium text-foreground truncate leading-tight">
         {profile.display_name}
       </p>
       {subtitle && (
@@ -98,7 +98,7 @@ export default function NearbyProfilesWidget() {
         <h2 id="nearby-heading" className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
           {t("nearbyPeople")}
         </h2>
-        <Link href="/browse" className="text-xs text-brand-subtle hover:text-white transition-colors">
+        <Link href="/browse" className="text-xs text-brand-subtle hover:text-foreground transition-colors">
           {t("browseAll")} →
         </Link>
       </div>
@@ -111,7 +111,7 @@ export default function NearbyProfilesWidget() {
             : (
               <div className="flex flex-col gap-1.5 py-2">
                 <p className="text-sm text-gray-500">{t("nearbyEmpty")}</p>
-                <Link href="/profile" className="text-xs text-brand-subtle hover:text-white transition-colors">
+                <Link href="/profile" className="text-xs text-brand-subtle hover:text-foreground transition-colors">
                   {t("nearbySetLocation")} →
                 </Link>
               </div>

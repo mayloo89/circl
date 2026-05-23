@@ -91,7 +91,7 @@ function ResetPasswordForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
           />
           {password && <div className="mt-2"><PasswordRequirements password={password} /></div>}
         </div>
@@ -105,7 +105,7 @@ function ResetPasswordForm() {
             required
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
           />
           {!confirmMatch && (
             <p className="mt-1 text-xs text-red-400" role="alert">{t("passwordsMismatch")}</p>
@@ -115,7 +115,7 @@ function ResetPasswordForm() {
       <button
         type="submit"
         disabled={loading || !allRulesMet || !confirmMatch}
-        className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+        className="w-full rounded-md bg-blue-600 px-4 py-2 text-foreground hover:bg-blue-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
       >
         {loading ? t("submitting") : t("submit")}
       </button>
@@ -132,7 +132,7 @@ export default function ResetPasswordPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-8">
         <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
           <div>
-            <h2 className="text-center text-3xl font-bold text-white">{t("title")}</h2>
+            <h2 className="text-center text-3xl font-bold text-foreground">{t("title")}</h2>
             <p className="mt-2 text-center text-sm text-gray-400">{t("subtitle")}</p>
           </div>
           <Suspense fallback={<p className="text-center text-sm text-gray-400">{tc("loading")}</p>}>

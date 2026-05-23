@@ -13,7 +13,7 @@ export default async function Home() {
 
       <div className="mt-4 space-y-6 px-4 pb-4 lg:px-0">
         <div>
-          <h1 className="text-lg font-bold text-white">{t("welcome")}</h1>
+          <h1 className="text-lg font-bold text-foreground">{t("welcome")}</h1>
         </div>
 
         <PendingRequestsWidget />

@@ -30,7 +30,7 @@ export default function ConfirmDialog({
         className="w-full max-w-sm rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <p className="mt-2 text-sm text-gray-400">{message}</p>
         <div className="mt-5 flex justify-end gap-3">
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={loading}>

@@ -56,7 +56,7 @@ function CreateModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-md rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Create channel</h2>
+        <h2 className="text-base font-semibold text-foreground">Create channel</h2>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div>
           <label className="block text-xs text-gray-400 mb-1">Name</label>
@@ -125,7 +125,7 @@ function EditModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-md rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Edit #{channel.name}</h2>
+        <h2 className="text-base font-semibold text-foreground">Edit #{channel.name}</h2>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div>
           <label className="block text-xs text-gray-400 mb-1">Name</label>
@@ -206,7 +206,7 @@ export default function AdminChannelsPage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Channels</h1>
+        <h1 className="text-2xl font-bold text-foreground">Channels</h1>
         <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
           Create channel
         </Button>
@@ -295,7 +295,7 @@ export default function AdminChannelsPage() {
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-sm rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-            <h2 className="text-base font-semibold text-white">Delete #{deleteTarget.name}?</h2>
+            <h2 className="text-base font-semibold text-foreground">Delete #{deleteTarget.name}?</h2>
             <p className="text-sm text-gray-400">
               This will permanently delete the channel and all its messages. This action cannot be undone.
             </p>

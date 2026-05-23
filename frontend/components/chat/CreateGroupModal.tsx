@@ -110,7 +110,7 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-          <h2 className="text-base font-semibold text-white">{t("createGroupTitle")}</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("createGroupTitle")}</h2>
           <button
             type="button"
             aria-label={tc("close")}
@@ -150,13 +150,13 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
                         className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-800/60 ${checked ? "bg-brand-deep/40" : ""}`}
                       >
                         <Avatar src={c.avatar_url} name={c.display_name || "?"} size="sm" />
-                        <span className="flex-1 truncate text-sm text-white">
+                        <span className="flex-1 truncate text-sm text-foreground">
                           {c.display_name || c.username}
                         </span>
                         <span
                           className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
                             checked
-                              ? "border-brand-hover bg-brand-primary text-white"
+                              ? "border-brand-hover bg-brand-primary text-foreground"
                               : "border-gray-600 text-transparent"
                           }`}
                           aria-hidden="true"

@@ -83,7 +83,7 @@ function ReviewModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-xl rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Review appeal</h2>
+        <h2 className="text-base font-semibold text-foreground">Review appeal</h2>
 
         <div className="rounded bg-gray-800 p-4 space-y-2 text-sm">
           <p className="text-gray-400">
@@ -175,7 +175,7 @@ export default function AdminAppealsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-2">Appeals</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-2">Appeals</h1>
       <p className="text-sm text-gray-400 mb-6">
         Suspended users can submit a written appeal via the link emailed to them. Approving an appeal reactivates the user.
       </p>
@@ -187,7 +187,7 @@ export default function AdminAppealsPage() {
             onClick={() => setStatusFilter(s)}
             className={`rounded px-4 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === s
-                ? "bg-brand-primary text-white"
+                ? "bg-brand-primary text-foreground"
                 : "text-gray-400 hover:text-gray-200"
             }`}
           >

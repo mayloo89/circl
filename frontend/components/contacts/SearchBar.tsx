@@ -25,7 +25,7 @@ export default function SearchBar({ value, onChange, results, onAdd, onNavigate 
   const t = useTranslations("contacts")
   return (
     <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-      <h2 className="mb-3 text-lg font-semibold text-white">{t("addContactTitle")}</h2>
+      <h2 className="mb-3 text-lg font-semibold text-foreground">{t("addContactTitle")}</h2>
       <Input
         label="Search contacts"
         labelHidden

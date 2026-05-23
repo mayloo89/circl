@@ -82,7 +82,7 @@ function SuspendModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-md rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Suspend {user.email}</h2>
+        <h2 className="text-base font-semibold text-foreground">Suspend {user.email}</h2>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div>
           <label className="block text-xs text-gray-400 mb-1">Duration (days, 0 = permanent)</label>
@@ -147,7 +147,7 @@ function HardDeleteModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-sm rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Permanently delete account?</h2>
+        <h2 className="text-base font-semibold text-foreground">Permanently delete account?</h2>
         <p className="text-sm text-gray-400">
           This will immediately purge all data for <span className="text-gray-200">{user.email}</span> — messages will show as &ldquo;deleted user&rdquo; but all profile, contacts, and media will be erased. This cannot be undone.
         </p>
@@ -203,7 +203,7 @@ function RoleModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-sm rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-white">Change role for {user.email}</h2>
+        <h2 className="text-base font-semibold text-foreground">Change role for {user.email}</h2>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex gap-3">
           {(["user", "admin", "super_admin"] as const).map((r) => (
@@ -212,7 +212,7 @@ function RoleModal({
               onClick={() => setRole(r)}
               className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
                 role === r
-                  ? "bg-brand-primary text-white"
+                  ? "bg-brand-primary text-foreground"
                   : "bg-gray-800 text-gray-300 hover:bg-gray-700"
               }`}
             >
@@ -305,7 +305,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-6">Users</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-6">Users</h1>
 
       {/* Search + filter */}
       <form onSubmit={handleSearch} className="flex flex-wrap gap-3 mb-6">

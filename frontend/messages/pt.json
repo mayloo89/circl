@@ -109,7 +109,9 @@
     "collapseSidebar": "Recolher menu",
     "expandSidebar": "Expandir menu",
     "notifications": "Notificações",
-    "skipToContent": "Pular para o conteúdo principal"
+    "skipToContent": "Pular para o conteúdo principal",
+    "switchToLight": "Mudar para modo claro",
+    "switchToDark": "Mudar para modo escuro"
   },
   "login": {
     "title": "Entrar na sua conta",

@@ -1,43 +1,130 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────
+   Light mode tokens  (default)
+───────────────────────────────────────────────────────────────── */
 :root {
-  --background: #030712;
-  --foreground: #f9fafb;
-  --safe-top: env(safe-area-inset-top, 0px);
+  --background: #D8E8F5;
+  --foreground: #0C1A24;
+
+  /* Brand — trans-flag blue + rose */
+  --brand-pale:             #EBF3FC;
+  --brand-light:            #B8D4EE;
+  --brand-subtle:           #8AB8E0;
+  --brand-muted:            #5E9CCE;
+  --brand-hover:            #3580BC;
+  --brand-primary:          #2470B0;
+  --brand-strong:           #1A5A8A;
+  --brand-wash:             #0F3A60;
+  --brand-deep:             #092040;
+  --brand-accent:           #D4607A;
+  --brand-success:          #16a34a;
+  --brand-danger:           #dc2626;
+  --brand-surface:          #EBF3FC;
+  --brand-surface-elevated: #DDEAF7;
+
+  /* Gray scale — blue-tinted light surfaces + dark text */
+  --sys-gray-100: #0C1A24;
+  --sys-gray-200: #1A2A38;
+  --sys-gray-300: #2E4A64;
+  --sys-gray-400: #5A7890;
+  --sys-gray-500: #8AAAC0;
+  --sys-gray-600: #C8DAEA;
+  --sys-gray-700: #DDEAF5;
+  --sys-gray-800: #FFFFFF;
+  --sys-gray-900: #E4EFF8;
+  --sys-gray-950: #D8E8F5;
+
+  /* Shadows */
+  --sys-shadow-card:       0 1px 8px -2px rgb(36 112 176 / 0.12), 0 0 0 1px rgb(36 112 176 / 0.08);
+  --sys-shadow-card-hover: 0 4px 16px -4px rgb(36 112 176 / 0.22), 0 0 0 1px rgb(36 112 176 / 0.12);
+
+  --safe-top:    env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-display: var(--font-nunito);
-  --font-sans: var(--font-dm-sans);
+/* ─────────────────────────────────────────────────────────────────
+   Dark mode tokens
+───────────────────────────────────────────────────────────────── */
+.dark {
+  --background: #0A1020;
+  --foreground: #F0F6FF;
+
+  --brand-pale:             #0F1E30;
+  --brand-light:            #1A3050;
+  --brand-subtle:           #254878;
+  --brand-muted:            #3A5878;
+  --brand-hover:            #3080BC;
+  --brand-primary:          #3888CC;
+  --brand-strong:           #5AA0DC;
+  --brand-wash:             #8CC0F0;
+  --brand-deep:             #C0DCF8;
+  --brand-accent:           #E87090;
+  --brand-success:          #22c55e;
+  --brand-danger:           #f87171;
+  --brand-surface:          #0F1828;
+  --brand-surface-elevated: #162030;
+
+  /* Gray scale — restore Tailwind defaults for dark mode */
+  --sys-gray-100: #f3f4f6;
+  --sys-gray-200: #e5e7eb;
+  --sys-gray-300: #d1d5db;
+  --sys-gray-400: #9ca3af;
+  --sys-gray-500: #6b7280;
+  --sys-gray-600: #4b5563;
+  --sys-gray-700: #374151;
+  --sys-gray-800: #1f2937;
+  --sys-gray-900: #111827;
+  --sys-gray-950: #030712;
+
+  --sys-shadow-card:       0 4px 16px -4px rgb(0 0 0 / 0.4);
+  --sys-shadow-card-hover: 0 8px 24px -4px rgb(0 0 0 / 0.5);
 }
 
-@theme {
-  /* Brand palette — full indigo scale so palette swaps require changing only this file */
-  --color-brand-pale:    #eef2ff;  /* indigo-50  */
-  --color-brand-light:   #c7d2fe;  /* indigo-200 */
-  --color-brand-subtle:  #a5b4fc;  /* indigo-300 */
-  --color-brand-muted:   #818cf8;  /* indigo-400 */
-  --color-brand-hover:   #6366f1;  /* indigo-500 */
-  --color-brand-primary: #4f46e5;  /* indigo-600 */
-  --color-brand-strong:  #4338ca;  /* indigo-700 */
-  --color-brand-wash:    #312e81;  /* indigo-900 */
-  --color-brand-deep:    #1e1b4b;  /* indigo-950 */
-  --color-brand-accent:  #f97316;
-  --color-brand-success: #16a34a;
-  --color-brand-danger:  #dc2626;
-  --color-brand-surface: #111827;
-  --color-brand-surface-elevated: #1f2937;
+/* ─────────────────────────────────────────────────────────────────
+   Tailwind theme — all tokens are dynamic CSS-var references so
+   utilities respond to .dark without touching individual components
+───────────────────────────────────────────────────────────────── */
+@theme inline {
+  --color-background:             var(--background);
+  --color-foreground:             var(--foreground);
 
-  /* Card radii */
+  --color-brand-pale:             var(--brand-pale);
+  --color-brand-light:            var(--brand-light);
+  --color-brand-subtle:           var(--brand-subtle);
+  --color-brand-muted:            var(--brand-muted);
+  --color-brand-hover:            var(--brand-hover);
+  --color-brand-primary:          var(--brand-primary);
+  --color-brand-strong:           var(--brand-strong);
+  --color-brand-wash:             var(--brand-wash);
+  --color-brand-deep:             var(--brand-deep);
+  --color-brand-accent:           var(--brand-accent);
+  --color-brand-success:          var(--brand-success);
+  --color-brand-danger:           var(--brand-danger);
+  --color-brand-surface:          var(--brand-surface);
+  --color-brand-surface-elevated: var(--brand-surface-elevated);
+
+  /* Override the full gray scale so existing bg-gray-* / text-gray-* /
+     border-gray-* utilities are automatically mode-aware */
+  --color-gray-100: var(--sys-gray-100);
+  --color-gray-200: var(--sys-gray-200);
+  --color-gray-300: var(--sys-gray-300);
+  --color-gray-400: var(--sys-gray-400);
+  --color-gray-500: var(--sys-gray-500);
+  --color-gray-600: var(--sys-gray-600);
+  --color-gray-700: var(--sys-gray-700);
+  --color-gray-800: var(--sys-gray-800);
+  --color-gray-900: var(--sys-gray-900);
+  --color-gray-950: var(--sys-gray-950);
+
   --radius-card: 1rem;
   --radius-pill: 9999px;
 
-  /* Elevation */
-  --shadow-card: 0 4px 16px -4px rgb(0 0 0 / 0.4);
-  --shadow-card-hover: 0 8px 24px -4px rgb(0 0 0 / 0.5);
+  --shadow-card:       var(--sys-shadow-card);
+  --shadow-card-hover: var(--sys-shadow-card-hover);
+
+  --font-display: var(--font-nunito);
+  --font-sans:    var(--font-dm-sans);
 }
 
 body {
@@ -109,8 +196,6 @@ html {
   }
 }
 
-/* Safe-area-aware padding for the app shell — accounts for TopBar and BottomNav heights
-   including the notch / Dynamic Island / home-indicator areas on iOS. */
 @utility pt-topbar {
   padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
 }
@@ -119,9 +204,6 @@ html {
   padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* Long-form typography for MDX-rendered legal/marketing content. Drop the
-   wrapper class on a container; child elements inherit consistent rhythm and
-   colour without per-tag class noise inside the .mdx files. */
 @utility legal-prose {
   & h2 {
     margin-top: 2.5rem;
@@ -129,7 +211,7 @@ html {
     font-size: 1.5rem;
     line-height: 2rem;
     font-weight: 700;
-    color: var(--color-foreground);
+    color: var(--foreground);
   }
   & h3 {
     margin-top: 2rem;
@@ -137,13 +219,13 @@ html {
     font-size: 1.125rem;
     line-height: 1.75rem;
     font-weight: 600;
-    color: var(--color-foreground);
+    color: var(--foreground);
   }
   & p {
     margin-top: 1rem;
     margin-bottom: 1rem;
     line-height: 1.75;
-    color: #d1d5db;
+    color: var(--color-gray-300);
   }
   & a {
     color: var(--color-brand-muted);
@@ -157,7 +239,7 @@ html {
     margin-bottom: 1rem;
     padding-left: 1.5rem;
     list-style: disc;
-    color: #d1d5db;
+    color: var(--color-gray-300);
   }
   & ul li {
     margin-top: 0.25rem;
@@ -165,7 +247,7 @@ html {
     line-height: 1.6;
   }
   & strong {
-    color: var(--color-foreground);
+    color: var(--foreground);
     font-weight: 600;
   }
   & blockquote {
@@ -173,9 +255,9 @@ html {
     margin-bottom: 1rem;
     padding: 0.75rem 1rem;
     border-left: 3px solid var(--color-brand-muted);
-    background: rgb(255 255 255 / 0.03);
+    background: var(--color-gray-700);
     border-radius: 0 0.5rem 0.5rem 0;
-    color: #e5e7eb;
+    color: var(--color-gray-200);
   }
   & blockquote p {
     margin: 0;
@@ -183,8 +265,8 @@ html {
   & code {
     padding: 0.125rem 0.375rem;
     border-radius: 0.25rem;
-    background: rgb(255 255 255 / 0.05);
+    background: var(--color-gray-700);
     font-size: 0.875em;
-    color: #e5e7eb;
+    color: var(--color-gray-200);
   }
 }

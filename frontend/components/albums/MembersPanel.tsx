@@ -188,7 +188,7 @@ export default function MembersPanel({ albumID, token }: Props) {
                   size="sm"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-white">
+                  <p className="truncate text-sm text-foreground">
                     {contact?.display_name || contact?.username || g.grantee_id}
                   </p>
                   <p className="text-xs text-gray-500">

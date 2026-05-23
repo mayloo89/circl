@@ -257,7 +257,7 @@ export default function ChatInput({
               handleSend()
             }
           }}
-          className="flex-1 max-h-40 resize-none overflow-y-auto rounded-2xl border border-gray-700 bg-gray-800 px-4 py-2 text-base text-white placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+          className="flex-1 max-h-40 resize-none overflow-y-auto rounded-2xl border border-gray-700 bg-gray-800 px-4 py-2 text-base text-foreground placeholder-gray-500 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
         />
         <button
           onClick={handleSend}

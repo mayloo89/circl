@@ -16,6 +16,7 @@ import BottomNav from "@/components/nav/BottomNav"
 import PushPrompt from "@/components/PushPrompt"
 import AuthLocalePicker from "@/components/AuthLocalePicker"
 import { ToastProvider } from "@/components/ui/Toast"
+import { ThemeProvider } from "@/contexts/ThemeContext"
 
 function SessionGuard() {
   const { data: session } = useSession()
@@ -87,7 +88,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       {authenticated && !isOnboarding && (
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
         >
           {tNav("skipToContent")}
         </a>
@@ -111,20 +112,22 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
-      <SessionGuard />
-      <NotificationsProvider>
-        <PushProvider>
-          <ProfileProvider>
-            <SidebarProvider>
-              <ToastProvider>
-                <OnboardingRedirect />
-                <AppShell>{children}</AppShell>
-              </ToastProvider>
-            </SidebarProvider>
-          </ProfileProvider>
-        </PushProvider>
-      </NotificationsProvider>
-    </SessionProvider>
+    <ThemeProvider>
+      <SessionProvider>
+        <SessionGuard />
+        <NotificationsProvider>
+          <PushProvider>
+            <ProfileProvider>
+              <SidebarProvider>
+                <ToastProvider>
+                  <OnboardingRedirect />
+                  <AppShell>{children}</AppShell>
+                </ToastProvider>
+              </SidebarProvider>
+            </ProfileProvider>
+          </PushProvider>
+        </NotificationsProvider>
+      </SessionProvider>
+    </ThemeProvider>
   )
 }

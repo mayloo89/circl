@@ -57,7 +57,7 @@ function RoomRow({ room }: { room: RoomSummary }) {
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-medium text-white truncate">{room.name}</span>
+          <span className="text-sm font-medium text-foreground truncate">{room.name}</span>
           {room.last_message && (
             <span className="flex-none text-xs text-gray-500">
               {relativeTime(room.last_message.created_at)}
@@ -69,7 +69,7 @@ function RoomRow({ room }: { room: RoomSummary }) {
         </p>
       </div>
       {room.unread_count > 0 && (
-        <span className="flex-none h-4 min-w-4 rounded-full bg-brand-primary px-1 text-[10px] font-semibold text-white flex items-center justify-center">
+        <span className="flex-none h-4 min-w-4 rounded-full bg-brand-primary px-1 text-[10px] font-semibold text-foreground flex items-center justify-center">
           {room.unread_count > 9 ? "9+" : room.unread_count}
         </span>
       )}
@@ -117,7 +117,7 @@ export default function RecentConversationsWidget() {
         <h2 id="recent-heading" className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
           {t("recentConversations")}
         </h2>
-        <Link href="/chat" className="text-xs text-brand-subtle hover:text-white transition-colors">
+        <Link href="/chat" className="text-xs text-brand-subtle hover:text-foreground transition-colors">
           {t("seeAllChats")} →
         </Link>
       </div>

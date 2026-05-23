@@ -129,7 +129,7 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
 
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div>
-          <p className="font-semibold text-white truncate">
+          <p className="font-semibold text-foreground truncate">
             {profile.display_name}
             {profile.age !== null && (
               <span className="text-gray-400 font-normal">, {profile.age}</span>
@@ -151,13 +151,13 @@ function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string
             {profile.interests.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-brand-wash/50 px-2 py-0.5 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
+                className="rounded-full bg-brand-primary/15 px-2.5 py-0.5 text-xs font-medium text-brand-strong ring-1 ring-brand-primary/30"
               >
                 {tag}
               </span>
             ))}
             {profile.interests.length > 3 && (
-              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-500">
+              <span className="rounded-full bg-gray-700/60 px-2.5 py-0.5 text-xs font-medium text-gray-400">
                 +{profile.interests.length - 3}
               </span>
             )}
@@ -287,7 +287,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
                 onClick={() => toggleGender(g)}
                 className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
                   active
-                    ? "bg-brand-primary text-white ring-brand-hover"
+                    ? "bg-brand-primary text-foreground ring-brand-hover"
                     : "bg-gray-800 text-gray-400 ring-gray-700 hover:text-gray-200"
                 }`}
               >
@@ -308,7 +308,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             onChange={(e) => setInterestQuery(e.target.value)}
             placeholder={t("searchInterests")}
             aria-label={t("searchInterests")}
-            className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
+            className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-foreground placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
           {interestSuggestions.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
@@ -331,10 +331,10 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
             {draftInterests.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1 rounded-full bg-brand-wash/50 px-2 py-0.5 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
+                className="flex items-center gap-1 rounded-full bg-brand-primary/15 px-2.5 py-0.5 text-xs font-medium text-brand-strong ring-1 ring-brand-primary/30"
               >
                 {tag}
-                <button type="button" onClick={() => removeInterest(tag)} className="hover:text-white">×</button>
+                <button type="button" onClick={() => removeInterest(tag)} className="hover:text-foreground">×</button>
               </span>
             ))}
           </div>
@@ -521,7 +521,7 @@ export default function BrowsePage() {
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>
           <p className="mt-1 text-sm text-gray-400">{t("subtitle")}</p>
         </div>
 
@@ -537,7 +537,7 @@ export default function BrowsePage() {
           </svg>
           {t("filters")}
           {filterCount > 0 && (
-            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-primary px-1 text-[10px] font-semibold text-white">
+            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-primary px-1 text-[10px] font-semibold text-foreground">
               {filterCount}
             </span>
           )}
@@ -560,7 +560,7 @@ export default function BrowsePage() {
         {/* Desktop filter sidebar */}
         <aside className="hidden w-64 shrink-0 lg:block">
           <div className="sticky top-6 rounded-xl bg-gray-900 ring-1 ring-gray-800 p-5">
-            <p className="mb-5 text-sm font-semibold text-white">{t("filters")}</p>
+            <p className="mb-5 text-sm font-semibold text-foreground">{t("filters")}</p>
             <FilterPanel
               prefs={prefs}
               sortByDistance={sortByDistance}

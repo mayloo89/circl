@@ -529,7 +529,7 @@ export default function ProfilePage() {
       <div className="w-full max-w-2xl space-y-6 px-4">
 
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>
           <div className="flex items-center gap-2">
             {profile?.username && (
               <Button variant="ghost" size="sm" onClick={() => router.push(`/profile/${profile.username}`)}>
@@ -540,7 +540,7 @@ export default function ProfilePage() {
             <Link
               href="/settings"
               aria-label={tNav("settings")}
-              className="lg:hidden cursor-pointer rounded-md p-3 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-hover"
+              className="lg:hidden cursor-pointer rounded-md p-3 text-gray-400 transition-colors hover:bg-gray-800 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3" />
@@ -579,7 +579,7 @@ export default function ProfilePage() {
         {completeness && completeness.percent < 100 && (
           <div className="rounded-lg bg-gray-900 p-5 ring-1 ring-gray-800 space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-white">{t("completeness.title")}</p>
+              <p className="text-sm font-semibold text-foreground">{t("completeness.title")}</p>
               <span className="text-sm font-bold text-brand-accent">{completeness.percent}%</span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
@@ -594,7 +594,7 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => router.push(ONBOARDING_STEP[field])}
-                    className="flex w-full items-center gap-2 text-left text-sm text-gray-400 hover:text-white"
+                    className="flex w-full items-center gap-2 text-left text-sm text-gray-400 hover:text-foreground"
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-gray-600 shrink-0" />
                     {t(`completeness.${field}`)}
@@ -627,7 +627,7 @@ export default function ProfilePage() {
                   {displayName ? displayName[0].toUpperCase() : "?"}
                 </span>
               )}
-              <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs text-foreground opacity-0 transition-opacity group-hover:opacity-100">
                 {uploadingAvatar ? "Uploading…" : "Change"}
               </span>
             </button>
@@ -675,8 +675,8 @@ export default function ProfilePage() {
                     profile?.username
                       ? "border-gray-700 text-gray-400 cursor-not-allowed"
                       : username !== (profile?.username ?? "")
-                      ? "border-orange-500 text-white focus:border-orange-400 focus:ring-orange-400"
-                      : "border-gray-700 text-white focus:border-brand-hover focus:ring-brand-hover"
+                      ? "border-orange-500 text-foreground focus:border-orange-400 focus:ring-orange-400"
+                      : "border-gray-700 text-foreground focus:border-brand-hover focus:ring-brand-hover"
                   }`}
                 />
               </div>
@@ -708,7 +708,7 @@ export default function ProfilePage() {
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
                 maxLength={MAX_BIO}
-                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
                   bio !== (profile?.bio ?? "")
                     ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
                     : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
@@ -732,7 +732,7 @@ export default function ProfilePage() {
                 id="gender"
                 value={gender}
                 onChange={(e) => { setGender(e.target.value); if (e.target.value !== CUSTOM_GENDER) setGenderOther("") }}
-                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-white shadow-sm focus:outline-none focus:ring-1 ${
+                className={`mt-1 block w-full rounded-md border bg-gray-800 px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-1 ${
                   effectiveGender(gender, genderOther) !== (profile?.gender ?? "")
                     ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
                     : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
@@ -750,7 +750,7 @@ export default function ProfilePage() {
                   onChange={(e) => setGenderOther(e.target.value)}
                   placeholder={t("genderCustomPlaceholder")}
                   maxLength={50}
-                  className="mt-2 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  className="mt-2 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
                 />
               )}
             </div>
@@ -765,7 +765,7 @@ export default function ProfilePage() {
                   onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value); setLocationLat(null); setLocationLng(null); setLocationEdited(true) }}
                   placeholder={t("locationPlaceholder")}
                   autoComplete="off"
-                  className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
+                  className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
                     locationText !== (profile?.location_text ?? "")
                       ? "border-orange-500 focus:border-orange-400 focus:ring-orange-400"
                       : "border-gray-700 focus:border-brand-hover focus:ring-brand-hover"
@@ -817,7 +817,7 @@ export default function ProfilePage() {
                 placeholder={t("interestsPlaceholder")}
                 disabled={interests.length >= MAX_INTERESTS}
                 autoComplete="off"
-                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
+                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
               />
               {interestSuggestions.length > 0 && (
                 <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
@@ -842,14 +842,14 @@ export default function ProfilePage() {
                   {interests.map((tag) => (
                     <span
                       key={tag}
-                      className="flex items-center gap-1 rounded-full bg-brand-wash/60 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong"
+                      className="flex items-center gap-1 rounded-full bg-brand-primary/15 px-3 py-1 text-xs font-medium text-brand-strong ring-1 ring-brand-primary/30"
                     >
                       {tag}
                       <button
                         type="button"
                         onClick={() => handleRemoveInterest(tag)}
                         aria-label={`Remove ${tag}`}
-                        className="ml-1 text-brand-muted hover:text-white"
+                        className="ml-1 text-brand-muted hover:text-foreground"
                       >
                         ×
                       </button>
@@ -884,7 +884,7 @@ export default function ProfilePage() {
                         }
                         className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
                           active
-                            ? "bg-brand-primary text-white ring-brand-hover"
+                            ? "bg-brand-primary text-foreground ring-brand-hover"
                             : "bg-gray-800 text-gray-400 ring-gray-700 hover:text-gray-200"
                         }`}
                       >
@@ -907,7 +907,7 @@ export default function ProfilePage() {
                     aria-label={t("lookingForAgeMin")}
                     value={lookingForAgeMin}
                     onChange={(e) => setLookingForAgeMin(e.target.value)}
-                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-foreground shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
                   />
                   <span className="text-gray-500">–</span>
                   <input
@@ -919,7 +919,7 @@ export default function ProfilePage() {
                     aria-label={t("lookingForAgeMax")}
                     value={lookingForAgeMax}
                     onChange={(e) => setLookingForAgeMax(e.target.value)}
-                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                    className="w-24 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-foreground shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
                   />
                 </div>
               </div>

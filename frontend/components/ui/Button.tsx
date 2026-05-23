@@ -14,13 +14,13 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantClasses: Record<Variant, string> = {
   primary:   "bg-brand-primary hover:bg-brand-hover text-white focus:ring-brand-hover",
-  secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200 focus:ring-gray-500",
+  secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200 ring-1 ring-gray-500/60 focus:ring-gray-500",
   danger:    "bg-red-900 hover:bg-red-800 text-red-300 focus:ring-red-500",
   success:   "bg-green-700 hover:bg-green-600 text-white focus:ring-green-500",
   ghost:     "text-gray-400 hover:text-gray-200 focus:ring-gray-500",
   warning:   "bg-orange-600 hover:bg-orange-500 text-white focus:ring-orange-500",
-  // Conversion CTA — orange brand accent (#F97316). Use for send-request, add-contact, message actions.
-  accent:    "bg-orange-500 hover:bg-orange-400 text-white focus:ring-orange-500 shadow-sm",
+  // Conversion CTA — rose brand accent. Use for send-request, add-contact, message actions.
+  accent:    "bg-brand-accent hover:bg-brand-accent/85 text-white focus:ring-brand-accent shadow-sm",
 }
 
 const sizeClasses: Record<Size, string> = {
@@ -51,7 +51,7 @@ export default function Button({
   // ghost buttons carry no background/padding — size prop is ignored.
   const sizeClass  = variant === "ghost" ? "text-sm" : sizeClasses[size]
   const roundClass = pill ? "rounded-full" : "rounded"
-  const base       = "inline-flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900"
+  const base       = "inline-flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background"
 
   return (
     <button

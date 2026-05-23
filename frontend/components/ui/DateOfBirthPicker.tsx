@@ -79,7 +79,7 @@ export default function DateOfBirthPicker({ id, label, value, onChange, onBlur, 
   const totalDays = daysInMonth(localMonth, localYear)
 
   const baseSelect =
-    "min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white shadow-sm " +
+    "min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground shadow-sm " +
     "focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
 
   const dayLabel   = labels?.day   ?? "DD"

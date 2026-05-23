@@ -91,7 +91,7 @@ function LookingForBlock({ profile }: { profile: PublicProfile }) {
           return (
             <span
               key={`g-${g}`}
-              className="rounded-full bg-brand-wash/50 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
+              className="rounded-full bg-brand-primary/15 px-3 py-1 text-xs font-medium text-brand-strong ring-1 ring-brand-primary/30"
             >
               {key ? tp(key) : g}
             </span>
@@ -336,7 +336,7 @@ export default function PublicProfilePage() {
         <button
           type="button"
           onClick={() => router.back()}
-          className="mb-6 flex items-center gap-1.5 text-sm text-gray-400 hover:text-white"
+          className="mb-6 flex items-center gap-1.5 text-sm text-gray-400 hover:text-foreground"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -391,10 +391,10 @@ export default function PublicProfilePage() {
     <>
       {isOwnProfile && (
         <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-brand-primary/30 bg-brand-deep/95 px-4 py-2.5 backdrop-blur-sm">
-          <p className="text-sm font-medium text-white">{t("previewBanner")}</p>
+          <p className="text-sm font-medium text-foreground">{t("previewBanner")}</p>
           <Link
             href="/profile"
-            className="shrink-0 rounded-full bg-brand-primary px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
+            className="shrink-0 rounded-full bg-brand-primary px-3 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-brand-hover"
           >
             {t("exitPreview")}
           </Link>
@@ -446,7 +446,7 @@ export default function PublicProfilePage() {
           </button>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-950 via-brand-primary/40 to-gray-900">
-            <span className="select-none text-[8rem] font-black text-white/20">
+            <span className="select-none text-[8rem] font-black text-foreground/20">
               {profile.display_name?.[0]?.toUpperCase() ?? "?"}
             </span>
           </div>
@@ -460,7 +460,7 @@ export default function PublicProfilePage() {
           type="button"
           onClick={() => router.back()}
           aria-label={tc("back")}
-          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-foreground backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -476,7 +476,7 @@ export default function PublicProfilePage() {
               aria-label={t("moreOptions")}
               aria-haspopup="menu"
               aria-expanded={overflowOpen}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-foreground backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
             >
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="5"  r="1.5" />
@@ -540,7 +540,7 @@ export default function PublicProfilePage() {
 
         {/* Name + subtitle */}
         <div>
-          <h1 className="text-2xl font-bold text-white">{profile.display_name}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{profile.display_name}</h1>
           {subtitle && <p className="mt-0.5 text-sm text-gray-400">{subtitle}</p>}
         </div>
 
@@ -568,7 +568,7 @@ export default function PublicProfilePage() {
             {profile.interests.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-brand-wash/50 px-3 py-1 text-xs text-brand-subtle ring-1 ring-brand-strong/60"
+                className="rounded-full bg-brand-primary/15 px-3 py-1 text-xs font-medium text-brand-strong ring-1 ring-brand-primary/30"
               >
                 {tag}
               </span>

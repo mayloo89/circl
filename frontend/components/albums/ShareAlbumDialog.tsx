@@ -75,7 +75,7 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
         className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-xl bg-gray-900 p-5 shadow-2xl ring-1 ring-gray-700 space-y-4"
       >
         <div>
-          <h2 className="text-lg font-semibold text-white">{t("shareInChat")}</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("shareInChat")}</h2>
           <p className="mt-1 text-xs text-gray-500">{t("shareInChatHint")}</p>
         </div>
 
@@ -88,8 +88,8 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
               onClick={() => setExpiresIn(preset)}
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                 expiresIn === preset
-                  ? "bg-brand-accent text-white"
-                  : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+                  ? "bg-brand-accent text-foreground"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-foreground"
               }`}
             >
               {expiryPresetKeys[preset]}
@@ -140,7 +140,7 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
                   </svg>
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-white">{a.name}</p>
+                  <p className="truncate text-sm font-medium text-foreground">{a.name}</p>
                   <p className="text-xs text-gray-500">{t("photoCount", { count: a.photo_count })}</p>
                 </div>
                 <Button

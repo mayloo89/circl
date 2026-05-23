@@ -46,7 +46,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0A0A0F",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)",  color: "#0A1020" },
+    { media: "(prefers-color-scheme: light)", color: "#F4F9FF" },
+  ],
 }
 
 const nunito = Nunito({
@@ -68,7 +71,11 @@ export default async function RootLayout({
 }) {
   const locale = await getLocale()
   return (
-    <html lang={locale}>
+    <html lang={locale} suppressHydrationWarning>
+      <head>
+        {/* Runs before paint to avoid flash of wrong theme */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.classList.toggle('dark',t==='dark')})()` }} />
+      </head>
       <body className={`${nunito.variable} ${dmSans.variable} antialiased`}>
         {children}
       </body>
