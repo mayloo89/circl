@@ -5,7 +5,6 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { Link } from "@/i18n/navigation"
-import Avatar from "@/components/ui/Avatar"
 import Skeleton from "@/components/ui/Skeleton"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -28,13 +27,14 @@ function formatDistance(km: number | null): string | null {
 function ProfileChip({ profile }: { profile: NearbyProfile }) {
   const distanceLabel = formatDistance(profile.distance_km)
   const subtitle = distanceLabel ?? (profile.location_text || null)
+  const initial = (profile.display_name || "?")[0].toUpperCase()
 
   return (
     <Link
       href={`/profile/${profile.username}`}
-      className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 bg-brand-primary/[0.04] dark:bg-transparent ring-1 ring-brand-primary/10 dark:ring-transparent hover:bg-brand-primary/[0.08] dark:hover:bg-white/[0.06] transition-colors snap-start"
+      className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/[0.06] transition-colors snap-start"
     >
-      <div className="relative h-12 w-12 flex-none rounded-full overflow-hidden ring-2 ring-brand-primary/40 dark:ring-white/[0.12]">
+      <div className="relative h-12 w-12 flex-none rounded-full border-2 border-brand-primary/50 dark:border-white/[0.12] overflow-hidden">
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
@@ -44,7 +44,9 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
             sizes="48px"
           />
         ) : (
-          <Avatar src="" name={profile.display_name || "?"} size="md" className="!h-full !w-full !rounded-full" />
+          <div className="h-full w-full flex items-center justify-center rounded-full bg-brand-primary/25 dark:bg-gray-700 text-sm font-semibold text-brand-primary dark:text-gray-300">
+            {initial}
+          </div>
         )}
       </div>
       <p className="w-full text-center text-xs font-medium text-foreground truncate leading-tight">
