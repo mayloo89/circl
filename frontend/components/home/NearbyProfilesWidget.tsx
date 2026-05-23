@@ -32,26 +32,26 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
   return (
     <Link
       href={`/profile/${profile.username}`}
-      className="group flex-none w-28 flex flex-col items-center gap-1.5 rounded-card bg-gray-900 p-3 ring-1 ring-gray-800 hover:ring-brand-strong transition-all"
+      className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/[0.06] transition-colors snap-start"
     >
-      <div className="relative h-14 w-14 flex-none rounded-full overflow-hidden ring-1 ring-gray-700">
+      <div className="relative h-12 w-12 flex-none rounded-full overflow-hidden ring-1 ring-gray-700 dark:ring-white/[0.1]">
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
             alt={profile.display_name ?? "Nearby user"}
             fill
-            className="object-cover transition-opacity duration-300 group-hover:opacity-80"
-            sizes="56px"
+            className="object-cover transition-opacity duration-200 group-hover:opacity-80"
+            sizes="48px"
           />
         ) : (
-          <Avatar src="" name={profile.display_name || "?"} size="lg" className="!h-full !w-full !rounded-full" />
+          <Avatar src="" name={profile.display_name || "?"} size="md" className="!h-full !w-full !rounded-full" />
         )}
       </div>
       <p className="w-full text-center text-xs font-medium text-foreground truncate leading-tight">
         {profile.display_name}
       </p>
       {subtitle && (
-        <p className="w-full text-center text-[11px] text-gray-500 truncate leading-tight">
+        <p className="w-full text-center text-[10px] text-gray-500 truncate leading-tight">
           {subtitle}
         </p>
       )}
@@ -61,9 +61,9 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
 
 function SkeletonChip() {
   return (
-    <div className="flex-none w-28 flex flex-col items-center gap-1.5 rounded-card bg-gray-900 p-3 ring-1 ring-gray-800">
-      <Skeleton className="h-14 w-14 rounded-full" />
-      <Skeleton className="h-3 w-16" />
+    <div className="flex-none w-20 flex flex-col items-center gap-1.5 p-2">
+      <Skeleton className="h-12 w-12 rounded-full" />
+      <Skeleton className="h-2.5 w-12" />
     </div>
   )
 }
@@ -83,9 +83,7 @@ export default function NearbyProfilesWidget() {
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
-        if (!cancelled) {
-          setProfiles(data.profiles ?? [])
-        }
+        if (!cancelled) setProfiles(data.profiles ?? [])
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -94,28 +92,34 @@ export default function NearbyProfilesWidget() {
 
   return (
     <section aria-labelledby="nearby-heading">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="nearby-heading" className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
-          {t("nearbyPeople")}
-        </h2>
-        <Link href="/browse" className="text-xs text-brand-subtle hover:text-foreground transition-colors">
-          {t("browseAll")} →
-        </Link>
-      </div>
+      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-gray-800 dark:ring-white/[0.08] p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 id="nearby-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <svg aria-hidden="true" className="h-4 w-4 flex-none text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            {t("nearbyPeople")}
+          </h2>
+          <Link href="/browse" className="text-xs text-brand-subtle hover:text-brand-primary transition-colors">
+            {t("browseAll")} →
+          </Link>
+        </div>
 
-      <div className="flex gap-2.5 overflow-x-auto py-1.5 scrollbar-hide snap-x snap-mandatory">
-        {loading
-          ? Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} />)
-          : profiles.length > 0
-            ? profiles.map((p) => <ProfileChip key={p.user_id} profile={p} />)
-            : (
-              <div className="flex flex-col gap-1.5 py-2">
-                <p className="text-sm text-gray-500">{t("nearbyEmpty")}</p>
-                <Link href="/profile" className="text-xs text-brand-subtle hover:text-foreground transition-colors">
-                  {t("nearbySetLocation")} →
-                </Link>
-              </div>
-            )}
+        <div className="flex gap-1 overflow-x-auto py-0.5 scrollbar-hide snap-x snap-mandatory -mx-1 px-1">
+          {loading
+            ? Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} />)
+            : profiles.length > 0
+              ? profiles.map((p) => <ProfileChip key={p.user_id} profile={p} />)
+              : (
+                <div className="flex flex-col gap-1.5 py-2">
+                  <p className="text-sm text-gray-500">{t("nearbyEmpty")}</p>
+                  <Link href="/profile" className="text-xs text-brand-subtle hover:text-brand-primary transition-colors">
+                    {t("nearbySetLocation")} →
+                  </Link>
+                </div>
+              )}
+        </div>
       </div>
     </section>
   )

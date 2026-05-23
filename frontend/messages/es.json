@@ -189,10 +189,18 @@
   "legal": {
     "lastUpdated": "Última actualización: {date}",
     "draftBanner": "Borrador — requiere revisión legal antes del lanzamiento.",
-    "terms": { "title": "Términos del Servicio" },
-    "privacy": { "title": "Política de Privacidad" },
-    "guidelines": { "title": "Pautas de la Comunidad" },
-    "safety": { "title": "Seguridad" }
+    "terms": {
+      "title": "Términos del Servicio"
+    },
+    "privacy": {
+      "title": "Política de Privacidad"
+    },
+    "guidelines": {
+      "title": "Pautas de la Comunidad"
+    },
+    "safety": {
+      "title": "Seguridad"
+    }
   },
   "forgotPassword": {
     "title": "Restablecer contraseña",
@@ -257,7 +265,8 @@
     "missing_bio": "Escribe una bio",
     "missing_interests": "Agrega tus intereses",
     "missing_birthdate": "Agrega tu fecha de nacimiento",
-    "missing_location": "Agrega tu ubicación"
+    "missing_location": "Agrega tu ubicación",
+    "tagline": "Tu círculo privado"
   },
   "settings": {
     "title": "Configuración",
@@ -396,7 +405,7 @@
     "cancel": "Cancelar",
     "avatar": "Foto de perfil",
     "changeAvatar": "Cambiar foto de perfil",
-    "photos":"Fotos",
+    "photos": "Fotos",
     "genderMale": "Masculino",
     "genderFemale": "Femenino",
     "genderTransMale": "Trans masculino",

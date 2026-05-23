@@ -34,10 +34,10 @@ function relativeTime(dateStr: string): string {
 function MessagePreview({ msg }: { msg: RoomSummary["last_message"] }) {
   if (!msg) return null
   switch (msg.type) {
-    case "image": return <span className="flex items-center gap-1 text-gray-500"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>Photo</span>
-    case "video": return <span className="flex items-center gap-1 text-gray-500"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>Video</span>
-    case "file": return <span className="flex items-center gap-1 text-gray-500"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" /></svg>File</span>
-    case "album_share": return <span className="flex items-center gap-1 text-gray-500"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>Album</span>
+    case "image": return <span className="flex items-center gap-1"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>Photo</span>
+    case "video": return <span className="flex items-center gap-1"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>Video</span>
+    case "file": return <span className="flex items-center gap-1"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" /></svg>File</span>
+    case "album_share": return <span className="flex items-center gap-1"><svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>Album</span>
     default: return <span className="truncate">{msg.content}</span>
   }
 }
@@ -47,7 +47,7 @@ function RoomRow({ room }: { room: RoomSummary }) {
   return (
     <Link
       href={`/chat/${room.id}`}
-      className="flex items-center gap-3 rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 p-3 hover:ring-brand-strong transition-all"
+      className="flex items-center gap-3 px-4 py-3 border-t border-gray-800 dark:border-white/[0.06] hover:bg-white/[0.04] transition-colors"
     >
       <Avatar
         src={room.peer_avatar_url}
@@ -64,12 +64,12 @@ function RoomRow({ room }: { room: RoomSummary }) {
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-xs text-gray-400 truncate">
+        <p className="mt-0.5 text-xs text-gray-500 truncate">
           <MessagePreview msg={room.last_message} />
         </p>
       </div>
       {room.unread_count > 0 && (
-        <span className="flex-none h-4 min-w-4 rounded-full bg-brand-primary px-1 text-[10px] font-semibold text-foreground flex items-center justify-center">
+        <span className="flex-none h-5 min-w-5 rounded-full bg-brand-primary px-1.5 text-[10px] font-semibold text-white flex items-center justify-center">
           {room.unread_count > 9 ? "9+" : room.unread_count}
         </span>
       )}
@@ -79,7 +79,7 @@ function RoomRow({ room }: { room: RoomSummary }) {
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 rounded-card bg-gray-900 p-3 ring-1 ring-gray-800">
+    <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-800 dark:border-white/[0.06]">
       <Skeleton className="h-8 w-8 rounded-full flex-none" />
       <div className="flex-1 space-y-1.5">
         <Skeleton className="h-3 w-32" />
@@ -113,22 +113,29 @@ export default function RecentConversationsWidget() {
 
   return (
     <section aria-labelledby="recent-heading">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="recent-heading" className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
-          {t("recentConversations")}
-        </h2>
-        <Link href="/chat" className="text-xs text-brand-subtle hover:text-foreground transition-colors">
-          {t("seeAllChats")} →
-        </Link>
-      </div>
+      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-gray-800 dark:ring-white/[0.08] overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3">
+          <h2 id="recent-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <svg aria-hidden="true" className="h-4 w-4 flex-none text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            {t("recentConversations")}
+          </h2>
+          <Link href="/chat" className="text-xs text-brand-subtle hover:text-brand-primary transition-colors">
+            {t("seeAllChats")} →
+          </Link>
+        </div>
 
-      <div className="space-y-2">
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)
+          <>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </>
         ) : rooms.length > 0 ? (
           rooms.map((room) => <RoomRow key={room.id} room={room} />)
         ) : (
-          <p className="text-sm text-gray-500 py-2">{t("recentEmpty")}</p>
+          <p className="px-4 pb-4 pt-1 text-sm text-gray-500">{t("recentEmpty")}</p>
         )}
       </div>
     </section>
