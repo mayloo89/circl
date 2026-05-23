@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { Nunito, DM_Sans } from "next/font/google"
 import { getLocale } from "next-intl/server"
+import Script from "next/script"
 import "./globals.css"
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
@@ -73,8 +74,11 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
-        {/* Runs before paint to avoid flash of wrong theme */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.classList.toggle('dark',t==='dark')})()` }} />
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.classList.toggle('dark',t==='dark')})()` }}
+        />
       </head>
       <body className={`${nunito.variable} ${dmSans.variable} antialiased`}>
         {children}
