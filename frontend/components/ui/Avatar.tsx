@@ -35,8 +35,10 @@ export default function Avatar({ src, name, size = "md", color = "gray", classNa
     )
   }
 
-  const bgClass      = color === "indigo" ? "bg-brand-strong"   : "bg-gray-700"
-  const textClass    = color === "indigo" ? "text-white"      : "text-gray-300"
+  // bg-gray-700 collapses to near-white in light mode (inverted gray scale), so
+  // use a brand-tinted surface that stays visible in both themes.
+  const bgClass      = color === "indigo" ? "bg-brand-strong"          : "bg-brand-primary/20 dark:bg-gray-700"
+  const textClass    = color === "indigo" ? "text-white"               : "text-brand-primary dark:text-gray-300"
   const ringOverride = color === "indigo" ? "ring-1 ring-brand-primary" : fallbackRing
 
   return (

@@ -34,7 +34,7 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
       href={`/profile/${profile.username}`}
       className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/[0.06] transition-colors snap-start"
     >
-      <div className="relative h-12 w-12 flex-none rounded-full overflow-hidden ring-1 ring-gray-700 dark:ring-white/[0.1]">
+      <div className="relative h-12 w-12 flex-none rounded-full overflow-hidden ring-1 ring-brand-primary/30 dark:ring-white/[0.1]">
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
