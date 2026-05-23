@@ -29,9 +29,9 @@ describe("Avatar", () => {
     expect(container.firstChild).toHaveClass("bg-brand-strong")
   })
 
-  it("applies gray background by default", () => {
+  it("applies brand-tinted background by default", () => {
     const { container } = render(<Avatar name="Eve" />)
-    expect(container.firstChild).toHaveClass("bg-gray-700")
+    expect(container.firstChild).toHaveClass("bg-brand-primary/40")
   })
 
   it("applies the xl size class", () => {
