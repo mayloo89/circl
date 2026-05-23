@@ -44,11 +44,11 @@ function ProfileChip({ profile }: { profile: NearbyProfile }) {
             width={48}
             height={48}
             onError={() => setImgError(true)}
-            className="h-12 w-12 rounded-full object-cover ring-2 ring-brand-primary/60 dark:ring-white/[0.14]"
+            className="h-12 w-12 rounded-full object-cover ring-2 ring-brand-primary dark:ring-white/20"
             sizes="48px"
           />
         ) : (
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-primary/50 dark:bg-gray-700 text-sm font-semibold text-brand-primary dark:text-gray-300 ring-2 ring-brand-primary/70 dark:ring-white/[0.14]">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-primary/50 dark:bg-gray-700 text-sm font-semibold text-brand-primary dark:text-gray-300 ring-2 ring-brand-primary dark:ring-white/20">
             {initial}
           </span>
         )}
