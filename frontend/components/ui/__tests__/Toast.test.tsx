@@ -56,7 +56,7 @@ describe("ToastProvider", () => {
     const { toast } = renderWithProvider()
     act(() => { toast("Note") })
     const el = screen.getByText("Note")
-    expect(el.closest("div")).toHaveClass("bg-gray-800")
+    expect(el.closest("div")).toHaveClass("bg-gray-200")
   })
 
   it("auto-dismisses the toast after 4 seconds", () => {
