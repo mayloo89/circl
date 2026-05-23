@@ -20,6 +20,6 @@ test.describe("profile", () => {
     await page.goto("/en/profile")
     await page.getByRole("link", { name: /home/i }).click()
     await page.waitForURL(/\/en\/?$/)
-    await expect(page.getByText("Welcome to Circl")).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: "circl" })).toBeVisible()
   })
 })

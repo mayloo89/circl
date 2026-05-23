@@ -52,7 +52,7 @@ test.describe("auth", () => {
     await page.getByRole("button", { name: "Sign in" }).click()
 
     await page.waitForURL(/\/en\/?$/)
-    await expect(page.getByText("Welcome to Circl")).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: "circl" })).toBeVisible()
   })
 
   test("shows error for wrong password", async ({ page, request }) => {

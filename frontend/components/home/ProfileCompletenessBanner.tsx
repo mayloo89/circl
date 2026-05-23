@@ -61,7 +61,7 @@ export default function ProfileCompletenessBanner() {
   }
 
   return (
-    <div className="mx-4 mt-4 rounded-card bg-gray-900 shadow-card ring-1 ring-gray-800 p-4 lg:mx-0">
+    <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground">
@@ -69,7 +69,7 @@ export default function ProfileCompletenessBanner() {
           </p>
           <p className="mt-0.5 text-xs text-gray-400">{t("completeProfileDesc")}</p>
 
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-700">
             <div
               className="h-full rounded-full bg-brand-primary transition-all duration-500"
               style={{ width: `${percent}%` }}

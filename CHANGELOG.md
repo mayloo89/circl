@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Home page redesign**: replaced the plain heading with a full-width hero section featuring the Circl logo mark, wordmark, tagline, and personalised greeting; ambient blur blobs give depth in both light and dark mode. Four contextual widgets below the hero — profile completeness banner, pending contact requests, nearby profiles (horizontal scroll), and recent conversations — each in a glass-style card with visible ring border in light mode.
+- **Collapsed sidebar logo**: the sidebar now shows the `mark.svg` logo icon when collapsed (links to home); the expand chevron appears as the first item in the nav list so the action is unambiguous. Expanded state is unchanged.
+
+### Changed
+
+- **Avatar fallback contrast**: fallback circles now use `bg-brand-primary/40` and `ring-brand-primary/40 dark:ring-gray-600` instead of `bg-gray-700` / `ring-gray-600`; the Tailwind v4 inverted gray scale made gray-based circles invisible on light card surfaces.
+- **Home widget card borders**: changed from `ring-gray-800` (collapses to white in light mode) to `ring-brand-primary/20 dark:ring-white/[0.08]`, making all home page cards visible on the light background.
+- **Nearby profile chips**: replaced Avatar component usage inside chips with explicit `<Image>` + fallback `<span>` pattern; added `onError` handler to recover when an avatar URL fails to load; ring moved from box-shadow to direct `ring-2 ring-brand-primary` on the element to avoid clipping by ancestor overflow contexts.
+
+
+
 - **Light/dark mode toggle**: `ThemeContext` + `ThemeToggle` component; localStorage persistence with `prefers-color-scheme` fallback; FOUC-prevention inline script in `<head>`; toggle wired into `Sidebar` (with label when expanded) and `TopBar`; `suppressHydrationWarning` on `<html>`.
 
 ### Changed

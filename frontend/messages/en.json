@@ -173,10 +173,18 @@
   "legal": {
     "lastUpdated": "Last updated: {date}",
     "draftBanner": "Draft — pending legal review before launch.",
-    "terms": { "title": "Terms of Service" },
-    "privacy": { "title": "Privacy Policy" },
-    "guidelines": { "title": "Community Guidelines" },
-    "safety": { "title": "Safety" }
+    "terms": {
+      "title": "Terms of Service"
+    },
+    "privacy": {
+      "title": "Privacy Policy"
+    },
+    "guidelines": {
+      "title": "Community Guidelines"
+    },
+    "safety": {
+      "title": "Safety"
+    }
   },
   "appeal": {
     "title": "Appeal your account suspension",
@@ -257,7 +265,8 @@
     "missing_bio": "Write a bio",
     "missing_interests": "Add your interests",
     "missing_birthdate": "Add your date of birth",
-    "missing_location": "Add your location"
+    "missing_location": "Add your location",
+    "tagline": "Your private circle"
   },
   "settings": {
     "title": "Settings",
