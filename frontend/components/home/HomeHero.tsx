@@ -10,7 +10,7 @@ export default function HomeHero() {
   const firstName = session?.user?.name?.split(" ")[0] ?? null
 
   return (
-    <div className="relative overflow-hidden px-4 py-10 text-center lg:px-0 lg:py-12">
+    <div className="relative overflow-hidden px-4 py-10 text-center lg:py-12">
       {/* Ambient blobs — visible in dark, very subtle in light */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute -top-24 -left-16 h-72 w-72 rounded-full bg-brand-primary/10 blur-3xl" />

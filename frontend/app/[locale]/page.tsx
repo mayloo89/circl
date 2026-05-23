@@ -6,14 +6,16 @@ import RecentConversationsWidget from "@/components/home/RecentConversationsWidg
 
 export default function Home() {
   return (
-    <div className="mx-auto max-w-2xl lg:px-4 lg:py-6">
+    <>
       <HomeHero />
-      <div className="space-y-4 px-4 pb-8 lg:px-0">
-        <ProfileCompletenessBanner />
-        <PendingRequestsWidget />
-        <NearbyProfilesWidget />
-        <RecentConversationsWidget />
+      <div className="mx-auto max-w-2xl lg:px-4 lg:pb-6">
+        <div className="space-y-4 px-4 pb-8 lg:px-0">
+          <ProfileCompletenessBanner />
+          <PendingRequestsWidget />
+          <NearbyProfilesWidget />
+          <RecentConversationsWidget />
+        </div>
       </div>
-    </div>
+    </>
   )
 }
