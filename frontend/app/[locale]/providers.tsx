@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { type Session } from "next-auth"
 import { SessionProvider, signOut, useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
@@ -110,10 +111,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children, session }: { children: React.ReactNode; session: Session | null }) {
   return (
     <ThemeProvider>
-      <SessionProvider>
+      <SessionProvider session={session}>
         <SessionGuard />
         <NotificationsProvider>
           <PushProvider>

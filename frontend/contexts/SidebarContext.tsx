@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState } from "react"
+import { createContext, useCallback, useContext, useSyncExternalStore } from "react"
 
 interface SidebarContextValue {
   collapsed: boolean
@@ -12,19 +12,25 @@ const SidebarContext = createContext<SidebarContextValue>({
   toggle: () => {},
 })
 
-export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false
-    return localStorage.getItem("sidebar-collapsed") === "true"
-  })
+const sidebarListeners = new Set<() => void>()
 
-  function toggle() {
-    setCollapsed((prev) => {
-      const next = !prev
-      localStorage.setItem("sidebar-collapsed", String(next))
-      return next
-    })
-  }
+function subscribe(cb: () => void) {
+  sidebarListeners.add(cb)
+  return () => { sidebarListeners.delete(cb) }
+}
+
+function getSnapshot(): boolean {
+  return localStorage.getItem("sidebar-collapsed") === "true"
+}
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const collapsed = useSyncExternalStore(subscribe, getSnapshot, () => false)
+
+  const toggle = useCallback(() => {
+    const next = !collapsed
+    localStorage.setItem("sidebar-collapsed", String(next))
+    sidebarListeners.forEach((cb) => cb())
+  }, [collapsed])
 
   return (
     <SidebarContext.Provider value={{ collapsed, toggle }}>
