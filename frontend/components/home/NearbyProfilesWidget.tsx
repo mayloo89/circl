@@ -25,28 +25,32 @@ function formatDistance(km: number | null): string | null {
 }
 
 function ProfileChip({ profile }: { profile: NearbyProfile }) {
+  const [imgError, setImgError] = useState(false)
   const distanceLabel = formatDistance(profile.distance_km)
   const subtitle = distanceLabel ?? (profile.location_text || null)
   const initial = (profile.display_name || "?")[0].toUpperCase()
+  const showImage = !!profile.avatar_url && !imgError
 
   return (
     <Link
       href={`/profile/${profile.username}`}
       className="group flex-none w-20 flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/[0.06] transition-colors snap-start"
     >
-      <div className="relative h-12 w-12 flex-none rounded-full border-2 border-brand-primary/50 dark:border-white/[0.12] overflow-hidden">
-        {profile.avatar_url ? (
+      <div className="relative h-12 w-12 flex-none">
+        {showImage ? (
           <Image
             src={profile.avatar_url}
             alt={profile.display_name ?? "Nearby user"}
-            fill
-            className="object-cover transition-opacity duration-200 group-hover:opacity-80"
+            width={48}
+            height={48}
+            onError={() => setImgError(true)}
+            className="h-12 w-12 rounded-full object-cover ring-2 ring-brand-primary/60 dark:ring-white/[0.14]"
             sizes="48px"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center rounded-full bg-brand-primary/25 dark:bg-gray-700 text-sm font-semibold text-brand-primary dark:text-gray-300">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-primary/50 dark:bg-gray-700 text-sm font-semibold text-brand-primary dark:text-gray-300 ring-2 ring-brand-primary/70 dark:ring-white/[0.14]">
             {initial}
-          </div>
+          </span>
         )}
       </div>
       <p className="w-full text-center text-xs font-medium text-foreground truncate leading-tight">
