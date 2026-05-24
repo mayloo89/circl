@@ -73,7 +73,7 @@ export default function ContactCard({
         )}
         {variant === "contact" && (
           <>
-            <Button variant="primary" size="sm" onClick={onPrimary}>{t("message")}</Button>
+            <Button variant="accent" size="sm" onClick={onPrimary}>{t("message")}</Button>
             <Button variant="danger" size="sm" onClick={onSecondary}>{t("remove")}</Button>
           </>
         )}
