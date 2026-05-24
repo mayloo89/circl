@@ -14,7 +14,8 @@
     "unknownError": "Something went wrong. Please try again.",
     "password": "Password",
     "passwordRequired": "Password is required.",
-    "back": "Back"
+    "back": "Back",
+    "loadFailed": "Couldn’t load"
   },
   "albums": {
     "title": "Private albums",
@@ -111,7 +112,8 @@
     "notifications": "Notifications",
     "skipToContent": "Skip to main content",
     "switchToLight": "Switch to light mode",
-    "switchToDark": "Switch to dark mode"
+    "switchToDark": "Switch to dark mode",
+    "more": "More"
   },
   "login": {
     "title": "Sign in to your account",
@@ -257,6 +259,7 @@
     "recentConversations": "Recent Conversations",
     "recentEmpty": "No conversations yet",
     "seeAllChats": "See all",
+    "getStarted": "Get started",
     "completeProfile": "Complete your profile",
     "completeProfileDesc": "Add more info to be discovered by others",
     "continueSetup": "Continue setup",
@@ -384,6 +387,8 @@
     "message": "Message",
     "confirmRemoveTitle": "Remove contact?",
     "confirmRemoveMessage": "Are you sure you want to remove {name} from your contacts?",
+    "confirmDeclineTitle": "Decline request?",
+    "confirmDeclineMessage": "Decline the contact request from {name}?",
     "loading": "Loading…",
     "add": "Add",
     "addContactTitle": "Add Contact",

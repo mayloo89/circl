@@ -60,6 +60,7 @@ export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
   const [removeConfirm, setRemoveConfirm] = useState<AcceptedContact | null>(null)
+  const [declineConfirm, setDeclineConfirm] = useState<PendingRequest | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
 
@@ -236,11 +237,17 @@ export default function ContactsPage() {
       onConfirm={() => { if (removeConfirm) { remove(removeConfirm.contact_id); setRemoveConfirm(null) } }}
       onCancel={() => setRemoveConfirm(null)}
     />
-    <div className="flex min-h-screen flex-col items-center bg-gray-950 py-10">
+    <ConfirmDialog
+      open={declineConfirm !== null}
+      title={t("confirmDeclineTitle")}
+      message={t("confirmDeclineMessage", { name: declineConfirm?.display_name || "" })}
+      confirmLabel={t("decline")}
+      onConfirm={() => { if (declineConfirm) { remove(declineConfirm.contact_id); setDeclineConfirm(null) } }}
+      onCancel={() => setDeclineConfirm(null)}
+    />
+    <div className="flex min-h-screen flex-col items-center py-10">
       <div className="w-full max-w-2xl space-y-8 px-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>
-        </div>
+        <h1 className="text-xl font-semibold text-foreground">{t("title")}</h1>
 
         {error && (
           <p className="rounded-md bg-red-950 p-3 text-sm text-red-400 ring-1 ring-red-900">{error}</p>
@@ -255,12 +262,12 @@ export default function ContactsPage() {
         />
 
         {pending.length > 0 && (
-          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 flex items-center text-lg font-semibold text-foreground">
+          <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
+            <h2 className="mb-3 flex items-center text-sm font-semibold text-foreground">
               {t("pendingRequests")}
               <Badge count={pending.length} variant="pill" className="ml-2" />
             </h2>
-            <ul className="divide-y divide-gray-700">
+            <ul className="divide-y divide-gray-800 dark:divide-white/[0.06]">
               {pending.map((r) => (
                 <ContactCard
                   key={r.contact_id}
@@ -271,7 +278,7 @@ export default function ContactsPage() {
                   variant="pending"
                   onNavigate={() => router.push(`/profile/${r.username || r.user_id}`)}
                   onPrimary={() => accept(r.contact_id)}
-                  onSecondary={() => remove(r.contact_id)}
+                  onSecondary={() => setDeclineConfirm(r)}
                 />
               ))}
             </ul>
@@ -279,9 +286,9 @@ export default function ContactsPage() {
         )}
 
         {sent.length > 0 && (
-          <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-            <h2 className="mb-3 text-lg font-semibold text-foreground">{t("sentRequests")}</h2>
-            <ul className="divide-y divide-gray-700">
+          <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">{t("sentRequests")}</h2>
+            <ul className="divide-y divide-gray-800 dark:divide-white/[0.06]">
               {sent.map((r) => (
                 <ContactCard
                   key={r.contact_id}
@@ -298,12 +305,12 @@ export default function ContactsPage() {
           </div>
         )}
 
-        <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          <h2 className="mb-3 text-lg font-semibold text-foreground">{t("myContacts", { count: contacts.length })}</h2>
+        <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">{t("myContacts", { count: contacts.length })}</h2>
           {contacts.length === 0 ? (
             <p className="text-sm text-gray-500">{t("noContacts")}</p>
           ) : (
-            <ul className="divide-y divide-gray-700">
+            <ul className="divide-y divide-gray-800 dark:divide-white/[0.06]">
               {[...contacts].sort((a, b) => {
                 const aOnline = presence[a.user_id]?.online ? 1 : 0
                 const bOnline = presence[b.user_id]?.online ? 1 : 0

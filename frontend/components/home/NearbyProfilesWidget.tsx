@@ -76,9 +76,15 @@ function SkeletonChip() {
 
 export default function NearbyProfilesWidget() {
   const t = useTranslations("home")
+  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const [profiles, setProfiles] = useState<NearbyProfile[]>([])
-  const [loading, setLoading] = useState(true)
+  const [retryKey, setRetryKey] = useState(0)
+  const [loadedKey, setLoadedKey] = useState<number | null>(null)
+  const [errorKey, setErrorKey] = useState<number | null>(null)
+
+  const loading = loadedKey !== retryKey
+  const error = errorKey === retryKey
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.accessToken) return
@@ -89,29 +95,47 @@ export default function NearbyProfilesWidget() {
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
-        if (!cancelled) setProfiles(data.profiles ?? [])
+        if (!cancelled) {
+          setProfiles(data.profiles ?? [])
+          setLoadedKey(retryKey)
+        }
       })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .catch(() => {
+        if (!cancelled) {
+          setErrorKey(retryKey)
+          setLoadedKey(retryKey)
+        }
+      })
     return () => { cancelled = true }
-  }, [status, session?.accessToken])
+  }, [status, session?.accessToken, retryKey])
 
   return (
     <section aria-labelledby="nearby-heading">
-      <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 id="nearby-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <svg aria-hidden="true" className="h-4 w-4 flex-none text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {t("nearbyPeople")}
-          </h2>
-          <Link href="/browse" className="text-xs text-brand-subtle hover:text-brand-primary transition-colors">
-            {t("browseAll")} →
-          </Link>
-        </div>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 id="nearby-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <svg aria-hidden="true" className="h-4 w-4 flex-none text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          {t("nearbyPeople")}
+        </h2>
+        <Link href="/browse" className="inline-flex items-center gap-0.5 text-xs text-brand-subtle hover:text-brand-primary transition-colors">
+          {t("browseAll")}
+          <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </Link>
+      </div>
 
+      {error ? (
+        <div className="flex items-center gap-3 py-2">
+          <p className="text-sm text-gray-500">{tc("loadFailed")}</p>
+          <button
+            onClick={() => setRetryKey((k) => k + 1)}
+            className="text-xs text-brand-subtle hover:text-brand-primary transition-colors"
+          >
+            {tc("retry")}
+          </button>
+        </div>
+      ) : (
         <div className="flex gap-1 overflow-x-auto py-0.5 scrollbar-hide snap-x snap-mandatory -mx-1 px-1">
           {loading
             ? Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} />)
@@ -120,13 +144,14 @@ export default function NearbyProfilesWidget() {
               : (
                 <div className="flex flex-col gap-1.5 py-2">
                   <p className="text-sm text-gray-500">{t("nearbyEmpty")}</p>
-                  <Link href="/profile" className="text-xs text-brand-subtle hover:text-brand-primary transition-colors">
-                    {t("nearbySetLocation")} →
+                  <Link href="/profile" className="inline-flex items-center gap-0.5 text-xs text-brand-subtle hover:text-brand-primary transition-colors">
+                    {t("nearbySetLocation")}
+                    <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
                   </Link>
                 </div>
               )}
         </div>
-      </div>
+      )}
     </section>
   )
 }

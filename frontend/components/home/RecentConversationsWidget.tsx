@@ -91,9 +91,15 @@ function SkeletonRow() {
 
 export default function RecentConversationsWidget() {
   const t = useTranslations("home")
+  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const [rooms, setRooms] = useState<RoomSummary[]>([])
-  const [loading, setLoading] = useState(true)
+  const [retryKey, setRetryKey] = useState(0)
+  const [loadedKey, setLoadedKey] = useState<number | null>(null)
+  const [errorKey, setErrorKey] = useState<number | null>(null)
+
+  const loading = loadedKey !== retryKey
+  const error = errorKey === retryKey
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.accessToken) return
@@ -104,12 +110,19 @@ export default function RecentConversationsWidget() {
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
-        if (!cancelled) setRooms(Array.isArray(data) ? data : (data.rooms ?? []))
+        if (!cancelled) {
+          setRooms(Array.isArray(data) ? data : (data.rooms ?? []))
+          setLoadedKey(retryKey)
+        }
       })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .catch(() => {
+        if (!cancelled) {
+          setErrorKey(retryKey)
+          setLoadedKey(retryKey)
+        }
+      })
     return () => { cancelled = true }
-  }, [status, session?.accessToken])
+  }, [status, session?.accessToken, retryKey])
 
   return (
     <section aria-labelledby="recent-heading">
@@ -121,12 +134,23 @@ export default function RecentConversationsWidget() {
             </svg>
             {t("recentConversations")}
           </h2>
-          <Link href="/chat" className="text-xs text-brand-subtle hover:text-brand-primary transition-colors">
-            {t("seeAllChats")} →
+          <Link href="/chat" className="inline-flex items-center gap-0.5 text-xs text-brand-subtle hover:text-brand-primary transition-colors">
+            {t("seeAllChats")}
+            <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
           </Link>
         </div>
 
-        {loading ? (
+        {error ? (
+          <div className="flex items-center gap-3 px-4 pb-4 pt-1">
+            <p className="text-sm text-gray-500">{tc("loadFailed")}</p>
+            <button
+              onClick={() => setRetryKey((k) => k + 1)}
+              className="text-xs text-brand-subtle hover:text-brand-primary transition-colors"
+            >
+              {tc("retry")}
+            </button>
+          </div>
+        ) : loading ? (
           <>
             <SkeletonRow />
             <SkeletonRow />

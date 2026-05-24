@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
@@ -18,36 +18,43 @@ interface PendingRequest {
 
 export default function PendingRequestsWidget() {
   const t = useTranslations("home")
+  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const { subscribe } = useNotificationsContext()
   const [requests, setRequests] = useState<PendingRequest[]>([])
   const [busy, setBusy] = useState<Record<string, boolean>>({})
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
+  const [errorKey, setErrorKey] = useState<number | null>(null)
 
-  const load = useCallback(async () => {
-    if (!session?.accessToken) return
-    try {
-      const res = await fetch(`${API_URL}/contacts/pending`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      if (res.ok) setRequests(await res.json())
-    } catch {
-      // silent
-    }
-  }, [session?.accessToken])
+  const error = errorKey === retryKey
 
   useEffect(() => {
-    if (status === "authenticated") load()
-  }, [status, load])
+    if (status !== "authenticated" || !session?.accessToken) return
+    const token = session.accessToken
+    let cancelled = false
+    fetch(`${API_URL}/contacts/pending`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: PendingRequest[]) => {
+        if (!cancelled) setRequests(Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        if (!cancelled) setErrorKey(retryKey)
+      })
+    return () => { cancelled = true }
+  }, [status, session?.accessToken, retryKey])
 
   useEffect(() => {
     return subscribe((e) => {
-      if (e.type === "contact_request") load()
+      if (e.type === "contact_request") setRetryKey((k) => k + 1)
       if (e.type === "contact_removed") {
         const { contact_id } = e.payload as { contact_id: string }
         setRequests((prev) => prev.filter((r) => r.contact_id !== contact_id))
       }
     })
-  }, [subscribe, load])
+  }, [subscribe])
 
   async function accept(contactID: string) {
     if (!session?.accessToken) return
@@ -81,7 +88,7 @@ export default function PendingRequestsWidget() {
     }
   }
 
-  if (!requests.length) return null
+  if (!requests.length && !error) return null
 
   return (
     <section aria-labelledby="pending-heading">
@@ -94,6 +101,17 @@ export default function PendingRequestsWidget() {
             {t("pendingRequests")}
           </h2>
         </div>
+        {error && !requests.length ? (
+          <div className="flex items-center gap-3 px-4 pb-4 pt-1">
+            <p className="text-sm text-gray-500">{tc("loadFailed")}</p>
+            <button
+              onClick={() => setRetryKey((k) => k + 1)}
+              className="text-xs text-brand-subtle hover:text-brand-primary transition-colors"
+            >
+              {tc("retry")}
+            </button>
+          </div>
+        ) : (
         <ul>
           {requests.map((req) => (
             <li
@@ -104,27 +122,47 @@ export default function PendingRequestsWidget() {
               <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">
                 {req.display_name}
               </span>
-              <div className="flex gap-2 flex-none">
-                <Button
-                  variant="accent"
-                  size="sm"
-                  loading={busy[req.contact_id]}
-                  onClick={() => accept(req.contact_id)}
-                >
-                  {t("accept")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={busy[req.contact_id]}
-                  onClick={() => decline(req.contact_id)}
-                >
-                  {t("decline")}
-                </Button>
-              </div>
+              {confirming === req.contact_id ? (
+                <div className="flex items-center gap-2 flex-none">
+                  <span className="text-xs text-gray-400">{tc("confirm")}?</span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={busy[req.contact_id]}
+                    onClick={() => { setConfirming(null); decline(req.contact_id) }}
+                  >
+                    {t("decline")}
+                  </Button>
+                  <button
+                    onClick={() => setConfirming(null)}
+                    className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                  >
+                    {tc("cancel")}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2 flex-none">
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    loading={busy[req.contact_id]}
+                    onClick={() => accept(req.contact_id)}
+                  >
+                    {t("accept")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setConfirming(req.contact_id)}
+                  >
+                    {t("decline")}
+                  </Button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
+        )}
       </div>
     </section>
   )
