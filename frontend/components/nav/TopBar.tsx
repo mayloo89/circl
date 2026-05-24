@@ -32,10 +32,13 @@ const ROUTE_TITLES: Record<string, string> = {
   "/": "home",
   "/browse": "browse",
   "/chat": "messages",
+  "/chat/channels": "channels",
   "/contacts": "contacts",
+  "/albums": "albums",
   "/profile": "profile",
   "/settings": "settings",
   "/admin": "adminPanel",
+  "/onboarding": "profile",
 }
 
 export default function TopBar() {
@@ -43,7 +46,6 @@ export default function TopBar() {
   const pathname = usePathname()
   const { permission, supported, enable, disable } = usePushContext()
   const { profile } = useProfileContext()
-
   const titleKey = Object.entries(ROUTE_TITLES)
     .reverse()
     .find(([route]) => pathname === route || (route !== "/" && pathname.startsWith(route)))?.[1] ?? "home"
@@ -69,7 +71,7 @@ export default function TopBar() {
           {t(titleKey as Parameters<typeof t>[0])}
         </span>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-1">
           {supported && permission !== "granted" && (
             <button
               onClick={enable}
@@ -89,9 +91,13 @@ export default function TopBar() {
             </button>
           )}
 
-          <ThemeToggle className="px-2 py-2" />
+          <ThemeToggle className="p-3 rounded hover:bg-transparent" />
 
-          <Link href="/profile" aria-label={t("profile")} className="rounded-full p-1.5">
+          <Link
+            href="/profile"
+            aria-label={t("profile")}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full"
+          >
             <Avatar
               src={profile?.avatar_url ?? ""}
               name={profile?.display_name || "?"}

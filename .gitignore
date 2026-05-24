@@ -36,9 +36,11 @@ backend/data/
 .claude/
 .agents/
 .opencode/
+.impeccable/
 skills-lock.json
 CLAUDE.md
 CLAUDE.local.md
+PRODUCT.md
 
 # Local CI script
 run-ci-local.sh

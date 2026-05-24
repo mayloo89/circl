@@ -9,11 +9,11 @@ export default function Home() {
     <>
       <HomeHero />
       <div className="mx-auto max-w-2xl lg:px-4 lg:pb-6">
-        <div className="space-y-4 px-4 pb-8 lg:px-0">
-          <ProfileCompletenessBanner />
+        <div className="space-y-5 px-4 pb-8 lg:px-0">
           <PendingRequestsWidget />
           <NearbyProfilesWidget />
           <RecentConversationsWidget />
+          <ProfileCompletenessBanner />
         </div>
       </div>
     </>

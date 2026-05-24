@@ -64,7 +64,7 @@ export default function ContactCard({
         )}
         {variant === "pending" && (
           <>
-            <Button variant="success" size="sm" onClick={onPrimary}>{t("accept")}</Button>
+            <Button variant="accent" size="sm" onClick={onPrimary}>{t("accept")}</Button>
             <Button variant="secondary" size="sm" onClick={onSecondary}>{t("decline")}</Button>
           </>
         )}
@@ -73,7 +73,7 @@ export default function ContactCard({
         )}
         {variant === "contact" && (
           <>
-            <Button variant="primary" size="sm" onClick={onPrimary}>{t("message")}</Button>
+            <Button variant="accent" size="sm" onClick={onPrimary}>{t("message")}</Button>
             <Button variant="danger" size="sm" onClick={onSecondary}>{t("remove")}</Button>
           </>
         )}

@@ -60,12 +60,38 @@ export default function ProfileCompletenessBanner() {
     setDismissed(true)
   }
 
+  const isNewUser = percent < 40
+
   return (
     <div className="rounded-card bg-gray-900 dark:bg-white/[0.04] shadow-card ring-1 ring-brand-primary/20 dark:ring-white/[0.08] p-4">
+      {isNewUser && (
+        <div className="mb-4 pb-4 border-b border-gray-800 dark:border-white/[0.06]">
+          <p className="text-sm font-semibold text-foreground mb-2">{t("getStarted")}</p>
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-1.5 text-xs text-brand-subtle hover:text-brand-primary transition-colors"
+            >
+              <svg aria-hidden="true" className="h-3.5 w-3.5 flex-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              {t("completeProfile")}
+              <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </Link>
+            <Link
+              href="/browse"
+              className="inline-flex items-center gap-1.5 text-xs text-brand-subtle hover:text-brand-primary transition-colors"
+            >
+              <svg aria-hidden="true" className="h-3.5 w-3.5 flex-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+              {t("browseAll")}
+              <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground">
-            {t("completeProfile")} — {percent}%
+            {t("completeProfile")}: {percent}%
           </p>
           <p className="mt-0.5 text-xs text-gray-400">{t("completeProfileDesc")}</p>
 

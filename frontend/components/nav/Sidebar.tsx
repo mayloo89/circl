@@ -302,7 +302,7 @@ export default function Sidebar() {
                 )}
               </svg>
             </span>
-            {!collapsed && t("notifications")}
+            {!collapsed && <span className="flex-1 truncate">{permission === "granted" ? t("disablePush") : t("enablePush")}</span>}
           </button>
         )}
 
@@ -334,6 +334,8 @@ export default function Sidebar() {
           showLabel={!collapsed}
           className={`w-full ${collapsed ? "justify-center px-0" : "px-3"}`}
         />
+
+        <div className="my-1 border-t border-gray-800" />
 
         {/* Sign out — always visible; icon-only when collapsed */}
         <button

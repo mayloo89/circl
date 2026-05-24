@@ -14,7 +14,8 @@
     "unknownError": "Algo salió mal. Por favor intenta de nuevo.",
     "password": "Contraseña",
     "passwordRequired": "La contraseña es requerida.",
-    "back": "Volver"
+    "back": "Volver",
+    "loadFailed": "No se pudo cargar"
   },
   "albums": {
     "title": "Álbumes privados",
@@ -111,7 +112,8 @@
     "notifications": "Notificaciones",
     "skipToContent": "Saltar al contenido principal",
     "switchToLight": "Cambiar a modo claro",
-    "switchToDark": "Cambiar a modo oscuro"
+    "switchToDark": "Cambiar a modo oscuro",
+    "more": "Más"
   },
   "login": {
     "title": "Iniciar sesión",
@@ -257,6 +259,7 @@
     "recentConversations": "Conversaciones recientes",
     "recentEmpty": "Sin conversaciones aún",
     "seeAllChats": "Ver todos",
+    "getStarted": "Empezar",
     "completeProfile": "Completa tu perfil",
     "completeProfileDesc": "Agrega más info para que otros te descubran",
     "continueSetup": "Continuar configuración",
@@ -384,6 +387,8 @@
     "message": "Mensaje",
     "confirmRemoveTitle": "¿Eliminar contacto?",
     "confirmRemoveMessage": "¿Estás seguro de querer eliminar a {name} de tus contactos?",
+    "confirmDeclineTitle": "¿Rechazar solicitud?",
+    "confirmDeclineMessage": "¿Rechazar la solicitud de contacto de {name}?",
     "loading": "Cargando…",
     "add": "Agregar",
     "addContactTitle": "Agregar Contacto",

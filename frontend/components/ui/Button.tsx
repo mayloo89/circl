@@ -15,7 +15,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const variantClasses: Record<Variant, string> = {
   primary:   "bg-brand-primary hover:bg-brand-hover text-white focus:ring-brand-hover",
   secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200 ring-1 ring-gray-500/60 focus:ring-gray-500",
-  danger:    "bg-red-900 hover:bg-red-800 text-red-300 focus:ring-red-500",
+  danger:    "bg-red-500/10 hover:bg-red-500/15 text-red-400 ring-1 ring-red-500/25 focus:ring-red-500",
   success:   "bg-green-700 hover:bg-green-600 text-white focus:ring-green-500",
   ghost:     "text-gray-400 hover:text-gray-200 focus:ring-gray-500",
   warning:   "bg-orange-600 hover:bg-orange-500 text-white focus:ring-orange-500",
