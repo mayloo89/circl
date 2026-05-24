@@ -43,7 +43,7 @@ describe("Button", () => {
 
   it("applies danger variant classes", () => {
     const { container } = render(<Button variant="danger">Delete</Button>)
-    expect(container.firstChild).toHaveClass("bg-red-900")
+    expect(container.firstChild).toHaveClass("text-red-400")
   })
 
   it("applies ghost variant classes", () => {
