@@ -274,7 +274,8 @@
 - [ ] **CI/CD pipeline** — staging deploy on push to `develop`, production deploy on push to `main`; coverage reporting gate (98%+ on handlers/services); Docker image build + registry push; environment secrets in GitHub Actions Settings.
 - [ ] **Pre-deploy checks** — run migrations before deploy; database backup before destructive migrations; tested rollback plan with down migrations; platform health-check + readiness gates.
 - [ ] **DB ops** — automated daily backups; periodic restore drill; `sslmode=require` (or `verify-full`) in production `DATABASE_URL`.
-- [ ] **Secrets management** — `JWT_SECRET`, VAPID keys, `NEXTAUTH_SECRET`, SMTP credentials in vault/KMS (not env files); key-rotation runbook documented under `docs/runbooks/`.
+- [x] **Operational runbooks** — `docs/runbooks/` contains four runbooks: `deploy.md` (first-deploy checklist, release procedure, rollback decision tree), `db-backup-restore.md` (manual + automated daily backup via `pg_dump`, restore procedure, drill log, migration state inspection), `incident-response.md` (severity levels, log inspection, Prometheus alert reference, common failure scenarios, post-incident checklist), `secret-rotation.md` (`JWT_SECRET`, `AUTH_SECRET`, VAPID keys, DB password, S3 credentials).
+- [ ] **Secrets management** — move `JWT_SECRET`, VAPID keys, `AUTH_SECRET`, SMTP credentials to vault/KMS (not env files) for production.
 - [ ] **Observability hosting decision** — Grafana Cloud (managed) vs. self-hosted Loki + Prometheus + Tempo + Grafana stack from PR #60.
 - [ ] **Sentry integration** — frontend + backend error tracking; capture panics in goroutines (WebSocket pumps, hub).
 - [ ] **Global per-IP API rate limit middleware** — beyond the existing per-endpoint limiters (`LOGIN_IP_LIMIT`, `REGISTER_IP_LIMIT`, contact-request 100/day, reports 10/hour).
