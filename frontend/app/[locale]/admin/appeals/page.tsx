@@ -174,7 +174,7 @@ export default function AdminAppealsPage() {
   useEffect(() => { fetchAppeals() }, [fetchAppeals])
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <h1 className="text-2xl font-bold text-foreground mb-2">Appeals</h1>
       <p className="text-sm text-gray-400 mb-6">
         Suspended users can submit a written appeal via the link emailed to them. Approving an appeal reactivates the user.
@@ -204,8 +204,8 @@ export default function AdminAppealsPage() {
             <tr>
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Submitted</th>
-              <th className="px-4 py-3">Expires</th>
+              <th className="hidden sm:table-cell px-4 py-3">Submitted</th>
+              <th className="hidden sm:table-cell px-4 py-3">Expires</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -215,8 +215,8 @@ export default function AdminAppealsPage() {
                 <tr key={i} className="bg-gray-950">
                   <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="hidden sm:table-cell px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="hidden sm:table-cell px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                   <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-20 ml-auto" /></td>
                 </tr>
               ))
@@ -238,10 +238,10 @@ export default function AdminAppealsPage() {
                       {STATUS_LABELS[a.status] ?? a.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
                     {a.submitted_at ? new Date(a.submitted_at).toLocaleDateString() : "—"}
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
                     {new Date(a.expires_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">

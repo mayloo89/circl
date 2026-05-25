@@ -253,7 +253,7 @@ export default function AdminReportsPage() {
   useEffect(() => { fetchReports() }, [fetchReports])
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <h1 className="text-2xl font-bold text-foreground mb-6">Reports</h1>
 
       {/* Status tabs */}
@@ -296,9 +296,9 @@ export default function AdminReportsPage() {
             <tr>
               <th className="px-4 py-3">Priority</th>
               <th className="px-4 py-3">Reported user</th>
-              <th className="px-4 py-3">Reason</th>
+              <th className="hidden md:table-cell px-4 py-3">Reason</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Date</th>
+              <th className="hidden sm:table-cell px-4 py-3">Date</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -308,9 +308,9 @@ export default function AdminReportsPage() {
                 <tr key={i} className="bg-gray-950">
                   <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                  <td className="hidden md:table-cell px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="hidden sm:table-cell px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                   <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-20 ml-auto" /></td>
                 </tr>
               ))
@@ -341,7 +341,7 @@ export default function AdminReportsPage() {
                     )}
                     <p className="text-xs text-gray-500">{r.reported_email}</p>
                   </td>
-                  <td className="px-4 py-3 text-gray-300">
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-300">
                     {REASON_LABELS[r.reason] ?? r.reason}
                     {r.description && (
                       <p className="text-xs text-gray-500 truncate max-w-xs">{r.description}</p>
@@ -352,7 +352,7 @@ export default function AdminReportsPage() {
                       {r.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
                     {new Date(r.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
