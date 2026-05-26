@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Admin panel — mobile-responsive layout and UX**: replaced the fixed `w-56` sidebar (which consumed ~60% of mobile viewport) with a slide-over drawer on `<md` — hamburger button in a sticky top bar opens it, backdrop tap or nav selection closes it, active link is highlighted. All six admin pages get responsive padding (`p-4 sm:p-6 md:p-8`). Table columns hide progressively by breakpoint so the most important columns (identity, status, actions) remain visible at every size: secondary columns (`Activity`, `Joined`, `Reason`, `Date`, `Submitted`, `Expires`, `Description`, `Created`, `Score`, `Categories`) disappear at `sm`/`md`/`lg` breakpoints respectively. The users table actions column is consolidated into a single "Actions ▾" dropdown that lists all relevant actions (Suspend, Ban, Reactivate, Change role, Delete) with keyboard-navigable menu using the existing `useMenuKeyboard` hook (`ArrowUp`/`ArrowDown`, `Escape`, focus-restore on close) and full ARIA wiring (`aria-haspopup="menu"`, `aria-expanded`, `aria-labelledby`).
+
 ### Added
 
 - **Operational runbooks** (`docs/runbooks/`): three new runbooks covering the full production operations surface. `deploy.md` — first-deploy checklist, step-by-step bring-up, subsequent release procedure, rollback, and useful commands. `db-backup-restore.md` — manual and automated daily backup via `pg_dump`, restore procedure, restore drill log, and migration state inspection. `incident-response.md` — severity levels, log inspection guide, Prometheus alert reference, common failure scenarios (backend down, Postgres/Redis failures, disk full, moderation sidecar down), rollback decision tree, and post-incident checklist.

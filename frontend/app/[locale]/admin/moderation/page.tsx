@@ -84,7 +84,7 @@ export default function ModerationAdminPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 sm:p-6 space-y-5">
       <header className="space-y-1">
         <h1 className="text-xl font-semibold text-foreground">{t("moderationTitle")}</h1>
         <p className="max-w-2xl text-sm text-gray-400">{t("moderationSubtitle")}</p>
@@ -146,16 +146,16 @@ export default function ModerationAdminPage() {
                 <th scope="col" className="px-4 py-3">
                   {t("moderationColCode")}
                 </th>
-                <th scope="col" className="px-4 py-3">
+                <th scope="col" className="hidden lg:table-cell px-4 py-3">
                   {t("moderationColScore")}
                 </th>
-                <th scope="col" className="px-4 py-3">
+                <th scope="col" className="hidden lg:table-cell px-4 py-3">
                   {t("moderationColCategories")}
                 </th>
-                <th scope="col" className="px-4 py-3">
+                <th scope="col" className="hidden md:table-cell px-4 py-3">
                   {t("moderationColReason")}
                 </th>
-                <th scope="col" className="px-4 py-3">
+                <th scope="col" className="hidden sm:table-cell px-4 py-3">
                   {t("moderationColTime")}
                 </th>
               </tr>
@@ -193,10 +193,10 @@ export default function ModerationAdminPage() {
                       {codeLabel(item.code)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs tabular-nums text-gray-300">
+                  <td className="hidden lg:table-cell px-4 py-3 font-mono text-xs tabular-nums text-gray-300">
                     {item.score != null ? item.score.toFixed(3) : "—"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="hidden lg:table-cell px-4 py-3">
                     {item.categories && item.categories.length > 0 ? (
                       <ul className="flex flex-wrap gap-1">
                         {item.categories.map((cat) => (
@@ -212,8 +212,8 @@ export default function ModerationAdminPage() {
                       <span className="text-gray-600">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 max-w-xs text-xs text-gray-400">{item.reason}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                  <td className="hidden md:table-cell px-4 py-3 max-w-xs text-xs text-gray-400">{item.reason}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                     {new Date(item.moderated_at).toLocaleString()}
                   </td>
                 </tr>

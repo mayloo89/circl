@@ -51,7 +51,7 @@ export default function AdminDashboard() {
   }, [session])
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <h1 className="text-2xl font-bold text-foreground mb-8">Dashboard</h1>
 
       {error && (

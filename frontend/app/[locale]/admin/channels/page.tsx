@@ -204,7 +204,7 @@ export default function AdminChannelsPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-foreground">Channels</h1>
         <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
@@ -219,8 +219,8 @@ export default function AdminChannelsPage() {
           <thead className="bg-gray-900 text-xs uppercase tracking-wider text-gray-500">
             <tr>
               <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Description</th>
-              <th className="px-4 py-3">Created</th>
+              <th className="hidden md:table-cell px-4 py-3">Description</th>
+              <th className="hidden sm:table-cell px-4 py-3">Created</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -229,8 +229,8 @@ export default function AdminChannelsPage() {
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className="bg-gray-950">
                   <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="hidden md:table-cell px-4 py-3"><Skeleton className="h-4 w-48" /></td>
+                  <td className="hidden sm:table-cell px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24 ml-auto" /></td>
                 </tr>
               ))
@@ -244,10 +244,10 @@ export default function AdminChannelsPage() {
               channels.map((c) => (
                 <tr key={c.id} className="bg-gray-950 hover:bg-gray-900">
                   <td className="px-4 py-3 font-medium text-gray-100">#{c.name}</td>
-                  <td className="px-4 py-3 text-gray-400 max-w-xs truncate">
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-400 max-w-xs truncate">
                     {c.description || <span className="text-gray-600 italic">No description</span>}
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">

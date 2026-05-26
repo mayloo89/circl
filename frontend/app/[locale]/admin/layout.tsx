@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
-import { Link } from "@/i18n/navigation"
+import AdminShell from "@/components/admin/AdminShell"
 
 export const metadata = { title: "Admin — Circl" }
 
@@ -14,52 +14,5 @@ export default async function AdminLayout({
     redirect("/")
   }
 
-  return (
-    <div className="flex min-h-screen bg-gray-950">
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 border-r border-gray-800 bg-gray-900">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <Link href="/" aria-label="Circl" className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, next/image adds unnecessary overhead */}
-            <img
-              src="/branding/logo-dark.svg"
-              alt=""
-              width={100}
-              height={28}
-              className="h-7 w-auto"
-            />
-          </Link>
-          <p className="mt-0.5 text-xs font-medium text-brand-muted uppercase tracking-wider">Admin</p>
-        </div>
-        <nav className="mt-2 px-2 py-2 flex flex-col gap-0.5">
-          <SidebarLink href="/admin">Dashboard</SidebarLink>
-          <SidebarLink href="/admin/users">Users</SidebarLink>
-          <SidebarLink href="/admin/reports">Reports</SidebarLink>
-          <SidebarLink href="/admin/appeals">Appeals</SidebarLink>
-          <SidebarLink href="/admin/moderation">Moderation</SidebarLink>
-          <SidebarLink href="/admin/channels">Channels</SidebarLink>
-        </nav>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
-  )
-}
-
-function SidebarLink({
-  href,
-  children,
-}: {
-  href: string
-  children: React.ReactNode
-}) {
-  return (
-    <Link
-      href={href}
-      className="block rounded px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-foreground transition-colors"
-    >
-      {children}
-    </Link>
-  )
+  return <AdminShell>{children}</AdminShell>
 }

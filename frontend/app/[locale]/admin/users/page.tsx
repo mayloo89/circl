@@ -1,12 +1,13 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
 import { formatLastSeen } from "@/hooks/usePresence"
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -229,6 +230,124 @@ function RoleModal({
   )
 }
 
+function ActionsMenu({
+  user,
+  isSuperAdmin,
+  actionLoading,
+  onSuspend,
+  onBan,
+  onReactivate,
+  onRole,
+  onHardDelete,
+}: {
+  user: UserRecord
+  isSuperAdmin: boolean
+  actionLoading: string | null
+  onSuspend: () => void
+  onBan: () => void
+  onReactivate: () => void
+  onRole: () => void
+  onHardDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useMenuKeyboard({ open, containerRef: menuRef, onClose: () => setOpen(false) })
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleOutside)
+    return () => document.removeEventListener("mousedown", handleOutside)
+  }, [open])
+
+  const isLoading = !!actionLoading?.startsWith(user.id)
+
+  const statusItems: { label: string; onClick: () => void; cls: string }[] = []
+  if (user.status === "active") {
+    statusItems.push({ label: "Suspend", onClick: () => { setOpen(false); onSuspend() }, cls: "text-yellow-400" })
+    statusItems.push({ label: "Ban", onClick: () => { setOpen(false); onBan() }, cls: "text-red-400" })
+  }
+  if (user.status === "suspended" || user.status === "banned") {
+    statusItems.push({ label: "Reactivate", onClick: () => { setOpen(false); onReactivate() }, cls: "text-green-400" })
+  }
+
+  const adminItems: { label: string; onClick: () => void; cls: string }[] = []
+  if (isSuperAdmin) {
+    adminItems.push({ label: "Change role", onClick: () => { setOpen(false); onRole() }, cls: "text-gray-200" })
+    adminItems.push({ label: "Delete", onClick: () => { setOpen(false); onHardDelete() }, cls: "text-red-400" })
+  }
+
+  const allItems = [...statusItems, ...adminItems]
+  if (allItems.length === 0) return null
+
+  const triggerId = `actions-trigger-${user.id}`
+
+  return (
+    <div ref={wrapperRef} className="relative inline-block">
+      <Button
+        id={triggerId}
+        size="sm"
+        variant="secondary"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={isLoading}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Actions
+        <svg
+          className={`h-3 w-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2 4l4 4 4-4" />
+        </svg>
+      </Button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-labelledby={triggerId}
+          className="absolute right-0 top-full mt-1 z-20 min-w-[10rem] rounded-lg bg-gray-900 py-1 ring-1 ring-gray-700 shadow-lg"
+        >
+          {statusItems.map((item) => (
+            <button
+              key={item.label}
+              role="menuitem"
+              onClick={item.onClick}
+              className={`block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-800 focus:bg-gray-800 focus:outline-none ${item.cls}`}
+            >
+              {item.label}
+            </button>
+          ))}
+          {statusItems.length > 0 && adminItems.length > 0 && (
+            <div className="my-1 border-t border-gray-800" role="separator" />
+          )}
+          {adminItems.map((item) => (
+            <button
+              key={item.label}
+              role="menuitem"
+              onClick={item.onClick}
+              className={`block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-800 focus:bg-gray-800 focus:outline-none ${item.cls}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminUsersPage() {
   const { data: session } = useSession()
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -304,13 +423,13 @@ export default function AdminUsersPage() {
   const currentPage = Math.floor(offset / limit) + 1
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <h1 className="text-2xl font-bold text-foreground mb-6">Users</h1>
 
       {/* Search + filter */}
       <form onSubmit={handleSearch} className="flex flex-wrap gap-3 mb-6">
         <Input
-          className="w-64"
+          className="w-full sm:w-64"
           placeholder="Search by email or username"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -336,8 +455,8 @@ export default function AdminUsersPage() {
             <tr>
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Activity</th>
-              <th className="px-4 py-3">Joined</th>
+              <th className="hidden md:table-cell px-4 py-3">Activity</th>
+              <th className="hidden sm:table-cell px-4 py-3">Joined</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -347,8 +466,8 @@ export default function AdminUsersPage() {
                 <tr key={i} className="bg-gray-950">
                   <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="hidden md:table-cell px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                  <td className="hidden sm:table-cell px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-32 ml-auto" /></td>
                 </tr>
               ))
@@ -384,7 +503,7 @@ export default function AdminUsersPage() {
                       {u.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-400">
                     {u.online ? (
                       <span className="inline-flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
@@ -399,60 +518,20 @@ export default function AdminUsersPage() {
                       <span className="text-gray-600">Never</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
                     {new Date(u.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {(u.status === "active") && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="warning"
-                            loading={actionLoading === u.id + "suspend"}
-                            onClick={() => setSuspendTarget(u)}
-                          >
-                            Suspend
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            loading={actionLoading === u.id + "ban"}
-                            onClick={() => doAction(u, "ban")}
-                          >
-                            Ban
-                          </Button>
-                        </>
-                      )}
-                      {(u.status === "suspended" || u.status === "banned") && (
-                        <Button
-                          size="sm"
-                          variant="success"
-                          loading={actionLoading === u.id + "reactivate"}
-                          onClick={() => doAction(u, "reactivate")}
-                        >
-                          Reactivate
-                        </Button>
-                      )}
-                      {isSuperAdmin && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setRoleTarget(u)}
-                          >
-                            Role
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => setHardDeleteTarget(u)}
-                          >
-                            Delete
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                    <ActionsMenu
+                      user={u}
+                      isSuperAdmin={isSuperAdmin}
+                      actionLoading={actionLoading}
+                      onSuspend={() => setSuspendTarget(u)}
+                      onBan={() => doAction(u, "ban")}
+                      onReactivate={() => doAction(u, "reactivate")}
+                      onRole={() => setRoleTarget(u)}
+                      onHardDelete={() => setHardDeleteTarget(u)}
+                    />
                   </td>
                 </tr>
               ))
