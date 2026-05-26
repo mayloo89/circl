@@ -46,7 +46,8 @@ interface Preferences {
   require_photo: boolean
 }
 
-const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Other"]
+// Must match the canonical gender values stored in profiles.gender
+const GENDER_OPTIONS = ["Male", "Female", "Trans male", "Trans female", "Non-binary"]
 
 function ProfileCardSkeleton() {
   return (
@@ -445,15 +446,58 @@ export default function BrowsePage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return
+    let cancelled = false
 
-    fetch(`${API_URL}/profiles/me/preferences`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: Preferences | null) => { if (data) setPrefs(data) })
-      .catch(() => {})
+    async function init() {
+      const [prefsRes, profileRes] = await Promise.all([
+        fetch(`${API_URL}/profiles/me/preferences`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+        fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+      ])
 
-    loadProfiles(null, false, false, [])
+      if (cancelled) return
+
+      let loadedPrefs: Preferences = { min_age: null, max_age: null, max_distance_km: null, gender_preference: [], require_photo: false }
+      if (prefsRes?.ok) loadedPrefs = await prefsRes.json()
+
+      // Seed from "Looking for" profile fields when the user has never set browse preferences
+      const prefsAreDefault =
+        loadedPrefs.min_age === null &&
+        loadedPrefs.max_age === null &&
+        loadedPrefs.max_distance_km === null &&
+        (loadedPrefs.gender_preference ?? []).length === 0 &&
+        !loadedPrefs.require_photo
+
+      if (prefsAreDefault && profileRes?.ok) {
+        const profile = await profileRes.json()
+        const lookingForGender: string[] = profile.looking_for_gender ?? []
+        const lookingForAgeMin: number | null = profile.looking_for_age_min ?? null
+        const lookingForAgeMax: number | null = profile.looking_for_age_max ?? null
+
+        if (lookingForGender.length > 0 || lookingForAgeMin !== null || lookingForAgeMax !== null) {
+          const derived: Preferences = {
+            ...loadedPrefs,
+            gender_preference: lookingForGender.length > 0 ? lookingForGender : [],
+            min_age: lookingForAgeMin,
+            max_age: lookingForAgeMax,
+          }
+          // Persist so the DB browse query applies them server-side
+          try {
+            const saveRes = await fetch(`${API_URL}/profiles/me/preferences`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify(derived),
+            })
+            loadedPrefs = saveRes.ok ? await saveRes.json() : derived
+          } catch { loadedPrefs = derived }
+        }
+      }
+
+      if (!cancelled) setPrefs(loadedPrefs)
+      if (!cancelled) loadProfiles(null, false, false, [])
+    }
+
+    init()
+    return () => { cancelled = true }
   }, [status, token, loadProfiles])
 
   useEffect(() => {

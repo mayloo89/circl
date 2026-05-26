@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
+### Fixed
+
+- **Browse gender filter**: `GENDER_OPTIONS` in the filter panel used `"Man"` / `"Woman"` / `"Other"` which never matched the canonical values stored in `profiles.gender` (`"Male"` / `"Female"` / `"Trans male"` / `"Trans female"` / `"Non-binary"`). The filter silently returned all profiles regardless of gender selection. Options are now aligned with stored values.
+- **Browse preferences seeded from "Looking for"**: on first visit to browse (when no browse preferences have ever been saved), the user's profile "Looking for" fields (`looking_for_gender`, `looking_for_age_min`, `looking_for_age_max`) are automatically applied as default browse filters and persisted to `profile_preferences` so results are filtered server-side from the first page load.
+- **Browse filter panel sequencing**: preferences are now loaded before the initial browse fetch fires so the filter count badge and panel state are immediately correct — no flash of "0 active filters".
 
 - **Admin panel — mobile-responsive layout and UX**: replaced the fixed `w-56` sidebar (which consumed ~60% of mobile viewport) with a slide-over drawer on `<md` — hamburger button in a sticky top bar opens it, backdrop tap or nav selection closes it, active link is highlighted. All six admin pages get responsive padding (`p-4 sm:p-6 md:p-8`). Table columns hide progressively by breakpoint so the most important columns (identity, status, actions) remain visible at every size: secondary columns (`Activity`, `Joined`, `Reason`, `Date`, `Submitted`, `Expires`, `Description`, `Created`, `Score`, `Categories`) disappear at `sm`/`md`/`lg` breakpoints respectively. The users table actions column is consolidated into a single "Actions ▾" dropdown that lists all relevant actions (Suspend, Ban, Reactivate, Change role, Delete) with keyboard-navigable menu using the existing `useMenuKeyboard` hook (`ArrowUp`/`ArrowDown`, `Escape`, focus-restore on close) and full ARIA wiring (`aria-haspopup="menu"`, `aria-expanded`, `aria-labelledby`).
 
