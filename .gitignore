@@ -41,6 +41,9 @@ skills-lock.json
 CLAUDE.md
 CLAUDE.local.md
 PRODUCT.md
+.mcp.json
+AGENTS.md
+.cursor/
 
 # Local CI script
 run-ci-local.sh
