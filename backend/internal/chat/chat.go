@@ -42,9 +42,9 @@ var (
 //
 // Only DM is active today. Public guest rooms (24h retention) will be added
 // here once rooms.visibility exists; until then that policy is intentionally
-// inert. Channel and group rooms are deliberately excluded — they retain
-// history (leaving a channel is already irreversible precisely because past
-// messages must remain accessible).
+// inert. Channels are absent because they are broadcast-only — their messages
+// are never persisted (see the WS send loop in handler.go), so there is
+// nothing to retain or sweep. Group rooms are not yet covered.
 var RetentionDurations = map[string]time.Duration{
 	RoomTypeDM: 3 * 30 * 24 * time.Hour, // ~3 months
 }

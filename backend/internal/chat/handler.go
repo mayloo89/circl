@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -900,6 +901,34 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		if !ok || in.Content == "" {
 			continue
 		}
+
+		// Channels are broadcast-only: their messages are never persisted (see
+		// RetentionDurations in chat.go). They are text-only and ignore
+		// attachment, TTL and view-once inputs. The frame is minted in-process
+		// from the connection's identity rather than a stored row, so there is
+		// no DB write and nothing to retain or sweep.
+		if c.isChannel {
+			if msgType != MessageTypeText {
+				continue
+			}
+			frame, err := json.Marshal(serverMessage{
+				Event:           "new_message",
+				Type:            MessageTypeText,
+				ID:              uuid.NewString(),
+				RoomID:          c.roomID,
+				SenderID:        c.userID,
+				SenderName:      c.displayName,
+				SenderAvatarURL: c.avatarURL,
+				Content:         in.Content,
+				CreatedAt:       time.Now().UTC(),
+			})
+			if err != nil {
+				continue
+			}
+			_ = c.hub.Publish(c.ctx, c.roomID, frame)
+			continue
+		}
+
 		// Attachment messages must carry an upload_id so the file can be
 		// linked to the message record and cleaned up on deletion.
 		if in.Type == "attachment" && in.UploadID == "" {

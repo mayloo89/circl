@@ -1,0 +1,1 @@
+-- Irreversible: purged channel messages cannot be restored.
