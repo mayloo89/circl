@@ -40,13 +40,15 @@ var (
 // removed; no tombstone is left). This map is the single source of truth —
 // ListRetentionEligibleMessages builds its query from it.
 //
-// Only DM is active today. Public guest rooms (24h retention) will be added
-// here once rooms.visibility exists; until then that policy is intentionally
-// inert. Channels are absent because they are broadcast-only — their messages
-// are never persisted (see the WS send loop in handler.go), so there is
-// nothing to retain or sweep. Group rooms are not yet covered.
+// DM and group rooms retain for ~3 months — both are relationship spaces, so
+// they share the window. Public guest rooms (24h retention) will be added here
+// once rooms.visibility exists; until then that policy is intentionally inert.
+// Channels are absent because they are broadcast-only — their messages are
+// never persisted (see the WS send loop in handler.go), so there is nothing to
+// retain or sweep.
 var RetentionDurations = map[string]time.Duration{
-	RoomTypeDM: 3 * 30 * 24 * time.Hour, // ~3 months
+	RoomTypeDM:    3 * 30 * 24 * time.Hour, // ~3 months
+	RoomTypeGroup: 3 * 30 * 24 * time.Hour, // ~3 months
 }
 
 var ttlDurations = map[string]time.Duration{

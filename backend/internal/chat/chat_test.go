@@ -791,12 +791,14 @@ func TestRetentionDurations_Defined(t *testing.T) {
 	if _, ok := chat.RetentionDurations[chat.RoomTypeDM]; !ok {
 		t.Error("RetentionDurations missing DM entry")
 	}
-	// Channels and groups must NOT have a retention window — they retain
-	// history. The 24h public-room policy stays inert until public rooms exist.
-	if _, ok := chat.RetentionDurations[chat.RoomTypeChannel]; ok {
-		t.Error("RetentionDurations must not include channels (they retain history)")
+	// Groups are relationship spaces like DMs — they share the retention window.
+	if _, ok := chat.RetentionDurations[chat.RoomTypeGroup]; !ok {
+		t.Error("RetentionDurations missing group entry")
 	}
-	if _, ok := chat.RetentionDurations[chat.RoomTypeGroup]; ok {
-		t.Error("RetentionDurations must not include groups (out of scope)")
+	// Channels must NOT have a retention window — they are broadcast-only and
+	// never persist messages. The 24h public-room policy stays inert until
+	// public rooms exist.
+	if _, ok := chat.RetentionDurations[chat.RoomTypeChannel]; ok {
+		t.Error("RetentionDurations must not include channels (broadcast-only, never persisted)")
 	}
 }
