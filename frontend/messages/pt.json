@@ -616,7 +616,9 @@
     "ephemeral6h": "6 horas",
     "ephemeral12h": "12 horas",
     "ephemeral24h": "24 horas",
-    "scrollToBottom": "Ir para o fim"
+    "scrollToBottom": "Ir para o fim",
+    "contactRedacted": "Informações de contato foram removidas da mensagem anterior para proteger a privacidade.",
+    "contactWarning": "Não é permitido compartilhar informações de contato fora de contatos aceitos."
   },
   "publicProfile": {
     "title": "Perfil",

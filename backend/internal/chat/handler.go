@@ -30,7 +30,6 @@ const (
 	maxMsgSize = 4096
 )
 
-
 // Client represents a single WebSocket connection from an authenticated user.
 type Client struct {
 	hub             *Hub
@@ -75,6 +74,7 @@ type serverMessage struct {
 	Content         string     `json:"content,omitempty"`
 	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
 	ViewOnce        bool       `json:"view_once,omitempty"`
+	Redacted        bool       `json:"redacted,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitzero"`
 	CreatedAt       time.Time  `json:"created_at,omitzero"`
 }
@@ -117,6 +117,14 @@ type HandlerConfig struct {
 	// Returns true if the sender is blocked by any room member, suppressing
 	// the message silently.
 	IsBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
+	// AreContacts, if set, returns true if the two users have a mutual
+	// accepted contact relationship. Used to decide whether DM messages
+	// should be scanned for external contact info.
+	AreContacts func(ctx context.Context, userA, userB string) (bool, error)
+	// IsExemptSender, if set, returns true if the sender should bypass
+	// contact-info redaction (e.g. verified service accounts). Always
+	// returns false when nil.
+	IsExemptSender func(ctx context.Context, senderID string) bool
 	// AllowedOrigins is the list of origins permitted to open WebSocket
 	// connections. When empty, all origins are allowed (development only).
 	AllowedOrigins []string
@@ -169,7 +177,7 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/rooms/dm", getDMHandler(svc, c))
 	r.Post("/rooms", createGroupHandler(svc))
 	r.Get("/rooms", listRoomsHandler(svc))
-	r.Get("/rooms/{id}", getRoomHandler(svc))
+	r.Get("/rooms/{id}", getRoomHandler(svc, c))
 	r.Put("/rooms/{id}", updateGroupHandler(svc))
 	r.Get("/rooms/{id}/members", listGroupMembersHandler(svc, c))
 	r.Post("/rooms/{id}/members", addGroupMemberHandler(svc))
@@ -242,7 +250,19 @@ func getDMHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 			return
 		}
 
-		apierror.WriteJSON(w, http.StatusOK, room)
+		resp := struct {
+			*Room
+			AreAcceptedContacts bool `json:"are_accepted_contacts"`
+		}{Room: room}
+
+		if cfg.AreContacts != nil {
+			accepted, accErr := cfg.AreContacts(r.Context(), userID, body.PeerID)
+			if accErr == nil {
+				resp.AreAcceptedContacts = accepted
+			}
+		}
+
+		apierror.WriteJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -284,7 +304,7 @@ func createGroupHandler(svc Manager) http.HandlerFunc {
 // require the caller to be a member.
 //
 // GET /chat/rooms/{id}
-func getRoomHandler(svc Manager) http.HandlerFunc {
+func getRoomHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -304,6 +324,22 @@ func getRoomHandler(svc Manager) http.HandlerFunc {
 				return
 			}
 		}
+
+		if room.Type == RoomTypeDM && cfg.AreContacts != nil {
+			peerID, peerErr := svc.GetDMPeerID(r.Context(), roomID, userID)
+			if peerErr == nil {
+				accepted, accErr := cfg.AreContacts(r.Context(), userID, peerID)
+				if accErr == nil {
+					resp := struct {
+						*Room
+						AreAcceptedContacts bool `json:"are_accepted_contacts"`
+					}{Room: room, AreAcceptedContacts: accepted}
+					apierror.WriteJSON(w, http.StatusOK, resp)
+					return
+				}
+			}
+		}
+
 		apierror.WriteJSON(w, http.StatusOK, room)
 	}
 }
@@ -926,6 +962,7 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 				Content:         content,
 				ThumbnailURL:    msg.ThumbnailURL,
 				ViewOnce:        msg.ViewOnce,
+				Redacted:        msg.Redacted,
 				ExpiresAt:       msg.ExpiresAt,
 				CreatedAt:       msg.CreatedAt,
 			})
@@ -934,6 +971,19 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			}
 
 			_ = c.hub.Publish(msgCtx, c.roomID, data)
+
+			if msg.Redacted {
+				noteData, noteErr := json.Marshal(serverMessage{
+					Event:     "new_message",
+					Type:      MessageTypeSystem,
+					RoomID:    c.roomID,
+					Content:   "Contact information was removed from the previous message to protect privacy.",
+					CreatedAt: msg.CreatedAt,
+				})
+				if noteErr == nil {
+					_ = c.hub.Publish(msgCtx, c.roomID, noteData)
+				}
+			}
 
 			// Notify non-sender members so they can show an unread badge.
 			if notifyNewMessage != nil {

@@ -17,6 +17,7 @@ export interface ChatMessage {
   thumbnail_url?: string
   view_once: boolean
   tombstone?: boolean
+  redacted?: boolean
   expires_at?: string
   created_at: string
 }
@@ -34,7 +35,7 @@ export interface TypingUser {
 /** Maps userId → timestamp (ms) of their last read event. */
 export type ReadReceipts = Map<string, number>
 
-const chatMessageTypes = new Set(["text", "image", "video", "file", "album_share"])
+const chatMessageTypes = new Set(["text", "image", "video", "file", "album_share", "system"])
 
 /**
  * Manages the WebSocket connection for a single chat room.

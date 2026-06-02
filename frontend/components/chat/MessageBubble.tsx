@@ -1,5 +1,6 @@
 "use client"
 
+import { Fragment } from "react"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
 
@@ -7,6 +8,10 @@ import type { AnyMessage } from "@/types/chat"
 import { formatExpiry, expiryColorClass } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
 import AlbumShareBubble from "@/components/chat/AlbumShareBubble"
+
+// Sentinel emitted by the backend redact package in place of contact info.
+// Kept in sync with backend/internal/redact.RedactionToken.
+const REDACTION_TOKEN = "[contact hidden]"
 
 interface MessageBubbleProps {
   msg: AnyMessage
@@ -37,6 +42,8 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const t = useTranslations("chatRoom")
   const avatarUrl = "sender_avatar_url" in msg ? msg.sender_avatar_url : ""
+  const isSystem = msg.type === "system"
+  const isRedacted = "redacted" in msg && msg.redacted
   const isViewOnce = msg.view_once
   const hasMedia =
     ("thumbnail_url" in msg && msg.thumbnail_url) ||
@@ -54,22 +61,30 @@ export default function MessageBubble({
 
   return (
     <div
-      className={`flex ${isOwn ? "justify-end" : "justify-start"} ${firstInGroup ? "mt-3" : "mt-0.5"} ${isLive ? "animate-message-in" : ""}`}
+      className={`flex ${isSystem ? "justify-center" : isOwn ? "justify-end" : "justify-start"} ${firstInGroup ? "mt-3" : "mt-0.5"} ${isLive ? "animate-message-in" : ""}`}
     >
-      {!isOwn && (
-        <div className="mr-2 mt-auto flex-none self-end">
-          {lastInGroup ? (
-            <Avatar src={avatarUrl} name={msg.sender_name || "?"} size="sm" />
-          ) : (
-            <div className="h-7 w-7" />
-          )}
-        </div>
-      )}
-
-      <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
-        {!isOwn && firstInGroup && (
-          <span className="mb-1 text-xs text-gray-500">{msg.sender_name}</span>
+    {isSystem ? (
+      <div className="my-1">
+        <span className="rounded-full bg-gray-800/60 px-3 py-1 text-center text-xs text-gray-400" role="status">
+          {msg.content}
+        </span>
+      </div>
+    ) : (
+    <>
+    {!isOwn && (
+      <div className="mr-2 mt-auto flex-none self-end">
+        {lastInGroup ? (
+          <Avatar src={avatarUrl} name={msg.sender_name || "?"} size="sm" />
+        ) : (
+          <div className="h-7 w-7" />
         )}
+      </div>
+    )}
+
+    <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+      {!isOwn && firstInGroup && (
+        <span className="mb-1 text-xs text-gray-500">{msg.sender_name}</span>
+      )}
 
         {isTombstone ? (
           <>
@@ -186,11 +201,24 @@ export default function MessageBubble({
                   </svg>
                   <span className="truncate underline">{msg.content.split("/").pop() ?? "attachment"}</span>
                 </a>
-              ) : msg.type === "album_share" ? (
-                <AlbumShareBubble content={msg.content} isOwn={isOwn} />
-              ) : (
-                msg.content
-              )}
+    ) : msg.type === "album_share" ? (
+      <AlbumShareBubble content={msg.content} isOwn={isOwn} />
+    ) : isRedacted ? (
+      // Surrounding text is preserved verbatim by the backend; only the
+      // contact span is replaced with the sentinel, which we localize inline.
+      msg.content.split(REDACTION_TOKEN).map((part, i, parts) => (
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <span className="italic text-gray-400" role="note">
+              {t("contactRedacted")}
+            </span>
+          )}
+        </Fragment>
+      ))
+    ) : (
+      msg.content
+    )}
             </div>
 
             <div className="mt-1 flex items-center gap-1.5">
@@ -212,12 +240,14 @@ export default function MessageBubble({
                 </svg>
               )}
             </div>
-            {isLastSeenOwn && (
-              <span className="mt-0.5 text-xs text-brand-muted">{t("seen")}</span>
-            )}
-          </>
-        )}
+      {isLastSeenOwn && (
+        <span className="mt-0.5 text-xs text-brand-muted">{t("seen")}</span>
+      )}
+      </>
+      )}
       </div>
+    </>
+    )}
     </div>
   )
 }

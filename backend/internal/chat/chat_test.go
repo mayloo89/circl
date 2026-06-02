@@ -21,7 +21,7 @@ type mockStore struct {
 	isMember         bool
 	roomErr          error
 	roomsErr         error
-	channelsErr error
+	channelsErr      error
 	msgErr           error
 	msgsErr          error
 	memberErr        error
@@ -41,6 +41,7 @@ type mockStore struct {
 	expiredErr       error
 	displayName      string
 	displayNameErr   error
+	savedParams      *chat.SaveMessageParams
 }
 
 func (m *mockStore) GetDisplayName(_ context.Context, _ string) (string, error) {
@@ -51,6 +52,9 @@ func (m *mockStore) GetAvatarURL(_ context.Context, _ string) (string, error) {
 }
 func (m *mockStore) GetUsername(_ context.Context, _ string) (string, error) {
 	return "", nil
+}
+func (m *mockStore) GetDMPeerID(_ context.Context, _, _ string) (string, error) {
+	return "peer-1", nil
 }
 func (m *mockStore) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
@@ -88,7 +92,8 @@ func (m *mockStore) UpdateGroupName(_ context.Context, _, _, _ string) error {
 func (m *mockStore) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary, error) {
 	return m.rooms, m.roomsErr
 }
-func (m *mockStore) SaveMessage(_ context.Context, _ chat.SaveMessageParams) (*chat.Message, error) {
+func (m *mockStore) SaveMessage(_ context.Context, p chat.SaveMessageParams) (*chat.Message, error) {
+	m.savedParams = &p
 	return m.msg, m.msgErr
 }
 func (m *mockStore) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
@@ -569,5 +574,189 @@ func TestService_ListChannels_Error(t *testing.T) {
 	_, err := svc.ListChannels(t.Context())
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestService_MaybeRedact_DMNonAccepted(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeDM},
+		members: []string{"u-1", "u-2"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+	svc.AreContacts = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+	svc.IsExemptSender = func(_ context.Context, _ string) bool { return false }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeText,
+		Content:  "call me at +1-555-0123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams == nil {
+		t.Fatal("savedParams is nil")
+	}
+	if !store.savedParams.Redacted {
+		t.Error("Redacted = false, want true")
+	}
+	if store.savedParams.Content == "call me at +1-555-0123" {
+		t.Error("Content should have been redacted")
+	}
+}
+
+func TestService_MaybeRedact_DMAccepted(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeDM},
+		members: []string{"u-1", "u-2"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+	svc.AreContacts = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
+	svc.IsExemptSender = func(_ context.Context, _ string) bool { return false }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeText,
+		Content:  "call me at +1-555-0123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams.Redacted {
+		t.Error("Redacted = true, want false (accepted contacts)")
+	}
+}
+
+func TestService_MaybeRedact_ExemptSender(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeDM},
+		members: []string{"u-1", "u-2"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+	svc.AreContacts = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+	svc.IsExemptSender = func(_ context.Context, _ string) bool { return true }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeText,
+		Content:  "call me at +1-555-0123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams.Redacted {
+		t.Error("Redacted = true, want false (exempt sender)")
+	}
+}
+
+func TestService_MaybeRedact_GroupRoom(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeGroup},
+		members: []string{"u-1", "u-2", "u-3"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+	svc.AreContacts = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+	svc.IsExemptSender = func(_ context.Context, _ string) bool { return false }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeText,
+		Content:  "call me at +1-555-0123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams.Redacted {
+		t.Error("Redacted = true, want false (group room)")
+	}
+}
+
+func TestService_MaybeRedact_NilFuncs(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeDM},
+		members: []string{"u-1", "u-2"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeText,
+		Content:  "call me at +1-555-0123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams.Redacted {
+		t.Error("Redacted = true, want false (nil funcs)")
+	}
+}
+
+func TestService_MaybeRedact_NonTextType(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeDM},
+		members: []string{"u-1", "u-2"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+	svc.AreContacts = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+	svc.IsExemptSender = func(_ context.Context, _ string) bool { return false }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeImage,
+		Content:  "https://example.com/img.png",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams.Redacted {
+		t.Error("Redacted = true, want false (non-text type)")
+	}
+}
+
+func TestService_MaybeRedact_NoContactInfo(t *testing.T) {
+	store := &mockStore{
+		room:    &chat.Room{ID: "r-1", Type: chat.RoomTypeDM},
+		members: []string{"u-1", "u-2"},
+		msg:     &chat.Message{ID: "m-1"},
+	}
+	svc := chat.NewService(store)
+	svc.AreContacts = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+	svc.IsExemptSender = func(_ context.Context, _ string) bool { return false }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID:   "r-1",
+		SenderID: "u-1",
+		Type:     chat.MessageTypeText,
+		Content:  "hey, how are you?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams.Redacted {
+		t.Error("Redacted = true, want false (no contact info)")
+	}
+}
+
+func TestService_GetDMPeerID_Success(t *testing.T) {
+	store := &mockStore{}
+	svc := chat.NewService(store)
+	peerID, err := svc.GetDMPeerID(t.Context(), "r-1", "u-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if peerID != "peer-1" {
+		t.Errorf("peerID = %q, want peer-1", peerID)
 	}
 }

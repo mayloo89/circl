@@ -117,6 +117,9 @@ type Store interface {
 	IsBlocked(ctx context.Context, userA, userB string) (bool, error)
 	// IsBlockedInRoom returns true if userID is blocked by any user in the given list.
 	IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error)
+	// AreAcceptedContacts returns true if userA and userB have a mutual
+	// accepted contact relationship.
+	AreAcceptedContacts(ctx context.Context, userA, userB string) (bool, error)
 }
 
 // Service implements the contacts business logic.
@@ -203,4 +206,10 @@ func (s *Service) IsBlocked(ctx context.Context, userA, userB string) (bool, err
 // IsBlockedInRoom returns true if userID is blocked by any user in the otherUserIDs list.
 func (s *Service) IsBlockedInRoom(ctx context.Context, userID string, otherUserIDs []string) (bool, error) {
 	return s.store.IsBlockedInRoom(ctx, userID, otherUserIDs)
+}
+
+// AreAcceptedContacts returns true if userA and userB have a mutual
+// accepted contact relationship.
+func (s *Service) AreAcceptedContacts(ctx context.Context, userA, userB string) (bool, error) {
+	return s.store.AreAcceptedContacts(ctx, userA, userB)
 }

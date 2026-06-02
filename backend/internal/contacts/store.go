@@ -295,14 +295,35 @@ func (s *pgStore) IsBlockedInRoom(ctx context.Context, userID string, otherUserI
 	var exists bool
 	err := s.db.QueryRow(ctx, `
 		SELECT EXISTS(
-		    SELECT 1 FROM blocks
-		    WHERE (blocker_id = $1 AND blocked_id = ANY($2))
-		       OR (blocker_id = ANY($2) AND blocked_id = $1)
+			SELECT 1 FROM blocks
+			WHERE (blocker_id = $1 AND blocked_id = ANY($2))
+			OR (blocker_id = ANY($2) AND blocked_id = $1)
 		)`,
 		userID, otherUserIDs,
 	).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("is blocked in room: %w", err)
+	}
+	return exists, nil
+}
+
+// AreAcceptedContacts returns true if userA and userB have an accepted
+// contact relationship. A relationship is a single row (Accept transitions the
+// pending row to status='accepted'), so one accepted row in either direction
+// is sufficient.
+func (s *pgStore) AreAcceptedContacts(ctx context.Context, userA, userB string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM contacts
+			WHERE ((requester_id = $1 AND addressee_id = $2)
+			    OR (requester_id = $2 AND addressee_id = $1))
+			AND status = 'accepted'
+		)`,
+		userA, userB,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("are accepted contacts: %w", err)
 	}
 	return exists, nil
 }

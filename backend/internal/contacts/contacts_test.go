@@ -68,6 +68,9 @@ func (m *mockStore) IsBlocked(_ context.Context, _, _ string) (bool, error) {
 func (m *mockStore) IsBlockedInRoom(_ context.Context, _ string, _ []string) (bool, error) {
 	return m.isBlockedInRoomResult, m.isBlockedInRoomErr
 }
+func (m *mockStore) AreAcceptedContacts(_ context.Context, _, _ string) (bool, error) {
+	return false, nil
+}
 
 func newService(store contacts.Store) *contacts.Service {
 	return contacts.NewService(store)

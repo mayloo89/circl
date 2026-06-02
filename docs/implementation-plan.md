@@ -8,6 +8,9 @@
 - Online/offline presence with "last seen".
 - Photo and file uploads with CDN delivery.
 - Multi-language UI: Spanish (default), English, Portuguese — user-selectable, persisted to backend.
+- Services marketplace (monetization): verified, clearly-labeled service profiles in a separate opt-in directory, surfaced from the dating home via a deprioritized "services nearby" widget; inbound-only contact; public reviews. A one-way bridge keeps commercial profiles out of the dating browse and social rooms.
+- Public chat rooms with a guest tier: visitors join with a nickname + age-of-majority declaration; registered users are marked in the participant list and unlock DMs, persistent identity, uploads, and members-only rooms.
+- Message retention: public-room messages deleted after 24h, DM messages after 3 months (hard-delete, no placeholder); only user-set self-destruct messages leave a tombstone.
 
 ## 2. Stack
 - Frontend: Next.js (App Router) + React + TypeScript + Tailwind. Playwright for e2e.
@@ -48,8 +51,12 @@
 - contacts: id, requester_id, addressee_id, status (pending/accepted/blocked), created_at.
 - rooms: id, type (dm|group), name, dm_key (unique for DMs), created_at, updated_at.
 - room_members: room_id, user_id, last_read_at.
-- messages: id, room_id, sender_id, type, content, media_url?, expires_at, view_once, created_at.
+- messages: id, room_id, sender_id, type, content, media_url?, expires_at, view_once, created_at; + `self_destruct` flag to distinguish user-set TTL (tombstone on expiry) from retention-driven expiry (hard-delete). Retention sweep is room-type-aware (24h public / 3-month DM).
 - message_views: message_id, user_id, viewed_at (for view-once ephemeral messages).
+- rooms: + `visibility` (public | members-only) for guest-accessible rooms.
+- service_profiles: role/flag on (or 1:1 with) users — verification status, tier, featured-until, zone; inbound-only; clearly labeled and segregated from the dating surface.
+- service_reviews: id, service_profile_id, reviewer_id (pseudonymous), rating, body, created_at; at most one open review per (reviewer, provider); gated on a prior recorded interaction.
+- guest sessions: Redis-only, ephemeral (no DB row) — nickname, age_attested_at, ip_hash, TTL; cannot DM, upload, or join members-only rooms; heavily rate-limited.
 - Indexes: profile search, messages(room_id, created_at) for pagination; FK constraints.
 
 ## 6. Real-time flow
@@ -269,6 +276,45 @@
 - [ ] **Feature-flag system** — env-driven minimum, `unleash` long-term.
 - [ ] **Maintenance-mode flag** in config.
 - [ ] **Marketing landing page** for unauthenticated visitors.
+
+### Monetization — services marketplace
+
+**Business model (decided 2026-05-31).** Circl is a 1:1 dating / connection app with strong local discovery and social rooms — **not** a creator-content platform. Primary revenue is **service-provider advertising subscriptions**, not consumer subscriptions: in AR consumer willingness-to-pay is low while service providers have commercial intent and pay. Consumer freemium exists mainly to build the audience that makes the ad inventory valuable. Marketplace integrity follows a **"two worlds, one-way bridge"** rule — World 1 (Dating) is real people only; World 2 (Services) is a separate opt-in directory; the bridge is user-initiated only (a user can reach a provider; a provider can never reach into World 1). Payment rails: Stripe / PayPal excluded (adult AUP), Mercado Pago carries AUP risk (validate, don't assume); viable rails are bank transfer, USDT/crypto, and direct invoicing for providers. Full design logged in mnimi: `business-model-services-marketplace`. See also `memory/project_content_policy.md`.
+
+- [ ] **Service profile type** — a distinct, clearly-labeled profile (badge, distinct card) that can never be confused with a real person; lives only in World 2; excluded from the dating browse and from social rooms.
+- [ ] **Services directory + deprioritized home widget** — opt-in directory (user setting to show/hide; default separate); a single labeled, capped, rotated "services nearby" widget on the dating home is the only bleed-through into World 1.
+- [ ] **Inbound-only enforcement** — service profiles cannot initiate contact, send unsolicited DMs, or send contact requests; users always initiate.
+- [ ] **Verification / KYC for service profiles** — required for the paid tier; the gate that also provides legal cover.
+- [ ] **Paid tiers + rotated featured placement** — listing / featured-top-of-zone / city boost / verification priority; featured is a rotating, per-zone-capped pool (never permanently pinned) so discovery never saturates with the same profiles.
+- [ ] **Public reviews / ratings** (Google-Maps-style trust layer) — only users with a prior recorded interaction can review; pseudonymous reviewers; one open review per provider; reports + moderation; rating feeds widget ranking/rotation; providers can respond.
+- [ ] **Auto-reply structured info card** — verified-tier feature; fires only in response to a user-initiated contact; a structured services/rates/availability card (easier to moderate than free text).
+- [ ] **Anti-leakage (disguised services on regular accounts)** — goal is a trickle, not zero. Three levers: make the legit path the better business (only verified profiles get discovery/rates/contact/widget); make the disguised path useless in World 1 (strip external contact, block price patterns, lower new-account outbound caps); and **detect-and-convert, not just ban** (soft prompt to move to the Services tier → shadow-limit → suspend), reusing the worker's perceptual image hashing, admin panel, and reports.
+- [ ] **Payment rail integration** — adult-friendly processor and/or bank transfer / USDT for consumer premium; direct invoicing acceptable for providers.
+
+### Growth — public rooms & guest access
+
+**Public rooms + guest tier (decided 2026-05-31).** Top-of-funnel front door that kills the empty-room cold-start problem for newcomers. Public chat rooms admit a **guest tier** (nickname + age-of-majority declaration) alongside registered users; an anonymous read-only tier was considered and rejected (in a live chat the value is participating, and nobody wants anonymous lurkers reading their messages). Guest restrictions double as conversion levers — registration is prompted at the exact moment a guest hits a limit they care about, not up front. Full design logged in mnimi: `public-rooms-guest-access`.
+
+- [ ] **Room visibility flag (public / members-only)** — operator-controlled per room; public rooms are the showcase, members-only rooms are a reason to register; public rooms clearly labeled as public.
+- [ ] **Guest sessions** — join with nickname + age declaration + captcha; ephemeral WS ticket (adapt the existing `POST /ws-ticket` mechanism); text-only (no uploads); hard rate limit; cannot DM, be contacted, join members-only rooms, or have a profile/presence/contacts; protected namespace (a guest cannot take a registered user's handle); in-room kick/mute by registered operators; ban anchored to session + IP.
+- [ ] **Registered-user marking + soft conversion prompts** — registered users visibly marked (badge/color) in the participant list as social proof; blocked guest actions surface a soft "register to…" prompt (DM, keep your nick, save the conversation, upload a photo, enter members-only rooms), never a hostile wall.
+- [ ] **Scheduled rooms + event QR funnel** — time-boxed themed rooms concentrate demand in time; IRL-event QR codes drop visitors straight into a live room (QR → nick in seconds → chatting → "I want to DM this person" → register).
+
+### Chat data retention
+
+**Retention policy (decided 2026-05-31).** Bounds DB growth (public rooms with guests are high-volume, low-value) and reinforces the privacy-first posture (less data stored = less to leak/subpoena). Today there is no global retention — messages persist forever unless a per-message TTL was set, and the `EphemeralCleaner` always *tombstones* (keeps an empty placeholder row). Full design logged in mnimi: `message-retention-policy`.
+
+- [ ] **Differentiated retention sweep** — distinguish the *reason* for expiry: retention-driven (24h public / 3-month DM) → **hard-delete** the row + linked object-storage files; user-set self-destruct / view-once → tombstone (current behavior). Sweep must be room-type-aware, not driven solely by an explicit `expires_at`.
+- [ ] **DM auto-delete (3 months) + UI disclosure** — rolling per-message expiry to start (reuses `expires_at` infra); state the policy explicitly in the UI so lost history is never a surprise. Chose 3 months over 1 to avoid mutilating active relationships.
+- [ ] **Disappearing messages per conversation (phase 2)** — user-shortenable, Signal-style; and/or an inactivity-based clock for DMs if users complain about losing wanted history.
+
+### DM external-contact masking
+
+**Contact masking (decided 2026-05-31).** DMs stay open (no mutual-acceptance gate — verified in code, only `IsBlocked` is checked today), but external contact info is masked between users who are not accepted contacts. Verified service profiles are exempt (publishing contact is their business). Masking requires the server to read plaintext, so this assumes chat is **not** end-to-end encrypted (already true given server-side moderation, view-once, TTL). Full design logged in mnimi: `dm-contact-masking`.
+
+- [x] **Server-side detection + mask-on-save** — detect and redact in the send path *before persisting*; the raw contact data never touches the DB; irreversible (accepting later does not un-redact stored messages — only future messages flow freely). Detection is layered: normalize first (collapse separators, spelled-out digits, homoglyphs, "arroba"/"punto com") for es/pt/en, then regex (phones, emails, URLs, handles), then keywords, with a digit-run/keyword threshold to avoid false positives (ages, heights, prices). Regex + normalization + keywords only — no ML classifier in v1. New `internal/redact` package (`normalize.go`, `detect.go`, `redact.go`); `redact.Redact()` replaces only the detected spans with the `[contact hidden]` token and emits the rest of the original text verbatim (an offset map translates normalized-text matches back to original coordinates, so surrounding text keeps its case and is never mangled); homoglyph substitution is token-aware (only inside tokens already containing a digit) to avoid false positives on interjections. `Service.maybeRedact()` wired into the chat send path via `HandlerConfig` (`AreContacts`, `IsExemptSender`); `AreAcceptedContacts` added to contacts store/service (a contact is a single row, so an `EXISTS` on one accepted row in either direction); `GetDMPeerID` on chat store/manager/service; migration `000042` adds `redacted BOOLEAN NOT NULL DEFAULT FALSE` to `messages`; `pgStore.SaveMessage` / `ListMessages` include `redacted`; `serverMessage` carries `Redacted`; readPump sends a system note after a redacted message. Service + handler tests plus a `redact` package suite covering surrounding-text preservation and interjection false-positives, and a contacts integration test for `AreAcceptedContacts`.
+- [x] **Redaction UI + bilateral system note** — replace the detected span with a labeled token (not deleted characters); both users see the same redacted message plus a system note framed as "to share contact, accept each other and write it in a new message" (no false promise of retroactive reveal). Client-side soft warning while typing is UX-only; enforcement is server-side. Frontend: `MessageBubble.tsx` renders system messages as centered pill (`role="status"`) and redaction token as italic gray text (`role="note"`, i18n key `contactRedacted`); `ChatInput.tsx` gains `showContactWarning` prop with amber warning banner; `RoomView.tsx` wires `showContactWarning={room?.type === "dm" && !room.are_accepted_contacts}`; `RoomSummary` includes `are_accepted_contacts`; `HistoryMessage` / `ChatMessage` include `redacted?: boolean`; `chatMessageTypes` includes `"system"`; `getDMHandler` and `getRoomHandler` return `are_accepted_contacts` for DM rooms; EN/ES/PT i18n keys (`contactRedacted`, `contactWarning`).
+- [x] **Service-profile exemption** — masking applies only to DMs between non-accepted regular users; verified service profiles publish contact freely in their info card. `IsExemptSender` hook wired in `HandlerConfig` (returns `false` today — placeholder for future service-profile logic).
 
 ### Phase 4 — Production deployment & operations
 
