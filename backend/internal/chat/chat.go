@@ -35,6 +35,20 @@ var (
 	ErrForbidden = errors.New("chat: forbidden")
 )
 
+// RetentionDurations maps room types to their data-retention window. Messages
+// older than the window are hard-deleted by the retention sweeper (the row is
+// removed; no tombstone is left). This map is the single source of truth —
+// ListRetentionEligibleMessages builds its query from it.
+//
+// Only DM is active today. Public guest rooms (24h retention) will be added
+// here once rooms.visibility exists; until then that policy is intentionally
+// inert. Channel and group rooms are deliberately excluded — they retain
+// history (leaving a channel is already irreversible precisely because past
+// messages must remain accessible).
+var RetentionDurations = map[string]time.Duration{
+	RoomTypeDM: 3 * 30 * 24 * time.Hour, // ~3 months
+}
+
 var ttlDurations = map[string]time.Duration{
 	TTL15Min:   15 * time.Minute,
 	TTL30Min:   30 * time.Minute,
@@ -212,6 +226,10 @@ type Store interface {
 	GetUsername(ctx context.Context, userID string) (string, error)
 	// GetDMPeerID returns the other member's user ID in a DM room.
 	GetDMPeerID(ctx context.Context, roomID, userID string) (string, error)
+	// ListRetentionEligibleMessages returns the IDs of messages that have
+	// exceeded the retention window for their room type. Only non-tombstoned
+	// messages in room types with a defined retention policy are returned.
+	ListRetentionEligibleMessages(ctx context.Context) ([]string, error)
 }
 
 // Manager is the interface used by HTTP and WebSocket handlers.
@@ -248,6 +266,9 @@ type Manager interface {
 	GetUsername(ctx context.Context, userID string) (string, error)
 	// GetDMPeerID returns the other member's user ID in a DM room.
 	GetDMPeerID(ctx context.Context, roomID, userID string) (string, error)
+	// ListRetentionEligibleMessages returns the IDs of messages that have
+	// exceeded the retention window for their room type.
+	ListRetentionEligibleMessages(ctx context.Context) ([]string, error)
 }
 
 // Service is the application-layer implementation of Manager.
@@ -393,4 +414,8 @@ func (s *Service) GetUsername(ctx context.Context, userID string) (string, error
 
 func (s *Service) GetDMPeerID(ctx context.Context, roomID, userID string) (string, error) {
 	return s.store.GetDMPeerID(ctx, roomID, userID)
+}
+
+func (s *Service) ListRetentionEligibleMessages(ctx context.Context) ([]string, error) {
+	return s.store.ListRetentionEligibleMessages(ctx)
 }

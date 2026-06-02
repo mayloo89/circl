@@ -136,6 +136,10 @@ func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
 	return m.expiredIDs, m.expiredErr
 }
 
+func (m *mockManager) ListRetentionEligibleMessages(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func authedReq(r *http.Request) *http.Request {
 	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
 	r.Header.Set("Authorization", "Bearer "+tok)

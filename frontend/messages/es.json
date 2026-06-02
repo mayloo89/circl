@@ -334,6 +334,7 @@
     "hideReadReceiptsDesc": "Si está activado, los demás no sabrán cuándo has leído sus mensajes. Tú tampoco verás los suyos.",
     "hideTyping": "Ocultar indicador de escritura",
     "hideTypingDesc": "Si está activado, los demás no verán cuándo estás escribiendo. Tú tampoco verás los suyos.",
+    "dmRetentionNotice": "Los mensajes directos se eliminan automáticamente 3 meses después de enviarse.",
     "privacyUpdateFailed": "No se pudo actualizar la preferencia de privacidad. Inténtalo de nuevo.",
     "notifyCategoriesLabel": "Envíame notificaciones para",
     "notifyChatMessages": "Mensajes",

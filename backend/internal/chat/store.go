@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -835,4 +836,49 @@ func (s *pgStore) GetDMPeerID(ctx context.Context, roomID, userID string) (strin
 		return "", fmt.Errorf("get dm peer id: %w", err)
 	}
 	return peerID, nil
+}
+
+// ListRetentionEligibleMessages returns the IDs of messages that have exceeded
+// the retention window for their room type, per the RetentionDurations policy
+// (which is the single source of truth). Tombstoned messages and messages with
+// a user-set expires_at (self-destruct / view-once) are excluded — those are
+// handled by the EphemeralCleaner. Room types absent from RetentionDurations
+// are never returned, so the policy stays inert for them.
+func (s *pgStore) ListRetentionEligibleMessages(ctx context.Context) ([]string, error) {
+	if len(RetentionDurations) == 0 {
+		return nil, nil
+	}
+
+	conds := make([]string, 0, len(RetentionDurations))
+	args := make([]any, 0, len(RetentionDurations)*2)
+	i := 1
+	for roomType, window := range RetentionDurations {
+		conds = append(conds, fmt.Sprintf("(r.type = $%d AND m.created_at < NOW() - make_interval(secs => $%d))", i, i+1))
+		args = append(args, roomType, window.Seconds())
+		i += 2
+	}
+
+	query := `
+		SELECT m.id
+		FROM messages m
+		JOIN rooms r ON r.id = m.room_id
+		WHERE NOT m.tombstone
+		  AND m.expires_at IS NULL
+		  AND (` + strings.Join(conds, " OR ") + `)`
+
+	rows, err := s.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list retention eligible messages: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("list retention eligible messages: scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
