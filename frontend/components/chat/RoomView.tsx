@@ -37,6 +37,7 @@ interface RoomSummary {
   peer_name?: string
   peer_avatar_url?: string
   peer_last_read_at?: string
+  are_accepted_contacts?: boolean
 }
 
 interface MemberProfile {
@@ -689,8 +690,9 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
             inputRef={inputRef}
             disableAttach={room?.type === "channel"}
             disableEphemeral={room?.type === "channel"}
-            onShareAlbum={room?.type === "dm" ? () => setShareAlbumOpen(true) : undefined}
-          />
+        onShareAlbum={room?.type === "dm" ? () => setShareAlbumOpen(true) : undefined}
+        showContactWarning={room?.type === "dm" && !room.are_accepted_contacts}
+      />
           {token && roomId && room?.type === "dm" && (
             <ShareAlbumDialog
               open={shareAlbumOpen}

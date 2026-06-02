@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/mayloo89/circl/backend/internal/redact"
 )
 
 const (
@@ -17,14 +19,15 @@ const (
 	MessageTypeVideo      = "video"
 	MessageTypeFile       = "file"
 	MessageTypeAlbumShare = "album_share"
+	MessageTypeSystem     = "system"
 
 	// TTL label constants for ephemeral messages.
-	TTL15Min  = "15m"
-	TTL30Min  = "30m"
-	TTL1Hour  = "1h"
-	TTL6Hours = "6h"
+	TTL15Min   = "15m"
+	TTL30Min   = "30m"
+	TTL1Hour   = "1h"
+	TTL6Hours  = "6h"
 	TTL12Hours = "12h"
-	TTL24Hour = "24h"
+	TTL24Hour  = "24h"
 )
 
 var (
@@ -97,15 +100,15 @@ type MessageSummary struct {
 // RoomSummary is returned by ListRooms and contains everything the UI needs
 // to render a conversation list entry without extra round-trips.
 type RoomSummary struct {
-	ID            string          `json:"id"`
-	Type          string          `json:"type"`
-	Name          string          `json:"name"`
-	Description   string          `json:"description,omitempty"`
-	CreatorID     string          `json:"creator_id,omitempty"`
-	PeerID        string          `json:"peer_id,omitempty"`
-	PeerUsername  string          `json:"peer_username,omitempty"`
-	PeerName      string          `json:"peer_name,omitempty"`
-	PeerAvatarURL string          `json:"peer_avatar_url,omitempty"`
+	ID            string `json:"id"`
+	Type          string `json:"type"`
+	Name          string `json:"name"`
+	Description   string `json:"description,omitempty"`
+	CreatorID     string `json:"creator_id,omitempty"`
+	PeerID        string `json:"peer_id,omitempty"`
+	PeerUsername  string `json:"peer_username,omitempty"`
+	PeerName      string `json:"peer_name,omitempty"`
+	PeerAvatarURL string `json:"peer_avatar_url,omitempty"`
 	// PeerLastReadAt is the peer's last_read_at timestamp for DM rooms.
 	// Used to seed the initial read-receipt state without a round-trip.
 	PeerLastReadAt *time.Time      `json:"peer_last_read_at,omitzero"`
@@ -116,22 +119,25 @@ type RoomSummary struct {
 
 // Message is the full representation of a chat message including sender info.
 type Message struct {
-	ID              string     `json:"id"`
-	RoomID          string     `json:"room_id"`
-	SenderID        string     `json:"sender_id"`
-	SenderName      string     `json:"sender_name"`
-	SenderAvatarURL string     `json:"sender_avatar_url"`
-	Type            string     `json:"type"`
-	Content         string     `json:"content"`
+	ID              string `json:"id"`
+	RoomID          string `json:"room_id"`
+	SenderID        string `json:"sender_id"`
+	SenderName      string `json:"sender_name"`
+	SenderAvatarURL string `json:"sender_avatar_url"`
+	Type            string `json:"type"`
+	Content         string `json:"content"`
 	// ThumbnailURL is the public URL of the image thumbnail, generated
 	// asynchronously after upload. Empty for non-image messages.
-	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
-	ExpiresAt       *time.Time `json:"expires_at,omitzero"`
-	ViewOnce        bool       `json:"view_once"`
+	ThumbnailURL string     `json:"thumbnail_url,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitzero"`
+	ViewOnce     bool       `json:"view_once"`
 	// Tombstone is true when the message content has been permanently erased
 	// (view-once viewed or TTL expired). The record is kept so the chat
 	// history can show a placeholder where the message used to be.
 	Tombstone bool `json:"tombstone,omitempty"`
+	// Redacted is true when the message content contained external contact
+	// info and was replaced with a redaction token before persistence.
+	Redacted  bool      `json:"redacted,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -148,6 +154,9 @@ type SaveMessageParams struct {
 	ViewOnce bool
 	// ExpiresAt, when non-nil, marks the message as TTL-based ephemeral.
 	ExpiresAt *time.Time
+	// Redacted is set to true when contact-info detection has replaced
+	// the original content with a redaction token.
+	Redacted bool
 }
 
 // Store is the persistence contract for the chat package.
@@ -201,6 +210,8 @@ type Store interface {
 	// GetUsername returns the username for the given user.
 	// Returns an empty string when the user does not exist.
 	GetUsername(ctx context.Context, userID string) (string, error)
+	// GetDMPeerID returns the other member's user ID in a DM room.
+	GetDMPeerID(ctx context.Context, roomID, userID string) (string, error)
 }
 
 // Manager is the interface used by HTTP and WebSocket handlers.
@@ -235,13 +246,17 @@ type Manager interface {
 	// GetUsername returns the username for the given user.
 	// Returns an empty string when the user does not exist.
 	GetUsername(ctx context.Context, userID string) (string, error)
+	// GetDMPeerID returns the other member's user ID in a DM room.
+	GetDMPeerID(ctx context.Context, roomID, userID string) (string, error)
 }
 
 // Service is the application-layer implementation of Manager.
 // It is a thin delegation layer over Store — business rules live here when
 // they grow beyond simple persistence calls.
 type Service struct {
-	store Store
+	store          Store
+	AreContacts    func(ctx context.Context, userA, userB string) (bool, error)
+	IsExemptSender func(ctx context.Context, senderID string) bool
 }
 
 func NewService(store Store) *Service {
@@ -297,7 +312,47 @@ func (s *Service) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 }
 
 func (s *Service) SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error) {
+	s.maybeRedact(ctx, &p)
 	return s.store.SaveMessage(ctx, p)
+}
+
+func (s *Service) maybeRedact(ctx context.Context, p *SaveMessageParams) {
+	if p.Type != MessageTypeText {
+		return
+	}
+	if s.AreContacts == nil || s.IsExemptSender == nil {
+		return
+	}
+	room, err := s.store.GetRoom(ctx, p.RoomID)
+	if err != nil || room.Type != RoomTypeDM {
+		return
+	}
+	if s.IsExemptSender(ctx, p.SenderID) {
+		return
+	}
+	members, err := s.store.ListMembers(ctx, p.RoomID)
+	if err != nil {
+		return
+	}
+	var peerID string
+	for _, m := range members {
+		if m != p.SenderID {
+			peerID = m
+			break
+		}
+	}
+	if peerID == "" {
+		return
+	}
+	accepted, err := s.AreContacts(ctx, p.SenderID, peerID)
+	if err != nil || accepted {
+		return
+	}
+	res := redact.Redact(p.Content)
+	if res.Redacted {
+		p.Content = res.Content
+		p.Redacted = true
+	}
 }
 
 func (s *Service) ListMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]Message, error) {
@@ -334,4 +389,8 @@ func (s *Service) GetAvatarURL(ctx context.Context, userID string) (string, erro
 
 func (s *Service) GetUsername(ctx context.Context, userID string) (string, error) {
 	return s.store.GetUsername(ctx, userID)
+}
+
+func (s *Service) GetDMPeerID(ctx context.Context, roomID, userID string) (string, error) {
+	return s.store.GetDMPeerID(ctx, roomID, userID)
 }

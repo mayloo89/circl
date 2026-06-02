@@ -272,23 +272,23 @@ func (s *pgStore) SaveMessage(ctx context.Context, p SaveMessageParams) (*Messag
 
 	var msg Message
 	err = tx.QueryRow(ctx, `
-		WITH inserted AS (
-			INSERT INTO messages (room_id, sender_id, type, content, expires_at, view_once)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id, room_id, sender_id, type, content, expires_at, view_once, tombstone, created_at
-		)
-		SELECT
-			i.id, i.room_id, i.sender_id,
-			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
-			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			i.type, i.content, i.expires_at, i.view_once, i.tombstone, i.created_at
-		FROM inserted i
-		JOIN users u ON u.id = i.sender_id
-		LEFT JOIN profiles p ON p.user_id = i.sender_id`,
-		p.RoomID, p.SenderID, p.Type, p.Content, p.ExpiresAt, p.ViewOnce,
+	WITH inserted AS (
+		INSERT INTO messages (room_id, sender_id, type, content, expires_at, view_once, redacted)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, room_id, sender_id, type, content, expires_at, view_once, tombstone, redacted, created_at
+	)
+	SELECT
+		i.id, i.room_id, i.sender_id,
+		COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
+		COALESCE(p.avatar_url, '') AS sender_avatar_url,
+		i.type, i.content, i.expires_at, i.view_once, i.tombstone, i.redacted, i.created_at
+	FROM inserted i
+	JOIN users u ON u.id = i.sender_id
+	LEFT JOIN profiles p ON p.user_id = i.sender_id`,
+		p.RoomID, p.SenderID, p.Type, p.Content, p.ExpiresAt, p.ViewOnce, p.Redacted,
 	).Scan(
 		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
-		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.CreatedAt,
+		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.Redacted, &msg.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("save message: %w", err)
@@ -320,18 +320,18 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 
 	rows, err := s.db.Query(ctx, `
 		SELECT
-			m.id, m.room_id, m.sender_id,
-			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
-			COALESCE(p.avatar_url, '') AS sender_avatar_url,
-			m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.created_at,
-			COALESCE(up.thumbnail_key, '') AS thumbnail_key
+		m.id, m.room_id, m.sender_id,
+		COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
+		COALESCE(p.avatar_url, '') AS sender_avatar_url,
+		m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.redacted, m.created_at,
+		COALESCE(up.thumbnail_key, '') AS thumbnail_key
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		LEFT JOIN profiles p ON p.user_id = m.sender_id
 		LEFT JOIN uploads up ON up.message_id = m.id
 		WHERE m.room_id = $1
-		  AND ($2::timestamptz IS NULL OR m.created_at < $2)
-		  AND (m.expires_at IS NULL OR m.expires_at > NOW() OR m.tombstone)
+		AND ($2::timestamptz IS NULL OR m.created_at < $2)
+		AND (m.expires_at IS NULL OR m.expires_at > NOW() OR m.tombstone)
 		ORDER BY m.created_at DESC
 		LIMIT $3`,
 		roomID, before, limit,
@@ -347,7 +347,7 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 		var thumbnailKey string
 		if err := rows.Scan(
 			&m.ID, &m.RoomID, &m.SenderID, &m.SenderName, &m.SenderAvatarURL,
-			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.Tombstone, &m.CreatedAt,
+			&m.Type, &m.Content, &m.ExpiresAt, &m.ViewOnce, &m.Tombstone, &m.Redacted, &m.CreatedAt,
 			&thumbnailKey,
 		); err != nil {
 			return nil, fmt.Errorf("list messages: scan: %w", err)
@@ -824,4 +824,15 @@ func collectUploadKeys(ctx context.Context, tx txQuerier, messageID string) ([]s
 		}
 	}
 	return keys, rows.Err()
+}
+
+func (s *pgStore) GetDMPeerID(ctx context.Context, roomID, userID string) (string, error) {
+	var peerID string
+	err := s.db.QueryRow(ctx,
+		`SELECT user_id::text FROM room_members WHERE room_id = $1 AND user_id != $2 LIMIT 1`,
+		roomID, userID).Scan(&peerID)
+	if err != nil {
+		return "", fmt.Errorf("get dm peer id: %w", err)
+	}
+	return peerID, nil
 }

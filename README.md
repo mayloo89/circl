@@ -99,6 +99,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **Habeas Data / GDPR Art. 20 data export**: users can request a zip of their data — machine-readable JSON (`data.json`) of profile, preferences, contacts, blocks, rooms, sent messages, filed reports, age attestations, and uploads, plus the bytes of every media file they own — built async via asynq, delivered via a single-use 14-day download link emailed to them. New `POST/GET /users/me/exports` + un-authenticated `GET /account/export/{token}` (the path token is the bearer credential). Migration `000033` adds the `export_requests` table with a unique partial index that lets at most one in-flight build per user; a 24h cool-down is enforced atomically inside `Create`. New `internal/exports` package + `export:user` asynq task type + `DataExportSection` in `/settings`. EN/ES/PT.
 - ✅ **Expanded reports + priority queue + age-verification audit + appeals**: migration `000032` adds three new report reasons (`non_consensual_intimate_images`, `digital_gender_violence` / "Ley Olimpia", `csam`), a `priority` column on `reports` with index, the `age_verification_audit` table (preserved across hard-delete via ON DELETE SET NULL), and the `appeals` table (token hashed, 30-day TTL, one open appeal per suspension). Priority is derived from the reason server-side so callers can't downgrade CSAM or NCII reports — admin list is ordered critical → high → normal → newest-first. Register handler captures IP + User-Agent + DOB to the audit table after `Register` succeeds. New `internal/appeals` package + public `/appeal/{token}` (un-authenticated) + admin `/admin/appeals` (mounted via `admin.WithAppealsHandler`). Suspend / Ban fires the new `admin.SuspensionNotifier` async hook which mints a token, persists the appeal row, and emails the appeal link; approving an appeal reactivates the user; denying leaves the suspension in place; either way a resolution email is sent. New `Appeals` admin sidebar entry, new `apierror.CodeAppealAlreadyResolved`. Full EN/ES/PT.
 - ✅ **Security hardening — phase 2** ([PR #111](https://github.com/mayloo89/circl/pull/111)): eleven backend security fixes. Trusted proxy middleware (`middleware.RealIP`) prevents rate-limit bypass via spoofed `X-Forwarded-For` — only trusted when the connection arrives from a configured CIDR (`TRUSTED_PROXIES` env var). SSE notifications auth migrated from `?token=JWT` to single-use tickets (matching the WebSocket pattern). Metrics endpoint requires `METRICS_TOKEN` (returns 403 when empty). bcrypt cost raised from 10 to 12. Refresh tokens revoked after password reset. Avatar and gallery URLs validated against the configured storage prefix to prevent external-image embedding. Rate-limit counters made atomic via a Lua script. Request body capped at 1 MiB across all JSON API routes. `Permissions-Policy` header added. Chat `?limit=` capped at 200. Forgot-password and resend-verification endpoints rate-limited per IP.
+- ✅ **DM external-contact masking**: server-side detection and redaction of contact info (phones, emails, URLs, handles) in DMs between non-accepted contacts. New `internal/redact` package with two-tier normalizer, regex detection, and keyword-boosted thresholds. `Service.maybeRedact()` wired into chat send path; raw data never touches DB. `AreAcceptedContacts` on contacts store; `GetDMPeerID` on chat store; `IsExemptSender` placeholder for future service-profile logic. Migration `000042` adds `redacted` column to `messages`. Frontend: system message pill, redaction token with i18n, amber contact-sharing warning in non-accepted DMs. EN/ES/PT.
 
 ## Local setup
 
@@ -278,10 +279,11 @@ circl/
 │   │   ├── middleware/    # RequireAuth, RequireAdmin, SecurityHeaders, RequestLogger
 │   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
 │   │   ├── presence/      # Redis heartbeat, offline, batch presence query
-│   │   ├── profiles/      # Profile handler, service, store; preferences (locale)
-│   │   ├── push/          # Web Push (VAPID) handler, service, store
-│   │   ├── ratelimit/     # Redis-backed rate limiter (per-IP and per-user)
-│   │   ├── reports/       # User report handler, service, store
+│   │   ├── profiles/ # Profile handler, service, store; preferences (locale)
+│   │   ├── push/ # Web Push (VAPID) handler, service, store
+│   │   ├── ratelimit/ # Redis-backed rate limiter (per-IP and per-user)
+│   │   ├── redact/ # Contact-info detection + redaction (normalize, detect, redact)
+│   │   ├── reports/ # User report handler, service, store
 │   │   ├── server/        # Chi router, CORS, /health, /metrics endpoints
 │   │   ├── storage/       # Storage interface, LocalStorage, S3Storage
 │   │   ├── testutil/      # Integration test helpers (OpenDB, CreateUser, NewRedis)
@@ -289,7 +291,7 @@ circl/
 │   │   ├── tracing/       # OTel SDK init, chi middleware, pgx tracer
 │   │   ├── uploads/       # Upload lifecycle (request → confirm), Postgres tracking
 │   │   └── worker/        # asynq tasks: image processing, ephemeral cleanup, purge
-│   ├── migrations/        # SQL migrations (up + down), currently at 000025
+│   ├── migrations/ # SQL migrations (up + down), currently at 000042
 │   └── go.mod
 ├── ops/                   # Local observability stack (dev only)
 │   ├── alloy/             # Grafana Alloy config — scrapes container stdout → Loki

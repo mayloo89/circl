@@ -68,6 +68,9 @@ func (m *mockManager) GetAvatarURL(_ context.Context, _ string) (string, error) 
 func (m *mockManager) GetUsername(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
+func (m *mockManager) GetDMPeerID(_ context.Context, _, _ string) (string, error) {
+	return "peer-1", nil
+}
 func (m *mockManager) GetOrCreateDM(_ context.Context, _, _ string) (*chat.Room, error) {
 	return m.room, m.roomErr
 }
@@ -775,7 +778,6 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
 
-
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
@@ -822,7 +824,6 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 func TestWSHandler_IgnoresEmptyContent(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
@@ -908,7 +909,6 @@ func TestWSHandler_SendAttachmentMessage(t *testing.T) {
 		CreatedAt:  now,
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
@@ -1046,7 +1046,6 @@ func TestWSHandler_IgnoresUnknownType(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
@@ -1077,7 +1076,6 @@ func TestWSHandler_IgnoresAttachmentWithEmptyContent(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
 
-
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
@@ -1106,7 +1104,6 @@ func TestWSHandler_IgnoresAttachmentWithEmptyContent(t *testing.T) {
 func TestWSHandler_IgnoresAttachmentWithoutUploadID(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
@@ -1137,7 +1134,6 @@ func TestWSHandler_IgnoresAttachmentWithoutUploadID(t *testing.T) {
 func TestWSHandler_SaveMessageError(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, msgErr: errors.New("db fail")}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
@@ -1308,7 +1304,6 @@ func TestWSHandler_TypingEventBroadcast(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, displayName: "Alice"}
 
-
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
 
@@ -1356,7 +1351,6 @@ func TestWSHandler_TypingEventBroadcast(t *testing.T) {
 func TestWSHandler_TypingEventDebounced(t *testing.T) {
 	hub := newTestHubForHandler(t)
 	mgr := &mockManager{isMember: true, displayName: "Bob"}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
@@ -1417,7 +1411,6 @@ func TestWSHandler_ThumbnailURLBroadcast(t *testing.T) {
 		CreatedAt:    now,
 	}
 	mgr := &mockManager{isMember: true, msg: savedMsg}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
@@ -1503,7 +1496,6 @@ func TestWSHandler_BlockedMessageSilentlyDropped(t *testing.T) {
 		},
 	}
 
-
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil, cfg))
 
@@ -1553,7 +1545,6 @@ func TestWSHandler_NotBlockedMessageDelivered(t *testing.T) {
 			return false
 		},
 	}
-
 
 	r := chi.NewRouter()
 	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil, cfg))
@@ -1923,5 +1914,116 @@ func TestCreateChannel_ServiceError(t *testing.T) {
 	serveWithAuth(h, req, rec)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestGetDM_AreAcceptedContacts(t *testing.T) {
+	room := &chat.Room{ID: "r-1", Type: "dm"}
+	cfg := chat.HandlerConfig{
+		AreContacts: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+	h := chat.NewHandler(&mockManager{room: room}, cfg)
+
+	body, _ := json.Marshal(map[string]string{"peer_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/dm", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got struct {
+		chat.Room
+		AreAcceptedContacts bool `json:"are_accepted_contacts"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !got.AreAcceptedContacts {
+		t.Error("are_accepted_contacts = false, want true")
+	}
+}
+
+func TestGetDM_NotAcceptedContacts(t *testing.T) {
+	room := &chat.Room{ID: "r-1", Type: "dm"}
+	cfg := chat.HandlerConfig{
+		AreContacts: func(_ context.Context, _, _ string) (bool, error) {
+			return false, nil
+		},
+	}
+	h := chat.NewHandler(&mockManager{room: room}, cfg)
+
+	body, _ := json.Marshal(map[string]string{"peer_id": "u-2"})
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/dm", bytes.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got struct {
+		chat.Room
+		AreAcceptedContacts bool `json:"are_accepted_contacts"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.AreAcceptedContacts {
+		t.Error("are_accepted_contacts = true, want false")
+	}
+}
+
+func TestGetRoom_DM_AreAcceptedContacts(t *testing.T) {
+	room := &chat.Room{ID: "r-1", Type: "dm"}
+	cfg := chat.HandlerConfig{
+		AreContacts: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+	h := chat.NewHandler(&mockManager{room: room, isMember: true}, cfg)
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got struct {
+		chat.Room
+		AreAcceptedContacts bool `json:"are_accepted_contacts"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !got.AreAcceptedContacts {
+		t.Error("are_accepted_contacts = false, want true")
+	}
+}
+
+func TestGetRoom_Group_NoAcceptedField(t *testing.T) {
+	room := &chat.Room{ID: "r-1", Type: "group", Name: "team"}
+	cfg := chat.HandlerConfig{
+		AreContacts: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+	h := chat.NewHandler(&mockManager{room: room, isMember: true}, cfg)
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms/r-1", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := got["are_accepted_contacts"]; ok {
+		t.Error("are_accepted_contacts should not be present for group rooms")
 	}
 }

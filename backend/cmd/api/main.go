@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
@@ -293,6 +293,8 @@ func main() {
 
 	chatStore := chat.NewStore(pool, fileStorage.PublicURL)
 	chatSvc := chat.NewService(chatStore)
+	chatSvc.AreContacts = contactSvc.AreAcceptedContacts
+	chatSvc.IsExemptSender = func(_ context.Context, _ string) bool { return false }
 
 	isBlockedInRoom := func(ctx context.Context, senderID, roomID string) bool {
 		members, err := chatSvc.ListMembers(ctx, roomID)
@@ -338,6 +340,8 @@ func main() {
 		}, func(f profiles.NotificationFlags) bool { return f.ChatMessages })
 	}, chat.HandlerConfig{
 		IsBlockedInRoom: isBlockedInRoom,
+		AreContacts:     contactSvc.AreAcceptedContacts,
+		IsExemptSender:  func(_ context.Context, _ string) bool { return false },
 		AllowedOrigins:  corsOrigins,
 		PrivacyResolver: chatPrivacy,
 	})
@@ -353,6 +357,8 @@ func main() {
 	chatHandler := chat.NewHandler(chatSvc, chat.HandlerConfig{
 		Hub:                  chatHub,
 		NotifyMessageDeleted: notifyDeleted,
+		AreContacts:          contactSvc.AreAcceptedContacts,
+		IsExemptSender:       func(_ context.Context, _ string) bool { return false },
 		NotifyRoomRead: func(roomID, userID string, readAt time.Time) {
 			// Emit gate: drop the broadcast entirely when the reader has
 			// opted out of read receipts. The hub's deliver loop also
@@ -431,10 +437,10 @@ func main() {
 	exportStore := exports.NewStore(pool)
 	exportSource := exports.NewSource(pool)
 	exportSvc := exports.NewService(exports.Config{
-		Store:           exportStore,
-		Source:          exportSource,
-		Storage:         fileStorage,
-		Mailer:          exportMailer{sender: mailer, frontendURL: frontendURL},
+		Store:   exportStore,
+		Source:  exportSource,
+		Storage: fileStorage,
+		Mailer:  exportMailer{sender: mailer, frontendURL: frontendURL},
 		Enqueue: func(ctx context.Context, requestID, userID string) error {
 			return worker.EnqueueExportUser(ctx, workerClient, worker.ExportPayload{
 				RequestID: requestID,
@@ -553,20 +559,20 @@ func main() {
 
 		RequireAuth: requireAuth,
 
-		Auth:          authHandler,
-		WSTicket:      wsticket.NewHandler(wsTicketStore),
-		Account:       accountHandler,
-		Profile:       profileHandler,
-		Available:     profiles.PublicAvailableHandler(profileSvc),
-		Contacts:      contactsHandler,
-		Notifications: notificationsHandler,
-		Chat:          chatHandler,
-		ChatWS:        chatWSHandler,
-		Presence:      presenceHandler,
-		Upload:        uploadHandler,
-		Albums:        albumsHandler,
-		Reports:       reportsHandler,
-		Push:          pushHandler,
+		Auth:           authHandler,
+		WSTicket:       wsticket.NewHandler(wsTicketStore),
+		Account:        accountHandler,
+		Profile:        profileHandler,
+		Available:      profiles.PublicAvailableHandler(profileSvc),
+		Contacts:       contactsHandler,
+		Notifications:  notificationsHandler,
+		Chat:           chatHandler,
+		ChatWS:         chatWSHandler,
+		Presence:       presenceHandler,
+		Upload:         uploadHandler,
+		Albums:         albumsHandler,
+		Reports:        reportsHandler,
+		Push:           pushHandler,
 		Admin:          adminHandler,
 		Appeals:        appealsPublicHandler,
 		Export:         exportAuthedHandler,

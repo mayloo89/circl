@@ -675,6 +675,15 @@ func TestIntegration_ContactsFlow(t *testing.T) {
 		t.Errorf("status = %q, want %q", accepted.Status, StatusAccepted)
 	}
 
+	// AreAcceptedContacts: a single accepted row is sufficient (regression —
+	// the query previously required COUNT>=2 and never returned true, which
+	// caused contact-info masking to apply even to accepted contacts).
+	if ok, err := store.AreAcceptedContacts(ctx, u1, u2); err != nil {
+		t.Fatalf("AreAcceptedContacts: %v", err)
+	} else if !ok {
+		t.Error("AreAcceptedContacts after accept = false, want true")
+	}
+
 	// List accepted contacts.
 	contacts, err := store.ListAccepted(ctx, u1)
 	if err != nil {
@@ -687,6 +696,13 @@ func TestIntegration_ContactsFlow(t *testing.T) {
 	// Delete contact.
 	if _, err := store.Delete(ctx, c.ID, u1); err != nil {
 		t.Fatalf("Delete: %v", err)
+	}
+
+	// No accepted row remains after deletion.
+	if ok, err := store.AreAcceptedContacts(ctx, u1, u2); err != nil {
+		t.Fatalf("AreAcceptedContacts after delete: %v", err)
+	} else if ok {
+		t.Error("AreAcceptedContacts after delete = true, want false")
 	}
 
 	// Search users — contact is gone so u2 must appear in results again.

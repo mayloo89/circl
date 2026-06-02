@@ -11,6 +11,7 @@ export interface HistoryMessage {
   thumbnail_url?: string
   view_once: boolean
   tombstone?: boolean
+  redacted?: boolean
   expires_at?: string
   created_at: string
 }

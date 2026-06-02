@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog"
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/notifications"
+	"github.com/rs/zerolog"
 )
 
 // RateLimiter is satisfied by *ratelimit.RedisLimiter.
@@ -327,6 +327,3 @@ func unblockHandler(svc Manager) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-
-
-
