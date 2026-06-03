@@ -86,6 +86,16 @@ function ChannelsIcon() {
   )
 }
 
+function GlobeIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  )
+}
+
 function AdminIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -103,7 +113,7 @@ function SettingsIcon() {
   )
 }
 
-const MORE_PATHS = ["/profile", "/albums", "/settings", "/chat/channels", "/admin"]
+const MORE_PATHS = ["/profile", "/albums", "/settings", "/chat/channels", "/rooms", "/admin"]
 
 export default function BottomNav() {
   const t = useTranslations("nav")
@@ -122,6 +132,7 @@ export default function BottomNav() {
 
   const moreItems: { href: string; label: string; icon: React.ReactNode }[] = [
     { href: "/profile", label: t("profile"), icon: <ProfileIcon /> },
+    { href: "/rooms", label: t("publicRooms"), icon: <GlobeIcon /> },
     { href: "/albums", label: t("albums"), icon: <AlbumIcon /> },
     { href: "/chat/channels", label: t("channels"), icon: <ChannelsIcon /> },
     { href: "/settings", label: t("settings"), icon: <SettingsIcon /> },

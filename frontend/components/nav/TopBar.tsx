@@ -33,6 +33,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/browse": "browse",
   "/chat": "messages",
   "/chat/channels": "channels",
+  "/rooms": "publicRooms",
   "/contacts": "contacts",
   "/albums": "albums",
   "/profile": "profile",
