@@ -471,6 +471,16 @@ func main() {
 	}, log)
 	ephemeralCleaner.Start(appCtx)
 
+	retentionCleaner := worker.NewRetentionCleaner(chatStore, fileStorage, func(roomID, messageID string) {
+		data, _ := json.Marshal(map[string]string{
+			"event":   "message_deleted",
+			"id":      messageID,
+			"room_id": roomID,
+		})
+		chatHub.Publish(appCtx, roomID, data) //nolint:errcheck
+	}, log)
+	retentionCleaner.Start(appCtx)
+
 	// Daily purge of accounts past the 30-day deletion grace period and of
 	// rejected upload files past their admin-review retention window.
 	moderationRetentionDays := config.EnvIntOrDefault("MODERATION_REJECTED_RETENTION_DAYS", worker.DefaultModerationRetentionDays)

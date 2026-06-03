@@ -449,3 +449,106 @@ func TestIntegration_ListMessages_DefaultLimit(t *testing.T) {
 	}
 	_ = msgs // result can be empty, just verifying no error
 }
+
+// TestIntegration_RetentionEligibility exercises ListRetentionEligibleMessages
+// against a real DB. It guards the core retention rules: DM and group messages
+// age out after ~3 months, while channel rows are never eligible (channels are
+// broadcast-only and not in the retention map) and self-destruct / tombstoned
+// rows are left to the EphemeralCleaner.
+func TestIntegration_RetentionEligibility(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
+	ctx := t.Context()
+
+	u1 := createTestUser(t, pool, "ret_test_u1@example.com")
+	u2 := createTestUser(t, pool, "ret_test_u2@example.com")
+
+	dm, err := store.GetOrCreateDM(ctx, u1, u2)
+	if err != nil {
+		t.Fatalf("GetOrCreateDM: %v", err)
+	}
+	channel, err := store.CreateChannel(ctx, u1, "retention-test-channel", "")
+	if err != nil {
+		t.Fatalf("CreateChannel: %v", err)
+	}
+	group, err := store.CreateGroup(ctx, u1, "retention-test-group", []string{u2})
+	if err != nil {
+		t.Fatalf("CreateGroup: %v", err)
+	}
+	// Clean up the channel/group and all messages we create (runs before the
+	// user cleanup registered by createTestUser, since t.Cleanup is LIFO).
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM rooms WHERE id = ANY($1)`, []string{channel.ID, group.ID}) //nolint:errcheck
+	})
+
+	save := func(roomID, content string, expiresAt *time.Time) string {
+		t.Helper()
+		m, err := store.SaveMessage(ctx, SaveMessageParams{
+			RoomID: roomID, SenderID: u1, Type: MessageTypeText, Content: content, ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			t.Fatalf("SaveMessage(%q): %v", content, err)
+		}
+		return m.ID
+	}
+	backdate := func(id string, age time.Duration) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`UPDATE messages SET created_at = NOW() - make_interval(secs => $2) WHERE id = $1`,
+			id, age.Seconds(),
+		); err != nil {
+			t.Fatalf("backdate %q: %v", id, err)
+		}
+	}
+
+	future := time.Now().Add(time.Hour)
+	oldDM := save(dm.ID, "old dm message", nil)
+	recentDM := save(dm.ID, "recent dm message", nil)
+	oldGroup := save(group.ID, "old group message", nil)
+	recentGroup := save(group.ID, "recent group message", nil)
+	oldChannel := save(channel.ID, "old channel message", nil)
+	oldSelfDestruct := save(dm.ID, "old self-destruct dm", &future)
+	oldTombstoned := save(dm.ID, "old tombstoned dm", nil)
+
+	// Age the relevant messages past the retention window (~3 months).
+	old := 100 * 24 * time.Hour
+	backdate(oldDM, old)
+	backdate(oldGroup, old)
+	backdate(oldChannel, old)
+	backdate(oldSelfDestruct, old)
+	backdate(oldTombstoned, old)
+	if _, err := pool.Exec(ctx, `UPDATE messages SET tombstone = true WHERE id = $1`, oldTombstoned); err != nil {
+		t.Fatalf("tombstone: %v", err)
+	}
+
+	ids, err := store.ListRetentionEligibleMessages(ctx)
+	if err != nil {
+		t.Fatalf("ListRetentionEligibleMessages: %v", err)
+	}
+	got := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		got[id] = true
+	}
+
+	if !got[oldDM] {
+		t.Error("old DM message should be retention-eligible")
+	}
+	if got[recentDM] {
+		t.Error("recent DM message must NOT be retention-eligible")
+	}
+	if !got[oldGroup] {
+		t.Error("old group message should be retention-eligible")
+	}
+	if got[recentGroup] {
+		t.Error("recent group message must NOT be retention-eligible")
+	}
+	if got[oldChannel] {
+		t.Error("channel message must NEVER be retention-eligible (channels are broadcast-only, not in the retention map)")
+	}
+	if got[oldSelfDestruct] {
+		t.Error("self-destruct (expires_at) message must be left to the EphemeralCleaner, not retention")
+	}
+	if got[oldTombstoned] {
+		t.Error("tombstoned message must NOT be retention-eligible")
+	}
+}

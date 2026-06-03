@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -57,6 +58,7 @@ type mockManager struct {
 	expiredErr       error
 	displayName      string
 	displayNameErr   error
+	saveCalls        atomic.Int32
 }
 
 func (m *mockManager) GetDisplayName(_ context.Context, _ string) (string, error) {
@@ -100,6 +102,7 @@ func (m *mockManager) ListRooms(_ context.Context, _ string) ([]chat.RoomSummary
 	return m.rooms, m.roomsErr
 }
 func (m *mockManager) SaveMessage(_ context.Context, _ chat.SaveMessageParams) (*chat.Message, error) {
+	m.saveCalls.Add(1)
 	return m.msg, m.msgErr
 }
 func (m *mockManager) ListMessages(_ context.Context, _ string, _ *time.Time, _ int) ([]chat.Message, error) {
@@ -134,6 +137,10 @@ func (m *mockManager) TombstoneMessage(_ context.Context, _ string) (string, []s
 }
 func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
 	return m.expiredIDs, m.expiredErr
+}
+
+func (m *mockManager) ListRetentionEligibleMessages(_ context.Context) ([]string, error) {
+	return nil, nil
 }
 
 func authedReq(r *http.Request) *http.Request {
@@ -818,6 +825,127 @@ func TestWSHandler_SendAndReceiveMessage(t *testing.T) {
 	}
 	if got["content"] != "hello from test" {
 		t.Errorf("content = %v, want %q", got["content"], "hello from test")
+	}
+	if n := mgr.saveCalls.Load(); n != 1 {
+		t.Errorf("SaveMessage call count = %d, want 1 (non-channel rooms persist)", n)
+	}
+}
+
+func TestWSHandler_ChannelBroadcastNotPersisted(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	channelRoom := &chat.Room{ID: "c-1", Type: chat.RoomTypeChannel, Name: "general"}
+	mgr := &mockManager{room: channelRoom, displayName: "Channel Tester"}
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/c-1/ws?ticket=test-ticket"
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Let the hub register the client and establish the subscription.
+	time.Sleep(100 * time.Millisecond)
+
+	if err := conn.WriteJSON(map[string]string{"type": "message", "content": "hi channel"}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	// Joining a channel first broadcasts a participant_join frame; skip
+	// non-message frames until our broadcast arrives.
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	var got map[string]any
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("ReadMessage: %v", err)
+		}
+		var frame map[string]any
+		if err := json.Unmarshal(raw, &frame); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if frame["event"] == "new_message" {
+			got = frame
+			break
+		}
+	}
+	if got["content"] != "hi channel" {
+		t.Errorf("content = %v, want %q", got["content"], "hi channel")
+	}
+	if got["sender_name"] != "Channel Tester" {
+		t.Errorf("sender_name = %v, want %q", got["sender_name"], "Channel Tester")
+	}
+	if id, _ := got["id"].(string); id == "" {
+		t.Error("frame has empty id, want a minted UUID")
+	}
+	if ts, _ := got["created_at"].(string); ts == "" {
+		t.Error("frame has empty created_at")
+	}
+
+	// The defining property: channel messages are broadcast-only, never saved.
+	if n := mgr.saveCalls.Load(); n != 0 {
+		t.Errorf("SaveMessage call count = %d, want 0 (channels are broadcast-only)", n)
+	}
+}
+
+func TestWSHandler_ChannelDropsAttachment(t *testing.T) {
+	hub := newTestHubForHandler(t)
+
+	channelRoom := &chat.Room{ID: "c-1", Type: chat.RoomTypeChannel, Name: "general"}
+	mgr := &mockManager{room: channelRoom, displayName: "Channel Tester"}
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, seededRedeemer(testUserID), nil))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/c-1/ws?ticket=test-ticket"
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Attachments require a stored row for cleanup; channels are text-only, so
+	// this send is dropped — no frame and no persistence.
+	if err := conn.WriteJSON(map[string]string{
+		"type":      "attachment",
+		"mime_type": "image/png",
+		"content":   "https://example.com/a.png",
+		"upload_id": "u-1",
+	}); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	// The participant_join frame is expected; a new_message frame is not.
+	conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond)) //nolint:errcheck
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			break // deadline reached: no new_message arrived
+		}
+		var frame map[string]any
+		if err := json.Unmarshal(raw, &frame); err != nil {
+			continue
+		}
+		if frame["event"] == "new_message" {
+			t.Error("expected no new_message frame for a channel attachment, but received one")
+			break
+		}
+	}
+	if n := mgr.saveCalls.Load(); n != 0 {
+		t.Errorf("SaveMessage call count = %d, want 0", n)
 	}
 }
 

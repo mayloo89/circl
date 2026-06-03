@@ -39,6 +39,8 @@ type mockStore struct {
 	deleteErr        error
 	expiredIDs       []string
 	expiredErr       error
+	retentionIDs     []string
+	retentionErr     error
 	displayName      string
 	displayNameErr   error
 	savedParams      *chat.SaveMessageParams
@@ -113,6 +115,10 @@ func (m *mockStore) TombstoneMessage(_ context.Context, _ string) (string, []str
 }
 func (m *mockStore) ListExpiredMessages(_ context.Context) ([]string, error) {
 	return m.expiredIDs, m.expiredErr
+}
+
+func (m *mockStore) ListRetentionEligibleMessages(_ context.Context) ([]string, error) {
+	return m.retentionIDs, m.retentionErr
 }
 
 func TestService_GetOrCreateDM_Success(t *testing.T) {
@@ -758,5 +764,41 @@ func TestService_GetDMPeerID_Success(t *testing.T) {
 	}
 	if peerID != "peer-1" {
 		t.Errorf("peerID = %q, want peer-1", peerID)
+	}
+}
+
+func TestService_ListRetentionEligibleMessages_Success(t *testing.T) {
+	svc := chat.NewService(&mockStore{retentionIDs: []string{"m-1", "m-2"}})
+
+	ids, err := svc.ListRetentionEligibleMessages(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ids) != 2 {
+		t.Errorf("len = %d, want 2", len(ids))
+	}
+}
+
+func TestService_ListRetentionEligibleMessages_Error(t *testing.T) {
+	svc := chat.NewService(&mockStore{retentionErr: errors.New("db error")})
+	_, err := svc.ListRetentionEligibleMessages(t.Context())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestRetentionDurations_Defined(t *testing.T) {
+	if _, ok := chat.RetentionDurations[chat.RoomTypeDM]; !ok {
+		t.Error("RetentionDurations missing DM entry")
+	}
+	// Groups are relationship spaces like DMs — they share the retention window.
+	if _, ok := chat.RetentionDurations[chat.RoomTypeGroup]; !ok {
+		t.Error("RetentionDurations missing group entry")
+	}
+	// Channels must NOT have a retention window — they are broadcast-only and
+	// never persist messages. The 24h public-room policy stays inert until
+	// public rooms exist.
+	if _, ok := chat.RetentionDurations[chat.RoomTypeChannel]; ok {
+		t.Error("RetentionDurations must not include channels (broadcast-only, never persisted)")
 	}
 }

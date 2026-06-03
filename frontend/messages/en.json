@@ -334,6 +334,7 @@
     "hideReadReceiptsDesc": "When on, others don't see when you've read their messages. You also stop seeing theirs.",
     "hideTyping": "Hide typing indicators",
     "hideTypingDesc": "When on, others don't see when you're typing. You also stop seeing theirs.",
+    "dmRetentionNotice": "Direct messages are automatically deleted 3 months after they're sent.",
     "privacyUpdateFailed": "Failed to update privacy preference. Please try again.",
     "notifyCategoriesLabel": "Send me notifications for",
     "notifyChatMessages": "Chat messages",

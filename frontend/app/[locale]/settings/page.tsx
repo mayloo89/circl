@@ -293,6 +293,7 @@ function PrivacySection({ token }: { token: string | undefined }) {
           </p>
         )}
       </div>
+      <p className="mt-3 px-1 text-xs text-gray-500">{t("dmRetentionNotice")}</p>
     </section>
   )
 }
