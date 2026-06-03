@@ -142,6 +142,15 @@ func (m *mockManager) ListExpiredMessages(_ context.Context) ([]string, error) {
 func (m *mockManager) ListRetentionEligibleMessages(_ context.Context) ([]string, error) {
 	return nil, nil
 }
+func (m *mockManager) CreatePublicRoom(_ context.Context, _, _, _ string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
+func (m *mockManager) ListPublicRooms(_ context.Context) ([]chat.PublicRoomSummary, error) {
+	return nil, nil
+}
+func (m *mockManager) NicknameTaken(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
 
 func authedReq(r *http.Request) *http.Request {
 	tok, _ := token.Generate(testUserID, token.RoleUser, testSecret, time.Hour)
@@ -171,13 +180,13 @@ type stubRedeemer struct {
 	tickets map[string]string
 }
 
-func (s *stubRedeemer) Redeem(_ context.Context, ticket string) (string, error) {
+func (s *stubRedeemer) Redeem(_ context.Context, ticket string) (wsticket.TicketData, error) {
 	userID, ok := s.tickets[ticket]
 	if !ok {
-		return "", wsticket.ErrInvalid
+		return wsticket.TicketData{}, wsticket.ErrInvalid
 	}
 	delete(s.tickets, ticket)
-	return userID, nil
+	return wsticket.TicketData{UserID: userID}, nil
 }
 
 func seededRedeemer(userID string) *stubRedeemer {

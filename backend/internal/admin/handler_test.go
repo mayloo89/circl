@@ -1042,3 +1042,121 @@ func TestSetUserRole_Unauthorized(t *testing.T) {
 		t.Errorf("status = %d, want 401", rec.Code)
 	}
 }
+
+// --- GET /admin/public-rooms ---
+
+func TestListPublicRooms_Success(t *testing.T) {
+	rooms := []admin.PublicRoomRecord{
+		{ID: "pr-1", Name: "Lounge", Description: "Chat lounge"},
+	}
+	store := &mockStore{publicRooms: rooms}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/public-rooms", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got []admin.PublicRoomRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "pr-1" {
+		t.Errorf("got = %v, want 1 room with ID pr-1", got)
+	}
+}
+
+func TestListPublicRooms_Error(t *testing.T) {
+	store := &mockStore{listPublicRoomsErr: errors.New("db error")}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodGet, "/public-rooms", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+// --- POST /admin/public-rooms ---
+
+func TestCreatePublicRoom_Success(t *testing.T) {
+	room := &admin.PublicRoomRecord{ID: "pr-1", Name: "Lounge"}
+	store := &mockStore{createdPublicRoom: room}
+	h := newHandler(store)
+
+	body := `{"name":"Lounge","description":"A friendly place"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/public-rooms", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", rec.Code)
+	}
+	var got admin.PublicRoomRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if got.ID != "pr-1" {
+		t.Errorf("ID = %q, want pr-1", got.ID)
+	}
+}
+
+func TestCreatePublicRoom_MissingName(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	body := `{"description":"no name"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/public-rooms", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCreatePublicRoom_NameTaken(t *testing.T) {
+	store := &mockStore{createPublicRoomErr: admin.ErrPublicRoomNameTaken}
+	h := newHandler(store)
+
+	body := `{"name":"taken"}`
+	req := adminRequest(httptest.NewRequest(http.MethodPost, "/public-rooms", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", rec.Code)
+	}
+}
+
+// --- DELETE /admin/public-rooms/{id} ---
+
+func TestDeletePublicRoom_Success(t *testing.T) {
+	store := &mockStore{}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodDelete, "/public-rooms/pr-1", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestDeletePublicRoom_NotFound(t *testing.T) {
+	store := &mockStore{deletePublicRoomErr: admin.ErrPublicRoomNotFound}
+	h := newHandler(store)
+
+	req := adminRequest(httptest.NewRequest(http.MethodDelete, "/public-rooms/pr-missing", nil))
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}

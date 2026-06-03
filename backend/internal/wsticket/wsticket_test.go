@@ -44,12 +44,12 @@ func TestStore_IssueAndRedeem(t *testing.T) {
 		t.Fatal("ticket should not be empty")
 	}
 
-	userID, err := store.Redeem(ctx, ticket)
+	td, err := store.Redeem(ctx, ticket)
 	if err != nil {
 		t.Fatalf("Redeem: %v", err)
 	}
-	if userID != "user-1" {
-		t.Errorf("userID = %q, want %q", userID, "user-1")
+	if td.UserID != "user-1" {
+		t.Errorf("UserID = %q, want %q", td.UserID, "user-1")
 	}
 }
 

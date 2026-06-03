@@ -13,6 +13,9 @@ const (
 	RoomTypeDM      = "dm"
 	RoomTypeGroup   = "group"
 	RoomTypeChannel = "channel"
+	RoomTypePublic  = "public"
+
+	RoomVisibilityPublic = "public"
 
 	MessageTypeText       = "text"
 	MessageTypeImage      = "image"
@@ -41,14 +44,14 @@ var (
 // ListRetentionEligibleMessages builds its query from it.
 //
 // DM and group rooms retain for ~3 months — both are relationship spaces, so
-// they share the window. Public guest rooms (24h retention) will be added here
-// once rooms.visibility exists; until then that policy is intentionally inert.
-// Channels are absent because they are broadcast-only — their messages are
-// never persisted (see the WS send loop in handler.go), so there is nothing to
-// retain or sweep.
+// they share the window. Public guest rooms retain for 24h — they are
+// high-volume, low-value transient spaces. Channels are absent because they
+// are broadcast-only — their messages are never persisted (see the WS send
+// loop in handler.go), so there is nothing to retain or sweep.
 var RetentionDurations = map[string]time.Duration{
-	RoomTypeDM:    3 * 30 * 24 * time.Hour, // ~3 months
-	RoomTypeGroup: 3 * 30 * 24 * time.Hour, // ~3 months
+	RoomTypeDM:     3 * 30 * 24 * time.Hour, // ~3 months
+	RoomTypeGroup:  3 * 30 * 24 * time.Hour, // ~3 months
+	RoomTypePublic: 24 * time.Hour,          // 24 hours
 }
 
 var ttlDurations = map[string]time.Duration{
@@ -77,6 +80,7 @@ type Room struct {
 	DMKey       string    `json:"dm_key,omitempty"`
 	CreatorID   string    `json:"creator_id,omitempty"`
 	Description string    `json:"description,omitempty"`
+	Visibility  string    `json:"visibility,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -90,6 +94,16 @@ type ChannelSummary struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatorID   string    `json:"creator_id,omitempty"`
+	ActiveCount int       `json:"active_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// PublicRoomSummary is returned by ListPublicRooms for the guest-facing
+// directory. ActiveCount is populated by the handler from the Hub.
+type PublicRoomSummary struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
 	ActiveCount int       `json:"active_count"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -173,6 +187,12 @@ type SaveMessageParams struct {
 	// Redacted is set to true when contact-info detection has replaced
 	// the original content with a redaction token.
 	Redacted bool
+	// SenderIsGuest is true when the sender is an unregistered guest.
+	// Triggers unconditional contact-info redaction in public rooms.
+	SenderIsGuest bool
+	// SenderName overrides the display name resolved from the DB (used
+	// for guest nicknames that are not backed by a profiles row).
+	SenderName string
 }
 
 // Store is the persistence contract for the chat package.
@@ -183,6 +203,13 @@ type Store interface {
 	CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error)
 	// ListChannels returns all public channels ordered by creation date.
 	ListChannels(ctx context.Context) ([]ChannelSummary, error)
+	// CreatePublicRoom creates a public guest-accessible room.
+	CreatePublicRoom(ctx context.Context, creatorID, name, description string) (*Room, error)
+	// ListPublicRooms returns all public rooms ordered by creation date.
+	ListPublicRooms(ctx context.Context) ([]PublicRoomSummary, error)
+	// NicknameTaken returns true when the nickname matches a registered user's
+	// username or display name, preventing guest impersonation.
+	NicknameTaken(ctx context.Context, nickname string) (bool, error)
 	// GetRoom returns the room record for the given ID.
 	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
@@ -240,6 +267,9 @@ type Manager interface {
 	CreateGroup(ctx context.Context, creatorID, name string, memberIDs []string) (*Room, error)
 	CreateChannel(ctx context.Context, creatorID, name, description string) (*Room, error)
 	ListChannels(ctx context.Context) ([]ChannelSummary, error)
+	CreatePublicRoom(ctx context.Context, creatorID, name, description string) (*Room, error)
+	ListPublicRooms(ctx context.Context) ([]PublicRoomSummary, error)
+	NicknameTaken(ctx context.Context, nickname string) (bool, error)
 	GetRoom(ctx context.Context, roomID string) (*Room, error)
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
 	ListMembers(ctx context.Context, roomID string) ([]string, error)
@@ -302,6 +332,18 @@ func (s *Service) ListChannels(ctx context.Context) ([]ChannelSummary, error) {
 	return s.store.ListChannels(ctx)
 }
 
+func (s *Service) CreatePublicRoom(ctx context.Context, creatorID, name, description string) (*Room, error) {
+	return s.store.CreatePublicRoom(ctx, creatorID, name, description)
+}
+
+func (s *Service) ListPublicRooms(ctx context.Context) ([]PublicRoomSummary, error) {
+	return s.store.ListPublicRooms(ctx)
+}
+
+func (s *Service) NicknameTaken(ctx context.Context, nickname string) (bool, error) {
+	return s.store.NicknameTaken(ctx, nickname)
+}
+
 func (s *Service) GetRoom(ctx context.Context, roomID string) (*Room, error) {
 	return s.store.GetRoom(ctx, roomID)
 }
@@ -347,7 +389,19 @@ func (s *Service) maybeRedact(ctx context.Context, p *SaveMessageParams) {
 		return
 	}
 	room, err := s.store.GetRoom(ctx, p.RoomID)
-	if err != nil || room.Type != RoomTypeDM {
+	if err != nil {
+		return
+	}
+	// Guest messages in public rooms are always redacted for contact info.
+	if room.Type == RoomTypePublic && p.SenderIsGuest {
+		res := redact.Redact(p.Content)
+		if res.Redacted {
+			p.Content = res.Content
+			p.Redacted = true
+		}
+		return
+	}
+	if room.Type != RoomTypeDM {
 		return
 	}
 	if s.IsExemptSender(ctx, p.SenderID) {

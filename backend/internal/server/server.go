@@ -27,7 +27,7 @@ type Config struct {
 	RedisPing   func(context.Context) error // nil = skip Redis health check
 	Log         zerolog.Logger
 	Env         string
-	Version     string   // reported in /health; defaults to "dev"
+	Version     string // reported in /health; defaults to "dev"
 	CORSOrigins []string
 
 	// Observability — all are optional (nil disables)
@@ -37,7 +37,7 @@ type Config struct {
 	// TracingMiddleware is inserted before RequestLogger so trace_id/span_id
 	// are available to the logger for log-trace correlation.
 	TracingMiddleware func(http.Handler) http.Handler
-	MetricsHandler    http.Handler               // mounted at GET /metrics
+	MetricsHandler    http.Handler // mounted at GET /metrics
 	MetricsMiddleware func(http.Handler) http.Handler
 
 	// Security
@@ -46,6 +46,8 @@ type Config struct {
 	// Sub-routers / handlers
 	Auth          http.Handler
 	WSTicket      http.Handler
+	GuestWSTicket http.Handler
+	Guest         http.Handler
 	Account       http.Handler
 	Profile       http.Handler
 	Available     http.Handler
@@ -67,8 +69,8 @@ type Config struct {
 	// the ready email lands.
 	Export         http.Handler
 	ExportDownload http.Handler
-	LocalStorage  http.Handler // nil in production
-	Test          http.Handler // nil unless TEST_ENDPOINTS_ENABLED
+	LocalStorage   http.Handler // nil in production
+	Test           http.Handler // nil unless TEST_ENDPOINTS_ENABLED
 }
 
 // New returns a configured chi router with all application routes registered.
@@ -123,6 +125,16 @@ func New(cfg Config) http.Handler {
 		// downloads with the single-use token from their ready email.
 		if cfg.ExportDownload != nil {
 			api.Mount("/account/export", cfg.ExportDownload)
+		}
+
+		// Guest-facing routes — unauthenticated. The guest session endpoint
+		// creates an ephemeral Redis-backed identity; the WS ticket endpoint
+		// validates the session internally.
+		if cfg.Guest != nil {
+			api.Mount("/guest", cfg.Guest)
+		}
+		if cfg.GuestWSTicket != nil {
+			api.Handle("/guest/ws-ticket", cfg.GuestWSTicket)
 		}
 
 		// SSE stream — auth is handled inside the handler via ?token= query param

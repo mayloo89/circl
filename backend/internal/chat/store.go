@@ -47,20 +47,22 @@ func (s *pgStore) GetOrCreateDM(ctx context.Context, userID, peerID string) (*Ro
 	var room Room
 	err = tx.QueryRow(ctx, `
 		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		       COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at
+		COALESCE(creator_id::text, ''), COALESCE(description, ''),
+		COALESCE(visibility, ''), created_at, updated_at
 		FROM rooms WHERE dm_key = $1`, key,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt)
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.Visibility, &room.CreatedAt, &room.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Room does not exist yet — create it.  DO UPDATE is a no-op that forces
+		// Room does not exist yet — create it. DO UPDATE is a no-op that forces
 		// RETURNING to always emit a row even when the conflict branch is taken.
 		err = tx.QueryRow(ctx, `
-			INSERT INTO rooms (type, dm_key) VALUES ('dm', $1)
-			ON CONFLICT (dm_key) WHERE dm_key IS NOT NULL
-			DO UPDATE SET dm_key = EXCLUDED.dm_key
-			RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-			          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`, key,
-		).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt)
+		INSERT INTO rooms (type, dm_key) VALUES ('dm', $1)
+		ON CONFLICT (dm_key) WHERE dm_key IS NOT NULL
+		DO UPDATE SET dm_key = EXCLUDED.dm_key
+		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+		COALESCE(creator_id::text, ''), COALESCE(description, ''),
+		COALESCE(visibility, ''), created_at, updated_at`, key,
+		).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.Visibility, &room.CreatedAt, &room.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("get or create dm: upsert room: %w", err)
 		}
@@ -93,8 +95,9 @@ func (s *pgStore) CreateGroup(ctx context.Context, creatorID, name string, membe
 	if err = tx.QueryRow(ctx, `
 		INSERT INTO rooms (type, name, creator_id) VALUES ('group', $1, $2)
 		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`, name, creatorID,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		COALESCE(creator_id::text, ''), COALESCE(description, ''),
+		COALESCE(visibility, ''), created_at, updated_at`, name, creatorID,
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.Visibility, &room.CreatedAt, &room.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("create group: insert room: %w", err)
 	}
 
@@ -145,24 +148,28 @@ func (s *pgStore) ListMembers(ctx context.Context, roomID string) ([]string, err
 }
 
 // IsMember reports whether userID is a member of roomID.
-// Channel rooms are open to every authenticated user — always returns true for them.
+// Channel and public rooms are open to every authenticated user — always returns true for them.
 func (s *pgStore) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
 	var roomType string
-	var exists bool
-	err := s.db.QueryRow(ctx,
-		`SELECT r.type,
-		        EXISTS(SELECT 1 FROM room_members rm WHERE rm.room_id = r.id AND rm.user_id = $2)
-		 FROM rooms r WHERE r.id = $1`,
-		roomID, userID,
-	).Scan(&roomType, &exists)
+	err := s.db.QueryRow(ctx, `SELECT type FROM rooms WHERE id = $1`, roomID).Scan(&roomType)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, ErrNotFound
 	}
 	if err != nil {
 		return false, fmt.Errorf("is member: %w", err)
 	}
-	if roomType == RoomTypeChannel {
+	// Channel and public rooms are open to everyone — resolve before touching
+	// room_members so a non-UUID id (e.g. a guest session) never reaches the
+	// UUID-typed membership comparison.
+	if roomType == RoomTypeChannel || roomType == RoomTypePublic {
 		return true, nil
+	}
+	var exists bool
+	if err := s.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2)`,
+		roomID, userID,
+	).Scan(&exists); err != nil {
+		return false, fmt.Errorf("is member: %w", err)
 	}
 	return exists, nil
 }
@@ -262,8 +269,9 @@ func (s *pgStore) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 }
 
 // SaveMessage persists a new message and returns the full record including
-// sender display name for immediate broadcast.  If p.UploadID is set, the
+// sender display name for immediate broadcast. If p.UploadID is set, the
 // corresponding upload record is linked to this message in the same transaction.
+// Guest messages use p.SenderName directly because guests have no users/profiles row.
 func (s *pgStore) SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -272,27 +280,49 @@ func (s *pgStore) SaveMessage(ctx context.Context, p SaveMessageParams) (*Messag
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	var msg Message
-	err = tx.QueryRow(ctx, `
-	WITH inserted AS (
-		INSERT INTO messages (room_id, sender_id, type, content, expires_at, view_once, redacted)
+
+	if p.SenderIsGuest {
+		err = tx.QueryRow(ctx, `
+		INSERT INTO messages (room_id, sender_label, type, content, expires_at, view_once, redacted)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, room_id, sender_id, type, content, expires_at, view_once, tombstone, redacted, created_at
-	)
-	SELECT
-		i.id, i.room_id, i.sender_id,
-		COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
-		COALESCE(p.avatar_url, '') AS sender_avatar_url,
-		i.type, i.content, i.expires_at, i.view_once, i.tombstone, i.redacted, i.created_at
-	FROM inserted i
-	JOIN users u ON u.id = i.sender_id
-	LEFT JOIN profiles p ON p.user_id = i.sender_id`,
-		p.RoomID, p.SenderID, p.Type, p.Content, p.ExpiresAt, p.ViewOnce, p.Redacted,
-	).Scan(
-		&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
-		&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.Redacted, &msg.CreatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("save message: %w", err)
+		RETURNING id, room_id, type, content, expires_at, view_once, tombstone, redacted, created_at`,
+			p.RoomID, p.SenderName, p.Type, p.Content, p.ExpiresAt, p.ViewOnce, p.Redacted,
+		).Scan(
+			&msg.ID, &msg.RoomID,
+			&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.Redacted, &msg.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("save message (guest): %w", err)
+		}
+		// The persisted row has sender_id NULL; the live broadcast frame keeps
+		// the guest session id so the sender's own client can highlight its
+		// messages. The nickname lives in sender_label (returned as SenderName).
+		msg.SenderID = p.SenderID
+		msg.SenderName = p.SenderName
+		msg.SenderAvatarURL = ""
+	} else {
+		err = tx.QueryRow(ctx, `
+		WITH inserted AS (
+			INSERT INTO messages (room_id, sender_id, type, content, expires_at, view_once, redacted)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id, room_id, sender_id, type, content, expires_at, view_once, tombstone, redacted, created_at
+		)
+		SELECT
+			i.id, i.room_id, i.sender_id,
+			COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
+			COALESCE(p.avatar_url, '') AS sender_avatar_url,
+			i.type, i.content, i.expires_at, i.view_once, i.tombstone, i.redacted, i.created_at
+		FROM inserted i
+		JOIN users u ON u.id = i.sender_id
+		LEFT JOIN profiles p ON p.user_id = i.sender_id`,
+			p.RoomID, p.SenderID, p.Type, p.Content, p.ExpiresAt, p.ViewOnce, p.Redacted,
+		).Scan(
+			&msg.ID, &msg.RoomID, &msg.SenderID, &msg.SenderName, &msg.SenderAvatarURL,
+			&msg.Type, &msg.Content, &msg.ExpiresAt, &msg.ViewOnce, &msg.Tombstone, &msg.Redacted, &msg.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("save message: %w", err)
+		}
 	}
 
 	if p.UploadID != "" {
@@ -321,13 +351,13 @@ func (s *pgStore) ListMessages(ctx context.Context, roomID string, before *time.
 
 	rows, err := s.db.Query(ctx, `
 		SELECT
-		m.id, m.room_id, m.sender_id,
-		COALESCE(NULLIF(p.display_name, ''), u.email) AS sender_name,
+		m.id, m.room_id, COALESCE(m.sender_id::text, ''),
+		COALESCE(NULLIF(m.sender_label, ''), NULLIF(p.display_name, ''), u.email) AS sender_name,
 		COALESCE(p.avatar_url, '') AS sender_avatar_url,
 		m.type, m.content, m.expires_at, m.view_once, m.tombstone, m.redacted, m.created_at,
 		COALESCE(up.thumbnail_key, '') AS thumbnail_key
 		FROM messages m
-		JOIN users u ON u.id = m.sender_id
+		LEFT JOIN users u ON u.id = m.sender_id
 		LEFT JOIN profiles p ON p.user_id = m.sender_id
 		LEFT JOIN uploads up ON up.message_id = m.id
 		WHERE m.room_id = $1
@@ -612,9 +642,10 @@ func (s *pgStore) GetRoom(ctx context.Context, roomID string) (*Room, error) {
 	var room Room
 	err := s.db.QueryRow(ctx, `
 		SELECT id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		       COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at
+		COALESCE(creator_id::text, ''), COALESCE(description, ''),
+		COALESCE(visibility, ''), created_at, updated_at
 		FROM rooms WHERE id = $1`, roomID,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt)
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.Visibility, &room.CreatedAt, &room.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -757,9 +788,10 @@ func (s *pgStore) CreateChannel(ctx context.Context, creatorID, name, descriptio
 	if err := s.db.QueryRow(ctx, `
 		INSERT INTO rooms (type, name, description, creator_id) VALUES ('channel', $1, $2, $3)
 		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
-		          COALESCE(creator_id::text, ''), COALESCE(description, ''), created_at, updated_at`,
+		COALESCE(creator_id::text, ''), COALESCE(description, ''),
+		COALESCE(visibility, ''), created_at, updated_at`,
 		name, description, creatorID,
-	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.CreatedAt, &room.UpdatedAt); err != nil {
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.Visibility, &room.CreatedAt, &room.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("create channel: %w", err)
 	}
 	return &room, nil
@@ -793,6 +825,70 @@ func (s *pgStore) ListChannels(ctx context.Context) ([]ChannelSummary, error) {
 		channels = []ChannelSummary{}
 	}
 	return channels, nil
+}
+
+// CreatePublicRoom creates a public guest-accessible room.
+func (s *pgStore) CreatePublicRoom(ctx context.Context, creatorID, name, description string) (*Room, error) {
+	var room Room
+	if err := s.db.QueryRow(ctx, `
+		INSERT INTO rooms (type, name, description, creator_id, visibility)
+		VALUES ('public', $1, $2, $3, 'public')
+		RETURNING id, type, COALESCE(name, ''), COALESCE(dm_key, ''),
+		COALESCE(creator_id::text, ''), COALESCE(description, ''),
+		COALESCE(visibility, ''), created_at, updated_at`,
+		name, description, creatorID,
+	).Scan(&room.ID, &room.Type, &room.Name, &room.DMKey, &room.CreatorID, &room.Description, &room.Visibility, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		return nil, fmt.Errorf("create public room: %w", err)
+	}
+	return &room, nil
+}
+
+// ListPublicRooms returns all public rooms ordered by creation date.
+// ActiveCount is not populated here — it is filled by the handler from the Hub.
+func (s *pgStore) ListPublicRooms(ctx context.Context) ([]PublicRoomSummary, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, name, COALESCE(description, ''), created_at
+		FROM rooms
+		WHERE type = 'public' AND visibility = 'public'
+		ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list public rooms: %w", err)
+	}
+	defer rows.Close()
+
+	var rooms []PublicRoomSummary
+	for rows.Next() {
+		var r PublicRoomSummary
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.CreatedAt); err != nil {
+			return nil, fmt.Errorf("list public rooms: scan: %w", err)
+		}
+		rooms = append(rooms, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list public rooms: rows: %w", err)
+	}
+	if rooms == nil {
+		rooms = []PublicRoomSummary{}
+	}
+	return rooms, nil
+}
+
+// NicknameTaken returns true when the nickname matches a registered user's
+// username or display name. This prevents guests from impersonating registered
+// users in public rooms.
+func (s *pgStore) NicknameTaken(ctx context.Context, nickname string) (bool, error) {
+	var taken bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM profiles
+			WHERE LOWER(username) = LOWER($1)
+			OR LOWER(display_name) = LOWER($1)
+		)`, nickname,
+	).Scan(&taken)
+	if err != nil {
+		return false, fmt.Errorf("nickname taken: %w", err)
+	}
+	return taken, nil
 }
 
 // txQuerier is the subset of pgx.Tx used by collectUploadKeys.

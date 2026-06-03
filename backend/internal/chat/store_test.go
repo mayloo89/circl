@@ -552,3 +552,145 @@ func TestIntegration_RetentionEligibility(t *testing.T) {
 		t.Error("tombstoned message must NOT be retention-eligible")
 	}
 }
+
+func TestIntegration_PublicRooms(t *testing.T) {
+	pool := openTestDB(t)
+	store := NewStore(pool, func(key string) string { return "https://example.com/" + key })
+	ctx := t.Context()
+
+	admin := createTestUser(t, pool, "pubroom_admin@example.com")
+
+	// --- CreatePublicRoom ---
+
+	room, err := store.CreatePublicRoom(ctx, admin, "Test Lounge", "A friendly place")
+	if err != nil {
+		t.Fatalf("CreatePublicRoom: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM rooms WHERE id = $1`, room.ID) //nolint:errcheck
+	})
+	if room.Type != RoomTypePublic {
+		t.Errorf("room.Type = %q, want %q", room.Type, RoomTypePublic)
+	}
+	if room.Name != "Test Lounge" {
+		t.Errorf("room.Name = %q, want %q", room.Name, "Test Lounge")
+	}
+	if room.Visibility != RoomVisibilityPublic {
+		t.Errorf("room.Visibility = %q, want %q", room.Visibility, RoomVisibilityPublic)
+	}
+
+	// --- ListPublicRooms ---
+
+	rooms, err := store.ListPublicRooms(ctx)
+	if err != nil {
+		t.Fatalf("ListPublicRooms: %v", err)
+	}
+	found := slices.ContainsFunc(rooms, func(r PublicRoomSummary) bool {
+		return r.ID == room.ID
+	})
+	if !found {
+		t.Errorf("ListPublicRooms: created room %s not found in listing", room.ID)
+	}
+
+	// --- Guest can save a message in the public room ---
+
+	msg, err := store.SaveMessage(ctx, SaveMessageParams{
+		RoomID:        room.ID,
+		SenderID:      "guest:abc-123",
+		Type:          MessageTypeText,
+		Content:       "hello from guest",
+		SenderIsGuest: true,
+		SenderName:    "GuestUser1",
+	})
+	if err != nil {
+		t.Fatalf("SaveMessage (guest): %v", err)
+	}
+	if msg.SenderName != "GuestUser1" {
+		t.Errorf("msg.SenderName = %q, want %q", msg.SenderName, "GuestUser1")
+	}
+	if msg.SenderAvatarURL != "" {
+		t.Errorf("msg.SenderAvatarURL = %q, want empty", msg.SenderAvatarURL)
+	}
+
+	// --- IsMember returns true for public rooms ---
+
+	isMember, err := store.IsMember(ctx, room.ID, "any-random-user")
+	if err != nil {
+		t.Fatalf("IsMember (public room): %v", err)
+	}
+	if !isMember {
+		t.Error("IsMember should return true for public rooms regardless of user")
+	}
+
+	// --- NicknameTaken: a registered user's username should be protected ---
+
+	createTestProfile(t, pool, admin, "adminnick", "AdminNick")
+	taken, err := store.NicknameTaken(ctx, "AdminNick")
+	if err != nil {
+		t.Fatalf("NicknameTaken: %v", err)
+	}
+	if !taken {
+		t.Error("NicknameTaken should return true for a registered display_name")
+	}
+	taken, err = store.NicknameTaken(ctx, "adminnick")
+	if err != nil {
+		t.Fatalf("NicknameTaken (username): %v", err)
+	}
+	if !taken {
+		t.Error("NicknameTaken should return true for a registered username (case-insensitive)")
+	}
+	taken, err = store.NicknameTaken(ctx, "TotallyUnknown123")
+	if err != nil {
+		t.Fatalf("NicknameTaken (unknown): %v", err)
+	}
+	if taken {
+		t.Error("NicknameTaken should return false for an unknown nickname")
+	}
+
+	// --- 24h retention: public room messages are eligible ---
+
+	save := func(roomID, content string, expiresAt *time.Time) string {
+		t.Helper()
+		m, err := store.SaveMessage(ctx, SaveMessageParams{
+			RoomID: roomID, SenderID: admin, Type: MessageTypeText, Content: content, ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			t.Fatalf("SaveMessage(%q): %v", content, err)
+		}
+		return m.ID
+	}
+	backdate := func(id string, age time.Duration) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`UPDATE messages SET created_at = NOW() - make_interval(secs => $2) WHERE id = $1`,
+			id, age.Seconds(),
+		); err != nil {
+			t.Fatalf("backdate %q: %v", id, err)
+		}
+	}
+
+	oldMsgID := save(room.ID, "old public msg", nil)
+	backdate(oldMsgID, 25*time.Hour)
+
+	retentionIDs, err := store.ListRetentionEligibleMessages(ctx)
+	if err != nil {
+		t.Fatalf("ListRetentionEligibleMessages: %v", err)
+	}
+	retentionSet := make(map[string]bool, len(retentionIDs))
+	for _, id := range retentionIDs {
+		retentionSet[id] = true
+	}
+	if !retentionSet[oldMsgID] {
+		t.Error("public room message older than 24h should be retention-eligible")
+	}
+}
+
+func createTestProfile(t *testing.T, pool *pgxpool.Pool, userID, username, displayName string) {
+	t.Helper()
+	_, err := pool.Exec(t.Context(),
+		`UPDATE profiles SET username = $2, display_name = $3 WHERE user_id = $1`,
+		userID, username, displayName)
+	if err != nil {
+		t.Fatalf("createTestProfile: %v", err)
+	}
+}

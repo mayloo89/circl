@@ -30,6 +30,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/db"
 	"github.com/mayloo89/circl/backend/internal/email"
 	"github.com/mayloo89/circl/backend/internal/exports"
+	"github.com/mayloo89/circl/backend/internal/guest"
 	"github.com/mayloo89/circl/backend/internal/logger"
 	"github.com/mayloo89/circl/backend/internal/metrics"
 	"github.com/mayloo89/circl/backend/internal/middleware"
@@ -50,6 +51,20 @@ import (
 )
 
 const tokenExpiry = 15 * time.Minute
+
+// guestSessionAdapter adapts guest.SessionStore to wsticket.SessionValidator
+// so wsticket doesn't need to import guest.
+type guestSessionAdapter struct {
+	*guest.SessionStore
+}
+
+func (a guestSessionAdapter) Get(ctx context.Context, sessionID string) (*wsticket.SessionData, error) {
+	sess, err := a.SessionStore.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return &wsticket.SessionData{ID: sess.ID, Nickname: sess.Nickname}, nil
+}
 
 func main() {
 	// Load .env first so every subsequent os.Getenv call (LOKI_URL, LOG_LEVEL, etc.) sees it.
@@ -329,6 +344,18 @@ func main() {
 
 	wsTicketStore := wsticket.NewStore(rdb)
 	notificationsHandler := notifications.NewHandler(hub, wsTicketStore)
+
+	guestSessionStore := guest.NewSessionStore(rdb)
+	guestHandler := guest.NewHandler(guest.HandlerConfig{
+		Sessions:      guestSessionStore,
+		NicknameTaken: chatSvc.NicknameTaken,
+		RoomLister:    chatSvc,
+		Limiter:       limiter,
+		GuestIPRate:   10,
+		GuestIPWindow: time.Minute,
+	})
+	guestWSTicketHandler := wsticket.NewGuestHandler(wsTicketStore, guestSessionAdapter{guestSessionStore})
+
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, wsTicketStore, func(recipientID, roomID string) {
 		notifyUser(recipientID, notifications.Event{
 			Type:    "new_message",
@@ -339,11 +366,15 @@ func main() {
 			URL:   "/chat/" + roomID,
 		}, func(f profiles.NotificationFlags) bool { return f.ChatMessages })
 	}, chat.HandlerConfig{
-		IsBlockedInRoom: isBlockedInRoom,
-		AreContacts:     contactSvc.AreAcceptedContacts,
-		IsExemptSender:  func(_ context.Context, _ string) bool { return false },
-		AllowedOrigins:  corsOrigins,
-		PrivacyResolver: chatPrivacy,
+		IsBlockedInRoom:   isBlockedInRoom,
+		AreContacts:       contactSvc.AreAcceptedContacts,
+		IsExemptSender:    func(_ context.Context, _ string) bool { return false },
+		IsServiceProvider: func(_ context.Context, _ string) bool { return false },
+		GuestMsgLimiter:   limiter,
+		GuestMsgRate:      config.EnvIntOrDefault("GUEST_MSG_RATE", 6),
+		GuestMsgWindow:    time.Minute,
+		AllowedOrigins:    corsOrigins,
+		PrivacyResolver:   chatPrivacy,
 	})
 
 	notifyDeleted := func(roomID, messageID string) {
@@ -571,6 +602,8 @@ func main() {
 
 		Auth:           authHandler,
 		WSTicket:       wsticket.NewHandler(wsTicketStore),
+		GuestWSTicket:  guestWSTicketHandler,
+		Guest:          guestHandler,
 		Account:        accountHandler,
 		Profile:        profileHandler,
 		Available:      profiles.PublicAvailableHandler(profileSvc),

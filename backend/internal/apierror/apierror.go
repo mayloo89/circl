@@ -33,12 +33,12 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 // Stable error codes referenced by frontend i18n message keys.
 const (
 	// Generic
-	CodeUnauthorized    = "unauthorized"
-	CodeForbidden       = "forbidden"
-	CodeNotFound        = "not_found"
-	CodeInvalidRequest  = "invalid_request"
-	CodeInternalError   = "internal_error"
-	CodeRateLimited     = "rate_limited"
+	CodeUnauthorized   = "unauthorized"
+	CodeForbidden      = "forbidden"
+	CodeNotFound       = "not_found"
+	CodeInvalidRequest = "invalid_request"
+	CodeInternalError  = "internal_error"
+	CodeRateLimited    = "rate_limited"
 
 	// Auth
 	CodeAccountLocked      = "account_locked"
@@ -51,25 +51,25 @@ const (
 	CodeTermsNotAccepted   = "terms_not_accepted"
 
 	// Contacts
-	CodeSelfContact    = "self_contact"
-	CodeContactExists  = "contact_exists"
+	CodeSelfContact     = "self_contact"
+	CodeContactExists   = "contact_exists"
 	CodeContactNotFound = "contact_not_found"
-	CodeSelfBlock      = "self_block"
-	CodeAlreadyBlocked = "already_blocked"
-	CodeBlockNotFound  = "block_not_found"
+	CodeSelfBlock       = "self_block"
+	CodeAlreadyBlocked  = "already_blocked"
+	CodeBlockNotFound   = "block_not_found"
 
 	// Chat
-	CodeRoomNotFound   = "room_not_found"
-	CodeNameRequired   = "name_required"
+	CodeRoomNotFound = "room_not_found"
+	CodeNameRequired = "name_required"
 
 	// Profile
 	CodeProfileNotFound = "profile_not_found"
 	CodeInvalidDOB      = "invalid_dob"
 
 	// Admin
-	CodeChannelNotFound     = "channel_not_found"
-	CodeChannelNameTaken    = "channel_name_taken"
-	CodeUserNotFound        = "user_not_found"
+	CodeChannelNotFound  = "channel_not_found"
+	CodeChannelNameTaken = "channel_name_taken"
+	CodeUserNotFound     = "user_not_found"
 
 	// Appeals
 	CodeAppealAlreadyResolved = "appeal_already_resolved"
@@ -83,4 +83,11 @@ const (
 
 	// Push
 	CodeServiceUnavailable = "service_unavailable"
+
+	// Guest / public rooms
+	CodeNicknameTaken       = "nickname_taken"
+	CodeAgeAttestRequired   = "age_attest_required"
+	CodeGuestRateLimited    = "guest_rate_limited"
+	CodePublicRoomNameTaken = "public_room_name_taken"
+	CodeGuestTextOnly       = "guest_text_only"
 )
