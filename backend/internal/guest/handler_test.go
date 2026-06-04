@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/guest"
 )
@@ -31,8 +33,10 @@ func (m *mockSessionStore) Get(_ context.Context, _ string) (*guest.Session, err
 }
 
 type mockManager struct {
-	rooms []chat.PublicRoomSummary
-	err   error
+	rooms   []chat.PublicRoomSummary
+	room    *chat.Room
+	roomErr error
+	err     error
 }
 
 func (m *mockManager) ListPublicRooms(_ context.Context) ([]chat.PublicRoomSummary, error) {
@@ -63,8 +67,8 @@ func (mockManager) ListChannels(context.Context) ([]chat.ChannelSummary, error) 
 	panic("unexpected")
 }
 
-func (mockManager) GetRoom(context.Context, string) (*chat.Room, error) {
-	panic("unexpected")
+func (m *mockManager) GetRoom(context.Context, string) (*chat.Room, error) {
+	return m.room, m.roomErr
 }
 
 func (mockManager) IsMember(context.Context, string, string) (bool, error) {
@@ -344,5 +348,86 @@ func TestListPublicRooms_Error(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestListRoomParticipants_Success(t *testing.T) {
+	mgr := &mockManager{room: &chat.Room{ID: "pr-1", Type: chat.RoomTypePublic}}
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions:   &mockSessionStore{},
+		RoomLister: mgr,
+		Participants: func(context.Context, string) []chat.ClientInfo {
+			return []chat.ClientInfo{
+				{UserID: "u1", Username: "alice_handle", DisplayName: "Alice", IsGuest: false},
+				{UserID: "guest:1", DisplayName: "Bob", IsGuest: true},
+			}
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms/pr-1/participants", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	// A registered user's @handle must never reach a guest-facing payload.
+	if strings.Contains(rec.Body.String(), "alice_handle") {
+		t.Error("response leaked a registered user's username")
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if _, ok := got[0]["username"]; ok {
+		t.Error("participant payload must not include username")
+	}
+	if got[0]["display_name"] != "Alice" || got[0]["is_guest"] != false {
+		t.Errorf("participant[0] = %v", got[0])
+	}
+	if got[1]["display_name"] != "Bob" || got[1]["is_guest"] != true {
+		t.Errorf("participant[1] = %v", got[1])
+	}
+}
+
+// TestGuestRoutes_MountedUnderChiPrefix guards the real wiring: the handler is
+// mounted at /guest by the server, so its routes must resolve under that prefix
+// (a stdlib ServeMux with relative patterns would 404 here).
+func TestGuestRoutes_MountedUnderChiPrefix(t *testing.T) {
+	mgr := &mockManager{rooms: []chat.PublicRoomSummary{{ID: "pr-1", Name: "Lounge"}}}
+	api := chi.NewRouter()
+	api.Mount("/guest", guest.NewHandler(guest.HandlerConfig{
+		Sessions:   &mockSessionStore{},
+		RoomLister: mgr,
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/guest/rooms", nil)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /guest/rooms via chi mount = %d, want 200 (routes must resolve under the /guest prefix)", rec.Code)
+	}
+}
+
+func TestListRoomParticipants_NotPublic(t *testing.T) {
+	mgr := &mockManager{room: &chat.Room{ID: "c-1", Type: chat.RoomTypeChannel}}
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions:   &mockSessionStore{},
+		RoomLister: mgr,
+		Participants: func(context.Context, string) []chat.ClientInfo {
+			return []chat.ClientInfo{{UserID: "u1", DisplayName: "Alice"}}
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms/c-1/participants", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a non-public room", rec.Code)
 	}
 }

@@ -350,6 +350,7 @@ func main() {
 		Sessions:      guestSessionStore,
 		NicknameTaken: chatSvc.NicknameTaken,
 		RoomLister:    chatSvc,
+		Participants:  chatHub.RoomParticipants,
 		Limiter:       limiter,
 		GuestIPRate:   10,
 		GuestIPWindow: time.Minute,

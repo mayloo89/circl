@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/ratelimit"
@@ -27,6 +29,9 @@ type HandlerConfig struct {
 	Sessions      SessionCreator
 	NicknameTaken NicknameChecker
 	RoomLister    chat.Manager
+	// Participants returns the live WebSocket participants for a room. Used to
+	// build the guest-facing roster without exposing registered handles.
+	Participants  func(ctx context.Context, roomID string) []chat.ClientInfo
 	Limiter       *ratelimit.RedisLimiter
 	GuestIPRate   int
 	GuestIPWindow time.Duration
@@ -36,11 +41,47 @@ type HandlerConfig struct {
 //
 // POST /guest/session — create a guest session (nickname + age attestation)
 // GET /guest/rooms — list public rooms (unauthenticated)
+// GET /guest/rooms/{id}/participants — live roster for a public room
 func NewHandler(cfg HandlerConfig) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /session", createGuestSession(cfg))
-	mux.HandleFunc("GET /rooms", listPublicRooms(cfg))
-	return mux
+	r := chi.NewRouter()
+	r.Post("/session", createGuestSession(cfg))
+	r.Get("/rooms", listPublicRooms(cfg))
+	r.Get("/rooms/{id}/participants", listRoomParticipants(cfg))
+	return r
+}
+
+// guestParticipant is the privacy-reduced view of a public-room participant:
+// display name + badge only, never the registered @handle.
+type guestParticipant struct {
+	UserID      string `json:"user_id"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	IsGuest     bool   `json:"is_guest"`
+}
+
+// listRoomParticipants handles GET /guest/rooms/{id}/participants.
+// Returns the live participants of a public room (display name + badge only).
+func listRoomParticipants(cfg HandlerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "id")
+		room, err := cfg.RoomLister.GetRoom(r.Context(), roomID)
+		if err != nil || room.Type != chat.RoomTypePublic {
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
+			return
+		}
+		out := []guestParticipant{}
+		if cfg.Participants != nil {
+			for _, p := range cfg.Participants(r.Context(), roomID) {
+				out = append(out, guestParticipant{
+					UserID:      p.UserID,
+					DisplayName: p.DisplayName,
+					AvatarURL:   p.AvatarURL,
+					IsGuest:     p.IsGuest,
+				})
+			}
+		}
+		apierror.WriteJSON(w, http.StatusOK, out)
+	}
 }
 
 // createGuestSession handles POST /guest/session.
