@@ -27,7 +27,7 @@ export const captchaEnabled = Boolean(SITE_KEY)
  *
  * Pass a stable `onVerify` (e.g. a `useState` setter); the effect depends on it.
  */
-export default function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
+export default function Turnstile({ onVerify, resetTrigger }: { onVerify: (token: string) => void; resetTrigger?: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetIdRef = useRef<string | null>(null)
 
@@ -69,6 +69,30 @@ export default function Turnstile({ onVerify }: { onVerify: (token: string) => v
       widgetIdRef.current = null
     }
   }, [onVerify])
+
+  // If `resetTrigger` changes, remove and re-render the widget to provide a
+  // fresh challenge (used when the server rejects the nickname and we want
+  // the user to solve a new captcha instance).
+  useEffect(() => {
+    if (!SITE_KEY) return
+    if (resetTrigger === undefined) return
+    if (!containerRef.current) return
+    if (!window.turnstile) return
+
+    if (widgetIdRef.current && window.turnstile) {
+      try { window.turnstile.remove(widgetIdRef.current) } catch {}
+      widgetIdRef.current = null
+    }
+
+    // Render a fresh widget instance and wire callbacks again.
+    widgetIdRef.current = window.turnstile.render(containerRef.current, {
+      sitekey: SITE_KEY,
+      theme: "dark",
+      callback: (token: string) => onVerify(token),
+      "error-callback": () => onVerify(""),
+      "expired-callback": () => onVerify(""),
+    })
+  }, [resetTrigger, onVerify])
 
   if (!SITE_KEY) return null
   return <div ref={containerRef} className="flex justify-center" />

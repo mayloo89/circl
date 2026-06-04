@@ -30,6 +30,7 @@ export default function GuestRoomPage() {
   const [captchaToken, setCaptchaToken] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [turnstileReset, setTurnstileReset] = useState(0)
 
   // Registered users enter as themselves — no nickname gate.
   if (status === "authenticated" && session?.accessToken && session.user?.id) {
@@ -76,6 +77,8 @@ export default function GuestRoomPage() {
 
       if (res.status === 409) {
         setError(t("nicknameTaken"))
+        setCaptchaToken("")
+        setTurnstileReset((c) => c + 1)
         return
       }
       if (res.status === 403) {
@@ -134,7 +137,7 @@ export default function GuestRoomPage() {
             <span className="text-sm text-gray-300">{t("ageAttestLabel")}</span>
           </label>
 
-          <Turnstile onVerify={setCaptchaToken} />
+          <Turnstile onVerify={setCaptchaToken} resetTrigger={turnstileReset} />
 
           {error && <p className="text-xs text-red-400">{error}</p>}
 
