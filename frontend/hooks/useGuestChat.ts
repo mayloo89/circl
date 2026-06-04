@@ -117,6 +117,7 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
               username: (frame.username as string) || "",
               displayName: (frame.display_name as string) || "",
               avatarURL: (frame.avatar_url as string) || "",
+              isGuest: Boolean(frame.is_guest),
             }])
           } else if (frame.event === "participant_leave" && frame.user_id) {
             setParticipantEvents((prev) => [...prev, {
@@ -125,6 +126,7 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
               username: "",
               displayName: "",
               avatarURL: "",
+              isGuest: Boolean(frame.is_guest),
             }])
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])

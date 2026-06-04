@@ -52,6 +52,7 @@ export interface ParticipantEvent {
   username: string
   displayName: string
   avatarURL: string
+  isGuest: boolean
 }
 
 export function useChat(roomId: string | null, token: string | undefined) {
@@ -185,6 +186,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
               username: (frame.username as string) || "",
               displayName: (frame.display_name as string) || "",
               avatarURL: (frame.avatar_url as string) || "",
+              isGuest: Boolean(frame.is_guest),
             }])
           } else if (frame.event === "participant_leave" && frame.user_id) {
             setParticipantEvents((prev) => [...prev, {
@@ -193,6 +195,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
               username: "",
               displayName: "",
               avatarURL: "",
+              isGuest: Boolean(frame.is_guest),
             }])
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])

@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useParams } from "next/navigation"
 
 import { Link } from "@/i18n/navigation"
 import GuestRoomView from "@/components/chat/GuestRoomView"
+import RegisteredPublicRoomView from "@/components/chat/RegisteredPublicRoomView"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 
@@ -16,6 +18,7 @@ export default function GuestRoomPage() {
   const tc = useTranslations("common")
   const params = useParams()
   const roomId = params.roomId as string
+  const { data: session, status } = useSession()
 
   const [sessionId, setSessionId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null
@@ -25,6 +28,19 @@ export default function GuestRoomPage() {
   const [ageAttestation, setAgeAttestation] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  // Registered users enter as themselves — no nickname gate.
+  if (status === "authenticated" && session?.accessToken && session.user?.id) {
+    return <RegisteredPublicRoomView roomId={roomId} token={session.accessToken} userID={session.user.id} />
+  }
+  // Avoid flashing the guest gate to a user whose session is still resolving.
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+        <p className="text-sm text-gray-500">{tc("loading")}</p>
+      </div>
+    )
+  }
 
   if (sessionId) {
     return <GuestRoomView roomId={roomId} sessionId={sessionId} />

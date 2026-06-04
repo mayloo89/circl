@@ -2,43 +2,39 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/i18n/navigation"
-import { useTranslations } from "next-intl"
 
 import type { AnyMessage } from "@/types/chat"
-import { useGuestChat } from "@/hooks/useGuestChat"
+import { useChat } from "@/hooks/useChat"
 import PublicRoomShell from "@/components/chat/PublicRoomShell"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
-interface GuestRoomViewProps {
+interface RegisteredPublicRoomViewProps {
   roomId: string
-  sessionId: string
+  token: string
+  userID: string
 }
 
-export default function GuestRoomView({ roomId, sessionId }: GuestRoomViewProps) {
-  const t = useTranslations("guestRooms")
+export default function RegisteredPublicRoomView({ roomId, token, userID }: RegisteredPublicRoomViewProps) {
   const router = useRouter()
-  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents } = useGuestChat(roomId, sessionId)
+  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents } = useChat(roomId, token)
   const [history, setHistory] = useState<AnyMessage[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [roomName, setRoomName] = useState("")
 
   useEffect(() => {
-    fetch(`${API_URL}/guest/rooms`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rooms: { id: string; name: string }[]) => {
-        const room = rooms.find((r) => r.id === roomId)
-        if (room) setRoomName(room.name)
-      })
+    fetch(`${API_URL}/chat/rooms/${roomId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((room: { name?: string } | null) => { if (room?.name) setRoomName(room.name) })
       .catch(() => {})
-  }, [roomId])
+  }, [roomId, token])
 
   useEffect(() => {
-    fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`)
+    fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : []))
       .then((msgs: AnyMessage[]) => { setHistory(Array.isArray(msgs) ? msgs : []); setHistoryLoaded(true) })
       .catch(() => setHistoryLoaded(true))
-  }, [roomId])
+  }, [roomId, token])
 
   // Combine history + live messages, deduplicating by id (a message can arrive
   // more than once on the socket — e.g. on reconnect or a StrictMode remount).
@@ -60,16 +56,15 @@ export default function GuestRoomView({ roomId, sessionId }: GuestRoomViewProps)
     <PublicRoomShell
       roomId={roomId}
       roomName={roomName}
+      token={token}
       messages={allMessages}
       historyLoaded={historyLoaded}
       connected={connected}
       deletedIds={deletedIds}
       typingNames={typingNames}
       participantEvents={participantEvents}
-      isOwn={(senderId) => senderId === sessionId}
-      headerBadge={t("guestBadge")}
-      confirmOnLeave
-      onBack={() => router.push("/rooms")}
+      isOwn={(senderId) => senderId === userID}
+      onBack={() => router.push("/chat/channels")}
       onSend={(content) => send(content)}
       onTyping={sendTyping}
     />

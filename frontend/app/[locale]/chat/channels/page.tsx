@@ -106,12 +106,20 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
   )
 }
 
+interface RoomItem {
+  id: string
+  name: string
+  description: string
+  active_count: number
+  kind: "channel" | "public"
+}
+
 export default function ChannelsPage() {
   const t = useTranslations("channels")
   const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [channels, setChannels] = useState<ChannelSummary[]>([])
+  const [rooms, setRooms] = useState<RoomItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
@@ -120,24 +128,31 @@ export default function ChannelsPage() {
   const token = session?.accessToken
   const isAdmin = session?.role === "admin" || session?.role === "super_admin"
 
-  function loadChannels() {
+  function loadRooms() {
     if (!token) return
     setLoading(true)
     setError("")
-    fetch(`${API_URL}/chat/channels`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((data: ChannelSummary[]) => setChannels(Array.isArray(data) ? data : []))
+    const headers = { Authorization: `Bearer ${token}` }
+    Promise.all([
+      fetch(`${API_URL}/chat/public-rooms`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+      fetch(`${API_URL}/chat/channels`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    ])
+      .then(([pubs, chans]: [RoomItem[], RoomItem[]]) => {
+        const publicRooms = (Array.isArray(pubs) ? pubs : []).map((r) => ({ ...r, kind: "public" as const }))
+        const channels = (Array.isArray(chans) ? chans : []).map((r) => ({ ...r, kind: "channel" as const }))
+        setRooms([...publicRooms, ...channels])
+      })
       .catch(() => setError(t("failedLoad")))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     if (status !== "authenticated" || !token) return
-    loadChannels()
+    loadRooms()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, token])
 
-  const filtered = channels.filter(
+  const filtered = rooms.filter(
     (c) => !query || c.name.toLowerCase().includes(query.toLowerCase()) || c.description.toLowerCase().includes(query.toLowerCase())
   )
 
@@ -149,7 +164,7 @@ export default function ChannelsPage() {
           token={token}
           onClose={() => setCreateOpen(false)}
           onCreated={(ch) => {
-            setChannels((prev) => [ch, ...prev])
+            setRooms((prev) => [{ ...ch, kind: "channel" }, ...prev])
             setCreateOpen(false)
             router.push(`/chat/channels/${ch.id}`)
           }}
@@ -158,8 +173,8 @@ export default function ChannelsPage() {
 <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>
-            <p className="mt-1 text-sm text-gray-500">{t("subtitle")}</p>
+            <h1 className="text-3xl font-bold text-foreground">{t("allRoomsTitle")}</h1>
+            <p className="mt-1 text-sm text-gray-500">{t("allRoomsSubtitle")}</p>
           </div>
           {isAdmin && (
             <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
@@ -179,7 +194,7 @@ export default function ChannelsPage() {
         {error && (
           <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
             <p className="text-sm text-red-400">{error}</p>
-            <Button variant="danger" size="sm" onClick={loadChannels} className="ml-3 shrink-0">{tc("retry")}</Button>
+            <Button variant="danger" size="sm" onClick={loadRooms} className="ml-3 shrink-0">{tc("retry")}</Button>
           </div>
         )}
 
@@ -196,7 +211,7 @@ export default function ChannelsPage() {
                 </svg>
               </div>
               <p className="text-sm font-medium text-gray-300">
-                {query ? t("noResults") : t("noChannels")}
+                {query ? t("noResults") : t("noRoomsYet")}
               </p>
               {!query && isAdmin && (
                 <Button variant="primary" size="sm" pill onClick={() => setCreateOpen(true)} className="mt-1">
@@ -206,22 +221,31 @@ export default function ChannelsPage() {
             </div>
           ) : (
             <ul className="divide-y divide-gray-800">
-              {filtered.map((ch) => (
-                <li key={ch.id} className="flex items-center gap-4 px-5 py-4">
-                  <Avatar name={ch.name} size="md" color="indigo" />
+              {filtered.map((room) => (
+                <li key={room.id} className="flex items-center gap-4 px-5 py-4">
+                  <Avatar name={room.name} size="md" color="indigo" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground"># {ch.name}</p>
-                    {ch.description && (
-                      <p className="mt-0.5 truncate text-xs text-gray-400">{ch.description}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {room.kind === "channel" ? `# ${room.name}` : room.name}
+                      </p>
+                      {room.kind === "public" && (
+                        <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                          {t("publicBadge")}
+                        </span>
+                      )}
+                    </div>
+                    {room.description && (
+                      <p className="mt-0.5 truncate text-xs text-gray-400">{room.description}</p>
                     )}
-                    {ch.active_count > 0 && (
-                      <p className="mt-0.5 text-xs text-gray-600">{t("onlineNow", { count: ch.active_count })}</p>
+                    {room.active_count > 0 && (
+                      <p className="mt-0.5 text-xs text-gray-600">{t("onlineNow", { count: room.active_count })}</p>
                     )}
                   </div>
                   <Button
                     variant="primary"
                     size="sm"
-                    onClick={() => router.push(`/chat/channels/${ch.id}`)}
+                    onClick={() => router.push(room.kind === "public" ? `/rooms/${room.id}` : `/chat/channels/${room.id}`)}
                   >
                     {t("enter")}
                   </Button>

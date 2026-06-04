@@ -94,9 +94,9 @@
   "nav": {
     "browse": "Browse",
     "messages": "Messages",
-  "channels": "Channels",
-  "publicRooms": "Public Rooms",
-  "contacts": "Contacts",
+    "channels": "Channels",
+    "publicRooms": "Public Rooms",
+    "contacts": "Contacts",
     "albums": "Albums",
     "profile": "Profile",
     "settings": "Settings",
@@ -114,7 +114,8 @@
     "skipToContent": "Skip to main content",
     "switchToLight": "Switch to light mode",
     "switchToDark": "Switch to dark mode",
-    "more": "More"
+    "more": "More",
+    "rooms": "Rooms"
   },
   "login": {
     "title": "Sign in to your account",
@@ -134,7 +135,8 @@
     "accountReactivated": "Account reactivated",
     "accountReactivatedDesc": "Welcome back! Your account has been restored. All your data is intact.",
     "goToHome": "Go to home",
-    "rememberMe": "Keep me signed in"
+    "rememberMe": "Keep me signed in",
+    "browseAsGuest": "Browse public rooms as a guest →"
   },
   "register": {
     "title": "Create account",
@@ -163,7 +165,8 @@
     "dobDay": "DD",
     "dobYear": "YYYY",
     "consentLabel": "I have read and agree to the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
-    "consentRequired": "You must accept the Terms and Privacy Policy to create an account."
+    "consentRequired": "You must accept the Terms and Privacy Policy to create an account.",
+    "browseAsGuest": "Browse public rooms as a guest →"
   },
   "footer": {
     "terms": "Terms",
@@ -536,7 +539,11 @@
     "descriptionPlaceholder": "What's this channel about?",
     "nameRequired": "Name is required.",
     "failedCreate": "Failed to create channel.",
-    "createButton": "Create channel"
+    "createButton": "Create channel",
+    "allRoomsTitle": "Rooms",
+    "allRoomsSubtitle": "Public lobbies and channels to jump into.",
+    "publicBadge": "Public",
+    "noRoomsYet": "No rooms yet"
   },
   "guestRooms": {
     "title": "Public Rooms",
@@ -564,7 +571,10 @@
     "backToRooms": "Back to rooms",
     "membersOnline": "{count, plural, one {# online} other {# online}}",
     "signInPrompt": "Want to send photos and more?",
-    "signInCta": "Sign in or create an account"
+    "signInCta": "Sign in or create an account",
+    "noOneHere": "No one here yet",
+    "leaveTitle": "Leave this room?",
+    "leaveMessage": "If you leave, you’ll lose your guest nickname and need to enter again."
   },
   "chatRoom": {
     "loading": "Loading…",

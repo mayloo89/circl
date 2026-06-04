@@ -94,9 +94,9 @@
   "nav": {
     "browse": "Explorar",
     "messages": "Mensajes",
-  "channels": "Canales",
-  "publicRooms": "Salas públicas",
-  "contacts": "Contactos",
+    "channels": "Canales",
+    "publicRooms": "Salas públicas",
+    "contacts": "Contactos",
     "albums": "Álbumes",
     "profile": "Perfil",
     "settings": "Configuración",
@@ -114,7 +114,8 @@
     "skipToContent": "Saltar al contenido principal",
     "switchToLight": "Cambiar a modo claro",
     "switchToDark": "Cambiar a modo oscuro",
-    "more": "Más"
+    "more": "Más",
+    "rooms": "Salas"
   },
   "login": {
     "title": "Iniciar sesión",
@@ -134,7 +135,8 @@
     "accountReactivated": "Cuenta reactivada",
     "accountReactivatedDesc": "¡Bienvenido de vuelta! Tu cuenta ha sido restaurada. Todos tus datos están intactos.",
     "goToHome": "Ir al inicio",
-    "rememberMe": "Mantener sesión iniciada"
+    "rememberMe": "Mantener sesión iniciada",
+    "browseAsGuest": "Explorar salas públicas como invitado →"
   },
   "register": {
     "title": "Crear cuenta",
@@ -163,7 +165,8 @@
     "dobDay": "DD",
     "dobYear": "AAAA",
     "consentLabel": "He leído y acepto los <terms>Términos del Servicio</terms> y la <privacy>Política de Privacidad</privacy>.",
-    "consentRequired": "Debes aceptar los Términos y la Política de Privacidad para crear una cuenta."
+    "consentRequired": "Debes aceptar los Términos y la Política de Privacidad para crear una cuenta.",
+    "browseAsGuest": "Explorar salas públicas como invitado →"
   },
   "footer": {
     "terms": "Términos",
@@ -536,7 +539,11 @@
     "descriptionPlaceholder": "¿De qué trata este canal?",
     "nameRequired": "El nombre es requerido.",
     "failedCreate": "Error al crear el canal.",
-    "createButton": "Crear canal"
+    "createButton": "Crear canal",
+    "allRoomsTitle": "Salas",
+    "allRoomsSubtitle": "Salas públicas y canales para unirte.",
+    "publicBadge": "Pública",
+    "noRoomsYet": "Aún no hay salas"
   },
   "guestRooms": {
     "title": "Salas públicas",
@@ -564,7 +571,10 @@
     "backToRooms": "Volver a salas",
     "membersOnline": "{count, plural, one {# en línea} other {# en línea}}",
     "signInPrompt": "¿Quieres enviar fotos y más?",
-    "signInCta": "Inicia sesión o crea una cuenta"
+    "signInCta": "Inicia sesión o crea una cuenta",
+    "noOneHere": "Nadie por aquí aún",
+    "leaveTitle": "¿Salir de esta sala?",
+    "leaveMessage": "Si sales, perderás tu apodo de invitado y deberás entrar de nuevo."
   },
   "chatRoom": {
     "loading": "Cargando…",
