@@ -574,7 +574,8 @@
     "signInCta": "Sign in or create an account",
     "noOneHere": "No one here yet",
     "leaveTitle": "Leave this room?",
-    "leaveMessage": "If you leave, you’ll lose your guest nickname and need to enter again."
+    "leaveMessage": "If you leave, you’ll lose your guest nickname and need to enter again.",
+    "captchaFailed": "Verification failed. Please try again."
   },
   "chatRoom": {
     "loading": "Loading…",

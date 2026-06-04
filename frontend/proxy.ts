@@ -8,11 +8,13 @@ function buildCSP(nonce: string): string {
   return [
     "default-src 'self'",
     // No 'unsafe-inline': Next.js bootstrap scripts are stamped with the nonce.
-    `script-src 'self' 'nonce-${nonce}' https://cdn.growthbook.io`,
+    // challenges.cloudflare.com is the Turnstile anti-bot widget (script + iframe).
+    `script-src 'self' 'nonce-${nonce}' https://cdn.growthbook.io https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https:",
     "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' wss: https://cdn.growthbook.io https://photon.komoot.io",
+    "connect-src 'self' wss: https://cdn.growthbook.io https://photon.komoot.io https://challenges.cloudflare.com",
+    "frame-src https://challenges.cloudflare.com",
     "frame-ancestors 'none'",
   ].join("; ")
 }
