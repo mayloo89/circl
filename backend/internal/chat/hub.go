@@ -16,6 +16,7 @@ type ClientInfo struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
+	IsGuest     bool   `json:"is_guest,omitempty"`
 }
 
 // participantsReq is a synchronous query sent on Hub.participantsQ.
@@ -102,6 +103,7 @@ func (h *Hub) Run(ctx context.Context) {
 					Username:    c.username,
 					DisplayName: c.displayName,
 					AvatarURL:   c.avatarURL,
+					IsGuest:     c.isGuest,
 				})
 			}
 			req.reply <- infos
@@ -165,13 +167,20 @@ func (h *Hub) addClient(ctx context.Context, client *Client) {
 	h.rooms[client.roomID][client] = struct{}{}
 	h.activeConns.Add(1)
 
-	if client.isChannel {
+	if client.isChannel || client.isPublic {
+		// Public rooms expose registered users by display name + badge only,
+		// never their @handle — guests must not be able to harvest usernames.
+		username := client.username
+		if client.isPublic {
+			username = ""
+		}
 		data, _ := json.Marshal(map[string]any{
 			"event":        "participant_join",
 			"user_id":      client.userID,
-			"username":     client.username,
+			"username":     username,
 			"display_name": client.displayName,
 			"avatar_url":   client.avatarURL,
+			"is_guest":     client.isGuest,
 		})
 		go h.rdb.Publish(h.bgCtx, redisChannelPrefix+client.roomID, data) //nolint:errcheck
 	}
@@ -191,10 +200,11 @@ func (h *Hub) removeClient(client *Client) {
 	close(client.send)
 	h.activeConns.Add(-1)
 
-	if client.isChannel {
+	if client.isChannel || client.isPublic {
 		data, _ := json.Marshal(map[string]any{
-			"event":   "participant_leave",
-			"user_id": client.userID,
+			"event":    "participant_leave",
+			"user_id":  client.userID,
+			"is_guest": client.isGuest,
 		})
 		go h.rdb.Publish(h.bgCtx, redisChannelPrefix+client.roomID, data) //nolint:errcheck
 	}

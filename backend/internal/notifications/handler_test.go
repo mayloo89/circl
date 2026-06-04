@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mayloo89/circl/backend/internal/notifications"
+	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
 
 // mockRedeemer is a test double for notifications.TicketRedeemer.
@@ -17,13 +18,12 @@ type mockRedeemer struct {
 	tickets map[string]string // ticket → userID
 }
 
-func (m *mockRedeemer) Redeem(_ context.Context, ticket string) (string, error) {
+func (m *mockRedeemer) Redeem(_ context.Context, ticket string) (wsticket.TicketData, error) {
 	if uid, ok := m.tickets[ticket]; ok {
-		// Single-use: remove after redemption.
 		delete(m.tickets, ticket)
-		return uid, nil
+		return wsticket.TicketData{UserID: uid}, nil
 	}
-	return "", errors.New("invalid ticket")
+	return wsticket.TicketData{}, errors.New("invalid ticket")
 }
 
 // noFlusherWriter wraps an http.ResponseWriter without exposing http.Flusher,

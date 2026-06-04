@@ -278,7 +278,7 @@ func (s *pgStore) CreateChannel(ctx context.Context, adminID, name, description 
 func (s *pgStore) UpdateChannel(ctx context.Context, channelID, name, description string) error {
 	tag, err := s.db.Exec(ctx,
 		`UPDATE rooms SET name = $2, description = $3
-		  WHERE id = $1 AND type = 'channel'`,
+		WHERE id = $1 AND type = 'channel'`,
 		channelID, name, description,
 	)
 	if err != nil {
@@ -289,6 +289,70 @@ func (s *pgStore) UpdateChannel(ctx context.Context, channelID, name, descriptio
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrChannelNotFound
+	}
+	return nil
+}
+
+// ListPublicRooms returns all public guest-accessible rooms ordered by creation date.
+func (s *pgStore) ListPublicRooms(ctx context.Context) ([]PublicRoomRecord, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, name, COALESCE(description, ''), COALESCE(visibility, 'public'),
+		COALESCE(creator_id::text, ''), created_at
+		FROM rooms
+		WHERE type = 'public'
+		ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("admin list public rooms: %w", err)
+	}
+	defer rows.Close()
+
+	var rooms []PublicRoomRecord
+	for rows.Next() {
+		var r PublicRoomRecord
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Visibility, &r.CreatorID, &r.CreatedAt); err != nil {
+			return nil, fmt.Errorf("admin list public rooms scan: %w", err)
+		}
+		rooms = append(rooms, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("admin list public rooms rows: %w", err)
+	}
+	if rooms == nil {
+		rooms = []PublicRoomRecord{}
+	}
+	return rooms, nil
+}
+
+// CreatePublicRoom inserts a new public guest-accessible room.
+func (s *pgStore) CreatePublicRoom(ctx context.Context, adminID, name, description string) (*PublicRoomRecord, error) {
+	var r PublicRoomRecord
+	err := s.db.QueryRow(ctx,
+		`INSERT INTO rooms (type, name, description, creator_id, visibility)
+		VALUES ('public', $1, $2, $3, 'public')
+		RETURNING id, name, COALESCE(description, ''), COALESCE(visibility, 'public'),
+		COALESCE(creator_id::text, ''), created_at`,
+		name, description, adminID,
+	).Scan(&r.ID, &r.Name, &r.Description, &r.Visibility, &r.CreatorID, &r.CreatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrPublicRoomNameTaken
+		}
+		return nil, fmt.Errorf("admin create public room: %w", err)
+	}
+	return &r, nil
+}
+
+// DeletePublicRoom removes a public room and cascades to its messages.
+func (s *pgStore) DeletePublicRoom(ctx context.Context, roomID string) error {
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM rooms WHERE id = $1 AND type = 'public'`,
+		roomID,
+	)
+	if err != nil {
+		return fmt.Errorf("admin delete public room: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrPublicRoomNotFound
 	}
 	return nil
 }

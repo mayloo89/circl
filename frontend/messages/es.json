@@ -95,6 +95,7 @@
     "browse": "Explorar",
     "messages": "Mensajes",
     "channels": "Canales",
+    "publicRooms": "Salas públicas",
     "contacts": "Contactos",
     "albums": "Álbumes",
     "profile": "Perfil",
@@ -113,7 +114,8 @@
     "skipToContent": "Saltar al contenido principal",
     "switchToLight": "Cambiar a modo claro",
     "switchToDark": "Cambiar a modo oscuro",
-    "more": "Más"
+    "more": "Más",
+    "rooms": "Salas"
   },
   "login": {
     "title": "Iniciar sesión",
@@ -133,7 +135,8 @@
     "accountReactivated": "Cuenta reactivada",
     "accountReactivatedDesc": "¡Bienvenido de vuelta! Tu cuenta ha sido restaurada. Todos tus datos están intactos.",
     "goToHome": "Ir al inicio",
-    "rememberMe": "Mantener sesión iniciada"
+    "rememberMe": "Mantener sesión iniciada",
+    "browseAsGuest": "Explorar salas públicas como invitado →"
   },
   "register": {
     "title": "Crear cuenta",
@@ -162,7 +165,8 @@
     "dobDay": "DD",
     "dobYear": "AAAA",
     "consentLabel": "He leído y acepto los <terms>Términos del Servicio</terms> y la <privacy>Política de Privacidad</privacy>.",
-    "consentRequired": "Debes aceptar los Términos y la Política de Privacidad para crear una cuenta."
+    "consentRequired": "Debes aceptar los Términos y la Política de Privacidad para crear una cuenta.",
+    "browseAsGuest": "Explorar salas públicas como invitado →"
   },
   "footer": {
     "terms": "Términos",
@@ -535,7 +539,42 @@
     "descriptionPlaceholder": "¿De qué trata este canal?",
     "nameRequired": "El nombre es requerido.",
     "failedCreate": "Error al crear el canal.",
-    "createButton": "Crear canal"
+    "createButton": "Crear canal",
+    "allRoomsTitle": "Salas",
+    "allRoomsSubtitle": "Salas públicas y canales para unirte.",
+    "publicBadge": "Pública",
+    "noRoomsYet": "Aún no hay salas"
+  },
+  "guestRooms": {
+    "title": "Salas públicas",
+    "subtitle": "Entra sin necesidad de cuenta.",
+    "search": "Buscar salas…",
+    "searchLabel": "Buscar salas públicas",
+    "noResults": "Ninguna sala coincide con tu búsqueda.",
+    "noRooms": "Aún no hay salas públicas.",
+    "onlineNow": "{count} en línea ahora",
+    "enter": "Entrar",
+    "failedLoad": "Error al cargar las salas.",
+    "gateTitle": "Únete a la conversación",
+    "gateSubtitle": "Elige un apodo y confirma que eres mayor de 18 años.",
+    "nicknameLabel": "Apodo",
+    "nicknamePlaceholder": "Tu nombre visible",
+    "nicknameRequired": "El apodo es requerido.",
+    "nicknameTooLong": "El apodo debe tener 30 caracteres o menos.",
+    "ageAttestLabel": "Confirmo que tengo 18 años o más",
+    "ageAttestRequired": "Debes confirmar que eres mayor de 18 años.",
+    "nicknameTaken": "Ese apodo pertenece a un usuario registrado.",
+    "enterRoom": "Entrar a la sala",
+    "guestBadge": "Invitado",
+    "textOnlyHint": "Los invitados solo pueden enviar mensajes de texto.",
+    "rateLimited": "Estás enviando mensajes muy rápido. Espera un momento.",
+    "backToRooms": "Volver a salas",
+    "membersOnline": "{count, plural, one {# en línea} other {# en línea}}",
+    "signInPrompt": "¿Quieres enviar fotos y más?",
+    "signInCta": "Inicia sesión o crea una cuenta",
+    "noOneHere": "Nadie por aquí aún",
+    "leaveTitle": "¿Salir de esta sala?",
+    "leaveMessage": "Si sales, perderás tu apodo de invitado y deberás entrar de nuevo."
   },
   "chatRoom": {
     "loading": "Cargando…",

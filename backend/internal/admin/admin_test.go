@@ -11,27 +11,32 @@ import (
 
 // mockStore is a test double for admin.Store.
 type mockStore struct {
-	user              *admin.UserRecord
-	getUserErr        error
-	setStatusErr      error
-	suspension        *admin.Suspension
-	createSusErr      error
-	isActive          bool
-	isActiveErr       error
-	stats             *admin.Stats
-	getStatsErr       error
-	users             []*admin.UserRecord
-	usersTotal        int
-	listUsersErr      error
-	reactivateErr     error
-	channels          []admin.ChannelRecord
-	listChansErr      error
-	deleteChansErr    error
-	createdChannel    *admin.ChannelRecord
-	createChanErr     error
-	updateChanErr     error
-	hardDeleteErr     error
-	setRoleErr        error
+	user                *admin.UserRecord
+	getUserErr          error
+	setStatusErr        error
+	suspension          *admin.Suspension
+	createSusErr        error
+	isActive            bool
+	isActiveErr         error
+	stats               *admin.Stats
+	getStatsErr         error
+	users               []*admin.UserRecord
+	usersTotal          int
+	listUsersErr        error
+	reactivateErr       error
+	channels            []admin.ChannelRecord
+	listChansErr        error
+	deleteChansErr      error
+	createdChannel      *admin.ChannelRecord
+	createChanErr       error
+	updateChanErr       error
+	hardDeleteErr       error
+	setRoleErr          error
+	publicRooms         []admin.PublicRoomRecord
+	listPublicRoomsErr  error
+	createdPublicRoom   *admin.PublicRoomRecord
+	createPublicRoomErr error
+	deletePublicRoomErr error
 }
 
 func (m *mockStore) GetUserByID(_ context.Context, _ string) (*admin.UserRecord, error) {
@@ -84,6 +89,16 @@ func (m *mockStore) HardDeleteUser(_ context.Context, _ string) error {
 
 func (m *mockStore) SetUserRole(_ context.Context, _, _ string) error {
 	return m.setRoleErr
+}
+
+func (m *mockStore) ListPublicRooms(_ context.Context) ([]admin.PublicRoomRecord, error) {
+	return m.publicRooms, m.listPublicRoomsErr
+}
+func (m *mockStore) CreatePublicRoom(_ context.Context, _, _, _ string) (*admin.PublicRoomRecord, error) {
+	return m.createdPublicRoom, m.createPublicRoomErr
+}
+func (m *mockStore) DeletePublicRoom(_ context.Context, _ string) error {
+	return m.deletePublicRoomErr
 }
 
 // --- SuspendUser ---

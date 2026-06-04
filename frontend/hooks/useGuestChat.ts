@@ -2,60 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import type { ChatMessage, ParticipantEvent, ReadReceipts } from "./useChat"
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
-// Derive the WebSocket URL from the HTTP URL: http → ws, https → wss.
 const WS_URL = API_URL.replace(/^http/, "ws")
-
-export interface ChatMessage {
-  type: string
-  id: string
-  room_id: string
-  sender_id: string
-  sender_name: string
-  sender_avatar_url: string
-  content: string
-  thumbnail_url?: string
-  view_once: boolean
-  tombstone?: boolean
-  redacted?: boolean
-  expires_at?: string
-  created_at: string
-}
-
-export interface SendOpts {
-  viewOnce?: boolean
-  ttl?: string // "15m" | "30m" | "1h" | "6h" | "12h" | "24h"
-}
-
-export interface TypingUser {
-  userId: string
-  displayName: string
-}
-
-/** Maps userId → timestamp (ms) of their last read event. */
-export type ReadReceipts = Map<string, number>
 
 const chatMessageTypes = new Set(["text", "image", "video", "file", "album_share", "system"])
 
-/**
- * Manages the WebSocket connection for a single chat room.
- *
- * - Connects when both `roomId` and `token` are available.
- * - Reconnects automatically with exponential backoff on error.
- * - Returns the live message list, connection state, send functions,
- *   a set of IDs for messages deleted via message_deleted events,
- *   the current typing users, and a sendTyping function.
- */
-export interface ParticipantEvent {
-  type: "join" | "leave"
-  userId: string
-  username: string
-  displayName: string
-  avatarURL: string
-  isGuest: boolean
-}
-
-export function useChat(roomId: string | null, token: string | undefined) {
+export function useGuestChat(roomId: string | null, sessionId: string | undefined, onInvalidSession?: () => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
@@ -65,28 +19,12 @@ export function useChat(roomId: string | null, token: string | undefined) {
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
+  const onInvalidRef = useRef(onInvalidSession)
+  useEffect(() => { onInvalidRef.current = onInvalidSession }, [onInvalidSession])
 
-  const send = useCallback((content: string, opts?: SendOpts) => {
+  const send = useCallback((content: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "message",
-        content,
-        ...(opts?.viewOnce && { view_once: true }),
-        ...(opts?.ttl && { ttl: opts.ttl }),
-      }))
-    }
-  }, [])
-
-  const sendAttachment = useCallback((uploadId: string, url: string, mimeType: string, opts?: SendOpts) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "attachment",
-        content: url,
-        mime_type: mimeType,
-        upload_id: uploadId,
-        ...(opts?.viewOnce && { view_once: true }),
-        ...(opts?.ttl && { ttl: opts.ttl }),
-      }))
+      wsRef.current.send(JSON.stringify({ type: "message", content }))
     }
   }, [])
 
@@ -97,21 +35,27 @@ export function useChat(roomId: string | null, token: string | undefined) {
   }, [])
 
   useEffect(() => {
-    if (!roomId || !token) return
+    if (!roomId || !sessionId) return
 
     cancelledRef.current = false
 
     async function connect() {
       if (cancelledRef.current) return
 
-      // Exchange the Bearer token for a single-use 60 s ticket so the JWT
-      // never appears in WebSocket upgrade URLs or proxy access logs.
       let ticket: string
       try {
-        const res = await fetch(`${API_URL}/ws-ticket`, {
+        const res = await fetch(`${API_URL}/guest/ws-ticket`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, room_id: roomId }),
         })
+        if (res.status === 401) {
+          // The guest session is gone (expired or invalid) — retrying won't
+          // help. Signal the caller so it can clear the stale session and
+          // re-prompt for a nickname.
+          if (!cancelledRef.current) onInvalidRef.current?.()
+          return
+        }
         if (!res.ok) {
           if (!cancelledRef.current) {
             const delay = retryDelayRef.current
@@ -138,7 +82,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
 
       ws.onopen = () => {
         setConnected(true)
-        retryDelayRef.current = 1000 // reset backoff
+        retryDelayRef.current = 1000
       }
 
       ws.onclose = () => {
@@ -150,16 +94,12 @@ export function useChat(roomId: string | null, token: string | undefined) {
         }
       }
 
-      ws.onerror = () => {
-        ws.close()
-      }
+      ws.onerror = () => { ws.close() }
 
       ws.onmessage = (e) => {
         try {
           const frame = JSON.parse(e.data)
           if (frame.event === "message_deleted" && frame.id) {
-            // Keep the message in `messages` so the page can render a tombstone
-            // in its original position. Only track the ID as deleted.
             setDeletedIds((prev) => new Set([...prev, frame.id as string]))
           } else if (frame.event === "read_receipt" && frame.user_id && frame.read_at) {
             const ts = new Date(frame.read_at as string).getTime()
@@ -200,9 +140,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])
           }
-        } catch {
-          // ignore malformed frames
-        }
+        } catch { /* ignore malformed frames */ }
       }
     }
 
@@ -218,11 +156,10 @@ export function useChat(roomId: string | null, token: string | undefined) {
       setReadReceipts(new Map())
       setParticipantEvents([])
     }
-  }, [roomId, token])
+  }, [roomId, sessionId])
 
-  // Clear stale typing entries (older than 3 s) on a 1 s interval.
   useEffect(() => {
-    if (!roomId || !token) return
+    if (!roomId || !sessionId) return
     const id = setInterval(() => {
       const cutoff = Date.now() - 3000
       setTypingUsers((prev) => {
@@ -234,7 +171,7 @@ export function useChat(roomId: string | null, token: string | undefined) {
       })
     }, 1000)
     return () => clearInterval(id)
-  }, [roomId, token])
+  }, [roomId, sessionId])
 
-  return { messages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents }
+  return { messages, deletedIds, connected, send, sendTyping, typingUsers, readReceipts, participantEvents }
 }

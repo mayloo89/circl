@@ -85,7 +85,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {unauthenticated && <AuthLocalePicker />}
+      {unauthenticated && !pathname.includes("/rooms") && <AuthLocalePicker />}
       {authenticated && !isOnboarding && (
         <a
           href="#main-content"

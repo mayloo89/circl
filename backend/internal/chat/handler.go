@@ -21,6 +21,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/ratelimit"
 	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
 
@@ -33,16 +34,22 @@ const (
 
 // Client represents a single WebSocket connection from an authenticated user.
 type Client struct {
-	hub             *Hub
-	conn            *websocket.Conn
-	send            chan []byte
-	userID          string
-	roomID          string
-	username        string
-	displayName     string
-	avatarURL       string
-	isChannel       bool
-	isBlockedInRoom func(ctx context.Context, senderID, roomID string) bool
+	hub               *Hub
+	conn              *websocket.Conn
+	send              chan []byte
+	userID            string
+	roomID            string
+	username          string
+	displayName       string
+	avatarURL         string
+	isChannel         bool
+	isPublic          bool
+	isGuest           bool
+	isServiceProvider func(ctx context.Context, userID string) bool
+	guestMsgLimiter   *ratelimit.RedisLimiter
+	guestMsgRate      int
+	guestMsgWindow    time.Duration
+	isBlockedInRoom   func(ctx context.Context, senderID, roomID string) bool
 	// hideReadReceipts and hideTyping are populated at WS connect from the
 	// user's profile preferences. They are used both as the emit gate (for
 	// frames originating from this client) and the receive gate (in
@@ -126,6 +133,17 @@ type HandlerConfig struct {
 	// contact-info redaction (e.g. verified service accounts). Always
 	// returns false when nil.
 	IsExemptSender func(ctx context.Context, senderID string) bool
+	// IsServiceProvider, if set, returns true if the user is a verified
+	// service-provider profile. Such users are blocked from posting in
+	// public rooms (marketplace integrity). Always returns false when nil.
+	IsServiceProvider func(ctx context.Context, userID string) bool
+	// GuestMsgLimiter, if set, rate-limits guest message sends in public rooms.
+	// Keyed by guest session ID + client IP for stricter per-guest enforcement.
+	GuestMsgLimiter *ratelimit.RedisLimiter
+	// GuestMsgRate is the maximum number of messages a guest may send per window.
+	GuestMsgRate int
+	// GuestMsgWindow is the sliding window duration for guest message rate limiting.
+	GuestMsgWindow time.Duration
 	// AllowedOrigins is the list of origins permitted to open WebSocket
 	// connections. When empty, all origins are allowed (development only).
 	AllowedOrigins []string
@@ -192,6 +210,9 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r.Post("/channels", func(w http.ResponseWriter, r *http.Request) {
 		middleware.RequireAdmin(createChannelHandler(svc)).ServeHTTP(w, r)
 	})
+
+	// Public room routes
+	r.Get("/public-rooms", listPublicRoomsHandler(svc, c))
 
 	return r
 }
@@ -318,7 +339,7 @@ func getRoomHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "room not found")
 			return
 		}
-		if room.Type != RoomTypeChannel {
+		if room.Type != RoomTypeChannel && room.Type != RoomTypePublic {
 			member, err := svc.IsMember(r.Context(), roomID, userID)
 			if err != nil || !member {
 				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
@@ -378,12 +399,6 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 
 		roomID := chi.URLParam(r, "id")
 
-		member, err := svc.IsMember(r.Context(), roomID, userID)
-		if err != nil || !member {
-			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
-			return
-		}
-
 		room, err := svc.GetRoom(r.Context(), roomID)
 		if err != nil {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
@@ -393,6 +408,15 @@ func listMessagesHandler(svc Manager) http.HandlerFunc {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte("[]")) //nolint:errcheck
 			return
+		}
+
+		// Public rooms are readable by any authenticated user; other rooms require membership.
+		if room.Type != RoomTypePublic {
+			member, err := svc.IsMember(r.Context(), roomID, userID)
+			if err != nil || !member {
+				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
+				return
+			}
 		}
 
 		var before *time.Time
@@ -593,8 +617,8 @@ func listGroupMembersHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 			return
 		}
 
-		if room.Type == RoomTypeChannel {
-			// For channels, return currently connected participants from the hub.
+		if room.Type == RoomTypeChannel || room.Type == RoomTypePublic {
+			// For channels and public rooms, return currently connected participants from the hub.
 			var participants []ClientInfo
 			if cfg.Hub != nil {
 				participants = cfg.Hub.RoomParticipants(r.Context(), roomID)
@@ -742,6 +766,29 @@ func createChannelHandler(svc Manager) http.HandlerFunc {
 	}
 }
 
+// listPublicRoomsHandler returns all public guest-accessible rooms.
+// ActiveCount is populated from the Hub when available.
+//
+// GET /chat/public-rooms
+func listPublicRoomsHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rooms, err := svc.ListPublicRooms(r.Context())
+		if err != nil {
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+		if cfg.Hub != nil {
+			for i := range rooms {
+				rooms[i].ActiveCount = len(cfg.Hub.RoomParticipants(r.Context(), rooms[i].ID))
+			}
+		}
+		if rooms == nil {
+			rooms = []PublicRoomSummary{}
+		}
+		apierror.WriteJSON(w, http.StatusOK, rooms)
+	}
+}
+
 // wsHandler upgrades the connection to WebSocket and starts the client pumps.
 // Auth is performed via a single-use ?ticket= query parameter (obtained from
 // POST /ws-ticket) because the browser WebSocket API does not support custom
@@ -770,7 +817,7 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
-		userID, err := tickets.Redeem(r.Context(), ticket)
+		ticketData, err := tickets.Redeem(r.Context(), ticket)
 		if err != nil {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
@@ -787,10 +834,20 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		isChannel := room.Type == RoomTypeChannel
 
-		if !isChannel {
-			member, err := svc.IsMember(r.Context(), roomID, userID)
+		isChannel := room.Type == RoomTypeChannel
+		isPublic := room.Type == RoomTypePublic
+		isGuest := ticketData.IsGuest
+
+		// Guests may only connect to public rooms.
+		if isGuest && !isPublic {
+			apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
+			return
+		}
+
+		// Registered users must be a member of non-channel/non-public rooms.
+		if !isChannel && !isPublic {
+			member, err := svc.IsMember(r.Context(), roomID, ticketData.UserID)
 			if err != nil || !member {
 				apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 				return
@@ -802,9 +859,14 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			return
 		}
 
-		displayName, _ := svc.GetDisplayName(r.Context(), userID)
-		avatarURL, _ := svc.GetAvatarURL(r.Context(), userID)
-		username, _ := svc.GetUsername(r.Context(), userID)
+		var displayName, avatarURL, username string
+		if isGuest {
+			displayName = ticketData.GuestNickname
+		} else {
+			displayName, _ = svc.GetDisplayName(r.Context(), ticketData.UserID)
+			avatarURL, _ = svc.GetAvatarURL(r.Context(), ticketData.UserID)
+			username, _ = svc.GetUsername(r.Context(), ticketData.UserID)
+		}
 
 		// Start a session span that lives for the lifetime of this WebSocket
 		// connection. Use a detached context (not r.Context()) so the span is
@@ -816,31 +878,39 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 		sessCtx, _ = otel.Tracer("circl/chat").Start(sessCtx, "ws.session",
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(
-				attribute.String("user.id", userID),
+				attribute.String("user.id", ticketData.UserID),
 				attribute.String("room.id", roomID),
 				attribute.Bool("chat.is_channel", isChannel),
+				attribute.Bool("chat.is_public", isPublic),
+				attribute.Bool("chat.is_guest", isGuest),
 			),
 		)
 
 		var privacy PrivacyFlags
-		if cfg.PrivacyResolver != nil {
-			privacy, _ = cfg.PrivacyResolver(r.Context(), userID)
+		if !isGuest && cfg.PrivacyResolver != nil {
+			privacy, _ = cfg.PrivacyResolver(r.Context(), ticketData.UserID)
 		}
 
 		client := &Client{
-			hub:              hub,
-			conn:             conn,
-			send:             make(chan []byte, 256),
-			userID:           userID,
-			roomID:           roomID,
-			username:         username,
-			displayName:      displayName,
-			avatarURL:        avatarURL,
-			isChannel:        isChannel,
-			isBlockedInRoom:  cfg.IsBlockedInRoom,
-			hideReadReceipts: privacy.HideReadReceipts,
-			hideTyping:       privacy.HideTyping,
-			ctx:              sessCtx,
+			hub:               hub,
+			conn:              conn,
+			send:              make(chan []byte, 256),
+			userID:            ticketData.UserID,
+			roomID:            roomID,
+			username:          username,
+			displayName:       displayName,
+			avatarURL:         avatarURL,
+			isChannel:         isChannel,
+			isPublic:          isPublic,
+			isGuest:           isGuest,
+			isServiceProvider: cfg.IsServiceProvider,
+			guestMsgLimiter:   cfg.GuestMsgLimiter,
+			guestMsgRate:      cfg.GuestMsgRate,
+			guestMsgWindow:    cfg.GuestMsgWindow,
+			isBlockedInRoom:   cfg.IsBlockedInRoom,
+			hideReadReceipts:  privacy.HideReadReceipts,
+			hideTyping:        privacy.HideTyping,
+			ctx:               sessCtx,
 		}
 
 		hub.register <- client
@@ -929,6 +999,24 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			continue
 		}
 
+		// Guests in public rooms are text-only — reject attachments.
+		if c.isGuest && msgType != MessageTypeText {
+			continue
+		}
+
+		// Guest message rate limiting (stricter than registered users).
+		if c.isGuest && c.guestMsgLimiter != nil && c.guestMsgRate > 0 {
+			ok, err := c.guestMsgLimiter.Allow(c.ctx, "guest:msg:"+c.userID, c.guestMsgRate, c.guestMsgWindow)
+			if err != nil || !ok {
+				continue
+			}
+		}
+
+		// Service-provider profiles are not allowed to post in public rooms.
+		if c.isPublic && c.isServiceProvider != nil && c.isServiceProvider(c.ctx, c.userID) {
+			continue
+		}
+
 		// Attachment messages must carry an upload_id so the file can be
 		// linked to the message record and cleaned up on deletion.
 		if in.Type == "attachment" && in.UploadID == "" {
@@ -936,14 +1024,21 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		}
 
 		params := SaveMessageParams{
-			RoomID:   c.roomID,
-			SenderID: c.userID,
-			Type:     msgType,
-			Content:  in.Content,
-			UploadID: in.UploadID,
-			ViewOnce: in.ViewOnce,
+			RoomID:        c.roomID,
+			SenderID:      c.userID,
+			Type:          msgType,
+			Content:       in.Content,
+			UploadID:      in.UploadID,
+			ViewOnce:      in.ViewOnce,
+			SenderIsGuest: c.isGuest,
+			SenderName:    c.displayName,
 		}
-		if in.TTL != "" {
+		if c.isGuest {
+			// Guests cannot send ephemeral messages or attachments.
+			params.UploadID = ""
+			params.ViewOnce = false
+			params.ExpiresAt = nil
+		} else if in.TTL != "" {
 			d, err := ParseTTL(in.TTL)
 			if err != nil {
 				continue // reject unknown TTL values

@@ -59,6 +59,9 @@ func NewHandler(svc *Service, presence PresenceLookupFunc, opts ...HandlerOption
 	r.Post("/channels", h.createChannel)
 	r.Put("/channels/{id}", h.updateChannel)
 	r.Delete("/channels/{id}", h.deleteChannel)
+	r.Get("/public-rooms", h.listPublicRooms)
+	r.Post("/public-rooms", h.createPublicRoom)
+	r.Delete("/public-rooms/{id}", h.deletePublicRoom)
 
 	if cfg.appeals != nil {
 		r.Mount("/appeals", cfg.appeals)
@@ -235,6 +238,69 @@ func (h *handler) updateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, ErrChannelNameTaken) {
 		apierror.Write(w, http.StatusConflict, apierror.CodeChannelNameTaken, "channel name already taken")
+		return
+	}
+	if err != nil {
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// listPublicRooms handles GET /admin/public-rooms.
+func (h *handler) listPublicRooms(w http.ResponseWriter, r *http.Request) {
+	rooms, err := h.svc.ListPublicRooms(r.Context())
+	if err != nil {
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+		return
+	}
+	apierror.WriteJSON(w, http.StatusOK, rooms)
+}
+
+// createPublicRoom handles POST /admin/public-rooms.
+// Body: {"name":"...","description":"..."}
+func (h *handler) createPublicRoom(w http.ResponseWriter, r *http.Request) {
+	adminID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
+		return
+	}
+
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" {
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeNameRequired, "name is required")
+		return
+	}
+
+	room, err := h.svc.CreatePublicRoom(r.Context(), adminID, req.Name, req.Description)
+	if errors.Is(err, ErrPublicRoomNameTaken) {
+		apierror.Write(w, http.StatusConflict, apierror.CodePublicRoomNameTaken, "public room name already taken")
+		return
+	}
+	if err != nil {
+		apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+		return
+	}
+	apierror.WriteJSON(w, http.StatusCreated, room)
+}
+
+// deletePublicRoom handles DELETE /admin/public-rooms/{id}.
+func (h *handler) deletePublicRoom(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "id")
+	if roomID == "" {
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "missing room id")
+		return
+	}
+	err := h.svc.DeletePublicRoom(r.Context(), roomID)
+	if errors.Is(err, ErrPublicRoomNotFound) {
+		apierror.Write(w, http.StatusNotFound, apierror.CodePublicRoomNameTaken, "public room not found")
 		return
 	}
 	if err != nil {

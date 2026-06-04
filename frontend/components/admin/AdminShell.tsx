@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/admin/appeals", label: "Appeals" },
   { href: "/admin/moderation", label: "Moderation" },
   { href: "/admin/channels", label: "Channels" },
+  { href: "/admin/public-rooms", label: "Public rooms" },
 ]
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {

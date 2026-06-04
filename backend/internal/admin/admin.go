@@ -17,6 +17,10 @@ var (
 	ErrChannelNotFound = errors.New("channel not found")
 	// ErrChannelNameTaken is returned when a channel with the same name already exists.
 	ErrChannelNameTaken = errors.New("channel name already taken")
+	// ErrPublicRoomNotFound is returned when the target public room does not exist.
+	ErrPublicRoomNotFound = errors.New("public room not found")
+	// ErrPublicRoomNameTaken is returned when a public room name is already taken.
+	ErrPublicRoomNameTaken = errors.New("public room name already taken")
 	// ErrInvalidRole is returned when the given role string is not valid.
 	ErrInvalidRole = errors.New("invalid role")
 )
@@ -67,6 +71,16 @@ type ChannelRecord struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// PublicRoomRecord holds the admin view of a public guest-accessible room.
+type PublicRoomRecord struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Visibility  string    `json:"visibility"`
+	CreatorID   string    `json:"creator_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // Stats holds aggregate counts for the admin dashboard.
 type Stats struct {
 	TotalUsers     int `json:"total_users"`
@@ -93,6 +107,10 @@ type Store interface {
 	DeleteChannel(ctx context.Context, channelID string) error
 	CreateChannel(ctx context.Context, adminID, name, description string) (*ChannelRecord, error)
 	UpdateChannel(ctx context.Context, channelID, name, description string) error
+	// Public room admin operations.
+	ListPublicRooms(ctx context.Context) ([]PublicRoomRecord, error)
+	CreatePublicRoom(ctx context.Context, adminID, name, description string) (*PublicRoomRecord, error)
+	DeletePublicRoom(ctx context.Context, roomID string) error
 	// HardDeleteUser immediately purges all user data and anonymizes the users row.
 	HardDeleteUser(ctx context.Context, userID string) error
 	// SetUserRole updates the role of an existing user.
@@ -210,6 +228,21 @@ func (s *Service) CreateChannel(ctx context.Context, adminID, name, description 
 // UpdateChannel changes the name and description of an existing channel.
 func (s *Service) UpdateChannel(ctx context.Context, channelID, name, description string) error {
 	return s.store.UpdateChannel(ctx, channelID, name, description)
+}
+
+// ListPublicRooms returns all public guest-accessible rooms.
+func (s *Service) ListPublicRooms(ctx context.Context) ([]PublicRoomRecord, error) {
+	return s.store.ListPublicRooms(ctx)
+}
+
+// CreatePublicRoom creates a new public guest-accessible room owned by the admin.
+func (s *Service) CreatePublicRoom(ctx context.Context, adminID, name, description string) (*PublicRoomRecord, error) {
+	return s.store.CreatePublicRoom(ctx, adminID, name, description)
+}
+
+// DeletePublicRoom removes a public room and all its messages.
+func (s *Service) DeletePublicRoom(ctx context.Context, roomID string) error {
+	return s.store.DeletePublicRoom(ctx, roomID)
 }
 
 // HardDeleteUser immediately purges all user data and anonymizes the users row.

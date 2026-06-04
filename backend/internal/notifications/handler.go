@@ -12,12 +12,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
+	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
 
-// TicketRedeemer consumes a single-use ticket and returns the associated userID.
+// TicketRedeemer consumes a single-use ticket and returns the associated data.
 // Tickets are deleted on first use and expire after a short TTL.
 type TicketRedeemer interface {
-	Redeem(ctx context.Context, ticket string) (string, error)
+	Redeem(ctx context.Context, ticket string) (wsticket.TicketData, error)
 }
 
 // ErrInvalidTicket is returned by a TicketRedeemer when the ticket does not
@@ -37,14 +38,14 @@ func NewHandler(hub *Hub, redeemer TicketRedeemer) http.HandlerFunc {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
-		userID, err := redeemer.Redeem(r.Context(), ticket)
+		td, err := redeemer.Redeem(r.Context(), ticket)
 		if err != nil {
 			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
 			return
 		}
 
 		trace.SpanFromContext(r.Context()).SetAttributes(
-			attribute.String("user.id", userID),
+			attribute.String("user.id", td.UserID),
 			attribute.String("sse.type", "notifications"),
 		)
 
@@ -59,7 +60,7 @@ func NewHandler(hub *Hub, redeemer TicketRedeemer) http.HandlerFunc {
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("X-Accel-Buffering", "no")
 
-		ch, unsub := hub.Subscribe(userID)
+		ch, unsub := hub.Subscribe(td.UserID)
 		defer unsub()
 
 		writeEvent(w, flusher, Event{Type: "connected"})

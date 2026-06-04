@@ -95,6 +95,7 @@
     "browse": "Browse",
     "messages": "Messages",
     "channels": "Channels",
+    "publicRooms": "Public Rooms",
     "contacts": "Contacts",
     "albums": "Albums",
     "profile": "Profile",
@@ -113,7 +114,8 @@
     "skipToContent": "Skip to main content",
     "switchToLight": "Switch to light mode",
     "switchToDark": "Switch to dark mode",
-    "more": "More"
+    "more": "More",
+    "rooms": "Rooms"
   },
   "login": {
     "title": "Sign in to your account",
@@ -133,7 +135,8 @@
     "accountReactivated": "Account reactivated",
     "accountReactivatedDesc": "Welcome back! Your account has been restored. All your data is intact.",
     "goToHome": "Go to home",
-    "rememberMe": "Keep me signed in"
+    "rememberMe": "Keep me signed in",
+    "browseAsGuest": "Browse public rooms as a guest →"
   },
   "register": {
     "title": "Create account",
@@ -162,7 +165,8 @@
     "dobDay": "DD",
     "dobYear": "YYYY",
     "consentLabel": "I have read and agree to the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
-    "consentRequired": "You must accept the Terms and Privacy Policy to create an account."
+    "consentRequired": "You must accept the Terms and Privacy Policy to create an account.",
+    "browseAsGuest": "Browse public rooms as a guest →"
   },
   "footer": {
     "terms": "Terms",
@@ -535,7 +539,42 @@
     "descriptionPlaceholder": "What's this channel about?",
     "nameRequired": "Name is required.",
     "failedCreate": "Failed to create channel.",
-    "createButton": "Create channel"
+    "createButton": "Create channel",
+    "allRoomsTitle": "Rooms",
+    "allRoomsSubtitle": "Public lobbies and channels to jump into.",
+    "publicBadge": "Public",
+    "noRoomsYet": "No rooms yet"
+  },
+  "guestRooms": {
+    "title": "Public Rooms",
+    "subtitle": "Jump in — no account needed.",
+    "search": "Search rooms…",
+    "searchLabel": "Search public rooms",
+    "noResults": "No rooms match your search.",
+    "noRooms": "No public rooms yet.",
+    "onlineNow": "{count} online now",
+    "enter": "Enter",
+    "failedLoad": "Failed to load rooms.",
+    "gateTitle": "Join the conversation",
+    "gateSubtitle": "Pick a nickname and confirm you're 18+ to enter.",
+    "nicknameLabel": "Nickname",
+    "nicknamePlaceholder": "Your display name",
+    "nicknameRequired": "Nickname is required.",
+    "nicknameTooLong": "Nickname must be 30 characters or less.",
+    "ageAttestLabel": "I confirm that I am 18 years of age or older",
+    "ageAttestRequired": "You must confirm you are 18 or older.",
+    "nicknameTaken": "That nickname is taken by a registered user.",
+    "enterRoom": "Enter room",
+    "guestBadge": "Guest",
+    "textOnlyHint": "Guests can only send text messages.",
+    "rateLimited": "You're sending messages too quickly. Please wait a moment.",
+    "backToRooms": "Back to rooms",
+    "membersOnline": "{count, plural, one {# online} other {# online}}",
+    "signInPrompt": "Want to send photos and more?",
+    "signInCta": "Sign in or create an account",
+    "noOneHere": "No one here yet",
+    "leaveTitle": "Leave this room?",
+    "leaveMessage": "If you leave, you’ll lose your guest nickname and need to enter again."
   },
   "chatRoom": {
     "loading": "Loading…",

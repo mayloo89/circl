@@ -121,6 +121,16 @@ func (m *mockStore) ListRetentionEligibleMessages(_ context.Context) ([]string, 
 	return m.retentionIDs, m.retentionErr
 }
 
+func (m *mockStore) CreatePublicRoom(_ context.Context, _, _, _ string) (*chat.Room, error) {
+	return m.room, m.roomErr
+}
+func (m *mockStore) ListPublicRooms(_ context.Context) ([]chat.PublicRoomSummary, error) {
+	return nil, nil
+}
+func (m *mockStore) NicknameTaken(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
 func TestService_GetOrCreateDM_Success(t *testing.T) {
 	want := &chat.Room{ID: "r-1", Type: chat.RoomTypeDM}
 	svc := chat.NewService(&mockStore{room: want})
