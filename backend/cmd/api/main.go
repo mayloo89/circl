@@ -24,6 +24,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/albums"
 	"github.com/mayloo89/circl/backend/internal/appeals"
 	"github.com/mayloo89/circl/backend/internal/auth"
+	"github.com/mayloo89/circl/backend/internal/captcha"
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/contacts"
@@ -346,7 +347,7 @@ func main() {
 	notificationsHandler := notifications.NewHandler(hub, wsTicketStore)
 
 	guestSessionStore := guest.NewSessionStore(rdb)
-	guestHandler := guest.NewHandler(guest.HandlerConfig{
+	guestCfg := guest.HandlerConfig{
 		Sessions:      guestSessionStore,
 		NicknameTaken: chatSvc.NicknameTaken,
 		RoomLister:    chatSvc,
@@ -354,7 +355,13 @@ func main() {
 		Limiter:       limiter,
 		GuestIPRate:   10,
 		GuestIPWindow: time.Minute,
-	})
+	}
+	// Anti-bot on guest entry. Enabled only when a Turnstile secret is set;
+	// without it the check is skipped (local dev needs no captcha keys).
+	if secret := config.EnvOrDefault("TURNSTILE_SECRET", ""); secret != "" {
+		guestCfg.Captcha = captcha.NewTurnstile(secret).Verify
+	}
+	guestHandler := guest.NewHandler(guestCfg)
 	guestWSTicketHandler := wsticket.NewGuestHandler(wsTicketStore, guestSessionAdapter{guestSessionStore})
 
 	chatWSHandler := chat.NewWSHandler(chatSvc, chatHub, wsTicketStore, func(recipientID, roomID string) {

@@ -177,6 +177,49 @@ func TestCreateGuestSession_Success(t *testing.T) {
 	}
 }
 
+func TestCreateGuestSession_CaptchaFails(t *testing.T) {
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions:      &mockSessionStore{},
+		NicknameTaken: func(_ context.Context, _ string) (bool, error) { return false, nil },
+		RoomLister:    &mockManager{},
+		Captcha:       func(_ context.Context, _, _ string) (bool, error) { return false, nil },
+	})
+
+	body := `{"nickname":"Bot","age_attestation":true,"captcha_token":"bad"}`
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 (captcha failed)", rec.Code)
+	}
+}
+
+func TestCreateGuestSession_CaptchaPasses(t *testing.T) {
+	var gotToken string
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions:      &mockSessionStore{},
+		NicknameTaken: func(_ context.Context, _ string) (bool, error) { return false, nil },
+		RoomLister:    &mockManager{},
+		Captcha: func(_ context.Context, token, _ string) (bool, error) {
+			gotToken = token
+			return true, nil
+		},
+	})
+
+	body := `{"nickname":"Human","age_attestation":true,"captcha_token":"good"}`
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", rec.Code)
+	}
+	if gotToken != "good" {
+		t.Errorf("captcha token forwarded = %q, want good", gotToken)
+	}
+}
+
 func TestCreateGuestSession_MissingNickname(t *testing.T) {
 	sessions := &mockSessionStore{}
 	h := guest.NewHandler(guest.HandlerConfig{
