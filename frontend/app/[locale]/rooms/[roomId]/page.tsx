@@ -43,7 +43,17 @@ export default function GuestRoomPage() {
   }
 
   if (sessionId) {
-    return <GuestRoomView roomId={roomId} sessionId={sessionId} />
+    return (
+      <GuestRoomView
+        roomId={roomId}
+        sessionId={sessionId}
+        onInvalidSession={() => {
+          sessionStorage.removeItem(`guest:session:${roomId}`)
+          sessionStorage.removeItem(`guest:nickname:${roomId}`)
+          setSessionId(null)
+        }}
+      />
+    )
   }
 
   async function handleEnter() {

@@ -13,12 +13,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 interface GuestRoomViewProps {
   roomId: string
   sessionId: string
+  /** Called when the guest session is no longer valid (expired/invalid). */
+  onInvalidSession?: () => void
 }
 
-export default function GuestRoomView({ roomId, sessionId }: GuestRoomViewProps) {
+export default function GuestRoomView({ roomId, sessionId, onInvalidSession }: GuestRoomViewProps) {
   const t = useTranslations("guestRooms")
   const router = useRouter()
-  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents } = useGuestChat(roomId, sessionId)
+  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents } = useGuestChat(roomId, sessionId, onInvalidSession)
   const [history, setHistory] = useState<AnyMessage[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [roomName, setRoomName] = useState("")

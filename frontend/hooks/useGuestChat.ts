@@ -9,7 +9,7 @@ const WS_URL = API_URL.replace(/^http/, "ws")
 
 const chatMessageTypes = new Set(["text", "image", "video", "file", "album_share", "system"])
 
-export function useGuestChat(roomId: string | null, sessionId: string | undefined) {
+export function useGuestChat(roomId: string | null, sessionId: string | undefined, onInvalidSession?: () => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
@@ -19,6 +19,8 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
+  const onInvalidRef = useRef(onInvalidSession)
+  useEffect(() => { onInvalidRef.current = onInvalidSession }, [onInvalidSession])
 
   const send = useCallback((content: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -47,6 +49,13 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: sessionId, room_id: roomId }),
         })
+        if (res.status === 401) {
+          // The guest session is gone (expired or invalid) — retrying won't
+          // help. Signal the caller so it can clear the stale session and
+          // re-prompt for a nickname.
+          if (!cancelledRef.current) onInvalidRef.current?.()
+          return
+        }
         if (!res.ok) {
           if (!cancelledRef.current) {
             const delay = retryDelayRef.current
