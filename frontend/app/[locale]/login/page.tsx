@@ -200,6 +200,12 @@ export default function LoginPage() {
             {t("createOne")}
           </Link>
         </p>
+
+        <div className="border-t border-gray-800 pt-4 text-center">
+          <Link href="/rooms" className="text-sm font-medium text-brand-primary hover:text-brand-hover">
+            {t("browseAsGuest")}
+          </Link>
+        </div>
       </div>
       </main>
       <Footer />
