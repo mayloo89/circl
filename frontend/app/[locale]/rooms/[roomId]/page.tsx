@@ -10,6 +10,7 @@ import GuestRoomView from "@/components/chat/GuestRoomView"
 import RegisteredPublicRoomView from "@/components/chat/RegisteredPublicRoomView"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
+import Turnstile, { captchaEnabled } from "@/components/ui/Turnstile"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -26,8 +27,10 @@ export default function GuestRoomPage() {
   })
   const [gateNickname, setGateNickname] = useState("")
   const [ageAttestation, setAgeAttestation] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [turnstileReset, setTurnstileReset] = useState(0)
 
   // Registered users enter as themselves — no nickname gate.
   if (status === "authenticated" && session?.accessToken && session.user?.id) {
@@ -69,11 +72,18 @@ export default function GuestRoomPage() {
       const res = await fetch(`${API_URL}/guest/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: nick, age_attestation: true }),
+        body: JSON.stringify({ nickname: nick, age_attestation: true, captcha_token: captchaToken }),
       })
 
       if (res.status === 409) {
         setError(t("nicknameTaken"))
+        setCaptchaToken("")
+        setTurnstileReset((c) => c + 1)
+        return
+      }
+      if (res.status === 403) {
+        setError(t("captchaFailed"))
+        setCaptchaToken("")
         return
       }
       if (!res.ok) {
@@ -127,6 +137,8 @@ export default function GuestRoomPage() {
             <span className="text-sm text-gray-300">{t("ageAttestLabel")}</span>
           </label>
 
+          <Turnstile onVerify={setCaptchaToken} resetTrigger={turnstileReset} />
+
           {error && <p className="text-xs text-red-400">{error}</p>}
 
           <Button
@@ -135,7 +147,7 @@ export default function GuestRoomPage() {
             className="w-full"
             onClick={handleEnter}
             loading={loading}
-            disabled={!gateNickname.trim() || !ageAttestation}
+            disabled={!gateNickname.trim() || !ageAttestation || (captchaEnabled && !captchaToken)}
           >
             {t("enterRoom")}
           </Button>

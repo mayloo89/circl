@@ -574,7 +574,8 @@
     "signInCta": "Entre ou crie uma conta",
     "noOneHere": "Ninguém aqui ainda",
     "leaveTitle": "Sair desta sala?",
-    "leaveMessage": "Se você sair, perderá seu apelido de convidado e precisará entrar novamente."
+    "leaveMessage": "Se você sair, perderá seu apelido de convidado e precisará entrar novamente.",
+    "captchaFailed": "A verificação falhou. Tente novamente."
   },
   "chatRoom": {
     "loading": "Carregando…",

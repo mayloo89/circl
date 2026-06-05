@@ -90,4 +90,5 @@ const (
 	CodeGuestRateLimited    = "guest_rate_limited"
 	CodePublicRoomNameTaken = "public_room_name_taken"
 	CodeGuestTextOnly       = "guest_text_only"
+	CodeCaptchaFailed       = "captcha_failed"
 )

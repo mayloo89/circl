@@ -31,7 +31,10 @@ type HandlerConfig struct {
 	RoomLister    chat.Manager
 	// Participants returns the live WebSocket participants for a room. Used to
 	// build the guest-facing roster without exposing registered handles.
-	Participants  func(ctx context.Context, roomID string) []chat.ClientInfo
+	Participants func(ctx context.Context, roomID string) []chat.ClientInfo
+	// Captcha, when set, verifies the anti-bot token submitted with a guest
+	// session. When nil (no provider configured), the check is skipped.
+	Captcha       func(ctx context.Context, token, remoteIP string) (bool, error)
 	Limiter       *ratelimit.RedisLimiter
 	GuestIPRate   int
 	GuestIPWindow time.Duration
@@ -101,6 +104,7 @@ func createGuestSession(cfg HandlerConfig) http.HandlerFunc {
 		var body struct {
 			Nickname       string `json:"nickname"`
 			AgeAttestation bool   `json:"age_attestation"`
+			CaptchaToken   string `json:"captcha_token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
@@ -113,6 +117,15 @@ func createGuestSession(cfg HandlerConfig) http.HandlerFunc {
 		if !body.AgeAttestation {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeAgeAttestRequired, "age attestation is required")
 			return
+		}
+
+		// Anti-bot gate. Skipped entirely when no provider is configured (dev).
+		if cfg.Captcha != nil {
+			ok, err := cfg.Captcha(r.Context(), body.CaptchaToken, ip)
+			if err != nil || !ok {
+				apierror.Write(w, http.StatusForbidden, apierror.CodeCaptchaFailed, "captcha verification failed")
+				return
+			}
 		}
 
 		if cfg.NicknameTaken != nil {
