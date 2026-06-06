@@ -20,7 +20,7 @@ interface GuestRoomViewProps {
 export default function GuestRoomView({ roomId, sessionId, onInvalidSession }: GuestRoomViewProps) {
   const t = useTranslations("guestRooms")
   const router = useRouter()
-  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents } = useGuestChat(roomId, sessionId, onInvalidSession)
+  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents, isKicked, isMuted } = useGuestChat(roomId, sessionId, onInvalidSession)
   const [history, setHistory] = useState<AnyMessage[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [roomName, setRoomName] = useState("")
@@ -71,6 +71,8 @@ export default function GuestRoomView({ roomId, sessionId, onInvalidSession }: G
       isOwn={(senderId) => senderId === sessionId}
       headerBadge={t("guestBadge")}
       confirmOnLeave
+      isKicked={isKicked}
+      isMuted={isMuted}
       onBack={() => router.push("/rooms")}
       onSend={(content) => send(content)}
       onTyping={sendTyping}

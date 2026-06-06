@@ -2140,6 +2140,128 @@ func TestGetRoom_DM_AreAcceptedContacts(t *testing.T) {
 	}
 }
 
+// --- Moderation endpoint tests ---
+
+func TestModKick_ByAdmin(t *testing.T) {
+	var kicked string
+	var bannedIP string
+	h := chat.NewHandler(&mockManager{room: &chat.Room{ID: "r-1", Type: chat.RoomTypePublic}}, chat.HandlerConfig{
+		KickFromRoom: func(roomID, targetID string) { kicked = targetID },
+		GetGuestSession: func(_ context.Context, sessionID string) (string, error) {
+			return "abc123hash", nil
+		},
+		BanRoomIP: func(_ context.Context, _, ipHash string, _ time.Duration) error {
+			bannedIP = ipHash
+			return nil
+		},
+	})
+
+	body := `{"target_id":"guest:abc"}`
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/mod/kick", strings.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if kicked != "guest:abc" {
+		t.Errorf("KickFromRoom called with %q, want guest:abc", kicked)
+	}
+	if bannedIP != "abc123hash" {
+		t.Errorf("BanRoomIP called with %q, want abc123hash", bannedIP)
+	}
+}
+
+func TestModKick_NonAdmin403(t *testing.T) {
+	h := chat.NewHandler(&mockManager{room: &chat.Room{ID: "r-1", Type: chat.RoomTypePublic}}, chat.HandlerConfig{})
+
+	body := `{"target_id":"guest:abc"}`
+	req := authedReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/mod/kick", strings.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for non-admin kick", rec.Code)
+	}
+}
+
+func TestModKick_NotPublicRoom404(t *testing.T) {
+	h := chat.NewHandler(&mockManager{room: &chat.Room{ID: "r-1", Type: chat.RoomTypeDM}}, chat.HandlerConfig{})
+
+	body := `{"target_id":"u-1"}`
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/rooms/r-1/mod/kick", strings.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for non-public room", rec.Code)
+	}
+}
+
+func TestModMute_ByAdmin(t *testing.T) {
+	var mutedUser, mutedRoom string
+	var mutedDuration time.Duration
+	h := chat.NewHandler(&mockManager{}, chat.HandlerConfig{
+		MuteInRoom: func(_ context.Context, roomID, userID string, ttl time.Duration) error {
+			mutedRoom, mutedUser, mutedDuration = roomID, userID, ttl
+			return nil
+		},
+	})
+
+	body := `{"target_id":"guest:abc","duration":"1h"}`
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/rooms/r-2/mod/mute", strings.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if mutedUser != "guest:abc" || mutedRoom != "r-2" || mutedDuration != time.Hour {
+		t.Errorf("MuteInRoom(%q, %q, %v), want (r-2, guest:abc, 1h)", mutedRoom, mutedUser, mutedDuration)
+	}
+}
+
+func TestModMute_InvalidDuration400(t *testing.T) {
+	h := chat.NewHandler(&mockManager{}, chat.HandlerConfig{
+		MuteInRoom: func(_ context.Context, _, _ string, _ time.Duration) error { return nil },
+	})
+
+	body := `{"target_id":"guest:abc","duration":"99h"}`
+	req := adminReq(httptest.NewRequest(http.MethodPost, "/rooms/r-2/mod/mute", strings.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for invalid duration", rec.Code)
+	}
+}
+
+func TestModUnmute_ByAdmin(t *testing.T) {
+	var unmutedUser, unmutedRoom string
+	h := chat.NewHandler(&mockManager{}, chat.HandlerConfig{
+		UnmuteInRoom: func(_ context.Context, roomID, userID string) error {
+			unmutedRoom, unmutedUser = roomID, userID
+			return nil
+		},
+	})
+
+	req := adminReq(httptest.NewRequest(http.MethodDelete, "/rooms/r-3/mod/mute/guest:abc", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if unmutedUser != "guest:abc" || unmutedRoom != "r-3" {
+		t.Errorf("UnmuteInRoom(%q, %q), want (r-3, guest:abc)", unmutedRoom, unmutedUser)
+	}
+}
+
 func TestGetRoom_Group_NoAcceptedField(t *testing.T) {
 	room := &chat.Room{ID: "r-1", Type: "group", Name: "team"}
 	cfg := chat.HandlerConfig{

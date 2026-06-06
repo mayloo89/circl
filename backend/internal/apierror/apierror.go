@@ -91,4 +91,6 @@ const (
 	CodePublicRoomNameTaken = "public_room_name_taken"
 	CodeGuestTextOnly       = "guest_text_only"
 	CodeCaptchaFailed       = "captcha_failed"
+	CodeIPBanned            = "ip_banned"
+	CodeProfanityNickname   = "profanity_nickname"
 )

@@ -575,7 +575,12 @@
     "noOneHere": "Nadie por aquí aún",
     "leaveTitle": "¿Salir de esta sala?",
     "leaveMessage": "Si sales, perderás tu apodo de invitado y deberás entrar de nuevo.",
-    "captchaFailed": "La verificación falló. Inténtalo de nuevo."
+    "captchaFailed": "La verificación falló. Inténtalo de nuevo.",
+    "youWereKicked": "Has sido expulsado de esta sala.",
+    "kickedTitle": "Expulsado de la sala",
+    "youAreMuted": "Estás silenciado en esta sala.",
+    "ipBanned": "Tu acceso a esta sala ha sido restringido.",
+    "profanityNickname": "Tu apodo contiene lenguaje inapropiado."
   },
   "chatRoom": {
     "loading": "Cargando…",
@@ -659,7 +664,13 @@
     "ephemeral24h": "24 horas",
     "scrollToBottom": "Ir al final",
     "contactRedacted": "Se eliminó información de contacto del mensaje anterior para proteger la privacidad.",
-    "contactWarning": "No está permitido compartir información de contacto fuera de contactos aceptados."
+    "contactWarning": "No está permitido compartir información de contacto fuera de contactos aceptados.",
+    "kickAction": "Expulsar",
+    "muteAction": "Silenciar",
+    "mute15m": "Silenciar 15 min",
+    "mute1h": "Silenciar 1 hora",
+    "mute24h": "Silenciar 24 horas",
+    "moderationMenu": "Opciones de moderación"
   },
   "publicProfile": {
     "title": "Perfil",

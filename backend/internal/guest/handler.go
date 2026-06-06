@@ -20,8 +20,14 @@ type NicknameChecker func(ctx context.Context, nickname string) (bool, error)
 
 // SessionCreator creates and retrieves guest sessions.
 type SessionCreator interface {
-	Create(ctx context.Context, nickname string) (*Session, error)
+	Create(ctx context.Context, nickname, ipHash string) (*Session, error)
 	Get(ctx context.Context, sessionID string) (*Session, error)
+}
+
+// IPBanner enforces per-room IP bans for guests.
+type IPBanner interface {
+	BanRoomIP(ctx context.Context, roomID, ipHash string, ttl time.Duration) error
+	IsRoomIPBanned(ctx context.Context, roomID, ipHash string) (bool, error)
 }
 
 // HandlerConfig holds dependencies for the guest HTTP handler.
@@ -34,7 +40,14 @@ type HandlerConfig struct {
 	Participants func(ctx context.Context, roomID string) []chat.ClientInfo
 	// Captcha, when set, verifies the anti-bot token submitted with a guest
 	// session. When nil (no provider configured), the check is skipped.
-	Captcha       func(ctx context.Context, token, remoteIP string) (bool, error)
+	Captcha func(ctx context.Context, token, remoteIP string) (bool, error)
+	// ProfanityFilter, when set, is called with the requested nickname. A true
+	// return rejects the session with 400 CodeProfanityNickname.
+	ProfanityFilter func(nickname string) bool
+	// IPBanner, when set, checks and records per-room IP bans. If the caller
+	// provides a room_id in the request body the ban is checked before the
+	// session is minted.
+	IPBanner      IPBanner
 	Limiter       *ratelimit.RedisLimiter
 	GuestIPRate   int
 	GuestIPWindow time.Duration
@@ -88,7 +101,7 @@ func listRoomParticipants(cfg HandlerConfig) http.HandlerFunc {
 }
 
 // createGuestSession handles POST /guest/session.
-// Body: {"nickname": "...", "age_attestation": true}
+// Body: {"nickname": "...", "age_attestation": true, "room_id": "...", "captcha_token": "..."}
 func createGuestSession(cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
@@ -104,6 +117,7 @@ func createGuestSession(cfg HandlerConfig) http.HandlerFunc {
 		var body struct {
 			Nickname       string `json:"nickname"`
 			AgeAttestation bool   `json:"age_attestation"`
+			RoomID         string `json:"room_id"`
 			CaptchaToken   string `json:"captcha_token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -117,6 +131,22 @@ func createGuestSession(cfg HandlerConfig) http.HandlerFunc {
 		if !body.AgeAttestation {
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeAgeAttestRequired, "age attestation is required")
 			return
+		}
+
+		// Profanity filter. Skipped when no filter is configured.
+		if cfg.ProfanityFilter != nil && cfg.ProfanityFilter(body.Nickname) {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeProfanityNickname, "nickname contains disallowed content")
+			return
+		}
+
+		// Per-room IP ban check. Requires room_id in the request body.
+		ipHash := HashIP(ip)
+		if cfg.IPBanner != nil && body.RoomID != "" {
+			banned, err := cfg.IPBanner.IsRoomIPBanned(r.Context(), body.RoomID, ipHash)
+			if err == nil && banned {
+				apierror.Write(w, http.StatusForbidden, apierror.CodeIPBanned, "you have been banned from this room")
+				return
+			}
 		}
 
 		// Anti-bot gate. Skipped entirely when no provider is configured (dev).
@@ -140,7 +170,7 @@ func createGuestSession(cfg HandlerConfig) http.HandlerFunc {
 			}
 		}
 
-		sess, err := cfg.Sessions.Create(r.Context(), body.Nickname)
+		sess, err := cfg.Sessions.Create(r.Context(), body.Nickname, ipHash)
 		if err != nil {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return

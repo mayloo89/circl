@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -297,4 +298,68 @@ func TestHub_CancelStopsRun(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Error("send channel was not closed after hub shutdown")
 	}
+}
+
+func TestHub_KickFromRoom(t *testing.T) {
+	hub, cancel := newTestHub(t)
+	defer cancel()
+
+	target := &Client{
+		hub:    hub,
+		send:   make(chan []byte, 8),
+		userID: "guest:target",
+		roomID: "room-1",
+	}
+	bystander := &Client{
+		hub:    hub,
+		send:   make(chan []byte, 8),
+		userID: "u-bystander",
+		roomID: "room-1",
+	}
+	mustRegister(t, hub, target)
+	mustRegister(t, hub, bystander)
+
+	hub.KickFromRoom("room-1", "guest:target")
+
+	// target's send channel must receive a "kicked" frame then be closed.
+	select {
+	case frame, ok := <-target.send:
+		if !ok {
+			t.Fatal("received closed channel before kicked frame")
+		}
+		if !containsEvent(frame, "kicked") {
+			t.Errorf("first frame event is not kicked: %s", frame)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("target did not receive kicked frame within 500ms")
+	}
+	// Next receive must close the channel.
+	select {
+	case _, open := <-target.send:
+		if open {
+			t.Error("send channel must be closed after kick")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("target send channel not closed after kick")
+	}
+
+	// Bystander must remain registered (not kicked).
+	participants := hub.RoomParticipants(t.Context(), "room-1")
+	for _, p := range participants {
+		if p.UserID == "guest:target" {
+			t.Error("kicked target still appears in participants")
+		}
+	}
+	if len(participants) != 1 || participants[0].UserID != "u-bystander" {
+		t.Errorf("expected only bystander in room, got %v", participants)
+	}
+}
+
+// containsEvent checks whether a JSON frame has the given "event" field value.
+func containsEvent(data []byte, event string) bool {
+	var f struct{ Event string `json:"event"` }
+	if err := json.Unmarshal(data, &f); err != nil {
+		return false
+	}
+	return f.Event == event
 }

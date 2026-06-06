@@ -38,6 +38,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/moderation"
 	"github.com/mayloo89/circl/backend/internal/notifications"
 	"github.com/mayloo89/circl/backend/internal/presence"
+	"github.com/mayloo89/circl/backend/internal/profanity"
 	"github.com/mayloo89/circl/backend/internal/profiles"
 	"github.com/mayloo89/circl/backend/internal/push"
 	"github.com/mayloo89/circl/backend/internal/ratelimit"
@@ -348,13 +349,15 @@ func main() {
 
 	guestSessionStore := guest.NewSessionStore(rdb)
 	guestCfg := guest.HandlerConfig{
-		Sessions:      guestSessionStore,
-		NicknameTaken: chatSvc.NicknameTaken,
-		RoomLister:    chatSvc,
-		Participants:  chatHub.RoomParticipants,
-		Limiter:       limiter,
-		GuestIPRate:   10,
-		GuestIPWindow: time.Minute,
+		Sessions:        guestSessionStore,
+		NicknameTaken:   chatSvc.NicknameTaken,
+		RoomLister:      chatSvc,
+		Participants:    chatHub.RoomParticipants,
+		ProfanityFilter: profanity.Check,
+		IPBanner:        guestSessionStore,
+		Limiter:         limiter,
+		GuestIPRate:     10,
+		GuestIPWindow:   time.Minute,
 	}
 	// Anti-bot on guest entry. Enabled only when a Turnstile secret is set;
 	// without it the check is skipped (local dev needs no captcha keys).
@@ -422,6 +425,19 @@ func main() {
 		},
 		ReadFile:  fileStorage.GetObject,
 		IsBlocked: contactSvc.IsBlocked,
+		// In-room moderation
+		KickFromRoom: chatHub.KickFromRoom,
+		GetGuestSession: func(ctx context.Context, sessionID string) (string, error) {
+			sess, err := guestSessionStore.Get(ctx, sessionID)
+			if err != nil {
+				return "", err
+			}
+			return sess.IPHash, nil
+		},
+		BanRoomIP:    guestSessionStore.BanRoomIP,
+		IsMutedInRoom: guestSessionStore.IsMutedInRoom,
+		MuteInRoom:   guestSessionStore.MuteInRoom,
+		UnmuteInRoom: guestSessionStore.UnmuteInRoom,
 	})
 
 	uploadStore := uploads.NewStore(pool)

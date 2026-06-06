@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 
 import type { AnyMessage } from "@/types/chat"
 import type { ParticipantEvent } from "@/hooks/useChat"
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard"
 import MessageBubble from "@/components/chat/MessageBubble"
 import ChatInput from "@/components/chat/ChatInput"
 import DateSeparator from "@/components/chat/DateSeparator"
@@ -46,6 +47,14 @@ interface PublicRoomShellProps {
   /** When true, leaving the room asks for confirmation first (guests lose
    *  their ephemeral nickname/session on leave). */
   confirmOnLeave?: boolean
+  /** Whether the current viewer was removed from the room by a moderator. */
+  isKicked?: boolean
+  /** Whether the current viewer is currently muted in this room. */
+  isMuted?: boolean
+  /** Whether the current viewer is a platform admin (shows mod actions). */
+  isAdmin?: boolean
+  /** The viewer's own user ID — used to suppress mod actions on self. */
+  viewerId?: string
   onBack: () => void
   onSend: (content: string) => void
   onTyping: () => void
@@ -75,6 +84,10 @@ export default function PublicRoomShell({
   isOwn,
   headerBadge,
   confirmOnLeave = false,
+  isKicked = false,
+  isMuted = false,
+  isAdmin = false,
+  viewerId,
   onBack,
   onSend,
   onTyping,
@@ -86,7 +99,29 @@ export default function PublicRoomShell({
   const [rosterOpen, setRosterOpen] = useState(true)
   const [memberQuery, setMemberQuery] = useState("")
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
+  const [openModMenuId, setOpenModMenuId] = useState<string | null>(null)
+  const modMenuRef = useRef<HTMLDivElement | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  useMenuKeyboard({ open: openModMenuId !== null, containerRef: modMenuRef, onClose: () => setOpenModMenuId(null) })
+
+  const modAction = useCallback(async (path: string, body: Record<string, string>) => {
+    if (!token) return
+    setOpenModMenuId(null)
+    await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }).catch(() => {})
+  }, [token])
+
+  function kick(targetId: string) {
+    void modAction(`/chat/rooms/${roomId}/mod/kick`, { target_id: targetId })
+  }
+
+  function mute(targetId: string, duration: string) {
+    void modAction(`/chat/rooms/${roomId}/mod/mute`, { target_id: targetId, duration })
+  }
 
   function handleBack() {
     if (confirmOnLeave) setLeaveConfirmOpen(true)
@@ -152,6 +187,27 @@ export default function PublicRoomShell({
         onConfirm={() => { setLeaveConfirmOpen(false); onBack() }}
         onCancel={() => setLeaveConfirmOpen(false)}
       />
+
+      {isKicked && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-950/90 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-gray-900 p-6 text-center shadow-2xl ring-1 ring-gray-800">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+              <svg className="h-6 w-6 text-red-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h2 className="text-base font-semibold text-foreground">{t("kickedTitle")}</h2>
+            <p className="mt-1 text-sm text-gray-400">{t("youWereKicked")}</p>
+            <button
+              type="button"
+              onClick={onBack}
+              className="mt-4 w-full cursor-pointer rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            >
+              {t("backToRooms")}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-3 border-b border-gray-800 bg-gray-900 px-4 py-3">
           <button
@@ -224,6 +280,15 @@ export default function PublicRoomShell({
 
         <TypingIndicator typers={typingNames} />
 
+        {isMuted && (
+          <div className="flex items-center gap-2 border-t border-amber-500/20 bg-amber-500/10 px-4 py-2" role="status">
+            <svg className="h-4 w-4 shrink-0 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+            </svg>
+            <span className="text-xs text-amber-300">{t("youAreMuted")}</span>
+          </div>
+        )}
+
         <ChatInput
           connected={connected}
           uploading={false}
@@ -266,6 +331,62 @@ export default function PublicRoomShell({
                     <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
                       {t("guestBadge")}
                     </span>
+                  )}
+                  {isAdmin && p.userId !== viewerId && (
+                    <div className="relative shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setOpenModMenuId(openModMenuId === p.userId ? null : p.userId)}
+                        aria-haspopup="menu"
+                        aria-expanded={openModMenuId === p.userId}
+                        aria-label={tr("moderationMenu")}
+                        className="cursor-pointer rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                        </svg>
+                      </button>
+                      {openModMenuId === p.userId && (
+                        <div
+                          ref={modMenuRef}
+                          role="menu"
+                          className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
+                        >
+                          <button
+                            role="menuitem"
+                            type="button"
+                            onClick={() => kick(p.userId)}
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                          >
+                            {tr("kickAction")}
+                          </button>
+                          <button
+                            role="menuitem"
+                            type="button"
+                            onClick={() => mute(p.userId, "15m")}
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                          >
+                            {tr("mute15m")}
+                          </button>
+                          <button
+                            role="menuitem"
+                            type="button"
+                            onClick={() => mute(p.userId, "1h")}
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                          >
+                            {tr("mute1h")}
+                          </button>
+                          <button
+                            role="menuitem"
+                            type="button"
+                            onClick={() => mute(p.userId, "24h")}
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                          >
+                            {tr("mute24h")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </li>
               ))}
