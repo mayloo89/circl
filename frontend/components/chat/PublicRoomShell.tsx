@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import type { AnyMessage } from "@/types/chat"
 import type { ParticipantEvent } from "@/hooks/useChat"
@@ -10,8 +10,8 @@ import { useToast } from "@/components/ui/Toast"
 import MessageBubble from "@/components/chat/MessageBubble"
 import ChatInput from "@/components/chat/ChatInput"
 import DateSeparator from "@/components/chat/DateSeparator"
-import TypingIndicator from "@/components/chat/TypingIndicator"
 import Avatar from "@/components/ui/Avatar"
+import BottomSheet from "@/components/ui/BottomSheet"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -39,7 +39,6 @@ interface PublicRoomShellProps {
   historyLoaded: boolean
   connected: boolean
   deletedIds: Set<string>
-  typingNames: string[]
   participantEvents: ParticipantEvent[]
   /** True when the given sender id is the current viewer (own message). */
   isOwn: (senderId: string) => boolean
@@ -61,6 +60,108 @@ interface PublicRoomShellProps {
   onTyping: () => void
 }
 
+// ─── Shared roster component ──────────────────────────────────────────────────
+
+interface RosterContentProps {
+  visibleRoster: Participant[]
+  memberQuery: string
+  onQueryChange: (q: string) => void
+  isAdmin: boolean
+  viewerId?: string
+  openModMenu: (userId: string, trigger: HTMLButtonElement) => void
+  openModMenuId: string | null
+  variant: "desktop" | "mobile"
+}
+
+function RosterContent({
+  visibleRoster,
+  memberQuery,
+  onQueryChange,
+  isAdmin,
+  viewerId,
+  openModMenu,
+  openModMenuId,
+  variant,
+}: RosterContentProps) {
+  const t = useTranslations("guestRooms")
+  const tr = useTranslations("chatRoom")
+  const mobile = variant === "mobile"
+
+  return (
+    <div className={mobile ? "space-y-3" : "flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-2"}>
+      <input
+        type="search"
+        aria-label={tr("filterMembers")}
+        value={memberQuery}
+        onChange={(e) => onQueryChange(e.target.value)}
+        placeholder={tr("filterMembers")}
+        className={
+          mobile
+            ? "w-full rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
+            : "w-full rounded bg-gray-800 px-2 py-1 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
+        }
+      />
+      {visibleRoster.length === 0 ? (
+        <p className={mobile ? "py-4 text-center text-sm text-gray-500" : "py-2 text-xs text-gray-500"}>
+          {t("noOneHere")}
+        </p>
+      ) : (
+        <ul className={mobile ? "divide-y divide-gray-800" : "flex-1 overflow-y-auto"}>
+          {visibleRoster.map((p) => (
+            <li
+              key={p.userId}
+              className={mobile ? "flex items-center gap-3 py-3" : "flex items-center gap-2 py-2 hover:bg-gray-800/50"}
+            >
+              <div className="relative shrink-0">
+                <Avatar
+                  src={p.avatarURL || undefined}
+                  name={p.displayName || "?"}
+                  size={mobile ? "sm" : "xs"}
+                  color="indigo"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
+              </div>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {p.displayName || "—"}
+              </span>
+              {p.isGuest && (
+                <span className={`shrink-0 rounded bg-gray-800 px-1.5 py-0.5 font-medium text-gray-400 ${mobile ? "text-[10px]" : "text-xs"}`}>
+                  {t("guestBadge")}
+                </span>
+              )}
+              {isAdmin && p.userId !== viewerId && (
+                <button
+                  type="button"
+                  onClick={(e) => openModMenu(p.userId, e.currentTarget)}
+                  aria-haspopup="menu"
+                  aria-expanded={openModMenuId === p.userId}
+                  aria-label={tr("moderationMenu")}
+                  className={
+                    mobile
+                      ? "shrink-0 cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                      : "shrink-0 cursor-pointer rounded p-1.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  }
+                >
+                  <svg
+                    className={mobile ? "h-4 w-4" : "h-3.5 w-3.5"}
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                  >
+                    <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                  </svg>
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ─── Shell ────────────────────────────────────────────────────────────────────
+
 /**
  * Presentational shell shared by the guest and registered public-room views.
  * Public rooms are text-only on both paths, so attachment and ephemeral
@@ -80,7 +181,6 @@ export default function PublicRoomShell({
   historyLoaded,
   connected,
   deletedIds,
-  typingNames,
   participantEvents,
   isOwn,
   headerBadge,
@@ -95,9 +195,10 @@ export default function PublicRoomShell({
 }: PublicRoomShellProps) {
   const t = useTranslations("guestRooms")
   const tr = useTranslations("chatRoom")
+  const locale = useLocale()
   const [now] = useState(() => Date.now())
   const [seed, setSeed] = useState<Participant[]>([])
-  const [rosterOpen, setRosterOpen] = useState(true)
+  const [rosterOpen, setRosterOpen] = useState(false)
   const [memberQuery, setMemberQuery] = useState("")
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
   const [openModMenuId, setOpenModMenuId] = useState<string | null>(null)
@@ -112,11 +213,11 @@ export default function PublicRoomShell({
 
   useEffect(() => {
     if (openModMenuId === null) return
-    function handleOutside(e: MouseEvent) {
+    function handleOutside(e: PointerEvent) {
       if (modMenuRef.current && !modMenuRef.current.contains(e.target as Node)) closeModMenu()
     }
-    document.addEventListener("mousedown", handleOutside)
-    return () => document.removeEventListener("mousedown", handleOutside)
+    document.addEventListener("pointerdown", handleOutside)
+    return () => document.removeEventListener("pointerdown", handleOutside)
   }, [openModMenuId, closeModMenu])
 
   function openModMenu(userId: string, trigger: HTMLButtonElement) {
@@ -201,11 +302,11 @@ export default function PublicRoomShell({
   }, [messages.length])
 
   function formatDay(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    return new Date(dateStr).toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })
   }
 
   return (
-    <div className="relative flex h-screen bg-gray-950">
+    <div className="relative flex h-dvh bg-gray-950">
       <ConfirmDialog
         open={leaveConfirmOpen}
         title={t("leaveTitle")}
@@ -228,6 +329,7 @@ export default function PublicRoomShell({
             <button
               type="button"
               onClick={onBack}
+              autoFocus
               className="mt-4 w-full cursor-pointer rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               {t("backToRooms")}
@@ -240,7 +342,7 @@ export default function PublicRoomShell({
           <button
             type="button"
             onClick={handleBack}
-            className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-800 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            className="cursor-pointer rounded-full p-2.5 text-gray-400 hover:bg-gray-800 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover"
             aria-label={t("backToRooms")}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -259,7 +361,7 @@ export default function PublicRoomShell({
           <button
             type="button"
             onClick={() => setRosterOpen((v) => !v)}
-            className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${rosterOpen ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${rosterOpen ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
             aria-label={rosterOpen ? tr("hideMembers") : tr("showMembers")}
             aria-expanded={rosterOpen}
           >
@@ -275,7 +377,12 @@ export default function PublicRoomShell({
             <p className="text-sm text-gray-500">{tr("loading")}</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div
+              role="log"
+              aria-live="polite"
+              aria-label={tr("chatMessages")}
+              className="flex-1 overflow-y-auto overscroll-y-contain px-4 py-4"
+            >
             {messages.map((msg, i) => {
               const msgDate = formatDay(msg.created_at)
               const showDateSep = i === 0 || formatDay(messages[i - 1].created_at) !== msgDate
@@ -305,8 +412,6 @@ export default function PublicRoomShell({
           </div>
         )}
 
-        <TypingIndicator typers={typingNames} />
-
         {isMuted && (
           <div className="flex items-center gap-2 border-t border-amber-500/20 bg-amber-500/10 px-4 py-2" role="status">
             <svg className="h-4 w-4 shrink-0 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -330,68 +435,54 @@ export default function PublicRoomShell({
       </div>
 
       {rosterOpen && (
-        <aside className="hidden w-52 shrink-0 flex-col border-l border-gray-800 bg-gray-900 sm:flex">
-          <div className="space-y-2 px-3 pb-2 pt-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        <aside className="hidden w-64 shrink-0 flex-col overflow-hidden border-l border-gray-800 bg-gray-900 lg:flex">
+          <div className="shrink-0 px-3 pb-0 pt-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               {tr("membersTitle", { count: roster.length })}
             </p>
-            <input
-              type="text"
-              value={memberQuery}
-              onChange={(e) => setMemberQuery(e.target.value)}
-              placeholder={tr("filterMembers")}
-              className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
-            />
           </div>
-          {visibleRoster.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-gray-500">{t("noOneHere")}</p>
-          ) : (
-            <ul className="overflow-y-auto">
-              {visibleRoster.map((p) => (
-                <li key={p.userId} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800/50">
-                  <div className="relative shrink-0">
-                    <Avatar src={p.avatarURL || undefined} name={p.displayName || "?"} size="xs" color="indigo" />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
-                  </div>
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{p.displayName || "—"}</span>
-                  {p.isGuest && (
-                    <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
-                      {t("guestBadge")}
-                    </span>
-                  )}
-                  {isAdmin && p.userId !== viewerId && (
-                    <button
-                      type="button"
-                      onClick={(e) => openModMenu(p.userId, e.currentTarget)}
-                      aria-haspopup="menu"
-                      aria-expanded={openModMenuId === p.userId}
-                      aria-label={tr("moderationMenu")}
-                      className="shrink-0 cursor-pointer rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-                      </svg>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <RosterContent
+            visibleRoster={visibleRoster}
+            memberQuery={memberQuery}
+            onQueryChange={setMemberQuery}
+            isAdmin={isAdmin}
+            viewerId={viewerId}
+            openModMenu={openModMenu}
+            openModMenuId={openModMenuId}
+            variant="desktop"
+          />
         </aside>
       )}
+
+      <BottomSheet
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
+        title={tr("membersTitle", { count: roster.length })}
+      >
+        <RosterContent
+          visibleRoster={visibleRoster}
+          memberQuery={memberQuery}
+          onQueryChange={setMemberQuery}
+          isAdmin={isAdmin}
+          viewerId={viewerId}
+          openModMenu={openModMenu}
+          openModMenuId={openModMenuId}
+          variant="mobile"
+        />
+      </BottomSheet>
 
       {openModMenuId !== null && menuPos !== null && (
         <div
           ref={modMenuRef}
           role="menu"
           style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
-          className="z-50 w-40 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
+          className="z-[70] w-40 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
         >
           <button
             role="menuitem"
             type="button"
             onClick={() => kick(openModMenuId)}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("kickAction")}
           </button>
@@ -399,7 +490,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => mute(openModMenuId, "15m")}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("mute15m")}
           </button>
@@ -407,7 +498,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => mute(openModMenuId, "1h")}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("mute1h")}
           </button>
@@ -415,7 +506,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => mute(openModMenuId, "24h")}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("mute24h")}
           </button>

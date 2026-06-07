@@ -84,7 +84,7 @@ function CreateChannelModal({ open, token, onClose, onCreated }: CreateChannelMo
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
           <h2 className="text-base font-semibold text-foreground">{t("modalTitle")}</h2>
-          <button type="button" onClick={handleClose} className="cursor-pointer text-gray-500 transition-colors hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-hover rounded" aria-label={tc("close")}>
+          <button type="button" onClick={handleClose} className="cursor-pointer rounded p-2 text-gray-500 transition-colors hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-hover" aria-label={tc("close")}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -157,7 +157,7 @@ export default function ChannelsPage() {
   )
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-950">
+    <div className="flex min-h-dvh flex-col bg-gray-950">
       {token && (
         <CreateChannelModal
           open={createOpen}
@@ -186,6 +186,7 @@ export default function ChannelsPage() {
         <Input
           labelHidden
           label={t("searchLabel")}
+          type="search"
           placeholder={t("search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -219,40 +220,60 @@ export default function ChannelsPage() {
                 </Button>
               )}
             </div>
-          ) : (
-            <ul className="divide-y divide-gray-800">
-              {filtered.map((room) => (
-                <li key={room.id} className="flex items-center gap-4 px-5 py-4">
+          ) : (() => {
+            const publicRooms = filtered.filter((r) => r.kind === "public")
+            const channels = filtered.filter((r) => r.kind === "channel")
+            function RoomRow({ room }: { room: RoomItem }) {
+              return (
+                <li className="flex items-center gap-4 px-5 py-4">
                   <Avatar name={room.name} size="md" color="indigo" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {room.kind === "channel" ? `# ${room.name}` : room.name}
-                      </p>
-                      {room.kind === "public" && (
-                        <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
-                          {t("publicBadge")}
-                        </span>
-                      )}
-                    </div>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {room.kind === "channel" ? `# ${room.name}` : room.name}
+                    </p>
                     {room.description && (
                       <p className="mt-0.5 truncate text-xs text-gray-400">{room.description}</p>
                     )}
                     {room.active_count > 0 && (
-                      <p className="mt-0.5 text-xs text-gray-600">{t("onlineNow", { count: room.active_count })}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">{t("onlineNow", { count: room.active_count })}</p>
                     )}
                   </div>
                   <Button
                     variant="primary"
                     size="sm"
+                    aria-label={`${t("enter")} ${room.name}`}
                     onClick={() => router.push(room.kind === "public" ? `/rooms/${room.id}` : `/chat/channels/${room.id}`)}
                   >
                     {t("enter")}
                   </Button>
                 </li>
-              ))}
-            </ul>
-          )}
+              )
+            }
+            return (
+              <>
+                {publicRooms.length > 0 && (
+                  <section>
+                    <h2 className="px-5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                      {t("publicRoomsHeading")}
+                    </h2>
+                    <ul className="divide-y divide-gray-800">
+                      {publicRooms.map((room) => <RoomRow key={room.id} room={room} />)}
+                    </ul>
+                  </section>
+                )}
+                {channels.length > 0 && (
+                  <section>
+                    <h2 className="px-5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                      {t("channelsHeading")}
+                    </h2>
+                    <ul className="divide-y divide-gray-800">
+                      {channels.map((room) => <RoomRow key={room.id} room={room} />)}
+                    </ul>
+                  </section>
+                )}
+              </>
+            )
+          })()}
         </div>
       </div>
     </div>

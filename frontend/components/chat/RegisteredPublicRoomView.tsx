@@ -20,7 +20,7 @@ export default function RegisteredPublicRoomView({ roomId, token, userID }: Regi
   const router = useRouter()
   const { data: session } = useSession()
   const isAdmin = session?.role === "admin" || session?.role === "super_admin"
-  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents, isKicked, isMuted } = useChat(roomId, token)
+  const { messages: liveMessages, deletedIds, connected, send, sendTyping, participantEvents, isKicked, isMuted } = useChat(roomId, token)
   const [history, setHistory] = useState<AnyMessage[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [roomName, setRoomName] = useState("")
@@ -50,11 +50,6 @@ export default function RegisteredPublicRoomView({ roomId, token, userID }: Regi
     return out
   }, [history, liveMessages])
 
-  const typingNames = useMemo(
-    () => [...typingUsers.values()].map((v) => v.displayName).filter(Boolean),
-    [typingUsers],
-  )
-
   return (
     <PublicRoomShell
       roomId={roomId}
@@ -64,7 +59,6 @@ export default function RegisteredPublicRoomView({ roomId, token, userID }: Regi
       historyLoaded={historyLoaded}
       connected={connected}
       deletedIds={deletedIds}
-      typingNames={typingNames}
       participantEvents={participantEvents}
       isOwn={(senderId) => senderId === userID}
       isKicked={isKicked}

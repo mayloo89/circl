@@ -39,7 +39,7 @@ export default function GuestRoomPage() {
   // Avoid flashing the guest gate to a user whose session is still resolving.
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+      <div className="flex min-h-dvh items-center justify-center bg-gray-950">
         <p className="text-sm text-gray-500">{tc("loading")}</p>
       </div>
     )
@@ -115,7 +115,7 @@ export default function GuestRoomPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950 px-4">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-sm space-y-6 rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-800">
         <div className="text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-primary/10">
@@ -149,7 +149,7 @@ export default function GuestRoomPage() {
 
           <Turnstile onVerify={setCaptchaToken} resetTrigger={turnstileReset} />
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p role="alert" aria-live="assertive" className="text-xs text-red-400">{error}</p>}
 
           <Button
             variant="accent"
