@@ -517,7 +517,12 @@
     "moderationLoadError": "Could not load moderation queue.",
     "noReports": "No reports found.",
     "reviewReport": "Review",
-    "resolve": "Resolve"
+    "resolve": "Resolve",
+    "dashboard": "Dashboard",
+    "appeals": "Appeals",
+    "publicRoomsNav": "Public rooms",
+    "closeNav": "Close navigation",
+    "adminBadge": "Admin"
   },
   "channels": {
     "title": "Channels",

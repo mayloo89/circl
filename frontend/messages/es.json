@@ -517,7 +517,12 @@
     "moderationColTime": "Fecha",
     "moderationViewFull": "Ver original",
     "moderationFilePurged": "Archivo eliminado por política",
-    "moderationLoadError": "No se pudo cargar la cola de moderación."
+    "moderationLoadError": "No se pudo cargar la cola de moderación.",
+    "dashboard": "Panel",
+    "appeals": "Apelaciones",
+    "publicRoomsNav": "Salas públicas",
+    "closeNav": "Cerrar navegación",
+    "adminBadge": "Admin"
   },
   "channels": {
     "title": "Canales",

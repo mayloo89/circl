@@ -517,7 +517,12 @@
     "moderationColTime": "Data",
     "moderationViewFull": "Ver original",
     "moderationFilePurged": "Arquivo removido por política",
-    "moderationLoadError": "Não foi possível carregar a fila de moderação."
+    "moderationLoadError": "Não foi possível carregar a fila de moderação.",
+    "dashboard": "Painel",
+    "appeals": "Recursos",
+    "publicRoomsNav": "Salas públicas",
+    "closeNav": "Fechar navegação",
+    "adminBadge": "Admin"
   },
   "channels": {
     "title": "Canais",
