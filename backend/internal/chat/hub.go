@@ -39,6 +39,13 @@ type kickCmd struct {
 	targetID string
 }
 
+// notifyCmd asks the Run loop to deliver a frame directly to a specific user.
+type notifyCmd struct {
+	roomID   string
+	targetID string
+	data     []byte
+}
+
 // Hub manages WebSocket client connections and fans out messages via Redis
 // Pub/Sub so that the system scales horizontally across multiple server
 // instances.
@@ -56,6 +63,7 @@ type Hub struct {
 	broadcast     chan broadcastMsg
 	participantsQ chan participantsReq
 	kickCmds      chan kickCmd
+	notifyCmds    chan notifyCmd
 
 	// These fields are only accessed from the Run goroutine.
 	rooms   map[string]map[*Client]struct{}
@@ -78,6 +86,7 @@ func NewHub(rdb *redis.Client) *Hub {
 		broadcast:     make(chan broadcastMsg, 256),
 		participantsQ: make(chan participantsReq, 4),
 		kickCmds:      make(chan kickCmd, 8),
+		notifyCmds:    make(chan notifyCmd, 8),
 		rooms:         make(map[string]map[*Client]struct{}),
 		pubsubs:       make(map[string]*redis.PubSub),
 	}
@@ -89,6 +98,15 @@ func NewHub(rdb *redis.Client) *Hub {
 func (h *Hub) KickFromRoom(roomID, targetID string) {
 	select {
 	case h.kickCmds <- kickCmd{roomID: roomID, targetID: targetID}:
+	default:
+	}
+}
+
+// SendToUser delivers data to all local connections of targetID in roomID.
+// The call is non-blocking; the actual delivery happens in the Run loop.
+func (h *Hub) SendToUser(roomID, targetID string, data []byte) {
+	select {
+	case h.notifyCmds <- notifyCmd{roomID: roomID, targetID: targetID, data: data}:
 	default:
 	}
 }
@@ -128,6 +146,9 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case cmd := <-h.kickCmds:
 			h.kickTarget(cmd.roomID, cmd.targetID)
+
+		case cmd := <-h.notifyCmds:
+			h.sendToUser(cmd.roomID, cmd.targetID, cmd.data)
 
 		case <-ctx.Done():
 			for _, clients := range h.rooms {
@@ -315,6 +336,20 @@ func (h *Hub) kickTarget(roomID, targetID string) {
 			delete(h.pubsubs, roomID)
 		}
 		delete(h.rooms, roomID)
+	}
+}
+
+// sendToUser delivers data to each local connection of targetID in roomID.
+// Must only be called from the Run goroutine.
+func (h *Hub) sendToUser(roomID, targetID string, data []byte) {
+	for c := range h.rooms[roomID] {
+		if c.userID != targetID {
+			continue
+		}
+		select {
+		case c.send <- data:
+		default:
+		}
 	}
 }
 

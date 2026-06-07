@@ -172,6 +172,10 @@ type HandlerConfig struct {
 	MuteInRoom func(ctx context.Context, roomID, userID string, ttl time.Duration) error
 	// UnmuteInRoom, if set, removes a per-room mute.
 	UnmuteInRoom func(ctx context.Context, roomID, userID string) error
+	// ScheduleUnmute, if set, arranges for a you_are_unmuted frame to be
+	// delivered to targetID in roomID after ttl elapses. Used to clear the
+	// client-side muted state without requiring a reconnect.
+	ScheduleUnmute func(roomID, targetID string, ttl time.Duration)
 }
 
 // PrivacyFlags are the chat-relevant subset of a user's privacy preferences.
@@ -1235,6 +1239,10 @@ func modMuteHandler(cfg HandlerConfig) http.Handler {
 				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 				return
 			}
+		}
+
+		if cfg.ScheduleUnmute != nil {
+			cfg.ScheduleUnmute(roomID, body.TargetID, ttl)
 		}
 
 		w.WriteHeader(http.StatusNoContent)

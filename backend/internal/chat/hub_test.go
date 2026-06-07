@@ -355,6 +355,30 @@ func TestHub_KickFromRoom(t *testing.T) {
 	}
 }
 
+func TestHub_SendToUser(t *testing.T) {
+	hub, cancel := newTestHub(t)
+	defer cancel()
+
+	target := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-target", roomID: "room-notify"}
+	bystander := &Client{hub: hub, send: make(chan []byte, 8), userID: "u-bystander", roomID: "room-notify"}
+	mustRegister(t, hub, target)
+	mustRegister(t, hub, bystander)
+
+	frame, _ := json.Marshal(map[string]any{"event": "you_are_unmuted", "room_id": "room-notify"})
+	hub.SendToUser("room-notify", "u-target", frame)
+
+	got := receiveWithTimeout(t, target.send, 500*time.Millisecond)
+	if !containsEvent(got, "you_are_unmuted") {
+		t.Errorf("target got unexpected frame: %s", got)
+	}
+
+	select {
+	case msg := <-bystander.send:
+		t.Errorf("bystander should not receive the notification: %s", msg)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 // containsEvent checks whether a JSON frame has the given "event" field value.
 func containsEvent(data []byte, event string) bool {
 	var f struct{ Event string `json:"event"` }

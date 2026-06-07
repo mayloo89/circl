@@ -438,6 +438,13 @@ func main() {
 		IsMutedInRoom: guestSessionStore.IsMutedInRoom,
 		MuteInRoom:   guestSessionStore.MuteInRoom,
 		UnmuteInRoom: guestSessionStore.UnmuteInRoom,
+		ScheduleUnmute: func(roomID, targetID string, ttl time.Duration) {
+			frame, _ := json.Marshal(map[string]any{
+				"event":   "you_are_unmuted",
+				"room_id": roomID,
+			})
+			time.AfterFunc(ttl, func() { chatHub.SendToUser(roomID, targetID, frame) })
+		},
 	})
 
 	uploadStore := uploads.NewStore(pool)

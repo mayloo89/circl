@@ -205,6 +205,8 @@ export function useChat(roomId: string | null, token: string | undefined) {
             ws.close()
           } else if (frame.event === "you_are_muted") {
             setIsMuted(true)
+          } else if (frame.event === "you_are_unmuted") {
+            setIsMuted(false)
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])
           }
