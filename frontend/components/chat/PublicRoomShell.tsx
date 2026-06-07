@@ -12,6 +12,7 @@ import ChatInput from "@/components/chat/ChatInput"
 import DateSeparator from "@/components/chat/DateSeparator"
 import TypingIndicator from "@/components/chat/TypingIndicator"
 import Avatar from "@/components/ui/Avatar"
+import BottomSheet from "@/components/ui/BottomSheet"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -97,7 +98,7 @@ export default function PublicRoomShell({
   const tr = useTranslations("chatRoom")
   const [now] = useState(() => Date.now())
   const [seed, setSeed] = useState<Participant[]>([])
-  const [rosterOpen, setRosterOpen] = useState(true)
+  const [rosterOpen, setRosterOpen] = useState(false)
   const [memberQuery, setMemberQuery] = useState("")
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
   const [openModMenuId, setOpenModMenuId] = useState<string | null>(null)
@@ -112,11 +113,11 @@ export default function PublicRoomShell({
 
   useEffect(() => {
     if (openModMenuId === null) return
-    function handleOutside(e: MouseEvent) {
+    function handleOutside(e: PointerEvent) {
       if (modMenuRef.current && !modMenuRef.current.contains(e.target as Node)) closeModMenu()
     }
-    document.addEventListener("mousedown", handleOutside)
-    return () => document.removeEventListener("mousedown", handleOutside)
+    document.addEventListener("pointerdown", handleOutside)
+    return () => document.removeEventListener("pointerdown", handleOutside)
   }, [openModMenuId, closeModMenu])
 
   function openModMenu(userId: string, trigger: HTMLButtonElement) {
@@ -205,7 +206,7 @@ export default function PublicRoomShell({
   }
 
   return (
-    <div className="relative flex h-screen bg-gray-950">
+    <div className="relative flex h-dvh bg-gray-950">
       <ConfirmDialog
         open={leaveConfirmOpen}
         title={t("leaveTitle")}
@@ -240,7 +241,7 @@ export default function PublicRoomShell({
           <button
             type="button"
             onClick={handleBack}
-            className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-800 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover"
+            className="cursor-pointer rounded-full p-2.5 text-gray-400 hover:bg-gray-800 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover"
             aria-label={t("backToRooms")}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -259,7 +260,7 @@ export default function PublicRoomShell({
           <button
             type="button"
             onClick={() => setRosterOpen((v) => !v)}
-            className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${rosterOpen ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${rosterOpen ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
             aria-label={rosterOpen ? tr("hideMembers") : tr("showMembers")}
             aria-expanded={rosterOpen}
           >
@@ -330,7 +331,7 @@ export default function PublicRoomShell({
       </div>
 
       {rosterOpen && (
-        <aside className="hidden w-52 shrink-0 flex-col border-l border-gray-800 bg-gray-900 sm:flex">
+        <aside className="hidden w-64 shrink-0 flex-col border-l border-gray-800 bg-gray-900 lg:flex">
           <div className="space-y-2 px-3 pb-2 pt-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               {tr("membersTitle", { count: roster.length })}
@@ -380,12 +381,62 @@ export default function PublicRoomShell({
         </aside>
       )}
 
+      <BottomSheet
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
+        title={tr("membersTitle", { count: roster.length })}
+      >
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={memberQuery}
+            onChange={(e) => setMemberQuery(e.target.value)}
+            placeholder={tr("filterMembers")}
+            className="w-full rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
+          />
+          {visibleRoster.length === 0 ? (
+            <p className="py-4 text-center text-sm text-gray-500">{t("noOneHere")}</p>
+          ) : (
+            <ul className="divide-y divide-gray-800">
+              {visibleRoster.map((p) => (
+                <li key={p.userId} className="flex items-center gap-3 py-3">
+                  <div className="relative shrink-0">
+                    <Avatar src={p.avatarURL || undefined} name={p.displayName || "?"} size="sm" color="indigo" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{p.displayName || "—"}</span>
+                  {p.isGuest && (
+                    <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
+                      {t("guestBadge")}
+                    </span>
+                  )}
+                  {isAdmin && p.userId !== viewerId && (
+                    <button
+                      type="button"
+                      onClick={(e) => openModMenu(p.userId, e.currentTarget)}
+                      aria-haspopup="menu"
+                      aria-expanded={openModMenuId === p.userId}
+                      aria-label={tr("moderationMenu")}
+                      className="shrink-0 cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                    >
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                      </svg>
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </BottomSheet>
+
       {openModMenuId !== null && menuPos !== null && (
         <div
           ref={modMenuRef}
           role="menu"
           style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
-          className="z-50 w-40 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
+          className="z-[70] w-40 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
         >
           <button
             role="menuitem"

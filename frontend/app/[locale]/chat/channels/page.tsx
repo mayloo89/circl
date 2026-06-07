@@ -157,7 +157,7 @@ export default function ChannelsPage() {
   )
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-950">
+    <div className="flex min-h-dvh flex-col bg-gray-950">
       {token && (
         <CreateChannelModal
           open={createOpen}
