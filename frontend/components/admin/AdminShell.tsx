@@ -60,7 +60,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
         <nav className="mt-2 flex flex-col gap-0.5 px-2 py-2">
           {NAV_ITEMS.map(({ href, label }) => {
-            const active = pathname === href || pathname.startsWith(href + "/")
+            const active = href === "/admin"
+              ? pathname === "/admin"
+              : pathname === href || pathname.startsWith(href + "/")
             return (
               <Link
                 key={href}
@@ -93,7 +95,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {/* Desktop horizontal tab nav */}
         <nav className="hidden items-stretch gap-1 md:flex" aria-label="Admin navigation">
           {NAV_ITEMS.map(({ href, label }) => {
-            const active = pathname === href || pathname.startsWith(href + "/")
+            const active = href === "/admin"
+              ? pathname === "/admin"
+              : pathname === href || pathname.startsWith(href + "/")
             return (
               <Link
                 key={href}
