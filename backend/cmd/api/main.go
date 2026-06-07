@@ -386,6 +386,7 @@ func main() {
 		GuestMsgWindow:    time.Minute,
 		AllowedOrigins:    corsOrigins,
 		PrivacyResolver:   chatPrivacy,
+		IsMutedInRoom:     guestSessionStore.IsMutedInRoom,
 	})
 
 	notifyDeleted := func(roomID, messageID string) {
