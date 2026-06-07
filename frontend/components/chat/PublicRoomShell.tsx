@@ -60,6 +60,108 @@ interface PublicRoomShellProps {
   onTyping: () => void
 }
 
+// ─── Shared roster component ──────────────────────────────────────────────────
+
+interface RosterContentProps {
+  visibleRoster: Participant[]
+  memberQuery: string
+  onQueryChange: (q: string) => void
+  isAdmin: boolean
+  viewerId?: string
+  openModMenu: (userId: string, trigger: HTMLButtonElement) => void
+  openModMenuId: string | null
+  variant: "desktop" | "mobile"
+}
+
+function RosterContent({
+  visibleRoster,
+  memberQuery,
+  onQueryChange,
+  isAdmin,
+  viewerId,
+  openModMenu,
+  openModMenuId,
+  variant,
+}: RosterContentProps) {
+  const t = useTranslations("guestRooms")
+  const tr = useTranslations("chatRoom")
+  const mobile = variant === "mobile"
+
+  return (
+    <div className={mobile ? "space-y-3" : "flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-2"}>
+      <input
+        type="search"
+        aria-label={tr("filterMembers")}
+        value={memberQuery}
+        onChange={(e) => onQueryChange(e.target.value)}
+        placeholder={tr("filterMembers")}
+        className={
+          mobile
+            ? "w-full rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
+            : "w-full rounded bg-gray-800 px-2 py-1 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
+        }
+      />
+      {visibleRoster.length === 0 ? (
+        <p className={mobile ? "py-4 text-center text-sm text-gray-500" : "py-2 text-xs text-gray-500"}>
+          {t("noOneHere")}
+        </p>
+      ) : (
+        <ul className={mobile ? "divide-y divide-gray-800" : "flex-1 overflow-y-auto"}>
+          {visibleRoster.map((p) => (
+            <li
+              key={p.userId}
+              className={mobile ? "flex items-center gap-3 py-3" : "flex items-center gap-2 py-2 hover:bg-gray-800/50"}
+            >
+              <div className="relative shrink-0">
+                <Avatar
+                  src={p.avatarURL || undefined}
+                  name={p.displayName || "?"}
+                  size={mobile ? "sm" : "xs"}
+                  color="indigo"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
+              </div>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {p.displayName || "—"}
+              </span>
+              {p.isGuest && (
+                <span className={`shrink-0 rounded bg-gray-800 px-1.5 py-0.5 font-medium text-gray-400 ${mobile ? "text-[10px]" : "text-xs"}`}>
+                  {t("guestBadge")}
+                </span>
+              )}
+              {isAdmin && p.userId !== viewerId && (
+                <button
+                  type="button"
+                  onClick={(e) => openModMenu(p.userId, e.currentTarget)}
+                  aria-haspopup="menu"
+                  aria-expanded={openModMenuId === p.userId}
+                  aria-label={tr("moderationMenu")}
+                  className={
+                    mobile
+                      ? "shrink-0 cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                      : "shrink-0 cursor-pointer rounded p-1.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                  }
+                >
+                  <svg
+                    className={mobile ? "h-4 w-4" : "h-3.5 w-3.5"}
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                  >
+                    <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                  </svg>
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ─── Shell ────────────────────────────────────────────────────────────────────
+
 /**
  * Presentational shell shared by the guest and registered public-room views.
  * Public rooms are text-only on both paths, so attachment and ephemeral
@@ -333,54 +435,22 @@ export default function PublicRoomShell({
       </div>
 
       {rosterOpen && (
-        <aside className="hidden w-64 shrink-0 flex-col border-l border-gray-800 bg-gray-900 lg:flex">
-          <div className="space-y-2 px-3 pb-2 pt-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        <aside className="hidden w-64 shrink-0 flex-col overflow-hidden border-l border-gray-800 bg-gray-900 lg:flex">
+          <div className="shrink-0 px-3 pb-0 pt-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               {tr("membersTitle", { count: roster.length })}
             </p>
-            <input
-              type="search"
-              aria-label={tr("filterMembers")}
-              value={memberQuery}
-              onChange={(e) => setMemberQuery(e.target.value)}
-              placeholder={tr("filterMembers")}
-              className="w-full rounded bg-gray-800 px-2 py-1 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
-            />
           </div>
-          {visibleRoster.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-gray-500">{t("noOneHere")}</p>
-          ) : (
-            <ul className="overflow-y-auto">
-              {visibleRoster.map((p) => (
-                <li key={p.userId} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800/50">
-                  <div className="relative shrink-0">
-                    <Avatar src={p.avatarURL || undefined} name={p.displayName || "?"} size="xs" color="indigo" />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
-                  </div>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{p.displayName || "—"}</span>
-                  {p.isGuest && (
-                    <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-medium text-gray-400">
-                      {t("guestBadge")}
-                    </span>
-                  )}
-                  {isAdmin && p.userId !== viewerId && (
-                    <button
-                      type="button"
-                      onClick={(e) => openModMenu(p.userId, e.currentTarget)}
-                      aria-haspopup="menu"
-                      aria-expanded={openModMenuId === p.userId}
-                      aria-label={tr("moderationMenu")}
-                      className="shrink-0 cursor-pointer rounded p-1.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-                      </svg>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <RosterContent
+            visibleRoster={visibleRoster}
+            memberQuery={memberQuery}
+            onQueryChange={setMemberQuery}
+            isAdmin={isAdmin}
+            viewerId={viewerId}
+            openModMenu={openModMenu}
+            openModMenuId={openModMenuId}
+            variant="desktop"
+          />
         </aside>
       )}
 
@@ -389,50 +459,16 @@ export default function PublicRoomShell({
         onClose={() => setRosterOpen(false)}
         title={tr("membersTitle", { count: roster.length })}
       >
-        <div className="space-y-3">
-          <input
-            type="search"
-            aria-label={tr("filterMembers")}
-            value={memberQuery}
-            onChange={(e) => setMemberQuery(e.target.value)}
-            placeholder={tr("filterMembers")}
-            className="w-full rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
-          />
-          {visibleRoster.length === 0 ? (
-            <p className="py-4 text-center text-sm text-gray-500">{t("noOneHere")}</p>
-          ) : (
-            <ul className="divide-y divide-gray-800">
-              {visibleRoster.map((p) => (
-                <li key={p.userId} className="flex items-center gap-3 py-3">
-                  <div className="relative shrink-0">
-                    <Avatar src={p.avatarURL || undefined} name={p.displayName || "?"} size="sm" color="indigo" />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
-                  </div>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{p.displayName || "—"}</span>
-                  {p.isGuest && (
-                    <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
-                      {t("guestBadge")}
-                    </span>
-                  )}
-                  {isAdmin && p.userId !== viewerId && (
-                    <button
-                      type="button"
-                      onClick={(e) => openModMenu(p.userId, e.currentTarget)}
-                      aria-haspopup="menu"
-                      aria-expanded={openModMenuId === p.userId}
-                      aria-label={tr("moderationMenu")}
-                      className="shrink-0 cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
-                    >
-                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-                      </svg>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <RosterContent
+          visibleRoster={visibleRoster}
+          memberQuery={memberQuery}
+          onQueryChange={setMemberQuery}
+          isAdmin={isAdmin}
+          viewerId={viewerId}
+          openModMenu={openModMenu}
+          openModMenuId={openModMenuId}
+          variant="mobile"
+        />
       </BottomSheet>
 
       {openModMenuId !== null && menuPos !== null && (
