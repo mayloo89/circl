@@ -16,6 +16,8 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
   const [typingUsers, setTypingUsers] = useState<Map<string, { displayName: string; at: number }>>(new Map())
   const [readReceipts, setReadReceipts] = useState<ReadReceipts>(new Map())
   const [participantEvents, setParticipantEvents] = useState<ParticipantEvent[]>([])
+  const [isKicked, setIsKicked] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const retryDelayRef = useRef(1000)
   const cancelledRef = useRef(false)
@@ -137,6 +139,14 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
               avatarURL: "",
               isGuest: Boolean(frame.is_guest),
             }])
+          } else if (frame.event === "kicked") {
+            setIsKicked(true)
+            cancelledRef.current = true
+            ws.close()
+          } else if (frame.event === "you_are_muted") {
+            setIsMuted(true)
+          } else if (frame.event === "you_are_unmuted") {
+            setIsMuted(false)
           } else if (frame.type && chatMessageTypes.has(frame.type)) {
             setMessages((prev) => [...prev, frame as ChatMessage])
           }
@@ -155,6 +165,8 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
       setTypingUsers(new Map())
       setReadReceipts(new Map())
       setParticipantEvents([])
+      setIsKicked(false)
+      setIsMuted(false)
     }
   }, [roomId, sessionId])
 
@@ -173,5 +185,5 @@ export function useGuestChat(roomId: string | null, sessionId: string | undefine
     return () => clearInterval(id)
   }, [roomId, sessionId])
 
-  return { messages, deletedIds, connected, send, sendTyping, typingUsers, readReceipts, participantEvents }
+  return { messages, deletedIds, connected, send, sendTyping, typingUsers, readReceipts, participantEvents, isKicked, isMuted }
 }

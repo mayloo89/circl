@@ -575,7 +575,12 @@
     "noOneHere": "No one here yet",
     "leaveTitle": "Leave this room?",
     "leaveMessage": "If you leave, you’ll lose your guest nickname and need to enter again.",
-    "captchaFailed": "Verification failed. Please try again."
+    "captchaFailed": "Verification failed. Please try again.",
+    "youWereKicked": "You have been removed from this room.",
+    "kickedTitle": "Removed from room",
+    "youAreMuted": "You are muted in this room.",
+    "ipBanned": "Your access to this room has been restricted.",
+    "profanityNickname": "Your nickname contains inappropriate language."
   },
   "chatRoom": {
     "loading": "Loading…",
@@ -659,7 +664,15 @@
     "ephemeral24h": "24 hours",
     "scrollToBottom": "Scroll to bottom",
     "contactRedacted": "Contact information was removed from the previous message to protect privacy.",
-    "contactWarning": "Sharing contact info outside accepted contacts is not allowed."
+    "contactWarning": "Sharing contact info outside accepted contacts is not allowed.",
+    "kickAction": "Kick",
+    "muteAction": "Mute",
+    "mute15m": "Mute 15 min",
+    "mute1h": "Mute 1 hour",
+    "mute24h": "Mute 24 hours",
+    "moderationMenu": "Moderation options",
+    "kickDone": "User kicked",
+    "muteDone": "User muted"
   },
   "publicProfile": {
     "title": "Profile",

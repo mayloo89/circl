@@ -72,7 +72,7 @@ export default function GuestRoomPage() {
       const res = await fetch(`${API_URL}/guest/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: nick, age_attestation: true, captcha_token: captchaToken }),
+        body: JSON.stringify({ nickname: nick, age_attestation: true, captcha_token: captchaToken, room_id: roomId }),
       })
 
       if (res.status === 409) {
@@ -81,7 +81,17 @@ export default function GuestRoomPage() {
         setTurnstileReset((c) => c + 1)
         return
       }
+      if (res.status === 400) {
+        const body = await res.json().catch(() => ({})) as { code?: string }
+        setError(body.code === "profanity_nickname" ? t("profanityNickname") : tc("unknownError"))
+        return
+      }
       if (res.status === 403) {
+        const body = await res.json().catch(() => ({})) as { code?: string }
+        if (body.code === "ip_banned") {
+          setError(t("ipBanned"))
+          return
+        }
         setError(t("captchaFailed"))
         setCaptchaToken("")
         return

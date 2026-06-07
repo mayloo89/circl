@@ -33,6 +33,19 @@ type broadcastMsg struct {
 	data   []byte
 }
 
+// kickCmd asks the Run loop to disconnect a specific participant from a room.
+type kickCmd struct {
+	roomID   string
+	targetID string
+}
+
+// notifyCmd asks the Run loop to deliver a frame directly to a specific user.
+type notifyCmd struct {
+	roomID   string
+	targetID string
+	data     []byte
+}
+
 // Hub manages WebSocket client connections and fans out messages via Redis
 // Pub/Sub so that the system scales horizontally across multiple server
 // instances.
@@ -49,6 +62,8 @@ type Hub struct {
 	unregister    chan *Client
 	broadcast     chan broadcastMsg
 	participantsQ chan participantsReq
+	kickCmds      chan kickCmd
+	notifyCmds    chan notifyCmd
 
 	// These fields are only accessed from the Run goroutine.
 	rooms   map[string]map[*Client]struct{}
@@ -70,8 +85,29 @@ func NewHub(rdb *redis.Client) *Hub {
 		unregister:    make(chan *Client, 16),
 		broadcast:     make(chan broadcastMsg, 256),
 		participantsQ: make(chan participantsReq, 4),
+		kickCmds:      make(chan kickCmd, 8),
+		notifyCmds:    make(chan notifyCmd, 8),
 		rooms:         make(map[string]map[*Client]struct{}),
 		pubsubs:       make(map[string]*redis.PubSub),
+	}
+}
+
+// KickFromRoom disconnects all local connections from targetID in roomID.
+// A "kicked" event is sent to the client before the connection is closed.
+// The call is non-blocking: the actual disconnection happens in the Run loop.
+func (h *Hub) KickFromRoom(roomID, targetID string) {
+	select {
+	case h.kickCmds <- kickCmd{roomID: roomID, targetID: targetID}:
+	default:
+	}
+}
+
+// SendToUser delivers data to all local connections of targetID in roomID.
+// The call is non-blocking; the actual delivery happens in the Run loop.
+func (h *Hub) SendToUser(roomID, targetID string, data []byte) {
+	select {
+	case h.notifyCmds <- notifyCmd{roomID: roomID, targetID: targetID, data: data}:
+	default:
 	}
 }
 
@@ -107,6 +143,12 @@ func (h *Hub) Run(ctx context.Context) {
 				})
 			}
 			req.reply <- infos
+
+		case cmd := <-h.kickCmds:
+			h.kickTarget(cmd.roomID, cmd.targetID)
+
+		case cmd := <-h.notifyCmds:
+			h.sendToUser(cmd.roomID, cmd.targetID, cmd.data)
 
 		case <-ctx.Done():
 			for _, clients := range h.rooms {
@@ -262,6 +304,53 @@ func frameEvent(data []byte) string {
 		return ""
 	}
 	return meta.Event
+}
+
+// kickTarget sends a "kicked" event to each local connection of targetID in
+// roomID and then closes their send channel so the writePump tears down.
+// Must only be called from the Run goroutine.
+func (h *Hub) kickTarget(roomID, targetID string) {
+	clients, ok := h.rooms[roomID]
+	if !ok {
+		return
+	}
+	frame, _ := json.Marshal(map[string]any{
+		"event":   "kicked",
+		"room_id": roomID,
+	})
+	for c := range clients {
+		if c.userID != targetID {
+			continue
+		}
+		select {
+		case c.send <- frame:
+		default:
+		}
+		delete(clients, c)
+		close(c.send)
+		h.activeConns.Add(-1)
+	}
+	if len(clients) == 0 {
+		if ps, ok := h.pubsubs[roomID]; ok {
+			_ = ps.Close()
+			delete(h.pubsubs, roomID)
+		}
+		delete(h.rooms, roomID)
+	}
+}
+
+// sendToUser delivers data to each local connection of targetID in roomID.
+// Must only be called from the Run goroutine.
+func (h *Hub) sendToUser(roomID, targetID string, data []byte) {
+	for c := range h.rooms[roomID] {
+		if c.userID != targetID {
+			continue
+		}
+		select {
+		case c.send <- data:
+		default:
+		}
+	}
 }
 
 // listenRedis forwards messages from the Redis channel into the broadcast

@@ -21,7 +21,7 @@ type mockSessionStore struct {
 	err     error
 }
 
-func (m *mockSessionStore) Create(_ context.Context, nickname string) (*guest.Session, error) {
+func (m *mockSessionStore) Create(_ context.Context, nickname, _ string) (*guest.Session, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -472,5 +472,127 @@ func TestListRoomParticipants_NotPublic(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 for a non-public room", rec.Code)
+	}
+}
+
+// mockIPBanner is a controllable IPBanner for testing.
+type mockIPBanner struct {
+	banned bool
+	err    error
+	banned_calls []struct{ roomID, ipHash string }
+	ban_calls    []struct{ roomID, ipHash string }
+}
+
+func (m *mockIPBanner) IsRoomIPBanned(_ context.Context, roomID, ipHash string) (bool, error) {
+	m.banned_calls = append(m.banned_calls, struct{ roomID, ipHash string }{roomID, ipHash})
+	return m.banned, m.err
+}
+
+func (m *mockIPBanner) BanRoomIP(_ context.Context, roomID, ipHash string, _ time.Duration) error {
+	m.ban_calls = append(m.ban_calls, struct{ roomID, ipHash string }{roomID, ipHash})
+	return m.err
+}
+
+func TestCreateGuestSession_ProfanityRejected(t *testing.T) {
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions:        &mockSessionStore{},
+		ProfanityFilter: func(nick string) bool { return nick == "badword" },
+	})
+
+	body := `{"nickname":"badword","age_attestation":true}`
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for profanity nickname", rec.Code)
+	}
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err == nil {
+		if resp["code"] != "profanity_nickname" {
+			t.Errorf("code = %q, want profanity_nickname", resp["code"])
+		}
+	}
+}
+
+func TestCreateGuestSession_CleanNicknameProfanityPasses(t *testing.T) {
+	sessions := &mockSessionStore{}
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions:        sessions,
+		ProfanityFilter: func(nick string) bool { return nick == "badword" },
+	})
+
+	body := `{"nickname":"Alice","age_attestation":true}`
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201 for clean nickname", rec.Code)
+	}
+}
+
+func TestCreateGuestSession_IPBanned(t *testing.T) {
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions: &mockSessionStore{},
+		IPBanner: &mockIPBanner{banned: true},
+	})
+
+	body := `{"nickname":"Alice","age_attestation":true,"room_id":"room-1"}`
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for IP-banned guest", rec.Code)
+	}
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err == nil {
+		if resp["code"] != "ip_banned" {
+			t.Errorf("code = %q, want ip_banned", resp["code"])
+		}
+	}
+}
+
+func TestCreateGuestSession_IPNotBanned(t *testing.T) {
+	sessions := &mockSessionStore{}
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions: sessions,
+		IPBanner: &mockIPBanner{banned: false},
+	})
+
+	body := `{"nickname":"Alice","age_attestation":true,"room_id":"room-1"}`
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201 for non-banned IP", rec.Code)
+	}
+}
+
+func TestCreateGuestSession_NoRoomID_SkipsIPBanCheck(t *testing.T) {
+	banner := &mockIPBanner{}
+	sessions := &mockSessionStore{}
+	h := guest.NewHandler(guest.HandlerConfig{
+		Sessions: sessions,
+		IPBanner: banner,
+	})
+
+	body := `{"nickname":"Alice","age_attestation":true}` // no room_id
+	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201 when room_id is absent", rec.Code)
+	}
+	if len(banner.banned_calls) != 0 {
+		t.Errorf("IsRoomIPBanned called %d times, want 0 when room_id absent", len(banner.banned_calls))
 	}
 }

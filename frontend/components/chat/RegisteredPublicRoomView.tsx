@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "@/i18n/navigation"
 
 import type { AnyMessage } from "@/types/chat"
@@ -17,7 +18,9 @@ interface RegisteredPublicRoomViewProps {
 
 export default function RegisteredPublicRoomView({ roomId, token, userID }: RegisteredPublicRoomViewProps) {
   const router = useRouter()
-  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents } = useChat(roomId, token)
+  const { data: session } = useSession()
+  const isAdmin = session?.role === "admin" || session?.role === "super_admin"
+  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents, isKicked, isMuted } = useChat(roomId, token)
   const [history, setHistory] = useState<AnyMessage[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [roomName, setRoomName] = useState("")
@@ -64,6 +67,10 @@ export default function RegisteredPublicRoomView({ roomId, token, userID }: Regi
       typingNames={typingNames}
       participantEvents={participantEvents}
       isOwn={(senderId) => senderId === userID}
+      isKicked={isKicked}
+      isMuted={isMuted}
+      isAdmin={isAdmin}
+      viewerId={userID}
       onBack={() => router.push("/chat/channels")}
       onSend={(content) => send(content)}
       onTyping={sendTyping}

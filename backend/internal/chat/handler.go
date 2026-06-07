@@ -50,6 +50,7 @@ type Client struct {
 	guestMsgRate      int
 	guestMsgWindow    time.Duration
 	isBlockedInRoom   func(ctx context.Context, senderID, roomID string) bool
+	isMutedInRoom     func(ctx context.Context, roomID, userID string) bool
 	// hideReadReceipts and hideTyping are populated at WS connect from the
 	// user's profile preferences. They are used both as the emit gate (for
 	// frames originating from this client) and the receive gate (in
@@ -152,6 +153,29 @@ type HandlerConfig struct {
 	// REST-initiated read_receipt to decide whether to publish. When nil
 	// the gate is open (legacy behavior).
 	PrivacyResolver func(ctx context.Context, userID string) (PrivacyFlags, error)
+
+	// --- In-room moderation (public rooms only) ---
+
+	// KickFromRoom, if set, disconnects a participant from a room and sends
+	// them a "kicked" WS event. Called by the admin kick endpoint.
+	KickFromRoom func(roomID, targetID string)
+	// GetGuestSession, if set, retrieves a guest session by ID so the kick
+	// handler can look up the IP hash for follow-up IP banning.
+	// Returns the session's IP hash; empty string if unknown.
+	GetGuestSession func(ctx context.Context, sessionID string) (ipHash string, err error)
+	// BanRoomIP, if set, records a per-room IP ban in Redis.
+	BanRoomIP func(ctx context.Context, roomID, ipHash string, ttl time.Duration) error
+	// IsMutedInRoom, if set, returns true when the user is currently muted in
+	// the given room. Checked in readPump before saving each message.
+	IsMutedInRoom func(ctx context.Context, roomID, userID string) bool
+	// MuteInRoom, if set, stores a per-room mute in Redis with the given TTL.
+	MuteInRoom func(ctx context.Context, roomID, userID string, ttl time.Duration) error
+	// UnmuteInRoom, if set, removes a per-room mute.
+	UnmuteInRoom func(ctx context.Context, roomID, userID string) error
+	// ScheduleUnmute, if set, arranges for a you_are_unmuted frame to be
+	// delivered to targetID in roomID after ttl elapses. Used to clear the
+	// client-side muted state without requiring a reconnect.
+	ScheduleUnmute func(roomID, targetID string, ttl time.Duration)
 }
 
 // PrivacyFlags are the chat-relevant subset of a user's privacy preferences.
@@ -213,6 +237,17 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 
 	// Public room routes
 	r.Get("/public-rooms", listPublicRoomsHandler(svc, c))
+
+	// In-room moderation — admin only
+	r.Post("/rooms/{id}/mod/kick", func(w http.ResponseWriter, r *http.Request) {
+		middleware.RequireAdmin(modKickHandler(svc, c)).ServeHTTP(w, r)
+	})
+	r.Post("/rooms/{id}/mod/mute", func(w http.ResponseWriter, r *http.Request) {
+		middleware.RequireAdmin(modMuteHandler(c)).ServeHTTP(w, r)
+	})
+	r.Delete("/rooms/{id}/mod/mute/{targetID}", func(w http.ResponseWriter, r *http.Request) {
+		middleware.RequireAdmin(modUnmuteHandler(c)).ServeHTTP(w, r)
+	})
 
 	return r
 }
@@ -908,6 +943,7 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			guestMsgRate:      cfg.GuestMsgRate,
 			guestMsgWindow:    cfg.GuestMsgWindow,
 			isBlockedInRoom:   cfg.IsBlockedInRoom,
+			isMutedInRoom:     cfg.IsMutedInRoom,
 			hideReadReceipts:  privacy.HideReadReceipts,
 			hideTyping:        privacy.HideTyping,
 			ctx:               sessCtx,
@@ -1001,6 +1037,20 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 
 		// Guests in public rooms are text-only — reject attachments.
 		if c.isGuest && msgType != MessageTypeText {
+			continue
+		}
+
+		// Mute check: send a feedback event and drop the message.
+		if c.isMutedInRoom != nil && c.isMutedInRoom(c.ctx, c.roomID, c.userID) {
+			if frame, err := json.Marshal(map[string]any{
+				"event":   "you_are_muted",
+				"room_id": c.roomID,
+			}); err == nil {
+				select {
+				case c.send <- frame:
+				default:
+				}
+			}
 			continue
 		}
 
@@ -1121,6 +1171,99 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 			}
 		}()
 	}
+}
+
+// modKickHandler handles POST /chat/rooms/{id}/mod/kick (admin only).
+// Body: {"target_id": "..."}
+// Disconnects the target participant and IP-bans them if they are a guest.
+func modKickHandler(svc Manager, cfg HandlerConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "id")
+		room, err := svc.GetRoom(r.Context(), roomID)
+		if err != nil || room.Type != RoomTypePublic {
+			apierror.Write(w, http.StatusNotFound, apierror.CodeRoomNotFound, "public room not found")
+			return
+		}
+
+		var body struct {
+			TargetID string `json:"target_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TargetID == "" {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "target_id is required")
+			return
+		}
+
+		if cfg.KickFromRoom != nil {
+			cfg.KickFromRoom(roomID, body.TargetID)
+		}
+
+		// IP-ban guests (target_id starts with "guest:").
+		if strings.HasPrefix(body.TargetID, "guest:") && cfg.GetGuestSession != nil && cfg.BanRoomIP != nil {
+			if ipHash, err := cfg.GetGuestSession(r.Context(), body.TargetID); err == nil && ipHash != "" {
+				_ = cfg.BanRoomIP(r.Context(), roomID, ipHash, 24*time.Hour)
+			}
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// modMuteHandler handles POST /chat/rooms/{id}/mod/mute (admin only).
+// Body: {"target_id": "...", "duration": "15m"|"1h"|"24h"}
+func modMuteHandler(cfg HandlerConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "id")
+
+		var body struct {
+			TargetID string `json:"target_id"`
+			Duration string `json:"duration"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TargetID == "" {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "target_id is required")
+			return
+		}
+
+		durations := map[string]time.Duration{
+			"15m": 15 * time.Minute,
+			"1h":  time.Hour,
+			"24h": 24 * time.Hour,
+		}
+		ttl, ok := durations[body.Duration]
+		if !ok {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "duration must be 15m, 1h, or 24h")
+			return
+		}
+
+		if cfg.MuteInRoom != nil {
+			if err := cfg.MuteInRoom(r.Context(), roomID, body.TargetID, ttl); err != nil {
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+				return
+			}
+		}
+
+		if cfg.ScheduleUnmute != nil {
+			cfg.ScheduleUnmute(roomID, body.TargetID, ttl)
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// modUnmuteHandler handles DELETE /chat/rooms/{id}/mod/mute/{targetID} (admin only).
+func modUnmuteHandler(cfg HandlerConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "id")
+		targetID := chi.URLParam(r, "targetID")
+
+		if cfg.UnmuteInRoom != nil {
+			if err := cfg.UnmuteInRoom(r.Context(), roomID, targetID); err != nil {
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
 }
 
 // writePump pumps messages from the hub to the WebSocket connection.
