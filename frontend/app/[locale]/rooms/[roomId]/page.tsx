@@ -149,7 +149,7 @@ export default function GuestRoomPage() {
 
           <Turnstile onVerify={setCaptchaToken} resetTrigger={turnstileReset} />
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p role="alert" aria-live="assertive" className="text-xs text-red-400">{error}</p>}
 
           <Button
             variant="accent"

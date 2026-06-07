@@ -543,7 +543,9 @@
     "allRoomsTitle": "Salas",
     "allRoomsSubtitle": "Salas públicas e canais para entrar.",
     "publicBadge": "Pública",
-    "noRoomsYet": "Ainda não há salas"
+    "noRoomsYet": "Ainda não há salas",
+    "publicRoomsHeading": "Salas públicas",
+    "channelsHeading": "Canais"
   },
   "guestRooms": {
     "title": "Salas públicas",
@@ -601,6 +603,7 @@
     "membersCount": "{count, plural, one {# membro} other {# membros}}",
     "publicChannel": "Canal público",
     "group": "Grupo",
+    "chatMessages": "Mensagens do chat",
     "noMessages": "Ainda não há mensagens",
     "noMessagesDesc": "Diga olá para iniciar a conversa.",
     "loadingOlder": "Carregando mensagens anteriores…",

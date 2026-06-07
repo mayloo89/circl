@@ -543,7 +543,9 @@
     "allRoomsTitle": "Rooms",
     "allRoomsSubtitle": "Public lobbies and channels to jump into.",
     "publicBadge": "Public",
-    "noRoomsYet": "No rooms yet"
+    "noRoomsYet": "No rooms yet",
+    "publicRoomsHeading": "Public rooms",
+    "channelsHeading": "Channels"
   },
   "guestRooms": {
     "title": "Public Rooms",
@@ -601,6 +603,7 @@
     "membersCount": "{count, plural, one {# member} other {# members}}",
     "publicChannel": "Public channel",
     "group": "Group",
+    "chatMessages": "Chat messages",
     "noMessages": "No messages yet",
     "noMessagesDesc": "Say hello to start the conversation.",
     "loadingOlder": "Loading older messages…",

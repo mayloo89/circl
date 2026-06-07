@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import type { AnyMessage } from "@/types/chat"
 import type { ParticipantEvent } from "@/hooks/useChat"
@@ -96,6 +96,7 @@ export default function PublicRoomShell({
 }: PublicRoomShellProps) {
   const t = useTranslations("guestRooms")
   const tr = useTranslations("chatRoom")
+  const locale = useLocale()
   const [now] = useState(() => Date.now())
   const [seed, setSeed] = useState<Participant[]>([])
   const [rosterOpen, setRosterOpen] = useState(false)
@@ -202,7 +203,7 @@ export default function PublicRoomShell({
   }, [messages.length])
 
   function formatDay(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    return new Date(dateStr).toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })
   }
 
   return (
@@ -229,6 +230,7 @@ export default function PublicRoomShell({
             <button
               type="button"
               onClick={onBack}
+              autoFocus
               className="mt-4 w-full cursor-pointer rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover"
             >
               {t("backToRooms")}
@@ -276,7 +278,12 @@ export default function PublicRoomShell({
             <p className="text-sm text-gray-500">{tr("loading")}</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div
+              role="log"
+              aria-live="polite"
+              aria-label={tr("chatMessages")}
+              className="flex-1 overflow-y-auto overscroll-y-contain px-4 py-4"
+            >
             {messages.map((msg, i) => {
               const msgDate = formatDay(msg.created_at)
               const showDateSep = i === 0 || formatDay(messages[i - 1].created_at) !== msgDate
@@ -337,11 +344,12 @@ export default function PublicRoomShell({
               {tr("membersTitle", { count: roster.length })}
             </p>
             <input
-              type="text"
+              type="search"
+              aria-label={tr("filterMembers")}
               value={memberQuery}
               onChange={(e) => setMemberQuery(e.target.value)}
               placeholder={tr("filterMembers")}
-              className="w-full rounded bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
+              className="w-full rounded bg-gray-800 px-2 py-1 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-1 focus:ring-brand-hover"
             />
           </div>
           {visibleRoster.length === 0 ? (
@@ -354,9 +362,9 @@ export default function PublicRoomShell({
                     <Avatar src={p.avatarURL || undefined} name={p.displayName || "?"} size="xs" color="indigo" />
                     <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-gray-900" aria-hidden="true" />
                   </div>
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{p.displayName || "—"}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{p.displayName || "—"}</span>
                   {p.isGuest && (
-                    <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
+                    <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-medium text-gray-400">
                       {t("guestBadge")}
                     </span>
                   )}
@@ -367,7 +375,7 @@ export default function PublicRoomShell({
                       aria-haspopup="menu"
                       aria-expanded={openModMenuId === p.userId}
                       aria-label={tr("moderationMenu")}
-                      className="shrink-0 cursor-pointer rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                      className="shrink-0 cursor-pointer rounded p-1.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
                     >
                       <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
@@ -388,7 +396,8 @@ export default function PublicRoomShell({
       >
         <div className="space-y-3">
           <input
-            type="text"
+            type="search"
+            aria-label={tr("filterMembers")}
             value={memberQuery}
             onChange={(e) => setMemberQuery(e.target.value)}
             placeholder={tr("filterMembers")}
@@ -442,7 +451,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => kick(openModMenuId)}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("kickAction")}
           </button>
@@ -450,7 +459,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => mute(openModMenuId, "15m")}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("mute15m")}
           </button>
@@ -458,7 +467,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => mute(openModMenuId, "1h")}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("mute1h")}
           </button>
@@ -466,7 +475,7 @@ export default function PublicRoomShell({
             role="menuitem"
             type="button"
             onClick={() => mute(openModMenuId, "24h")}
-            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            className="flex w-full cursor-pointer items-center px-3 py-3 text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
           >
             {tr("mute24h")}
           </button>
