@@ -31,6 +31,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       {/* Mobile slide-over sidebar */}
       <aside
         id="admin-sidebar"
+        aria-hidden={!sidebarOpen}
+        inert={!sidebarOpen}
         className={[
           "fixed inset-y-0 left-0 z-50 flex w-56 flex-col overflow-y-auto md:hidden",
           "border-r border-gray-800 bg-gray-900",
@@ -58,7 +60,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
         <nav className="mt-2 flex flex-col gap-0.5 px-2 py-2">
           {NAV_ITEMS.map(({ href, label }) => {
-            const active = href === "/admin" ? pathname === "/admin" : pathname.startsWith(href)
+            const active = pathname === href || pathname.startsWith(href + "/")
             return (
               <Link
                 key={href}
@@ -91,7 +93,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {/* Desktop horizontal tab nav */}
         <nav className="hidden items-stretch gap-1 md:flex" aria-label="Admin navigation">
           {NAV_ITEMS.map(({ href, label }) => {
-            const active = href === "/admin" ? pathname === "/admin" : pathname.startsWith(href)
+            const active = pathname === href || pathname.startsWith(href + "/")
             return (
               <Link
                 key={href}
