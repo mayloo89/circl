@@ -1,7 +1,6 @@
 package email_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -18,7 +17,7 @@ func TestConsoleSender_Send(t *testing.T) {
 		HTML:    "<p>Hi</p>",
 		Text:    "Hi",
 	}
-	if err := s.Send(context.Background(), msg); err != nil {
+	if err := s.Send(t.Context(), msg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

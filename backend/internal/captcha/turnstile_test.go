@@ -1,7 +1,6 @@
 package captcha
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,14 +24,14 @@ func TestTurnstile_Verify(t *testing.T) {
 	v := NewTurnstile("sek")
 	v.url = srv.URL
 
-	if ok, err := v.Verify(context.Background(), "good", "1.2.3.4"); err != nil || !ok {
+	if ok, err := v.Verify(t.Context(), "good", "1.2.3.4"); err != nil || !ok {
 		t.Errorf("Verify(good) = %v, %v; want true, nil", ok, err)
 	}
-	if ok, err := v.Verify(context.Background(), "bad", ""); err != nil || ok {
+	if ok, err := v.Verify(t.Context(), "bad", ""); err != nil || ok {
 		t.Errorf("Verify(bad) = %v, %v; want false, nil", ok, err)
 	}
 	// An empty token is rejected without hitting the network.
-	if ok, err := v.Verify(context.Background(), "", ""); err != nil || ok {
+	if ok, err := v.Verify(t.Context(), "", ""); err != nil || ok {
 		t.Errorf("Verify(empty) = %v, %v; want false, nil", ok, err)
 	}
 }

@@ -66,7 +66,7 @@ func TestHub_LocalDelivery(t *testing.T) {
 	mustRegister(t, hub, client)
 
 	payload := []byte(`{"type":"message","content":"hello"}`)
-	if err := hub.Publish(context.Background(), "room-delivery", payload); err != nil {
+	if err := hub.Publish(t.Context(), "room-delivery", payload); err != nil {
 		t.Fatalf("Publish error: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestHub_MultipleClientsInRoom(t *testing.T) {
 	mustRegister(t, hub, c2)
 
 	payload := []byte(`{"type":"message"}`)
-	if err := hub.Publish(context.Background(), "room-multi", payload); err != nil {
+	if err := hub.Publish(t.Context(), "room-multi", payload); err != nil {
 		t.Fatalf("Publish error: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestHub_ClientsInDifferentRoomsAreIsolated(t *testing.T) {
 	mustRegister(t, hub, c2)
 
 	// Publish only to room-A.
-	if err := hub.Publish(context.Background(), "room-A", []byte(`{"room":"A"}`)); err != nil {
+	if err := hub.Publish(t.Context(), "room-A", []byte(`{"room":"A"}`)); err != nil {
 		t.Fatalf("Publish error: %v", err)
 	}
 
