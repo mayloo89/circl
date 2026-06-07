@@ -677,7 +677,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
               </svg>
             </button>
           )}
-          <TypingIndicator typers={typers} />
+          {surface !== "channels" && <TypingIndicator typers={typers} />}
 
           <ChatInput
             connected={connected}

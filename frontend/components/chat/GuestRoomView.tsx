@@ -20,7 +20,7 @@ interface GuestRoomViewProps {
 export default function GuestRoomView({ roomId, sessionId, onInvalidSession }: GuestRoomViewProps) {
   const t = useTranslations("guestRooms")
   const router = useRouter()
-  const { messages: liveMessages, deletedIds, connected, send, sendTyping, typingUsers, participantEvents, isKicked, isMuted } = useGuestChat(roomId, sessionId, onInvalidSession)
+  const { messages: liveMessages, deletedIds, connected, send, sendTyping, participantEvents, isKicked, isMuted } = useGuestChat(roomId, sessionId, onInvalidSession)
   const [history, setHistory] = useState<AnyMessage[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [roomName, setRoomName] = useState("")
@@ -53,11 +53,6 @@ export default function GuestRoomView({ roomId, sessionId, onInvalidSession }: G
     return out
   }, [history, liveMessages])
 
-  const typingNames = useMemo(
-    () => [...typingUsers.values()].map((v) => v.displayName).filter(Boolean),
-    [typingUsers],
-  )
-
   return (
     <PublicRoomShell
       roomId={roomId}
@@ -66,7 +61,6 @@ export default function GuestRoomView({ roomId, sessionId, onInvalidSession }: G
       historyLoaded={historyLoaded}
       connected={connected}
       deletedIds={deletedIds}
-      typingNames={typingNames}
       participantEvents={participantEvents}
       isOwn={(senderId) => senderId === sessionId}
       headerBadge={t("guestBadge")}

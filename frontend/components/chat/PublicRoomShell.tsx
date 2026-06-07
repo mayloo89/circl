@@ -10,7 +10,6 @@ import { useToast } from "@/components/ui/Toast"
 import MessageBubble from "@/components/chat/MessageBubble"
 import ChatInput from "@/components/chat/ChatInput"
 import DateSeparator from "@/components/chat/DateSeparator"
-import TypingIndicator from "@/components/chat/TypingIndicator"
 import Avatar from "@/components/ui/Avatar"
 import BottomSheet from "@/components/ui/BottomSheet"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
@@ -40,7 +39,6 @@ interface PublicRoomShellProps {
   historyLoaded: boolean
   connected: boolean
   deletedIds: Set<string>
-  typingNames: string[]
   participantEvents: ParticipantEvent[]
   /** True when the given sender id is the current viewer (own message). */
   isOwn: (senderId: string) => boolean
@@ -81,7 +79,6 @@ export default function PublicRoomShell({
   historyLoaded,
   connected,
   deletedIds,
-  typingNames,
   participantEvents,
   isOwn,
   headerBadge,
@@ -312,8 +309,6 @@ export default function PublicRoomShell({
             <div ref={bottomRef} />
           </div>
         )}
-
-        <TypingIndicator typers={typingNames} />
 
         {isMuted && (
           <div className="flex items-center gap-2 border-t border-amber-500/20 bg-amber-500/10 px-4 py-2" role="status">
