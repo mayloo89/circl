@@ -317,7 +317,7 @@ export default function PublicRoomShell({
         )}
 
         <ChatInput
-          connected={connected}
+          connected={connected && !isMuted}
           uploading={false}
           ephemeral="off"
           onEphemeralChange={() => {}}
