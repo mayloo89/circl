@@ -670,7 +670,9 @@
     "mute15m": "Mute 15 min",
     "mute1h": "Mute 1 hour",
     "mute24h": "Mute 24 hours",
-    "moderationMenu": "Moderation options"
+    "moderationMenu": "Moderation options",
+    "kickDone": "User kicked",
+    "muteDone": "User muted"
   },
   "publicProfile": {
     "title": "Profile",

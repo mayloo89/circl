@@ -670,7 +670,9 @@
     "mute15m": "Silenciar 15 min",
     "mute1h": "Silenciar 1 hora",
     "mute24h": "Silenciar 24 horas",
-    "moderationMenu": "Opções de moderação"
+    "moderationMenu": "Opções de moderação",
+    "kickDone": "Usuário expulso",
+    "muteDone": "Usuário silenciado"
   },
   "publicProfile": {
     "title": "Perfil",

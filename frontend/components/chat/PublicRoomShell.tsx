@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 import type { AnyMessage } from "@/types/chat"
 import type { ParticipantEvent } from "@/hooks/useChat"
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard"
+import { useToast } from "@/components/ui/Toast"
 import MessageBubble from "@/components/chat/MessageBubble"
 import ChatInput from "@/components/chat/ChatInput"
 import DateSeparator from "@/components/chat/DateSeparator"
@@ -100,27 +101,53 @@ export default function PublicRoomShell({
   const [memberQuery, setMemberQuery] = useState("")
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
   const [openModMenuId, setOpenModMenuId] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const modMenuRef = useRef<HTMLDivElement | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const { toast } = useToast()
 
-  useMenuKeyboard({ open: openModMenuId !== null, containerRef: modMenuRef, onClose: () => setOpenModMenuId(null) })
+  const closeModMenu = useCallback(() => { setOpenModMenuId(null); setMenuPos(null) }, [])
 
-  const modAction = useCallback(async (path: string, body: Record<string, string>) => {
+  useMenuKeyboard({ open: openModMenuId !== null, containerRef: modMenuRef, onClose: closeModMenu })
+
+  useEffect(() => {
+    if (openModMenuId === null) return
+    function handleOutside(e: MouseEvent) {
+      if (modMenuRef.current && !modMenuRef.current.contains(e.target as Node)) closeModMenu()
+    }
+    document.addEventListener("mousedown", handleOutside)
+    return () => document.removeEventListener("mousedown", handleOutside)
+  }, [openModMenuId, closeModMenu])
+
+  function openModMenu(userId: string, trigger: HTMLButtonElement) {
+    if (openModMenuId === userId) {
+      setOpenModMenuId(null)
+      setMenuPos(null)
+      return
+    }
+    const rect = trigger.getBoundingClientRect()
+    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    setOpenModMenuId(userId)
+  }
+
+  const modAction = useCallback(async (path: string, body: Record<string, string>, successKey: "kickDone" | "muteDone") => {
     if (!token) return
     setOpenModMenuId(null)
-    await fetch(`${API_URL}${path}`, {
+    setMenuPos(null)
+    const res = await fetch(`${API_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
-    }).catch(() => {})
-  }, [token])
+    }).catch(() => null)
+    if (res?.ok) toast(tr(successKey), "success")
+  }, [token, toast, tr])
 
   function kick(targetId: string) {
-    void modAction(`/chat/rooms/${roomId}/mod/kick`, { target_id: targetId })
+    void modAction(`/chat/rooms/${roomId}/mod/kick`, { target_id: targetId }, "kickDone")
   }
 
   function mute(targetId: string, duration: string) {
-    void modAction(`/chat/rooms/${roomId}/mod/mute`, { target_id: targetId, duration })
+    void modAction(`/chat/rooms/${roomId}/mod/mute`, { target_id: targetId, duration }, "muteDone")
   }
 
   function handleBack() {
@@ -333,66 +360,66 @@ export default function PublicRoomShell({
                     </span>
                   )}
                   {isAdmin && p.userId !== viewerId && (
-                    <div className="relative shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setOpenModMenuId(openModMenuId === p.userId ? null : p.userId)}
-                        aria-haspopup="menu"
-                        aria-expanded={openModMenuId === p.userId}
-                        aria-label={tr("moderationMenu")}
-                        className="cursor-pointer rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
-                      >
-                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                          <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-                        </svg>
-                      </button>
-                      {openModMenuId === p.userId && (
-                        <div
-                          ref={modMenuRef}
-                          role="menu"
-                          className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
-                        >
-                          <button
-                            role="menuitem"
-                            type="button"
-                            onClick={() => kick(p.userId)}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
-                          >
-                            {tr("kickAction")}
-                          </button>
-                          <button
-                            role="menuitem"
-                            type="button"
-                            onClick={() => mute(p.userId, "15m")}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
-                          >
-                            {tr("mute15m")}
-                          </button>
-                          <button
-                            role="menuitem"
-                            type="button"
-                            onClick={() => mute(p.userId, "1h")}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
-                          >
-                            {tr("mute1h")}
-                          </button>
-                          <button
-                            role="menuitem"
-                            type="button"
-                            onClick={() => mute(p.userId, "24h")}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
-                          >
-                            {tr("mute24h")}
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => openModMenu(p.userId, e.currentTarget)}
+                      aria-haspopup="menu"
+                      aria-expanded={openModMenuId === p.userId}
+                      aria-label={tr("moderationMenu")}
+                      className="shrink-0 cursor-pointer rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                      </svg>
+                    </button>
                   )}
                 </li>
               ))}
             </ul>
           )}
         </aside>
+      )}
+
+      {openModMenuId !== null && menuPos !== null && (
+        <div
+          ref={modMenuRef}
+          role="menu"
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          className="z-50 w-40 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
+        >
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => kick(openModMenuId)}
+            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-red-400 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+          >
+            {tr("kickAction")}
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => mute(openModMenuId, "15m")}
+            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+          >
+            {tr("mute15m")}
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => mute(openModMenuId, "1h")}
+            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+          >
+            {tr("mute1h")}
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => mute(openModMenuId, "24h")}
+            className="flex w-full cursor-pointer items-center px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+          >
+            {tr("mute24h")}
+          </button>
+        </div>
       )}
     </div>
   )
