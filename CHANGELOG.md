@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Go test modernization**: replaced all `context.Background()` calls inside unit test functions with `t.Context()` across 5 test files (`hub_test.go`, `turnstile_test.go`, `email_test.go`, `retention_test.go`, `ephemeral_test.go`) — 18 call sites total; unused `context` imports removed from `turnstile_test.go` and `email_test.go`.
+
+### Fixed
+
+- **Admin panel i18n**: all 7 nav labels (`Dashboard`, `Users`, `Reports`, `Appeals`, `Moderation`, `Channels`, `Public rooms`), the "Admin" badge, and the "Close navigation" aria-label in `AdminShell` are now localized via `useTranslations("admin")` across EN/ES/PT; previously these were hardcoded English strings.
+- **Touch targets**: member-sidebar toggle in `RoomView` and desktop mod-menu trigger in `PublicRoomShell` now enforce a `min-h-[44px] min-w-[44px]` hit area (was ~22px and ~26px respectively).
+- **Filter input accessibility**: channel member filter `<input>` in `RoomView` gains `type="search"` and an explicit `aria-label`; previously had only a `placeholder`.
+- **Mod menu keyboard access**: mod-menu `<div>` in `PublicRoomShell` gains `tabIndex={-1}` and is programmatically focused on open, giving keyboard users an immediate entry point into the menu.
+
 ### Added
 
 - **In-room moderation for public rooms**: platform admins can kick and mute any participant (guest or registered) from a public room via new admin-only REST endpoints (`POST /chat/rooms/{id}/mod/kick`, `POST /chat/rooms/{id}/mod/mute`, `DELETE /chat/rooms/{id}/mod/mute/{targetID}`). Kick is real-time via a new `kickCmds` channel on the hub — the target receives a `kicked` WS event then their connection is closed; guests are also IP-banned for 24h (SHA-256 hash stored in Redis at `guest:ban:{roomID}:{ipHash}`). Mute durations are admin-chosen (15 min / 1 h / 24 h), stored as Redis keys (`guest:muted:{roomID}:{userID}`) and checked in `readPump` before saving — the sender receives a `you_are_muted` event and the message is dropped. Nicknames containing profanity are blocked at guest-session creation by a new `internal/profanity` package (normalize → deny-list covering the ~50 worst-case slurs in EN/ES/PT, including leet-speak variants); returns `400 CodeProfanityNickname`. `POST /guest/session` now accepts `room_id` and checks for an active IP ban before minting the session (`403 CodeIPBanned`). Frontend: `kicked` / `you_are_muted` WS events handled in `useGuestChat` and `useChat` (expose `isKicked` / `isMuted` state); `PublicRoomShell` renders a full-screen removal modal when kicked and an amber muted banner above the chat input; admin-only `•••` overflow menu per roster participant (Kick, Mute 15 min / 1 h / 24 h) using `useMenuKeyboard` with full ARIA wiring; guest entry gate surfaces localized `ipBanned` and `profanityNickname` errors. All moderation state is Redis-only — no migration needed. New `apierror.CodeIPBanned` + `CodeProfanityNickname`.
