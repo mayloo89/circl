@@ -45,22 +45,29 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="flex min-h-dvh flex-col bg-gray-950">
-      <header className="flex items-center justify-between px-5 py-4">
-        <span
-          className="text-sm font-medium text-gray-400"
-          aria-label={t("stepIndicator", { current, total })}
-        >
-          {current} / {total}
-        </span>
-
-        <button
-          type="button"
-          onClick={handleSkipAll}
-          disabled={skipping}
-          className="text-sm text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
-        >
-          {t("skipAll")}
-        </button>
+      <header className="px-5 pt-4 pb-0">
+        <div className="flex items-center justify-between mb-3">
+          <span className="sr-only" aria-live="polite">
+            {t("stepIndicator", { current, total })}
+          </span>
+          <span className="text-xs font-medium text-gray-500" aria-hidden="true">
+            {current} / {total}
+          </span>
+          <button
+            type="button"
+            onClick={handleSkipAll}
+            disabled={skipping}
+            className="flex min-h-[36px] items-center rounded px-2 text-sm text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
+          >
+            {t("skipAll")}
+          </button>
+        </div>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-gray-800" role="progressbar" aria-valuenow={current} aria-valuemin={1} aria-valuemax={total}>
+          <div
+            className="h-full rounded-full bg-brand-primary transition-all duration-500 ease-out"
+            style={{ width: `${(current / total) * 100}%` }}
+          />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col items-center px-5 pb-10 pt-6">

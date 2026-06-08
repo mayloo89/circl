@@ -763,7 +763,8 @@
     "interests": {
       "title": "O que você curte?",
       "subtitle": "Adicione interesses para encontrar pessoas com as mesmas paixões.",
-      "placeholder": "Buscar interesses…"
+      "placeholder": "Buscar interesses…",
+      "removeInterest": "Remover {tag}"
     },
     "location": {
       "title": "Onde você está?",

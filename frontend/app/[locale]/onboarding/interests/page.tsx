@@ -21,8 +21,10 @@ export default function OnboardingInterestsPage() {
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? [])
   const [query, setQuery] = useState("")
   const [suggestions, setSuggestions] = useState<string[]>([])
+  const [activeIdx, setActiveIdx] = useState(-1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const listboxId = "interests-listbox"
 
   useEffect(() => {
     if (!query.trim() || !token) { setSuggestions([]); return }
@@ -40,6 +42,8 @@ export default function OnboardingInterestsPage() {
     return () => clearTimeout(id)
   }, [query, token, interests])
 
+  useEffect(() => { setActiveIdx(-1) }, [suggestions])
+
   function addInterest(name: string) {
     if (interests.includes(name) || interests.length >= MAX_INTERESTS) return
     setInterests((prev) => [...prev, name])
@@ -49,6 +53,29 @@ export default function OnboardingInterestsPage() {
 
   function removeInterest(name: string) {
     setInterests((prev) => prev.filter((i) => i !== name))
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      if (suggestions.length === 0) return
+      e.preventDefault()
+      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1))
+    } else if (e.key === "ArrowUp") {
+      if (suggestions.length === 0) return
+      e.preventDefault()
+      setActiveIdx((i) => Math.max(i - 1, -1))
+    } else if (e.key === "Escape") {
+      setSuggestions([])
+      setActiveIdx(-1)
+    } else if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault()
+      if (activeIdx >= 0 && suggestions[activeIdx]) {
+        addInterest(suggestions[activeIdx])
+        return
+      }
+      const tag = query.trim().toLowerCase().replace(/,/g, "")
+      if (tag) addInterest(tag)
+    }
   }
 
   async function handleContinue() {
@@ -101,26 +128,35 @@ export default function OnboardingInterestsPage() {
       <div className="relative">
         <input
           type="text"
+          role="combobox"
+          aria-expanded={suggestions.length > 0}
+          aria-autocomplete="list"
+          aria-controls={listboxId}
+          aria-activedescendant={activeIdx >= 0 ? `interest-option-${activeIdx}` : undefined}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter" && e.key !== ",") return
-            e.preventDefault()
-            const tag = query.trim().toLowerCase().replace(/,/g, "")
-            if (tag) addInterest(tag)
-          }}
+          onKeyDown={handleKeyDown}
           placeholder={t("interests.placeholder")}
           disabled={interests.length >= MAX_INTERESTS}
           className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-foreground placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
         />
         {suggestions.length > 0 && (
-          <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl">
-            {suggestions.map((s) => (
-              <li key={s}>
+          <ul
+            id={listboxId}
+            role="listbox"
+            className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl"
+          >
+            {suggestions.map((s, idx) => (
+              <li
+                key={s}
+                id={`interest-option-${idx}`}
+                role="option"
+                aria-selected={idx === activeIdx}
+              >
                 <button
                   type="button"
                   onClick={() => addInterest(s)}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700"
+                  className={`w-full px-4 py-2.5 text-left text-sm text-gray-200 ${idx === activeIdx ? "bg-gray-600" : "hover:bg-gray-700"}`}
                 >
                   {s}
                 </button>
@@ -141,7 +177,7 @@ export default function OnboardingInterestsPage() {
               <button
                 type="button"
                 onClick={() => removeInterest(tag)}
-                aria-label={`Remove ${tag}`}
+                aria-label={t("interests.removeInterest", { tag })}
                 className="text-brand-muted hover:text-foreground"
               >
                 ×

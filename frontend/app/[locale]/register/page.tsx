@@ -363,7 +363,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading || !allRulesMet || usernameAvailable === false}
-            className="w-full rounded-md bg-brand-primary px-4 py-2 text-foreground hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="w-full rounded-md bg-brand-primary px-4 py-3 text-foreground hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             {loading ? t("submitting") : t("submit")}
           </button>

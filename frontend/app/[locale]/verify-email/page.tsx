@@ -49,7 +49,7 @@ function VerifyEmailContent() {
     return (
       <div className="text-center space-y-4">
         <p className="text-sm text-red-400">{t("invalidLink")}</p>
-        <Link href="/login" className="text-sm text-blue-400 hover:text-blue-300">
+        <Link href="/login" className="text-sm text-brand-muted hover:text-brand-subtle">
           {t("backToSignIn")}
         </Link>
       </div>
@@ -64,7 +64,7 @@ function VerifyEmailContent() {
     return (
       <div className="text-center space-y-4">
         <p className="text-sm text-red-400">{errorMessage}</p>
-        <Link href="/login" className="block text-sm text-blue-400 hover:text-blue-300">
+        <Link href="/login" className="block text-sm text-brand-muted hover:text-brand-subtle">
           {t("backToSignIn")}
         </Link>
       </div>
@@ -73,11 +73,15 @@ function VerifyEmailContent() {
 
   return (
     <div className="text-center space-y-4">
-      <div className="text-green-400 text-5xl" aria-hidden="true">✓</div>
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-900/50 ring-1 ring-green-700">
+        <svg className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
       <p className="text-sm text-gray-300">{t("success")}</p>
       <Link
         href="/login"
-        className="inline-block rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-foreground hover:bg-blue-500"
+        className="inline-block rounded-md bg-brand-primary px-6 py-3 text-sm font-medium text-foreground hover:bg-brand-hover"
       >
         {t("signIn")}
       </Link>

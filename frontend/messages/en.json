@@ -763,7 +763,8 @@
     "interests": {
       "title": "What are you into?",
       "subtitle": "Add interests to find people who share your passions.",
-      "placeholder": "Search interests…"
+      "placeholder": "Search interests…",
+      "removeInterest": "Remove {tag}"
     },
     "location": {
       "title": "Where are you based?",
