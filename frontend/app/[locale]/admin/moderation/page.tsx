@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 
 import AuthedImage from "@/components/admin/AuthedImage"
@@ -32,6 +32,7 @@ const CODE_FILTERS = ["", "nsfw_detected", "hash_match", "size_out_of_bounds", "
 export default function ModerationAdminPage() {
   const { data: session } = useSession()
   const t = useTranslations("admin")
+  const locale = useLocale()
   const token = session?.accessToken
   type LoadState =
     | { kind: "idle" }
@@ -214,7 +215,7 @@ export default function ModerationAdminPage() {
                   </td>
                   <td className="hidden md:table-cell px-4 py-3 max-w-xs text-xs text-gray-400">{item.reason}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                    {new Date(item.moderated_at).toLocaleString()}
+                    {new Date(item.moderated_at).toLocaleString(locale)}
                   </td>
                 </tr>
               ))}

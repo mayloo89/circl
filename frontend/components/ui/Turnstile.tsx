@@ -5,16 +5,6 @@ import { useEffect, useRef } from "react"
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
 
-interface TurnstileApi {
-  render: (el: HTMLElement, opts: Record<string, unknown>) => string
-  remove: (id: string) => void
-}
-
-declare global {
-  interface Window {
-    turnstile?: TurnstileApi
-  }
-}
 
 /** Whether the anti-bot challenge is configured (a site key is present). */
 export const captchaEnabled = Boolean(SITE_KEY)

@@ -32,8 +32,8 @@ export default function CreateAlbumDialog({ open, token, onClose, onCreated }: P
       setName("")
       setDescription("")
       onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed")
+    } catch {
+      setError(t("createFailed"))
     } finally {
       setSubmitting(false)
     }

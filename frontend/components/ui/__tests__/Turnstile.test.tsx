@@ -1,17 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, cleanup } from "@testing-library/react"
 
-type TurnstileApi = {
-  render: ReturnType<typeof vi.fn>
-  remove: ReturnType<typeof vi.fn>
-}
-
-declare global {
-  interface Window {
-    turnstile?: TurnstileApi
-  }
-}
-
 describe("Turnstile", () => {
   beforeEach(() => {
     // Ensure SITE_KEY is present so the component actually renders the widget

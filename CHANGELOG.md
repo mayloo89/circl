@@ -11,10 +11,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Go test modernization**: replaced all `context.Background()` calls inside unit test functions with `t.Context()` across 5 test files (`hub_test.go`, `turnstile_test.go`, `email_test.go`, `retention_test.go`, `ephemeral_test.go`) — 18 call sites total; unused `context` imports removed from `turnstile_test.go` and `email_test.go`.
+- **Admin panel — full i18n pass**: all 7 admin pages fully localized. ~120 new keys added to the `admin` namespace across EN/ES/PT. Hardcoded label dictionaries (`STATUS_LABELS`, `PRIORITY_LABELS`, `REASON_LABELS`) removed and replaced with locale-aware maps computed via `t()` inside each component. All `toLocaleDateString()` / `toLocaleString()` calls gain an explicit locale arg from `useLocale()`. All modal backdrops changed from `bg-black/60` to `bg-gray-950/80` (brand invariant: no hardcoded #000 — every neutral is blue-tinted).
+- **Legal pages — draft banner gated on env var**: the amber "pending legal review" banner previously rendered unconditionally on all four routes (`/privacy`, `/terms`, `/guidelines`, `/safety`). The `draft` prop is now driven by `LEGAL_DRAFT=true`; set the env var in staging, omit it in production.
+- **Legal pages — back navigation**: `LegalPage` header gains a localized `← Back` link to `/` (EN: "Back", ES: "Volver", PT: "Voltar") above the page title so users reaching the page from the registration flow have a clear return path.
+- **Legal pages — blockquote style**: the `legal-prose` blockquote lost its `border-left: 3px solid var(--color-brand-muted)` side stripe (absolute-ban violation). Replaced with a full `border: 1px solid` ring and a translucent background tint.
+- **Legal pages — ordered-list style**: `legal-prose` now styles `<ol>` elements (decimal list-style, matching line-height and color overrides applied to `<ul>`); previously fell back to unthemed browser defaults.
 
 ### Fixed
 
 - **Admin panel i18n**: all 7 nav labels (`Dashboard`, `Users`, `Reports`, `Appeals`, `Moderation`, `Channels`, `Public rooms`), the "Admin" badge, and the "Close navigation" aria-label in `AdminShell` are now localized via `useTranslations("admin")` across EN/ES/PT; previously these were hardcoded English strings.
+- **Footer link focus ring**: footer links gain `focus-visible:ring-1 focus-visible:ring-brand-muted` so keyboard users navigating the legal-page footer have a visible focus indicator (previously only `hover:text-gray-300` was set).
 - **Touch targets**: member-sidebar toggle in `RoomView` and desktop mod-menu trigger in `PublicRoomShell` now enforce a `min-h-[44px] min-w-[44px]` hit area (was ~22px and ~26px respectively).
 - **Filter input accessibility**: channel member filter `<input>` in `RoomView` gains `type="search"` and an explicit `aria-label`; previously had only a `placeholder`.
 - **Mod menu keyboard access**: mod-menu `<div>` in `PublicRoomShell` gains `tabIndex={-1}` and is programmatically focused on open, giving keyboard users an immediate entry point into the menu.

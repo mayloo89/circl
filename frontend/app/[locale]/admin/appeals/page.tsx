@@ -1,6 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
+import { useLocale, useTranslations } from "next-intl"
 import { useCallback, useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
@@ -24,14 +25,6 @@ interface Appeal {
 }
 
 const STATUS_TABS = ["submitted", "open", "approved", "denied", ""] as const
-const STATUS_LABELS: Record<string, string> = {
-  "": "All",
-  open: "Awaiting user",
-  submitted: "Awaiting review",
-  approved: "Approved",
-  denied: "Denied",
-  expired: "Expired",
-}
 
 const STATUS_BADGE: Record<string, string> = {
   open: "bg-gray-800 text-gray-300",
@@ -52,6 +45,8 @@ function ReviewModal({
   onDone: () => void
   onClose: () => void
 }) {
+  const t = useTranslations("admin")
+  const locale = useLocale()
   const [decision, setDecision] = useState<"approved" | "denied">("approved")
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
@@ -71,7 +66,7 @@ function ReviewModal({
       })
       if (!res.ok) {
         const text = await res.text()
-        setError(text.trim() || "Failed to resolve appeal")
+        setError(text.trim() || t("resolveAppealFailed"))
         return
       }
       onDone()
@@ -81,28 +76,28 @@ function ReviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 p-4">
       <div className="w-full max-w-xl rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-foreground">Review appeal</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("appealReviewTitle")}</h2>
 
         <div className="rounded bg-gray-800 p-4 space-y-2 text-sm">
           <p className="text-gray-400">
-            <span className="text-gray-200 font-medium">User:</span> {appeal.user_name || appeal.user_email}
+            <span className="text-gray-200 font-medium">{t("appealUserLabel")}:</span> {appeal.user_name || appeal.user_email}
           </p>
           <p className="text-gray-400">
-            <span className="text-gray-200 font-medium">Submitted:</span>{" "}
-            {appeal.submitted_at ? new Date(appeal.submitted_at).toLocaleString() : "—"}
+            <span className="text-gray-200 font-medium">{t("appealSubmittedLabel")}:</span>{" "}
+            {appeal.submitted_at ? new Date(appeal.submitted_at).toLocaleString(locale) : "—"}
           </p>
           <div>
-            <p className="text-gray-200 font-medium mb-1">Appeal:</p>
-            <p className="whitespace-pre-wrap text-gray-300">{appeal.body || "(empty)"}</p>
+            <p className="text-gray-200 font-medium mb-1">{t("appealBodyLabel")}:</p>
+            <p className="whitespace-pre-wrap text-gray-300">{appeal.body || t("appealBodyEmpty")}</p>
           </div>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <div>
-          <label className="block text-xs text-gray-400 mb-2">Decision</label>
+          <label className="block text-xs text-gray-400 mb-2">{t("appealDecisionLabel")}</label>
           <div className="flex gap-3">
             {(["approved", "denied"] as const).map((d) => (
               <button
@@ -116,27 +111,27 @@ function ReviewModal({
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                 }`}
               >
-                {d === "approved" ? "Approve (reactivate user)" : "Deny"}
+                {d === "approved" ? t("appealApprove") : t("appealDeny")}
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <label htmlFor="note" className="block text-xs text-gray-400 mb-2">Note to user (optional)</label>
+          <label htmlFor="note" className="block text-xs text-gray-400 mb-2">{t("appealNoteLabel")}</label>
           <textarea
             id="note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
-            placeholder="Briefly explain the decision; this is included in the resolution email."
+            placeholder={t("appealNotePlaceholder")}
           />
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Submit</Button>
+          <Button variant="secondary" onClick={onClose}>{t("cancel")}</Button>
+          <Button variant="primary" loading={loading} onClick={submit}>{t("submitAction")}</Button>
         </div>
       </div>
     </div>
@@ -145,6 +140,18 @@ function ReviewModal({
 
 export default function AdminAppealsPage() {
   const { data: session } = useSession()
+  const t = useTranslations("admin")
+  const locale = useLocale()
+
+  const statusLabels: Record<string, string> = {
+    "": t("appealStatusAll"),
+    open: t("appealStatusAwaitingUser"),
+    submitted: t("appealStatusAwaitingReview"),
+    approved: t("appealStatusApproved"),
+    denied: t("appealStatusDenied"),
+    expired: t("appealStatusExpired"),
+  }
+
   const [appeals, setAppeals] = useState<Appeal[]>([])
   const [statusFilter, setStatusFilter] = useState<string>("submitted")
   const [loading, setLoading] = useState(false)
@@ -165,19 +172,19 @@ export default function AdminAppealsPage() {
       const data = await res.json()
       setAppeals(Array.isArray(data) ? data : [])
     } catch {
-      setError("Failed to load appeals")
+      setError(t("loadAppealsFailed"))
     } finally {
       setLoading(false)
     }
-  }, [session, statusFilter])
+  }, [session, statusFilter, t])
 
   useEffect(() => { fetchAppeals() }, [fetchAppeals])
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
-      <h1 className="text-2xl font-bold text-foreground mb-2">Appeals</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-2">{t("appealsTitle")}</h1>
       <p className="text-sm text-gray-400 mb-6">
-        Suspended users can submit a written appeal via the link emailed to them. Approving an appeal reactivates the user.
+        {t("appealsSubtitle")}
       </p>
 
       <div className="flex gap-1 mb-6 rounded-lg bg-gray-900 p-1 w-fit ring-1 ring-gray-800">
@@ -191,7 +198,7 @@ export default function AdminAppealsPage() {
                 : "text-gray-400 hover:text-gray-200"
             }`}
           >
-            {STATUS_LABELS[s]}
+            {statusLabels[s]}
           </button>
         ))}
       </div>
@@ -202,11 +209,11 @@ export default function AdminAppealsPage() {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-900 text-xs uppercase tracking-wider text-gray-500">
             <tr>
-              <th className="px-4 py-3">User</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="hidden sm:table-cell px-4 py-3">Submitted</th>
-              <th className="hidden sm:table-cell px-4 py-3">Expires</th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="px-4 py-3">{t("colUser")}</th>
+              <th className="px-4 py-3">{t("colStatus")}</th>
+              <th className="hidden sm:table-cell px-4 py-3">{t("colSubmitted")}</th>
+              <th className="hidden sm:table-cell px-4 py-3">{t("colExpires")}</th>
+              <th className="px-4 py-3 text-right">{t("actionsMenu")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
@@ -223,7 +230,7 @@ export default function AdminAppealsPage() {
             ) : appeals.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-500 bg-gray-950">
-                  No appeals found
+                  {t("appealsNoFound")}
                 </td>
               </tr>
             ) : (
@@ -235,19 +242,19 @@ export default function AdminAppealsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[a.status] ?? "bg-gray-800 text-gray-400"}`}>
-                      {STATUS_LABELS[a.status] ?? a.status}
+                      {statusLabels[a.status] ?? a.status}
                     </span>
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
-                    {a.submitted_at ? new Date(a.submitted_at).toLocaleDateString() : "—"}
+                    {a.submitted_at ? new Date(a.submitted_at).toLocaleDateString(locale) : "—"}
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-400">
-                    {new Date(a.expires_at).toLocaleDateString()}
+                    {new Date(a.expires_at).toLocaleDateString(locale)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {a.status === "submitted" && (
                       <Button size="sm" variant="primary" onClick={() => setReviewTarget(a)}>
-                        Review
+                        {t("reviewReport")}
                       </Button>
                     )}
                   </td>

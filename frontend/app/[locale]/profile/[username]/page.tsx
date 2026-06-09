@@ -445,7 +445,7 @@ export default function PublicProfilePage() {
             />
           </button>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-950 via-brand-primary/40 to-gray-900">
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-primary/20 via-brand-primary/10 to-gray-900">
             <span className="select-none text-[8rem] font-black text-foreground/20">
               {profile.display_name?.[0]?.toUpperCase() ?? "?"}
             </span>
@@ -460,7 +460,7 @@ export default function PublicProfilePage() {
           type="button"
           onClick={() => router.back()}
           aria-label={tc("back")}
-          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-foreground backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-gray-950/70 text-foreground backdrop-blur-sm transition-colors hover:bg-gray-950/90 focus:outline-none focus:ring-2 focus:ring-white/50"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -476,7 +476,7 @@ export default function PublicProfilePage() {
               aria-label={t("moreOptions")}
               aria-haspopup="menu"
               aria-expanded={overflowOpen}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-foreground backdrop-blur-sm transition-colors hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-950/70 text-foreground backdrop-blur-sm transition-colors hover:bg-gray-950/90 focus:outline-none focus:ring-2 focus:ring-white/50"
             >
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="5"  r="1.5" />

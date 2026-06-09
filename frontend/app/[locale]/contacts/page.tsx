@@ -51,6 +51,7 @@ interface AcceptedContact {
 
 export default function ContactsPage() {
   const t = useTranslations("contacts")
+  const tc = useTranslations("common")
   const { data: session, status } = useSession()
   const router = useRouter()
 
@@ -90,9 +91,9 @@ export default function ContactsPage() {
       fetch(`${API_URL}/contacts/sent`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
     ])
       .then(([c, p, s]) => { setContacts(c); setPending(p); setSent(s) })
-      .catch(() => setError("Failed to load contacts."))
+      .catch(() => setError(t("loadFailed")))
       .finally(() => setLoading(false))
-  }, [status, token])
+  }, [status, token, t])
 
   // Stable subscription via ref to avoid stale closures.
   const handleEventRef = useRef<Parameters<typeof subscribe>[0]>(() => {})
@@ -145,14 +146,14 @@ export default function ContactsPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ addressee_id: addresseeID }),
       })
-      if (res.status === 409) { setError("Contact request already sent."); return }
-      if (!res.ok) { setError(await apiError(res, "Failed to send contact request.")); return }
+      if (res.status === 409) { setError(t("requestAlreadySent")); return }
+      if (!res.ok) { setError(await apiError(res, t("requestFailed"))); return }
       const contact = await res.json()
       const user = searchResults.find((u) => u.id === addresseeID)
       if (user) setSent((prev) => [...prev, { contact_id: contact.id, user_id: user.id, username: user.username, email: user.email, display_name: user.display_name, avatar_url: user.avatar_url }])
       setSearchResults((prev) => prev.filter((u) => u.id !== addresseeID))
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     }
   }
 
@@ -163,13 +164,13 @@ export default function ContactsPage() {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { setError(await apiError(res, "Failed to accept contact request.")); return }
+      if (!res.ok) { setError(await apiError(res, t("acceptFailed"))); return }
       const accepted = pending.find((r) => r.contact_id === contactID)
       setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
       if (accepted) setContacts((prev) => [...prev, { contact_id: contactID, user_id: accepted.user_id, username: accepted.username, email: accepted.email, display_name: accepted.display_name, avatar_url: accepted.avatar_url }])
       refreshPendingCount()
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     }
   }
 
@@ -180,10 +181,10 @@ export default function ContactsPage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { setError(await apiError(res, "Failed to cancel request.")); return }
+      if (!res.ok) { setError(await apiError(res, t("cancelFailed"))); return }
       setSent((prev) => prev.filter((r) => r.contact_id !== contactID))
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     }
   }
 
@@ -195,11 +196,11 @@ export default function ContactsPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ peer_id: peerID }),
       })
-      if (!res.ok) { setError(await apiError(res, "Failed to open conversation.")); return }
+      if (!res.ok) { setError(await apiError(res, t("startDMFailed"))); return }
       const room = await res.json()
       router.push(`/chat/${room.id}`)
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     }
   }
 
@@ -210,19 +211,33 @@ export default function ContactsPage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { setError(await apiError(res, "Failed to remove contact.")); return }
+      if (!res.ok) { setError(await apiError(res, t("removeFailed"))); return }
       setContacts((prev) => prev.filter((c) => c.contact_id !== contactID))
       setPending((prev) => prev.filter((r) => r.contact_id !== contactID))
       refreshPendingCount()
     } catch {
-      setError("Network error. Please try again.")
+      setError(tc("networkError"))
     }
   }
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <p className="text-gray-400">{t("loading")}</p>
+      <div className="flex min-h-screen flex-col items-center py-10">
+        <div className="w-full max-w-2xl space-y-8 px-4">
+          <div className="h-7 w-24 animate-pulse rounded bg-gray-800" />
+          <div className="rounded-card bg-gray-900 p-4 ring-1 ring-brand-primary/20 divide-y divide-gray-800">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 py-3">
+                <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-gray-800" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-28 animate-pulse rounded bg-gray-800" />
+                  <div className="h-3 w-20 animate-pulse rounded bg-gray-700" />
+                </div>
+                <div className="h-8 w-16 shrink-0 animate-pulse rounded-full bg-gray-800" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
