@@ -139,7 +139,7 @@ function RosterContent({
                   className={
                     mobile
                       ? "shrink-0 cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
-                      : "shrink-0 cursor-pointer rounded p-1.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
+                      : "flex min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-hover"
                   }
                 >
                   <svg
@@ -213,6 +213,7 @@ export default function PublicRoomShell({
 
   useEffect(() => {
     if (openModMenuId === null) return
+    modMenuRef.current?.focus()
     function handleOutside(e: PointerEvent) {
       if (modMenuRef.current && !modMenuRef.current.contains(e.target as Node)) closeModMenu()
     }
@@ -475,6 +476,7 @@ export default function PublicRoomShell({
         <div
           ref={modMenuRef}
           role="menu"
+          tabIndex={-1}
           style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
           className="z-[70] w-40 overflow-hidden rounded-lg bg-gray-800 py-1 shadow-xl ring-1 ring-gray-700 focus:outline-none"
         >

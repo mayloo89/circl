@@ -19,7 +19,7 @@ export default async function PrivacyPage({
   const Content = locale === "es" ? EsContent : locale === "pt" ? PtContent : EnContent
 
   return (
-    <LegalPage title={t("title")} lastUpdated={lastUpdated} draft>
+    <LegalPage title={t("title")} lastUpdated={lastUpdated} draft={process.env.LEGAL_DRAFT === "true"}>
       <Content />
     </LegalPage>
   )

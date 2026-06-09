@@ -242,7 +242,7 @@ export default function ChatInput({
           )}
         </div>}
 
-        <label htmlFor="message-input" className="sr-only">Message</label>
+        <label htmlFor="message-input" className="sr-only">{t("messagePlaceholder")}</label>
         <textarea
           ref={effectiveRef}
           id="message-input"

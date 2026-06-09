@@ -105,7 +105,7 @@ export default function OnboardingPhotoPage() {
             </span>
           )}
           {uploading && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-foreground">
+            <span className="absolute inset-0 flex items-center justify-center bg-gray-950/70 text-xs text-foreground">
               {t("uploading")}
             </span>
           )}

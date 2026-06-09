@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { useEffect, useRef, useState } from "react"
 
 import AuthedImage from "@/components/admin/AuthedImage"
@@ -23,6 +23,7 @@ export default function AlbumDetailPage() {
   const router = useRouter()
   const t = useTranslations("albums")
   const tc = useTranslations("common")
+  const locale = useLocale()
   const token = session?.accessToken
 
   const [album, setAlbum] = useState<Album | null>(null)
@@ -32,6 +33,7 @@ export default function AlbumDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [lightboxPhoto, setLightboxPhoto] = useState<AlbumPhoto | null>(null)
+  const [removeError, setRemoveError] = useState("")
 
   const fileRef = useRef<HTMLInputElement>(null)
   const { upload, uploading, rejection, clearRejection, error: uploadErr } = useUpload(token)
@@ -87,9 +89,18 @@ export default function AlbumDetailPage() {
 
   async function removePhoto(uploadID: string) {
     if (!token) return
-    await albumsApi.removePhoto(token, albumID, uploadID)
+    const previousPhotos = photos
+    const previousAlbum = album
     setPhotos((prev) => (prev ?? []).filter((p) => p.upload_id !== uploadID))
     if (album) setAlbum({ ...album, photo_count: Math.max(album.photo_count - 1, 0) })
+    try {
+      await albumsApi.removePhoto(token, albumID, uploadID)
+      setRemoveError("")
+    } catch {
+      setPhotos(previousPhotos)
+      if (previousAlbum) setAlbum(previousAlbum)
+      setRemoveError(t("removePhotoFailed"))
+    }
   }
 
   async function handleDelete() {
@@ -189,13 +200,18 @@ export default function AlbumDetailPage() {
         {isOwner
           ? t("ownerNotice")
           : viewerGrant?.expires_at
-          ? t("viewerNoticeExpiry", { date: new Date(viewerGrant.expires_at).toLocaleDateString() })
+          ? t("viewerNoticeExpiry", { date: new Date(viewerGrant.expires_at).toLocaleDateString(locale) })
           : t("viewerNotice")}
       </p>
 
       {uploadErr && (
         <p role="alert" className="text-sm text-red-400">
           {uploadErr}
+        </p>
+      )}
+      {removeError && (
+        <p role="alert" className="text-sm text-red-400">
+          {removeError}
         </p>
       )}
 
@@ -239,7 +255,7 @@ export default function AlbumDetailPage() {
                   type="button"
                   onClick={() => removePhoto(p.upload_id)}
                   aria-label={t("removePhoto")}
-                  className="absolute right-1.5 top-1.5 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity hover:bg-rose-700 group-hover:opacity-100 focus:opacity-100"
+                  className="absolute right-1.5 top-1.5 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-950/80 text-white opacity-0 transition-opacity hover:bg-rose-700 group-hover:opacity-100 focus:opacity-100"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"

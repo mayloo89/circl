@@ -173,7 +173,7 @@ export default function MessageBubble({
                 >
                   <Image
                     src={"thumbnail_url" in msg && msg.thumbnail_url ? msg.thumbnail_url : msg.content}
-                    alt="Shared image"
+                    alt={t("sharedImage")}
                     width={240}
                     height={180}
                     className="max-h-60 w-auto object-cover transition-opacity hover:opacity-90"

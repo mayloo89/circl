@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import { Link, useRouter } from "@/i18n/navigation"
 
@@ -35,20 +35,21 @@ interface RoomSummary {
   created_at: string
 }
 
-function relativeTime(dateStr: string, now: number): string {
+function relativeTime(dateStr: string, now: number, locale: string, t: ReturnType<typeof useTranslations<"chat">>): string {
   const diff = now - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return "now"
+  if (mins < 1) return t("previewNow")
   if (mins < 60) return `${mins}m`
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
-  if (days === 1) return "yesterday"
-  if (days < 7) return new Date(dateStr).toLocaleDateString("en", { weekday: "short" })
-  return new Date(dateStr).toLocaleDateString("en", { month: "short", day: "numeric" })
+  if (days === 1) return t("previewYesterday")
+  if (days < 7) return new Date(dateStr).toLocaleDateString(locale, { weekday: "short" })
+  return new Date(dateStr).toLocaleDateString(locale, { month: "short", day: "numeric" })
 }
 
 function LastMessagePreview({ msg }: { msg: MessageSummary }) {
+  const t = useTranslations("chat")
   switch (msg.type) {
     case "image":
       return (
@@ -56,7 +57,7 @@ function LastMessagePreview({ msg }: { msg: MessageSummary }) {
           <svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
           </svg>
-          Photo
+          {t("previewPhoto")}
         </span>
       )
     case "video":
@@ -65,7 +66,7 @@ function LastMessagePreview({ msg }: { msg: MessageSummary }) {
           <svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
           </svg>
-          Video
+          {t("previewVideo")}
         </span>
       )
     case "file":
@@ -74,7 +75,7 @@ function LastMessagePreview({ msg }: { msg: MessageSummary }) {
           <svg className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
           </svg>
-          File
+          {t("previewFile")}
         </span>
       )
     case "album_share":
@@ -85,7 +86,7 @@ function LastMessagePreview({ msg }: { msg: MessageSummary }) {
             <circle cx="9" cy="9" r="2" />
             <path d="M21 15l-5-5L5 21" />
           </svg>
-          Album
+          {t("previewAlbum")}
         </span>
       )
     default:
@@ -116,6 +117,7 @@ interface ChatListPaneProps {
 
 export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatListPaneProps) {
   const t = useTranslations("chat")
+  const locale = useLocale()
   const { data: session, status } = useSession()
   const router = useRouter()
   const [rooms, setRooms] = useState<RoomSummary[]>([])
@@ -149,7 +151,7 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data: RoomSummary[]) => setRooms(Array.isArray(data) ? data : []))
-      .catch(() => setError("Failed to load conversations."))
+      .catch(() => setError(t("loadFailed")))
       .finally(() => setLoading(false))
   }
 
@@ -328,7 +330,7 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
                       <div className="flex flex-none flex-col items-end gap-1.5">
                         {room.last_message && (
                           <span className="text-xs text-gray-600">
-                            {relativeTime(room.last_message.created_at, now)}
+                            {relativeTime(room.last_message.created_at, now, locale, t)}
                           </span>
                         )}
                         {room.unread_count > 0 && (

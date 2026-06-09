@@ -66,7 +66,7 @@ export default function PublicRoomsPage() {
   )
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-950">
+    <div className="flex min-h-dvh flex-col bg-gray-950">
       <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">{t("title")}</h1>

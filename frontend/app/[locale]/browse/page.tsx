@@ -190,12 +190,14 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
   const [draftInterests, setDraftInterests] = useState<string[]>(selectedInterests)
   const [interestQuery, setInterestQuery] = useState("")
   const [interestSuggestions, setInterestSuggestions] = useState<string[]>([])
+  const [interestActiveIdx, setInterestActiveIdx] = useState(-1)
   const tokenRef = useRef(token)
 
   useEffect(() => { setDraft(prefs) }, [prefs])
   useEffect(() => { setDraftSort(sortByDistance) }, [sortByDistance])
   useEffect(() => { setDraftInterests(selectedInterests) }, [selectedInterests])
   useEffect(() => { tokenRef.current = token }, [token])
+  useEffect(() => { setInterestActiveIdx(-1) }, [interestSuggestions])
 
   useEffect(() => {
     if (interestQuery.length < 1) { setInterestSuggestions([]); return }
@@ -216,6 +218,27 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
     setDraftInterests((prev) => prev.includes(name) ? prev : [...prev, name])
     setInterestQuery("")
     setInterestSuggestions([])
+    setInterestActiveIdx(-1)
+  }
+
+  function handleInterestKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      if (interestSuggestions.length === 0) return
+      e.preventDefault()
+      setInterestActiveIdx((i) => Math.min(i + 1, interestSuggestions.length - 1))
+    } else if (e.key === "ArrowUp") {
+      if (interestSuggestions.length === 0) return
+      e.preventDefault()
+      setInterestActiveIdx((i) => Math.max(i - 1, -1))
+    } else if (e.key === "Escape") {
+      setInterestSuggestions([])
+      setInterestActiveIdx(-1)
+    } else if (e.key === "Enter") {
+      if (interestActiveIdx >= 0 && interestSuggestions[interestActiveIdx]) {
+        e.preventDefault()
+        addInterest(interestSuggestions[interestActiveIdx])
+      }
+    }
   }
 
   function removeInterest(name: string) {
@@ -305,20 +328,31 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
         <div className="relative">
           <input
             type="text"
+            role="combobox"
+            aria-expanded={interestSuggestions.length > 0}
+            aria-autocomplete="list"
+            aria-controls="browse-interests-listbox"
+            aria-activedescendant={interestActiveIdx >= 0 ? `browse-interest-option-${interestActiveIdx}` : undefined}
             value={interestQuery}
             onChange={(e) => setInterestQuery(e.target.value)}
+            onKeyDown={handleInterestKeyDown}
             placeholder={t("searchInterests")}
             aria-label={t("searchInterests")}
             className="w-full rounded bg-gray-800 px-3 py-1.5 text-sm text-foreground placeholder-gray-600 ring-1 ring-gray-700 focus:outline-none focus:ring-brand-hover"
           />
           {interestSuggestions.length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
-              {interestSuggestions.map((s) => (
-                <li key={s}>
+            <ul id="browse-interests-listbox" role="listbox" className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
+              {interestSuggestions.map((s, idx) => (
+                <li
+                  key={s}
+                  id={`browse-interest-option-${idx}`}
+                  role="option"
+                  aria-selected={idx === interestActiveIdx}
+                >
                   <button
                     type="button"
                     onClick={() => addInterest(s)}
-                    className="w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-700"
+                    className={`w-full px-3 py-1.5 text-left text-sm text-gray-200 ${idx === interestActiveIdx ? "bg-gray-600" : "hover:bg-gray-700"}`}
                   >
                     {s}
                   </button>

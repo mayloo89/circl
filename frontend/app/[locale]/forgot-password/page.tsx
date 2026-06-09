@@ -38,7 +38,7 @@ export default function ForgotPasswordPage() {
         {submitted ? (
           <div className="space-y-4 text-center">
             <p className="text-sm text-gray-300">{t("successMessage")}</p>
-            <Link href="/login" className="block text-sm text-blue-400 hover:text-blue-300">
+            <Link href="/login" className="block text-sm text-brand-muted hover:text-brand-subtle">
               {t("backToSignIn")}
             </Link>
           </div>
@@ -54,18 +54,18 @@ export default function ForgotPasswordPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-brand-hover"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-foreground hover:bg-blue-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              className="w-full rounded-md bg-brand-primary px-4 py-3 text-foreground hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
             >
               {loading ? t("submitting") : t("submit")}
             </button>
             <p className="text-center text-sm text-gray-400">
-              <Link href="/login" className="text-blue-400 hover:text-blue-300">
+              <Link href="/login" className="text-brand-muted hover:text-brand-subtle">
                 {t("backToSignIn")}
               </Link>
             </p>

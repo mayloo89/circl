@@ -21,7 +21,7 @@ export default function Footer() {
         <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
           {links.map(({ href, key }) => (
             <li key={href}>
-              <Link href={href} className="hover:text-gray-300">
+              <Link href={href} className="rounded hover:text-gray-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-muted">
                 {t(key)}
               </Link>
             </li>

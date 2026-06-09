@@ -33,9 +33,11 @@ export default function OnboardingLocationPage() {
   const [locationLng, setLocationLng] = useState<number | null>(null)
   const [query, setQuery] = useState(existingText)
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
+  const [activeIdx, setActiveIdx] = useState(-1)
   const [locating, setLocating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const listboxId = "location-listbox"
 
   // Fetch coordinates for the pre-existing location (text comes from context, coords need API)
   useEffect(() => {
@@ -77,6 +79,37 @@ export default function OnboardingLocationPage() {
     }, 350)
     return () => clearTimeout(id)
   }, [query])
+
+  useEffect(() => { setActiveIdx(-1) }, [suggestions])
+
+  function selectSuggestion(s: LocationSuggestion) {
+    setLocationText(s.label)
+    setQuery(s.label)
+    setLocationLat(s.lat)
+    setLocationLng(s.lng)
+    setSuggestions([])
+    setActiveIdx(-1)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      if (suggestions.length === 0) return
+      e.preventDefault()
+      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1))
+    } else if (e.key === "ArrowUp") {
+      if (suggestions.length === 0) return
+      e.preventDefault()
+      setActiveIdx((i) => Math.max(i - 1, -1))
+    } else if (e.key === "Escape") {
+      setSuggestions([])
+      setActiveIdx(-1)
+    } else if (e.key === "Enter") {
+      if (activeIdx >= 0 && suggestions[activeIdx]) {
+        e.preventDefault()
+        selectSuggestion(suggestions[activeIdx])
+      }
+    }
+  }
 
   function handleGeolocate() {
     if (!navigator.geolocation) return
@@ -166,11 +199,15 @@ export default function OnboardingLocationPage() {
         <p className="text-sm text-gray-400">{t("location.subtitle")}</p>
       </div>
 
-      {/* Location input */}
       <div className="space-y-3">
         <div className="relative">
           <input
             type="text"
+            role="combobox"
+            aria-expanded={suggestions.length > 0}
+            aria-autocomplete="list"
+            aria-controls={listboxId}
+            aria-activedescendant={activeIdx >= 0 ? `location-option-${activeIdx}` : undefined}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -178,25 +215,29 @@ export default function OnboardingLocationPage() {
               setLocationLat(null)
               setLocationLng(null)
             }}
+            onKeyDown={handleKeyDown}
             onBlur={() => setTimeout(() => setSuggestions([]), 150)}
             placeholder={t("location.placeholder")}
             autoComplete="off"
             className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-foreground placeholder-gray-600 focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover"
           />
           {suggestions.length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl">
-              {suggestions.map((s) => (
-                <li key={`${s.label}-${s.lat},${s.lng}`}>
+            <ul
+              id={listboxId}
+              role="listbox"
+              className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl"
+            >
+              {suggestions.map((s, idx) => (
+                <li
+                  key={`${s.label}-${s.lat},${s.lng}`}
+                  id={`location-option-${idx}`}
+                  role="option"
+                  aria-selected={idx === activeIdx}
+                >
                   <button
                     type="button"
-                    onClick={() => {
-                      setLocationText(s.label)
-                      setQuery(s.label)
-                      setLocationLat(s.lat)
-                      setLocationLng(s.lng)
-                      setSuggestions([])
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700"
+                    onClick={() => selectSuggestion(s)}
+                    className={`w-full px-4 py-2.5 text-left text-sm text-gray-200 ${idx === activeIdx ? "bg-gray-600" : "hover:bg-gray-700"}`}
                   >
                     {s.label}
                   </button>

@@ -93,7 +93,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col bg-gray-950">
 
       {reactivated && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="w-full max-w-sm rounded-xl bg-gray-900 p-8 text-center shadow-2xl ring-1 ring-green-800">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-900 ring-1 ring-green-700">
               <svg className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -116,8 +116,8 @@ export default function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-900 p-8 shadow-xl ring-1 ring-gray-800">
         <div>
-          <h2 className="text-center text-3xl font-bold text-foreground">Circl</h2>
-          <p className="mt-2 text-center text-sm text-gray-400">{t("title")}</p>
+          <p className="mb-1 text-center text-xs font-bold tracking-[0.25em] text-brand-primary uppercase">Circl</p>
+          <h2 className="text-center text-3xl font-bold text-foreground">{t("title")}</h2>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -153,6 +153,7 @@ export default function LoginPage() {
               <input
                 id="email"
                 type="email"
+                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -188,7 +189,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full rounded-md bg-brand-primary px-4 py-2 text-foreground hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="w-full rounded-md bg-brand-primary px-4 py-3 text-foreground hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             {t("submit")}
           </button>

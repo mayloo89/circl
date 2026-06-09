@@ -304,7 +304,9 @@ export default function ProfilePage() {
   const [interests, setInterests] = useState<string[]>([])
   const [locationQuery, setLocationQuery] = useState("")
   const [locationEdited, setLocationEdited] = useState(false)
+  const [locationActiveIdx, setLocationActiveIdx] = useState(-1)
   const [interestInput, setInterestInput] = useState("")
+  const [interestActiveIdx, setInterestActiveIdx] = useState(-1)
   const [interestFocused, setInterestFocused] = useState(false)
   const [lookingForGender, setLookingForGender] = useState<string[]>([])
   const [lookingForAgeMin, setLookingForAgeMin] = useState<string>("")
@@ -344,6 +346,9 @@ export default function ProfilePage() {
   useAutoReset(formSuccess, setFormSuccess)
   useAutoReset(avatarSuccess, setAvatarSuccess)
   useAutoReset(avatarError, setAvatarError)
+
+  useEffect(() => { setLocationActiveIdx(-1) }, [locationSuggestions])
+  useEffect(() => { setInterestActiveIdx(-1) }, [interestSuggestions])
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -388,9 +393,9 @@ export default function ProfilePage() {
         setLookingForAgeMin(data.looking_for_age_min != null ? String(data.looking_for_age_min) : "")
         setLookingForAgeMax(data.looking_for_age_max != null ? String(data.looking_for_age_max) : "")
       })
-      .catch(() => setLoadError("Failed to load profile."))
+      .catch(() => setLoadError(t("loadFailed")))
       .finally(() => setLoading(false))
-  }, [status, token])
+  }, [status, token, t])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -419,13 +424,13 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       })
-      if (!res.ok) { const data = await res.json(); setFormError(data.error ?? "Failed to update profile."); return }
+      if (!res.ok) { const data = await res.json(); setFormError(data.error ?? t("updateFailed")); return }
       const updated: Profile = await res.json()
       setProfile(updated)
       setUsername(updated.username ?? "")
       setAvatarURL(updated.avatar_url)
       setAvatarSuccess("")
-      setFormSuccess("Profile updated.")
+      setFormSuccess(t("profileUpdated"))
     } finally {
       setSaving(false)
     }
@@ -443,9 +448,9 @@ export default function ProfilePage() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ avatar_url: result.url }),
     })
-    if (!res.ok) { setAvatarError("Failed to save avatar."); return }
+    if (!res.ok) { setAvatarError(t("avatarSaveFailed")); return }
     setAvatarURL(result.url)
-    setAvatarSuccess("Avatar updated.")
+    setAvatarSuccess(t("avatarUpdated"))
   }
 
   async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -461,7 +466,7 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url: result.url }),
       })
-      if (!res.ok) { const data = await res.json(); setGalleryError(data.error ?? "Failed to add photo."); return }
+      if (!res.ok) { const data = await res.json(); setGalleryError(data.error ?? t("addPhotoFailed")); return }
       const photo: ProfilePhoto = await res.json()
       setProfile((prev) => prev ? { ...prev, photos: [...prev.photos, photo] } : prev)
     } finally {
@@ -476,7 +481,7 @@ export default function ProfilePage() {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) { setGalleryError("Failed to delete photo."); return }
+    if (!res.ok) { setGalleryError(t("deletePhotoFailed")); return }
     setProfile((prev) => prev ? { ...prev, photos: prev.photos.filter((p) => p.id !== photoID) } : prev)
   }
 
@@ -485,13 +490,58 @@ export default function ProfilePage() {
     if (!tag || interests.includes(tag) || interests.length >= MAX_INTERESTS) return
     setInterests((prev) => [...prev, tag])
     setInterestInput("")
+    setInterestActiveIdx(-1)
     clearInterestSuggestions()
   }
 
-  function handleAddInterest(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter" && e.key !== ",") return
-    e.preventDefault()
-    addInterest(interestInput)
+  function handleInterestKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    const visible = interestSuggestions.filter((s) => !interests.includes(s.name))
+    if (e.key === "ArrowDown") {
+      if (visible.length === 0) return
+      e.preventDefault()
+      setInterestActiveIdx((i) => Math.min(i + 1, visible.length - 1))
+    } else if (e.key === "ArrowUp") {
+      if (visible.length === 0) return
+      e.preventDefault()
+      setInterestActiveIdx((i) => Math.max(i - 1, -1))
+    } else if (e.key === "Escape") {
+      clearInterestSuggestions()
+      setInterestActiveIdx(-1)
+    } else if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault()
+      if (interestActiveIdx >= 0 && visible[interestActiveIdx]) {
+        addInterest(visible[interestActiveIdx].name)
+        return
+      }
+      addInterest(interestInput)
+    }
+  }
+
+  function handleLocationKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      if (locationSuggestions.length === 0) return
+      e.preventDefault()
+      setLocationActiveIdx((i) => Math.min(i + 1, locationSuggestions.length - 1))
+    } else if (e.key === "ArrowUp") {
+      if (locationSuggestions.length === 0) return
+      e.preventDefault()
+      setLocationActiveIdx((i) => Math.max(i - 1, -1))
+    } else if (e.key === "Escape") {
+      clearLocationSuggestions()
+      setLocationActiveIdx(-1)
+    } else if (e.key === "Enter") {
+      if (locationActiveIdx >= 0 && locationSuggestions[locationActiveIdx]) {
+        e.preventDefault()
+        const s = locationSuggestions[locationActiveIdx]
+        setLocationText(s.label)
+        setLocationQuery(s.label)
+        setLocationLat(s.lat)
+        setLocationLng(s.lng)
+        setLocationEdited(false)
+        clearLocationSuggestions()
+        setLocationActiveIdx(-1)
+      }
+    }
   }
 
   function handleRemoveInterest(tag: string) {
@@ -564,13 +614,13 @@ export default function ProfilePage() {
 
         {profileIncomplete && (
           <div className="rounded-lg bg-amber-950 p-4 ring-1 ring-amber-700">
-            <p className="text-sm font-medium text-amber-300">Complete your profile to use Circl</p>
+            <p className="text-sm font-medium text-amber-300">{t("incomplete.title")}</p>
             <p className="mt-1 text-xs text-amber-400">
               {!profile.username && !profile.date_of_birth
-                ? "Set your username and date of birth below."
+                ? t("incomplete.needsBoth")
                 : !profile.username
-                ? "Set your username below."
-                : "Set your date of birth below."}
+                ? t("incomplete.needsUsername")
+                : t("incomplete.needsBirthdate")}
             </p>
           </div>
         )}
@@ -621,14 +671,14 @@ export default function ProfilePage() {
               className="group relative h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-brand-hover focus:outline-none focus:ring-brand-hover"
             >
               {avatarURL ? (
-                <Image src={avatarURL} alt="Your avatar" width={96} height={96} className="h-full w-full object-cover" />
+                <Image src={avatarURL} alt={t("avatarAlt")} width={96} height={96} className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-3xl text-gray-500 group-hover:text-gray-300">
                   {displayName ? displayName[0].toUpperCase() : "?"}
                 </span>
               )}
-              <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs text-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                {uploadingAvatar ? "Uploading…" : "Change"}
+              <span className="absolute inset-0 flex items-center justify-center bg-gray-950/70 text-xs text-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                {uploadingAvatar ? t("uploading") : t("changePhoto")}
               </span>
             </button>
             <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={handleAvatarChange} className="hidden" />
@@ -644,7 +694,7 @@ export default function ProfilePage() {
             <div>
               <div className="flex items-center justify-between">
                 <label htmlFor="username" className="block text-sm font-medium text-gray-300">
-                  Username <span className="text-red-400">*</span>
+                  {t("username")} <span className="text-red-400">*</span>
                 </label>
                 {!profile?.username && username && (
                   <span className={`text-xs ${
@@ -653,10 +703,10 @@ export default function ProfilePage() {
                     usernameStatus === "invalid" ? "text-yellow-400" :
                     "text-gray-500"
                   }`}>
-                    {usernameStatus === "checking" ? "Checking…" :
-                     usernameStatus === "available" ? <><svg className="mr-0.5 inline h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>Available</> :
-                     usernameStatus === "taken" ? <><svg className="mr-0.5 inline h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>Taken</> :
-                     usernameStatus === "invalid" ? "3–30 chars, lowercase, digits, _" : ""}
+                    {usernameStatus === "checking" ? t("usernameChecking") :
+                     usernameStatus === "available" ? <><svg className="mr-0.5 inline h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>{t("usernameAvailable")}</> :
+                     usernameStatus === "taken" ? <><svg className="mr-0.5 inline h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{t("usernameTaken")}</> :
+                     usernameStatus === "invalid" ? t("usernameInvalid") : ""}
                   </span>
                 )}
               </div>
@@ -761,8 +811,14 @@ export default function ProfilePage() {
                 <input
                   id="location"
                   type="text"
+                  role="combobox"
+                  aria-expanded={locationSuggestions.length > 0}
+                  aria-autocomplete="list"
+                  aria-controls="profile-location-listbox"
+                  aria-activedescendant={locationActiveIdx >= 0 ? `profile-location-option-${locationActiveIdx}` : undefined}
                   value={locationQuery}
                   onChange={(e) => { setLocationQuery(e.target.value); setLocationText(e.target.value); setLocationLat(null); setLocationLng(null); setLocationEdited(true) }}
+                  onKeyDown={handleLocationKeyDown}
                   placeholder={t("locationPlaceholder")}
                   autoComplete="off"
                   className={`block w-full rounded-md border bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:outline-none focus:ring-1 ${
@@ -772,13 +828,18 @@ export default function ProfilePage() {
                   }`}
                 />
                 {locationSearching && (
-                  <span className="absolute right-3 top-2.5 text-xs text-gray-500">searching…</span>
+                  <span className="absolute right-3 top-2.5 text-xs text-gray-500">{t("locationSearching")}</span>
                 )}
               </div>
               {locationSuggestions.length > 0 && (
-                <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
-                  {locationSuggestions.map((s) => (
-                    <li key={`${s.label}-${s.lat},${s.lng}`}>
+                <ul id="profile-location-listbox" role="listbox" className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
+                  {locationSuggestions.map((s, idx) => (
+                    <li
+                      key={`${s.label}-${s.lat},${s.lng}`}
+                      id={`profile-location-option-${idx}`}
+                      role="option"
+                      aria-selected={idx === locationActiveIdx}
+                    >
                       <button
                         type="button"
                         onClick={() => {
@@ -788,8 +849,9 @@ export default function ProfilePage() {
                           setLocationLng(s.lng)
                           setLocationEdited(false)
                           clearLocationSuggestions()
+                          setLocationActiveIdx(-1)
                         }}
-                        className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                        className={`w-full px-3 py-2 text-left text-sm text-gray-200 focus:outline-none ${idx === locationActiveIdx ? "bg-gray-600" : "hover:bg-gray-700 focus:bg-gray-700"}`}
                       >
                         {s.label}
                       </button>
@@ -810,25 +872,35 @@ export default function ProfilePage() {
               <input
                 id="interestInput"
                 type="text"
+                role="combobox"
+                aria-expanded={interestSuggestions.filter((s) => !interests.includes(s.name)).length > 0}
+                aria-autocomplete="list"
+                aria-controls="profile-interests-listbox"
+                aria-activedescendant={interestActiveIdx >= 0 ? `profile-interest-option-${interestActiveIdx}` : undefined}
                 value={interestInput}
                 onChange={(e) => setInterestInput(e.target.value)}
-                onKeyDown={handleAddInterest}
+                onKeyDown={handleInterestKeyDown}
                 onFocus={() => setInterestFocused(true)}
                 placeholder={t("interestsPlaceholder")}
                 disabled={interests.length >= MAX_INTERESTS}
                 autoComplete="off"
                 className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-brand-hover focus:outline-none focus:ring-1 focus:ring-brand-hover disabled:opacity-50"
               />
-              {interestSuggestions.length > 0 && (
-                <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
+              {interestSuggestions.filter((s) => !interests.includes(s.name)).length > 0 && (
+                <ul id="profile-interests-listbox" role="listbox" className="absolute z-10 mt-1 w-full rounded-md border border-gray-700 bg-gray-800 shadow-lg">
                   {interestSuggestions
                     .filter((s) => !interests.includes(s.name))
-                    .map((s) => (
-                      <li key={s.name}>
+                    .map((s, idx) => (
+                      <li
+                        key={s.name}
+                        id={`profile-interest-option-${idx}`}
+                        role="option"
+                        aria-selected={idx === interestActiveIdx}
+                      >
                         <button
                           type="button"
                           onClick={() => addInterest(s.name)}
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+                          className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-200 focus:outline-none ${idx === interestActiveIdx ? "bg-gray-600" : "hover:bg-gray-700 focus:bg-gray-700"}`}
                         >
                           <span>{s.name}</span>
                           <span className="text-xs text-gray-500">{s.count}</span>
@@ -848,7 +920,7 @@ export default function ProfilePage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveInterest(tag)}
-                        aria-label={`Remove ${tag}`}
+                        aria-label={t("removeInterest", { tag })}
                         className="ml-1 text-brand-muted hover:text-foreground"
                       >
                         ×

@@ -52,8 +52,8 @@ export default function ShareAlbumDialog({ open, token, roomID, onClose, onShare
       await albumsApi.shareInChat(token, album.id, roomID, expiresIn)
       onShared()
       onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed")
+    } catch {
+      setError(t("shareFailed"))
     } finally {
       setSubmittingID(null)
     }

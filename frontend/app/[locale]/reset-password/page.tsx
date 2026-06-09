@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 
 import { Link, useRouter } from "@/i18n/navigation"
 import PasswordRequirements, { PASSWORD_RULES } from "@/components/ui/PasswordRequirements"
+import PasswordField from "@/components/ui/PasswordField"
 import Footer from "@/components/Footer"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -66,7 +67,7 @@ function ResetPasswordForm() {
     return (
       <div className="text-center space-y-4">
         <p className="text-sm text-red-400">{t("invalidToken")}</p>
-        <Link href="/forgot-password" className="text-sm text-blue-400 hover:text-blue-300">
+        <Link href="/forgot-password" className="text-sm text-brand-muted hover:text-brand-subtle">
           {t("requestNew")}
         </Link>
       </div>
@@ -82,40 +83,32 @@ function ResetPasswordForm() {
       )}
       <div className="space-y-4">
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-            {t("newPassword")}
-          </label>
-          <input
+          <PasswordField
             id="password"
-            type="password"
+            label={t("newPassword")}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            autoComplete="new-password"
           />
           {password && <div className="mt-2"><PasswordRequirements password={password} /></div>}
         </div>
         <div>
-          <label htmlFor="confirm" className="block text-sm font-medium text-gray-300">
-            {t("confirmPassword")}
-          </label>
-          <input
+          <PasswordField
             id="confirm"
-            type="password"
+            label={t("confirmPassword")}
             required
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-foreground placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            autoComplete="new-password"
+            error={!confirmMatch ? t("passwordsMismatch") : undefined}
           />
-          {!confirmMatch && (
-            <p className="mt-1 text-xs text-red-400" role="alert">{t("passwordsMismatch")}</p>
-          )}
         </div>
       </div>
       <button
         type="submit"
         disabled={loading || !allRulesMet || !confirmMatch}
-        className="w-full rounded-md bg-blue-600 px-4 py-2 text-foreground hover:bg-blue-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+        className="w-full rounded-md bg-brand-primary px-4 py-3 text-foreground hover:bg-brand-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-hover focus:ring-offset-2 focus:ring-offset-gray-900"
       >
         {loading ? t("submitting") : t("submit")}
       </button>

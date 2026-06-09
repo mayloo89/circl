@@ -47,7 +47,7 @@ func TestRetentionSweep_DeletesEligibleMessages(t *testing.T) {
 		notified = append(notified, roomID+":"+msgID)
 	}, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 2 {
 		t.Errorf("deleted %d messages, want 2", len(store.deletedIDs))
@@ -68,7 +68,7 @@ func TestRetentionSweep_NoEligibleMessages(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewRetentionCleaner(store, storage, nil, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 0 {
 		t.Errorf("expected 0 deletions, got %d", len(store.deletedIDs))
@@ -80,7 +80,7 @@ func TestRetentionSweep_ListError(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewRetentionCleaner(store, storage, nil, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 0 {
 		t.Errorf("expected 0 deletions on list error, got %d", len(store.deletedIDs))
@@ -99,7 +99,7 @@ func TestRetentionSweep_DeleteError(t *testing.T) {
 	notified := false
 	cleaner := worker.NewRetentionCleaner(store, storage, func(_, _ string) { notified = true }, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if notified {
 		t.Error("should not notify on DB delete error")
@@ -117,7 +117,7 @@ func TestRetentionSweep_StorageDeleteError(t *testing.T) {
 	notified := false
 	cleaner := worker.NewRetentionCleaner(store, storage, func(_, _ string) { notified = true }, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if !notified {
 		t.Error("should still notify even when storage delete fails")
@@ -136,7 +136,7 @@ func TestRetentionSweep_NilNotify(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewRetentionCleaner(store, storage, nil, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 1 {
 		t.Errorf("expected 1 deletion, got %d", len(store.deletedIDs))
@@ -154,7 +154,7 @@ func TestRetentionSweep_MultipleStorageKeys(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewRetentionCleaner(store, storage, nil, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(storage.deletedKeys) != 2 {
 		t.Errorf("deleted %d keys, want 2", len(storage.deletedKeys))

@@ -67,8 +67,8 @@ export default function MembersPanel({ albumID, token }: Props) {
       setGrants((prev) => [grant, ...prev])
       setSelected("")
       setExpiresIn("none")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed")
+    } catch {
+      setError(t("inviteFailed"))
     } finally {
       setSubmitting(false)
     }
@@ -78,8 +78,8 @@ export default function MembersPanel({ albumID, token }: Props) {
     try {
       const updated = await albumsApi.revoke(token, grantID)
       setGrants((prev) => prev.map((g) => (g.id === grantID ? updated : g)))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed")
+    } catch {
+      setError(t("revokeFailed"))
     }
   }
 
@@ -87,8 +87,8 @@ export default function MembersPanel({ albumID, token }: Props) {
     try {
       const updated = await albumsApi.accept(token, grantID)
       setGrants((prev) => prev.map((g) => (g.id === grantID ? updated : g)))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed")
+    } catch {
+      setError(t("acceptFailed"))
     }
   }
 
@@ -96,8 +96,8 @@ export default function MembersPanel({ albumID, token }: Props) {
     try {
       const updated = await albumsApi.deny(token, grantID)
       setGrants((prev) => prev.map((g) => (g.id === grantID ? updated : g)))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed")
+    } catch {
+      setError(t("denyFailed"))
     }
   }
 

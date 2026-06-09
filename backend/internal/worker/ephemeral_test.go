@@ -62,7 +62,7 @@ func TestSweep_DeletesExpiredMessages(t *testing.T) {
 		notified = append(notified, roomID+":"+msgID)
 	}, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 2 {
 		t.Errorf("deleted %d messages, want 2", len(store.deletedIDs))
@@ -83,7 +83,7 @@ func TestSweep_NoExpiredMessages(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 0 {
 		t.Errorf("expected 0 deletions, got %d", len(store.deletedIDs))
@@ -96,7 +96,7 @@ func TestSweep_ListError(t *testing.T) {
 	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	// Must not panic.
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 0 {
 		t.Errorf("expected 0 deletions on list error, got %d", len(store.deletedIDs))
@@ -116,7 +116,7 @@ func TestSweep_DeleteError(t *testing.T) {
 	cleaner := worker.NewEphemeralCleaner(store, storage, func(_ string, _ string) { notified = true }, zerolog.Nop())
 
 	// Must not panic and must not notify on failure.
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if notified {
 		t.Error("should not notify on DB delete error")
@@ -135,7 +135,7 @@ func TestSweep_StorageDeleteError(t *testing.T) {
 	cleaner := worker.NewEphemeralCleaner(store, storage, func(_ string, _ string) { notified = true }, zerolog.Nop())
 
 	// Storage error must not prevent notification.
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if !notified {
 		t.Error("should still notify even when storage delete fails")
@@ -155,7 +155,7 @@ func TestSweep_NilNotify(t *testing.T) {
 	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
 	// Must not panic when notify is nil.
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(store.deletedIDs) != 1 {
 		t.Errorf("expected 1 deletion, got %d", len(store.deletedIDs))
@@ -173,7 +173,7 @@ func TestSweep_MultipleStorageKeys(t *testing.T) {
 	storage := &fakeDeletionStorage{}
 	cleaner := worker.NewEphemeralCleaner(store, storage, nil, zerolog.Nop())
 
-	cleaner.Sweep(context.Background())
+	cleaner.Sweep(t.Context())
 
 	if len(storage.deletedKeys) != 2 {
 		t.Errorf("deleted %d keys, want 2", len(storage.deletedKeys))
