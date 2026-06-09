@@ -46,7 +46,16 @@ const nextConfig: NextConfig = {
     unoptimized: process.env.NEXT_PUBLIC_IMAGE_UNOPTIMIZED === "true",
   },
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      // /_next/image is excluded from the proxy.ts middleware matcher so it
+      // never receives the per-request nonce CSP. A static restrictive policy
+      // is sufficient — the endpoint only serves optimised image bytes.
+      {
+        source: "/_next/image",
+        headers: [{ key: "Content-Security-Policy", value: "default-src 'none'" }],
+      },
+    ];
   },
 };
 

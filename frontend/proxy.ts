@@ -16,6 +16,7 @@ function buildCSP(nonce: string): string {
     "connect-src 'self' wss: https://cdn.growthbook.io https://photon.komoot.io https://challenges.cloudflare.com",
     "frame-src https://challenges.cloudflare.com",
     "frame-ancestors 'none'",
+    "object-src 'none'",
   ].join("; ")
 }
 
@@ -56,8 +57,19 @@ export default auth((req) => {
   const nonce = isProd ? btoa(crypto.randomUUID()) : null
   const csp = nonce ? buildCSP(nonce) : null
 
-  const addCSP = (res: NextResponse): NextResponse => {
+  // Apply CSP and harden the NEXT_LOCALE locale cookie (Secure + HttpOnly).
+  // The cookie is readable server-side via middleware; no client JS reads it.
+  const finalize = (res: NextResponse): NextResponse => {
     if (csp) res.headers.set("Content-Security-Policy", csp)
+    const localeCookie = res.cookies.get("NEXT_LOCALE")
+    if (localeCookie) {
+      res.cookies.set("NEXT_LOCALE", localeCookie.value, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: "lax",
+        path: "/",
+      })
+    }
     return res
   }
 
@@ -69,12 +81,12 @@ export default auth((req) => {
 
   if (!isLoggedIn && !isAuthPage && !isPublicPage) {
     const locale = getLocale(pathname)
-    return addCSP(NextResponse.redirect(new URL(`/${locale}/login`, req.url)))
+    return finalize(NextResponse.redirect(new URL(`/${locale}/login`, req.url)))
   }
 
   if (isLoggedIn && isAuthPage) {
     const locale = getLocale(pathname)
-    return addCSP(NextResponse.redirect(new URL(`/${locale}`, req.url)))
+    return finalize(NextResponse.redirect(new URL(`/${locale}`, req.url)))
   }
 
   if (nonce && csp) {
@@ -90,10 +102,10 @@ export default auth((req) => {
       headers: requestHeaders,
       method: req.method,
     })
-    return addCSP(intlMiddleware(modifiedReq) as NextResponse)
+    return finalize(intlMiddleware(modifiedReq) as NextResponse)
   }
 
-  return intlMiddleware(req)
+  return finalize(intlMiddleware(req) as NextResponse)
 })
 
 export const config = {
