@@ -605,7 +605,7 @@
     "changeRoleAction": "Change role",
     "changeRoleTitle": "Change role for {email}",
     "roleUser": "User",
-    "roleSuperAdmin": "Super admin",
+    "roleSuperAdmin": "super admin",
     "roleFailed": "Failed to update role",
     "banFailed": "Failed to ban user",
     "reactivateFailed": "Failed to reactivate user",
@@ -706,10 +706,7 @@
     "createPublicRoomDuplicate": "A public room with that name already exists.",
     "deletePublicRoomFailed": "Failed to delete public room",
     "adminPublicRoomNamePlaceholder": "e.g. lounge",
-    "cancel": "Cancel",
-    "save": "Save",
-    "create": "Create",
-    "suspend": "Suspend"
+    "create": "Create"
   },
   "channels": {
     "title": "Channels",

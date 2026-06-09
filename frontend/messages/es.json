@@ -605,7 +605,7 @@
     "changeRoleAction": "Cambiar rol",
     "changeRoleTitle": "Cambiar rol de {email}",
     "roleUser": "Usuario",
-    "roleSuperAdmin": "Super admin",
+    "roleSuperAdmin": "super admin",
     "roleFailed": "No se pudo actualizar el rol",
     "banFailed": "No se pudo banear al usuario",
     "reactivateFailed": "No se pudo reactivar al usuario",
@@ -706,10 +706,7 @@
     "createPublicRoomDuplicate": "Ya existe una sala pública con ese nombre.",
     "deletePublicRoomFailed": "No se pudo eliminar la sala pública",
     "adminPublicRoomNamePlaceholder": "p. ej. sala-general",
-    "cancel": "Cancelar",
-    "save": "Guardar",
-    "create": "Crear",
-    "suspend": "Suspender"
+    "create": "Crear"
   },
   "channels": {
     "title": "Canales",

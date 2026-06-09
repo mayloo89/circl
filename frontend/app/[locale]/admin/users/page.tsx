@@ -502,7 +502,7 @@ export default function AdminUsersPage() {
                     <p className="text-xs text-gray-500">{u.email}</p>
                     {u.role !== "user" && (
                       <span className={`text-xs font-medium ${ROLE_BADGE[u.role] ?? "text-gray-400"}`}>
-                        {u.role === "super_admin" ? t("roleSuperAdmin").toLowerCase() : u.role}
+                        {u.role === "super_admin" ? t("roleSuperAdmin") : u.role}
                       </span>
                     )}
                   </td>

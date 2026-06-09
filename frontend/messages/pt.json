@@ -605,7 +605,7 @@
     "changeRoleAction": "Alterar função",
     "changeRoleTitle": "Alterar função de {email}",
     "roleUser": "Usuário",
-    "roleSuperAdmin": "Super admin",
+    "roleSuperAdmin": "super admin",
     "roleFailed": "Não foi possível atualizar a função",
     "banFailed": "Não foi possível banir o usuário",
     "reactivateFailed": "Não foi possível reativar o usuário",
@@ -706,10 +706,7 @@
     "createPublicRoomDuplicate": "Já existe uma sala pública com esse nome.",
     "deletePublicRoomFailed": "Não foi possível excluir a sala pública",
     "adminPublicRoomNamePlaceholder": "ex. lounge",
-    "cancel": "Cancelar",
-    "save": "Salvar",
-    "create": "Criar",
-    "suspend": "Suspender"
+    "create": "Criar"
   },
   "channels": {
     "title": "Canais",
