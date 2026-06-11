@@ -343,6 +343,7 @@
 ### Phase 5 — Final polish & launch
 
 - [ ] **WCAG 2.1 AA audit** — axe-core CI gate; manual VoiceOver run; keyboard-only walkthrough.
+- [ ] **Raise the frontend coverage ratchet** — the gate now measures the full surface at a ~48%-lines floor; the remaining untested components are the large room views (`RoomView`, `ChatListPane`, `PublicRoomShell`, `GuestRoomView`, `RegisteredPublicRoomView`), nav (`Sidebar`, `BottomNav`, `TopBar`), profile components, modals (`CreateGroupModal`, `NewChatModal`, `Lightbox`, `GroupMembersPanel`), and `NotificationsContext`/`PushContext`. Add tests and raise the thresholds in `vitest.config.ts` toward 80%+. E2E expansion (guest rooms, albums, admin/appeals, settings) tracks separately.
 - [ ] **Operational runbooks** under `docs/runbooks/` — incident playbooks (DB outage, Redis outage, message-delivery degraded), on-call rotation, alert response procedures, secret rotation.
 - [ ] **Final docs** — README polish, `CONTRIBUTING.md`, architecture diagram (component + data flow), `SECURITY.md` (responsible disclosure).
 - [ ] **Pre-launch smoke test** — register → verify email → login → complete profile → add contact → send DM → join channel → block + unblock → delete account → reactivate.
@@ -355,6 +356,15 @@
 - Integration: real Postgres and Redis (skipped when env vars not set).
 - E2E: Playwright (login, profiles, search, chat, presence flows).
 - Security: rate limiting, headers (CSP/HSTS), payload size limits.
+- Frontend coverage gate: `vitest --coverage` measures the full reusable
+  surface (`components/**`, `hooks/**`, `lib/**`, `contexts/**`) with
+  raise-only ratchet thresholds enforced in CI (`npm run test:coverage`);
+  pages under `app/` are exercised by Playwright instead. The 2026-06-11
+  test-debt sprint added 29 test files / 174 tests (WS chat + guest hooks,
+  SSE notifications, focus-trap and menu-keyboard a11y hooks, contexts,
+  MessageBubble redaction/tombstones, ChatInput, albums grant lifecycle,
+  AuthedImage, home widgets, remaining ui primitives) plus shared test
+  utilities (`test/renderWithIntl.tsx`, `test/fakeSockets.ts`).
 
 ## 10. Operations
 - SLIs: HTTP/WS latency, message delivery rate, 5xx error rate, heartbeat expiry.

@@ -47,9 +47,9 @@ jobs:
       - name: Lint
         if: steps.check.outputs.exists == 'true'
         run: cd frontend && npm run lint --if-present
-      - name: Test
+      - name: Test (coverage gate)
         if: steps.check.outputs.exists == 'true'
-        run: cd frontend && npm test --if-present -- --watch=false
+        run: cd frontend && npm run test:coverage --if-present
 
   backend:
     runs-on: ubuntu-latest
