@@ -76,7 +76,9 @@ describe("MembersPanel", () => {
       }),
     )
     setup([])
-    await screen.findByText("No one has access yet.")
+    // The empty state renders before the contacts fetch resolves — wait for
+    // the option to exist, or the select change is a no-op in jsdom.
+    await screen.findByRole("option", { name: "Carla" })
 
     fireEvent.change(screen.getByLabelText("Invite contact"), { target: { value: "u3" } })
     fireEvent.click(screen.getByRole("button", { name: "7 days" }))
@@ -135,7 +137,7 @@ describe("MembersPanel", () => {
       ),
     )
     setup([])
-    await screen.findByText("No one has access yet.")
+    await screen.findByRole("option", { name: "Carla" })
     fireEvent.change(screen.getByLabelText("Invite contact"), { target: { value: "u3" } })
     fireEvent.click(screen.getByRole("button", { name: "Invite" }))
     expect(await screen.findByRole("alert")).toHaveTextContent("Failed to invite contact.")
