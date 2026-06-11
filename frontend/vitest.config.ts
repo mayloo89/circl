@@ -12,15 +12,17 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      // The whole reusable surface is measured — components, hooks, libs,
+      // contexts. Pages under app/ are exercised by Playwright instead.
       include: [
-        "components/ui/**/*.tsx",
-        "hooks/useUpload.ts",
-        "hooks/useHeartbeat.ts",
-        "hooks/usePresence.ts",
-        "lib/chatHelpers.ts",
-        "lib/validation.ts",
+        "components/**/*.tsx",
+        "hooks/**/*.ts",
+        "lib/**/*.ts",
+        "contexts/**/*.tsx",
       ],
-      thresholds: { lines: 98, functions: 98, branches: 98, statements: 98 },
+      // Ratchet thresholds: set at the current floor so coverage can only
+      // move up. Raise them as the remaining untested components gain tests.
+      thresholds: { lines: 48, functions: 42, branches: 37, statements: 46 },
     },
   },
   resolve: {

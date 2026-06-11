@@ -220,9 +220,11 @@ Each folder has a `.env.example` — copy it and fill in the values. These files
 ### Frontend
 ```bash
 cd frontend
-npm run dev      # Development server
-npm run build    # Production build
-npm run lint     # ESLint
+npm run dev            # Development server
+npm run build          # Production build
+npm run lint           # ESLint
+npm run test           # Vitest unit tests
+npm run test:coverage  # Unit tests with the coverage gate CI enforces
 ```
 
 ### Backend
