@@ -57,6 +57,9 @@ type Client struct {
 	// hub.deliver). Pref changes take effect on the next reconnect.
 	hideReadReceipts bool
 	hideTyping       bool
+	// releaseConn returns this connection's per-IP slot to the concurrent
+	// connection limiter. Nil when the cap is disabled.
+	releaseConn func()
 	// ctx carries the OpenTelemetry session span for this connection.
 	// The span is ended in readPump's defer when the connection closes.
 	ctx context.Context
@@ -145,6 +148,9 @@ type HandlerConfig struct {
 	GuestMsgRate int
 	// GuestMsgWindow is the sliding window duration for guest message rate limiting.
 	GuestMsgWindow time.Duration
+	// WSConnLimiter, if set, caps concurrent WebSocket connections per client
+	// IP. Connections over the cap are rejected with 429 before the upgrade.
+	WSConnLimiter *ratelimit.ConcurrentLimiter
 	// AllowedOrigins is the list of origins permitted to open WebSocket
 	// connections. When empty, all origins are allowed (development only).
 	AllowedOrigins []string
@@ -889,8 +895,21 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			}
 		}
 
+		var releaseConn func()
+		if cfg.WSConnLimiter != nil {
+			ip := middleware.ClientIP(r)
+			if !cfg.WSConnLimiter.Acquire(ip) {
+				apierror.Write(w, http.StatusTooManyRequests, apierror.CodeRateLimited, "too many concurrent connections")
+				return
+			}
+			releaseConn = func() { cfg.WSConnLimiter.Release(ip) }
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
+			if releaseConn != nil {
+				releaseConn()
+			}
 			return
 		}
 
@@ -946,6 +965,7 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 			isMutedInRoom:     cfg.IsMutedInRoom,
 			hideReadReceipts:  privacy.HideReadReceipts,
 			hideTyping:        privacy.HideTyping,
+			releaseConn:       releaseConn,
 			ctx:               sessCtx,
 		}
 
@@ -963,6 +983,9 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 		trace.SpanFromContext(c.ctx).End()
 		c.hub.unregister <- c
 		c.conn.Close()
+		if c.releaseConn != nil {
+			c.releaseConn()
+		}
 	}()
 
 	c.conn.SetReadLimit(maxMsgSize)

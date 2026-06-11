@@ -175,6 +175,17 @@ func main() {
 
 	limiter := ratelimit.NewRedisLimiter(rdb)
 
+	// Backstop limits behind the per-endpoint ones. Zero disables either cap
+	// (used by CI E2E runs that hammer the API from one IP).
+	var globalRateLimit func(http.Handler) http.Handler
+	if globalIPLimit := config.EnvIntOrDefault("GLOBAL_IP_LIMIT", 300); globalIPLimit > 0 {
+		globalRateLimit = middleware.RateLimit(limiter, globalIPLimit, time.Minute)
+	}
+	var wsConnLimiter *ratelimit.ConcurrentLimiter
+	if wsConnLimit := config.EnvIntOrDefault("WS_IP_CONN_LIMIT", 20); wsConnLimit > 0 {
+		wsConnLimiter = ratelimit.NewConcurrentLimiter(wsConnLimit)
+	}
+
 	adminStore := admin.NewStore(pool)
 	adminSvc := admin.NewService(adminStore)
 
@@ -384,6 +395,7 @@ func main() {
 		GuestMsgLimiter:   limiter,
 		GuestMsgRate:      config.EnvIntOrDefault("GUEST_MSG_RATE", 6),
 		GuestMsgWindow:    time.Minute,
+		WSConnLimiter:     wsConnLimiter,
 		AllowedOrigins:    corsOrigins,
 		PrivacyResolver:   chatPrivacy,
 		IsMutedInRoom:     guestSessionStore.IsMutedInRoom,
@@ -630,7 +642,8 @@ func main() {
 		MetricsHandler:    m.Handler(config.EnvOrDefault("METRICS_TOKEN", "")),
 		MetricsMiddleware: m.Middleware(),
 
-		RequireAuth: requireAuth,
+		RequireAuth:     requireAuth,
+		GlobalRateLimit: globalRateLimit,
 
 		Auth:           authHandler,
 		WSTicket:       wsticket.NewHandler(wsTicketStore),
