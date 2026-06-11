@@ -82,8 +82,10 @@ describe("MembersPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "7 days" }))
     fireEvent.click(screen.getByRole("button", { name: "Invite" }))
 
-    await waitFor(() => expect(screen.getByText("Carla")).toBeInTheDocument())
-    expect(body).toEqual({ grantee_id: "u3", expires_in: "7d" })
+    // "Carla" also matches the picker <option>, so wait on the request body
+    // and the new member row's status instead.
+    await waitFor(() => expect(body).toEqual({ grantee_id: "u3", expires_in: "7d" }))
+    expect(await screen.findByText("Active")).toBeInTheDocument()
   })
 
   it("revokes access only after confirmation", async () => {

@@ -18,7 +18,11 @@ describe("AuthedImage", () => {
     server.use(
       http.get(SRC, ({ request }) => {
         auth = request.headers.get("Authorization")
-        return new HttpResponse(new Blob(["img"]), { status: 200 })
+        // String body, not Blob — Node 20's undici rejects jsdom Blobs.
+        return new HttpResponse("img-bytes", {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        })
       }),
     )
     render(<AuthedImage src={SRC} token="admin-tok" alt="Rejected upload" />)
@@ -35,7 +39,16 @@ describe("AuthedImage", () => {
   })
 
   it("revokes the blob URL on unmount", async () => {
-    server.use(http.get(SRC, () => new HttpResponse(new Blob(["img"]), { status: 200 })))
+    server.use(
+      http.get(
+        SRC,
+        () =>
+          new HttpResponse("img-bytes", {
+            status: 200,
+            headers: { "Content-Type": "image/jpeg" },
+          }),
+      ),
+    )
     const { unmount } = render(<AuthedImage src={SRC} token="t" alt="x" />)
     await screen.findByRole("img")
     unmount()

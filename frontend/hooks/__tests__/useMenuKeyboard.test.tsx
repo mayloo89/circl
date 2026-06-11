@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { useRef, useState } from "react"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard"
 
 function MenuHarness({ onClose }: { onClose?: () => void }) {
@@ -91,7 +91,9 @@ describe("useMenuKeyboard", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByText("Block")))
 
     const event = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
-    document.dispatchEvent(event)
+    act(() => {
+      document.dispatchEvent(event)
+    })
     expect(onClose).toHaveBeenCalledOnce()
     // Tab must NOT be prevented — focus continues past the menu.
     expect(event.defaultPrevented).toBe(false)

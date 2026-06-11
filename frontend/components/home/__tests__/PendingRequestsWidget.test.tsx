@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen, fireEvent, waitFor, within } from "@testing-library/react"
+import { act, screen, fireEvent, waitFor, within } from "@testing-library/react"
 import { http, HttpResponse } from "msw"
 import { server } from "@/test/msw-server"
 import { renderWithIntl } from "@/test/renderWithIntl"
@@ -113,14 +113,14 @@ describe("PendingRequestsWidget", () => {
         ]),
       ),
     )
-    notify({ type: "contact_request", payload: { contact_id: "c3", requester_id: "u4" } })
+    act(() => notify({ type: "contact_request", payload: { contact_id: "c3", requester_id: "u4" } }))
     expect(await screen.findByText("Diego")).toBeInTheDocument()
   })
 
   it("drops a request when its contact is removed elsewhere", async () => {
     renderWithIntl(<PendingRequestsWidget />)
     await screen.findByText("Bea")
-    notify({ type: "contact_removed", payload: { contact_id: "c1" } })
+    act(() => notify({ type: "contact_removed", payload: { contact_id: "c1" } }))
     await waitFor(() => expect(screen.queryByText("Bea")).not.toBeInTheDocument())
   })
 })
