@@ -189,6 +189,7 @@ cd /opt/circl
 # Stage your local, gitignored deploy folder from the generic templates.
 mkdir -p deploy
 cp docs/deploy/docker-compose.prod.yml deploy/
+cp docs/deploy/update.sh               deploy/
 cp docs/deploy/.env.prod.example       deploy/.env.prod
 cp docs/deploy/nginx.example.conf      deploy/nginx.conf
 
@@ -198,7 +199,11 @@ sed -i 's/EXAMPLE_DOMAIN/your.domain/g' deploy/nginx.conf
 sudo cp deploy/nginx.conf /etc/nginx/conf.d/your.domain.conf
 sudo nginx -t && sudo systemctl reload nginx
 
-docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml up -d --build
+# Pull the published linux/arm64 images from GHCR and start. CI publishes
+# them on every green push to develop/main; subsequent updates are the same
+# one-liner. (Forks / custom domains: ./deploy/update.sh --source builds
+# from source instead.)
+./deploy/update.sh
 ```
 
 See [`docs/deploy/README.md`](docs/deploy/README.md) for the full walkthrough,

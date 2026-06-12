@@ -3,6 +3,10 @@ name: CI
 on:
   push:
   pull_request:
+  # Manual runs also exercise publish-images from any branch (images get the
+  # sanitized branch-name tag) — lets the publish pipeline be verified before
+  # a change to it lands on develop.
+  workflow_dispatch:
 
 jobs:
   secret-scan:
@@ -191,3 +195,71 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+
+  # Publishes linux/arm64 images to GHCR once the full pipeline is green on
+  # develop or main. Production hosts pull these instead of building from
+  # source on-device (15-25 min on a Raspberry Pi 5 becomes a pull).
+  # Tags: the branch name (`develop` / `main`) plus the short commit SHA
+  # (`sha-<hash>`) for pinning and rollback.
+  publish-images:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'))
+    needs: [secret-scan, openapi-lint, frontend, backend, backend-integration, e2e]
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: backend
+            context: backend
+            build_args: ''
+          - image: frontend
+            context: frontend
+            # NEXT_PUBLIC_* values bake into the browser bundle at build time,
+            # so the image is domain-specific. DEPLOY_DOMAIN (and optionally
+            # NEXT_PUBLIC_TURNSTILE_SITE_KEY) come from repository variables;
+            # when DEPLOY_DOMAIN is unset the frontend image is skipped.
+            build_args: |
+              NEXT_PUBLIC_API_URL=https://${{ vars.DEPLOY_DOMAIN }}/api
+              NEXT_PUBLIC_WS_URL=wss://${{ vars.DEPLOY_DOMAIN }}/api
+              NEXT_PUBLIC_IMAGE_HOSTNAME=${{ vars.DEPLOY_DOMAIN }}
+              NEXT_PUBLIC_IMAGE_PROTOCOL=https
+              NEXT_PUBLIC_IMAGE_UNOPTIMIZED=true
+              NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          - image: moderation
+            context: ops/moderation
+            build_args: ''
+    steps:
+      - name: Decide whether this image can be built
+        id: gate
+        run: echo "build=${{ matrix.image != 'frontend' || vars.DEPLOY_DOMAIN != '' }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.build == 'true'
+      - uses: docker/setup-buildx-action@v3
+        if: steps.gate.outputs.build == 'true'
+      - uses: docker/login-action@v3
+        if: steps.gate.outputs.build == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        if: steps.gate.outputs.build == 'true'
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.image }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+      - uses: docker/build-push-action@v6
+        if: steps.gate.outputs.build == 'true'
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=image-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.image }}

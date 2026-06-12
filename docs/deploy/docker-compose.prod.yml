@@ -6,7 +6,21 @@
 #   mkdir -p deploy
 #   cp docs/deploy/docker-compose.prod.yml deploy/
 #   cp docs/deploy/.env.prod.example       deploy/.env.prod
-#   docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml up -d --build
+#   cp docs/deploy/update.sh               deploy/
+#
+# The app services (backend, frontend, moderation) carry both `image:` and
+# `build:`. CI publishes linux/arm64 images to GHCR on every green push to
+# develop/main, so the normal flow is pull-based — `deploy/update.sh` runs
+# `compose pull && compose up -d` and never compiles on the host. The
+# `build:` block stays as a fallback for forks or hosts that prefer building
+# from source (`up -d --build`). Pin a specific build for rollback via
+# BACKEND_IMAGE / FRONTEND_IMAGE / MODERATION_IMAGE in .env.prod, e.g.
+# BACKEND_IMAGE=ghcr.io/mayloo89/circl-backend:sha-<hash>.
+#
+# Note the frontend image bakes NEXT_PUBLIC_* values (domain!) at build
+# time — the published image targets the domain set in the repo's
+# DEPLOY_DOMAIN Actions variable. Forks and other domains must build from
+# source or publish their own image.
 #
 # Architecture:
 #   - postgres and redis have no exposed ports (internal docker network only).
@@ -58,6 +72,7 @@ services:
   # automatic NSFW screening (leaving MODERATION_API_URL unset; the
   # hash-list + heuristic detectors still run).
   moderation:
+    image: ${MODERATION_IMAGE:-ghcr.io/mayloo89/circl-moderation:develop}
     build: ../ops/moderation
     restart: always
     environment:
@@ -74,6 +89,7 @@ services:
           memory: 1G
 
   backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/mayloo89/circl-backend:develop}
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -98,6 +114,7 @@ services:
       retries: 3
 
   frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/mayloo89/circl-frontend:develop}
     build:
       context: ../frontend
       dockerfile: Dockerfile
