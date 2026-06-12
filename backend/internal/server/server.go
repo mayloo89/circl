@@ -42,6 +42,10 @@ type Config struct {
 
 	// Security
 	RequireAuth func(http.Handler) http.Handler
+	// GlobalRateLimit, if set, wraps the whole JSON API group with a per-IP
+	// request budget. Health, metrics, and local file serving stay outside it
+	// so monitoring and dev asset loads are never throttled.
+	GlobalRateLimit func(http.Handler) http.Handler
 
 	// Sub-routers / handlers
 	Auth          http.Handler
@@ -110,6 +114,9 @@ func New(cfg Config) http.Handler {
 	// The /uploads/files local-storage path is excluded because it handles
 	// binary file uploads that apply their own per-category size limits.
 	r.Group(func(api chi.Router) {
+		if cfg.GlobalRateLimit != nil {
+			api.Use(cfg.GlobalRateLimit)
+		}
 		api.Use(middleware.LimitRequestBody)
 
 		api.Mount("/auth", cfg.Auth)

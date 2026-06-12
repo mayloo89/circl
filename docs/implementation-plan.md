@@ -335,8 +335,8 @@
 - [ ] **Secrets management** — move `JWT_SECRET`, VAPID keys, `AUTH_SECRET`, SMTP credentials to vault/KMS (not env files) for production.
 - [ ] **Observability hosting decision** — Grafana Cloud (managed) vs. self-hosted Loki + Prometheus + Tempo + Grafana stack from PR #60.
 - [ ] **Sentry integration** — frontend + backend error tracking; capture panics in goroutines (WebSocket pumps, hub).
-- [ ] **Global per-IP API rate limit middleware** — beyond the existing per-endpoint limiters (`LOGIN_IP_LIMIT`, `REGISTER_IP_LIMIT`, contact-request 100/day, reports 10/hour).
-- [ ] **WebSocket connection rate limit** — cap concurrent WS upgrades per IP.
+- [x] **Global per-IP API rate limit middleware** — `middleware.RateLimit` wraps the whole JSON API group (health, metrics, and local file serving stay outside) with a Redis-backed per-IP budget (`GLOBAL_IP_LIMIT`, default 300 req/min, `0` disables) as a backstop behind the per-endpoint limiters (`LOGIN_IP_LIMIT`, `REGISTER_IP_LIMIT`, contact-request 100/day, reports 10/hour). Fails open on Redis errors; 429 + `Retry-After` + `rate_limited` code when exceeded. CI E2E runs set `GLOBAL_IP_LIMIT=0`.
+- [x] **WebSocket connection rate limit** — `ratelimit.ConcurrentLimiter` (in-memory by design: WS connections are process-local, so counts stay exact across crashes) caps concurrent WS connections per client IP (`WS_IP_CONN_LIMIT`, default 20, `0` disables). Checked in `wsHandler` after auth/membership, before the upgrade; the slot is released when `readPump` exits. Covers registered users and guests alike.
 - [ ] **`next/image` remote patterns** — replace dev `localhost:9000` MinIO entry with the production CDN hostname.
 - [ ] **NextAuth cookie verification** — confirm `secure: true` / `httpOnly: true` / `sameSite: "lax"` are applied (automatic when `NEXTAUTH_URL` is `https://`, but worth confirming on first deploy).
 
@@ -396,6 +396,8 @@
 | `MODERATION_REJECTED_RETENTION_DAYS` | `30` | Days to keep rejected NSFW / heuristic upload files for admin review before purge. Hash-list matches are purged immediately regardless. |
 | `LOGIN_IP_LIMIT` | `20` | Tune per environment |
 | `REGISTER_IP_LIMIT` | `10` | Tune per environment |
+| `GLOBAL_IP_LIMIT` | `300` | Per-IP requests/minute across the whole API (backstop behind the per-endpoint limiters). `0` disables — CI E2E runs set this. |
+| `WS_IP_CONN_LIMIT` | `20` | Max concurrent WebSocket connections per IP. `0` disables. |
 | `TURNSTILE_SECRET` | unset (captcha skipped) | Cloudflare Turnstile **secret** key; enables anti-bot verification on guest entry. Pair with `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (frontend). |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | unset (widget hidden) | Cloudflare Turnstile **site** key (frontend build-time); renders the widget on the guest entry gate. |
 | `VAPID_PUBLIC_KEY` | — | Generate for Web Push |
