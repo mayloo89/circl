@@ -23,13 +23,15 @@ your own reverse proxy / TLS terminator.
 | `backend`     | `ghcr.io/mayloo89/circl-backend` (or `../backend`)   | 8080  | 127.0.0.1:8080 |
 | `frontend`    | `ghcr.io/mayloo89/circl-frontend` (or `../frontend`) | 3000  | 127.0.0.1:3000 |
 
-The three app images are published to GHCR (linux/arm64) by the CI
-`publish-images` job on every green push to `develop` or `main`, tagged with
-the branch name and the short commit SHA (`sha-<hash>`). The compose file
-defaults to the `:develop` tag; override per service with `BACKEND_IMAGE` /
+The three app images are published to GHCR (**linux/arm64 only** — the
+project's production target is a Raspberry Pi 5) by the CI `publish-images`
+job on every green push to `develop` or `main`, tagged with the branch name
+and the short commit SHA (`sha-<hash>`). The compose file defaults to the
+`:develop` tag; override per service with `BACKEND_IMAGE` /
 `FRONTEND_IMAGE` / `MODERATION_IMAGE` in `.env.prod` (that's also the
 rollback lever — pin a `sha-<hash>` tag). The `build:` blocks remain as a
-from-source fallback.
+from-source fallback — amd64 hosts must use it (`update.sh --source`) until
+multi-arch publishing is added.
 
 > **Frontend image is domain-specific.** `NEXT_PUBLIC_*` values (API URL,
 > image host, Turnstile site key) bake into the browser bundle at build
@@ -136,7 +138,7 @@ takes 15–25 min on a single-board host):
 ```bash
 cd /opt/circl
 ./deploy/update.sh
-docker compose -f deploy/docker-compose.prod.yml logs -f
+docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml logs -f
 ```
 
 Building from source instead (fork / custom domain):
@@ -159,7 +161,7 @@ curl https://your.domain.com/api/health
 # Expected: {"status":"ok","db":"ok","redis":"ok"}
 
 # All containers should be healthy
-docker compose -f deploy/docker-compose.prod.yml ps
+docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml ps
 ```
 
 ## Updating
