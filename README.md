@@ -105,6 +105,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - ✅ **In-room moderation for public rooms**: admin-only kick/mute for any participant (guest or registered). Kick is real-time (hub `kickCmds` channel → `kicked` WS event → close connection); guests also receive a 24h IP ban (SHA-256 hash in Redis). Mute is Redis TTL-based (15 min / 1 h / 24 h), checked before each message save — sender gets `you_are_muted` event, message dropped. Nickname profanity filter at guest entry (`internal/profanity`, ~50 worst-case slurs EN/ES/PT with leet-speak normalization); IP-ban check at `POST /guest/session` when `room_id` supplied. Frontend: `isKicked` / `isMuted` state in `useGuestChat` / `useChat`; full-screen removal modal + amber muted banner in `PublicRoomShell`; admin `•••` overflow menu per roster participant with keyboard navigation. EN/ES/PT i18n. No migration needed (Redis-only state).
 - ✅ **Frontend polish pass — admin i18n + legal page fixes**: full i18n pass across all 7 admin pages — ~120 new keys added to the `admin` locale namespace (EN/ES/PT); hardcoded label dictionaries removed; `toLocaleDateString()`/`toLocaleString()` calls gain explicit locale from `useLocale()`; modal backdrops changed to `bg-gray-950/80`. Legal pages: `LegalPage` gains a localized back-link; `draft` banner gated on `LEGAL_DRAFT=true` env var; blockquote side-stripe replaced with full border + tint; `<ol>` styles added; `Footer` links gain `focus-visible` ring.
 - ✅ **Global rate limiting**: per-IP request budget across the whole JSON API (`GLOBAL_IP_LIMIT`, default 300 req/min) as a backstop behind the per-endpoint limiters, failing open on Redis errors; plus an in-memory cap on concurrent WebSocket connections per IP (`WS_IP_CONN_LIMIT`, default 20) covering registered users and guests.
+- ✅ **Automated database backups**: in-stack `backup` service takes a daily rotated `pg_dump` into a Docker volume (no host crontab), with an opt-in off-site sync to S3 / Cloudflare R2 and a one-command monthly restore drill (`deploy/restore-drill.sh`). See [`docs/runbooks/db-backup-restore.md`](docs/runbooks/db-backup-restore.md).
 
 ## Local setup
 
@@ -191,6 +192,7 @@ cd /opt/circl
 mkdir -p deploy
 cp docs/deploy/docker-compose.prod.yml deploy/
 cp docs/deploy/update.sh               deploy/
+cp docs/deploy/restore-drill.sh        deploy/
 cp docs/deploy/.env.prod.example       deploy/.env.prod
 cp docs/deploy/nginx.example.conf      deploy/nginx.conf
 

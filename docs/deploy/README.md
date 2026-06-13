@@ -65,6 +65,9 @@ the public URL the proxy serves them from.
   expects to be one level deep relative to the repo (e.g. `deploy/`).
 - **`update.sh`** — pull-based updater: `compose pull && compose up -d`
   plus image pruning. `--source` rebuilds from the working tree instead.
+- **`restore-drill.sh`** — restores the latest automated backup into a
+  throwaway Postgres container and sanity-checks it, without touching
+  production. Run it monthly (see the backup runbook).
 - **`.env.prod.example`** — every env var the stack reads today. Copy it
   to your local `deploy/.env.prod` and fill in the `CHANGE_ME` values.
 - **`nginx.example.conf`** — a generic reverse-proxy vhost. Replace the
@@ -97,6 +100,7 @@ cd /opt/circl
 mkdir -p deploy
 cp docs/deploy/docker-compose.prod.yml  deploy/
 cp docs/deploy/update.sh                deploy/
+cp docs/deploy/restore-drill.sh         deploy/
 cp docs/deploy/.env.prod.example        deploy/.env.prod
 cp docs/deploy/nginx.example.conf       deploy/nginx.conf
 ```
@@ -204,6 +208,18 @@ deliberate, hands-on releases.
 If a CDN sits in front of your reverse proxy (Cloudflare, Fastly, etc.) and
 the visible result doesn't reflect the new code, purge the CDN cache — the
 frontend bundle is fingerprinted but the HTML shell is sometimes held.
+
+## Backups
+
+The `backup` service takes a daily `pg_dump` (rotated daily/weekly/monthly)
+into the `db_backups` volume automatically — nothing to schedule on the host.
+Tune the cadence/retention and turn on off-site sync (S3 / Cloudflare R2 /
+MinIO) via the `BACKUP_*` vars in `.env.prod`. Validate backups monthly with
+`./deploy/restore-drill.sh`. Full restore procedure and the drill log live in
+[`docs/runbooks/db-backup-restore.md`](../runbooks/db-backup-restore.md).
+
+> Backups land in a Docker volume on the same host by default — enable the
+> off-site sync so a disk failure doesn't take your backups with it.
 
 ## Troubleshooting
 
