@@ -55,6 +55,63 @@ services:
       timeout: 5s
       retries: 5
 
+  # Automated Postgres backups — scheduled pg_dump with daily/weekly/monthly
+  # rotation, gzip-compressed into the db_backups volume. The image keeps a
+  # `last/<db>-latest.sql.gz` pointer used by restore-drill.sh. Restore and
+  # drill procedures: docs/runbooks/db-backup-restore.md.
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-circl_db}
+      POSTGRES_USER: ${POSTGRES_USER:-circl_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # --no-owner/--no-acl so a dump restores cleanly under any role.
+      POSTGRES_EXTRA_OPTS: "--no-owner --no-acl"
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      # Take a backup at container start so a fresh deploy is covered before
+      # the first scheduled run.
+      BACKUP_ON_START: "TRUE"
+    volumes:
+      - db_backups:/backups
+
+  # Optional off-site backup sync to any S3-compatible target (AWS S3,
+  # Cloudflare R2, MinIO). Disabled by default — enable by setting
+  # COMPOSE_PROFILES=offsite in .env.prod and filling the BACKUP_S3_* vars.
+  # Without off-site copy, backups share the host's disk and die with it.
+  backup-offsite:
+    image: amazon/aws-cli:2
+    profiles: ["offsite"]
+    restart: always
+    depends_on:
+      - backup
+    volumes:
+      - db_backups:/backups:ro
+    environment:
+      AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_KEY:-}
+      AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-auto}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_SYNC_INTERVAL: ${BACKUP_S3_SYNC_INTERVAL:-86400}
+    # $$ keeps the expansion at container runtime — compose must not resolve it.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          aws s3 sync /backups "s3://$${BACKUP_S3_BUCKET}" --delete \
+            $${BACKUP_S3_ENDPOINT:+--endpoint-url "$${BACKUP_S3_ENDPOINT}"} \
+            || echo "off-site backup sync failed"
+          sleep "$${BACKUP_S3_SYNC_INTERVAL}"
+        done
+
   redis:
     image: redis:7-alpine
     command: redis-server --save 60 1 --loglevel warning
@@ -163,3 +220,4 @@ volumes:
   postgres_data:
   redis_data:
   uploads_data:
+  db_backups:
