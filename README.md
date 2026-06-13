@@ -192,6 +192,7 @@ cd /opt/circl
 mkdir -p deploy
 cp docs/deploy/docker-compose.prod.yml deploy/
 cp docs/deploy/update.sh               deploy/
+cp docs/deploy/restore-drill.sh        deploy/
 cp docs/deploy/.env.prod.example       deploy/.env.prod
 cp docs/deploy/nginx.example.conf      deploy/nginx.conf
 
