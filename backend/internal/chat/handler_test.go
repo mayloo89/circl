@@ -19,6 +19,7 @@ import (
 
 	"github.com/mayloo89/circl/backend/internal/chat"
 	"github.com/mayloo89/circl/backend/internal/middleware"
+	"github.com/mayloo89/circl/backend/internal/ratelimit"
 	"github.com/mayloo89/circl/backend/internal/token"
 	"github.com/mayloo89/circl/backend/internal/wsticket"
 )
@@ -2284,5 +2285,72 @@ func TestGetRoom_Group_NoAcceptedField(t *testing.T) {
 	}
 	if _, ok := got["are_accepted_contacts"]; ok {
 		t.Error("are_accepted_contacts should not be present for group rooms")
+	}
+}
+
+// --- WebSocket per-IP connection cap ---
+
+func TestWSHandler_ConnCapRejectsOverLimit(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+	redeemer := &stubRedeemer{tickets: map[string]string{"t1": testUserID, "t2": testUserID}}
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, redeemer, nil, chat.HandlerConfig{
+		WSConnLimiter: ratelimit.NewConcurrentLimiter(1),
+	}))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket="
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"t1", nil)
+	if err != nil {
+		t.Fatalf("first dial: %v", err)
+	}
+	defer conn.Close()
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL+"t2", nil)
+	if err == nil {
+		t.Fatal("second dial should be rejected at cap=1")
+	}
+	if resp == nil || resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("second dial status = %v, want 429", resp)
+	}
+}
+
+func TestWSHandler_ConnCapReleasedOnClose(t *testing.T) {
+	hub := newTestHubForHandler(t)
+	mgr := &mockManager{isMember: true}
+	redeemer := &stubRedeemer{tickets: map[string]string{"t1": testUserID, "t2": testUserID}}
+
+	r := chi.NewRouter()
+	r.Get("/rooms/{id}/ws", chat.NewWSHandler(mgr, hub, redeemer, nil, chat.HandlerConfig{
+		WSConnLimiter: ratelimit.NewConcurrentLimiter(1),
+	}))
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/rooms/r-1/ws?ticket="
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"t1", nil)
+	if err != nil {
+		t.Fatalf("first dial: %v", err)
+	}
+	conn.Close()
+
+	// The slot is released in readPump's defer, which runs asynchronously
+	// after the close — poll until the next connection is admitted. Each
+	// failed attempt still consumes the single-use ticket, so re-seed it.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		redeemer.tickets["t2"] = testUserID
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"t2", nil)
+		if err == nil {
+			_ = conn2.Close()
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("dial after close: %v", err)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

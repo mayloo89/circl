@@ -297,3 +297,28 @@ func TestNormalizeCORSOrigins(t *testing.T) {
 		})
 	}
 }
+
+func TestGlobalRateLimit_AppliesToAPIButNotHealth(t *testing.T) {
+	cfg := minimalConfig(&mockPinger{})
+	cfg.Auth = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	cfg.GlobalRateLimit = func(http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusTooManyRequests)
+		})
+	}
+	h := server.New(cfg)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/auth/login", nil))
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("API route status = %d, want 429 (rate limit must wrap the API group)", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("/health status = %d, want 200 (health must stay outside the rate limit)", rec.Code)
+	}
+}

@@ -184,6 +184,7 @@ jobs:
           CORS_ALLOWED_ORIGINS="http://localhost:3000" \
           LOGIN_IP_LIMIT=1000 \
           REGISTER_IP_LIMIT=1000 \
+          GLOBAL_IP_LIMIT=0 \
           TEST_ENDPOINTS_ENABLED=true \
           bash -c 'cd backend && exec /tmp/api-server' &
           timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
