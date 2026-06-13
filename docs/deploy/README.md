@@ -29,9 +29,15 @@ job on every green push to `develop` or `main`, tagged with the branch name
 and the short commit SHA (`sha-<hash>`). The compose file defaults to the
 `:develop` tag; override per service with `BACKEND_IMAGE` /
 `FRONTEND_IMAGE` / `MODERATION_IMAGE` in `.env.prod` (that's also the
-rollback lever — pin a `sha-<hash>` tag). The `build:` blocks remain as a
-from-source fallback — amd64 hosts must use it (`update.sh --source`) until
-multi-arch publishing is added.
+rollback lever — pin a `sha-<hash>` tag).
+
+**On amd64 (no published images) it still works.** `update.sh` pulls with
+`--ignore-pull-failures`, so any image that can't be fetched (wrong arch, or
+the frontend image skipped because `DEPLOY_DOMAIN` is unset) falls through to
+`compose up` building it from the service's `build:` clause — the first run
+builds from source automatically rather than erroring. To pull in *new* code
+on amd64, run `update.sh --source` (the plain run reuses the locally built
+image). Multi-arch publishing would remove the build step entirely.
 
 > **Frontend image is domain-specific.** `NEXT_PUBLIC_*` values (API URL,
 > image host, Turnstile site key) bake into the browser bundle at build

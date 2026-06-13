@@ -10,11 +10,14 @@
 #
 # The app services (backend, frontend, moderation) carry both `image:` and
 # `build:`. CI publishes linux/arm64 images to GHCR on every green push to
-# develop/main, so the normal flow is pull-based — `deploy/update.sh` runs
-# `compose pull && compose up -d` and never compiles on the host. The
-# `build:` block stays as a fallback for forks or hosts that prefer building
-# from source (`up -d --build`). Pin a specific build for rollback via
-# BACKEND_IMAGE / FRONTEND_IMAGE / MODERATION_IMAGE in .env.prod, e.g.
+# develop/main, so the normal flow is pull-based — `deploy/update.sh` pulls
+# and never compiles on the arm64 host. The `build:` block stays as a
+# from-source fallback: update.sh pulls with --ignore-pull-failures, so on
+# amd64 (or when an image isn't published) the un-pulled services are built
+# by `compose up` instead of the update aborting. The GHCR `image:` defaults
+# are therefore safe on every host — they just decide pull-vs-build, not
+# success-vs-failure. Pin a specific build for rollback via BACKEND_IMAGE /
+# FRONTEND_IMAGE / MODERATION_IMAGE in .env.prod, e.g.
 # BACKEND_IMAGE=ghcr.io/mayloo89/circl-backend:sha-<hash>.
 #
 # Note the frontend image bakes NEXT_PUBLIC_* values (domain!) at build
