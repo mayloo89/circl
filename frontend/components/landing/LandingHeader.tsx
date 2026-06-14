@@ -23,7 +23,7 @@ export default function LandingHeader() {
           <Image
             src={theme === "dark" ? "/branding/logo-dark.svg" : "/branding/logo-light.svg"}
             alt="Circl"
-            width={120}
+            width={57}
             height={32}
             priority
             className="h-8 w-auto"
