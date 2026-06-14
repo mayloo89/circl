@@ -84,8 +84,10 @@ export default function (data) {
   const sessionOK = check(sessionRes, {
     "guest session created": (r) => r.status === 201,
   })
-  authErrors.add(!sessionOK)
   if (!sessionOK) {
+    // One sample per Rate per iteration — see the note below. Auth never
+    // succeeded, so the connection wasn't attempted.
+    authErrors.add(true)
     sleep(1)
     return
   }
@@ -100,17 +102,19 @@ export default function (data) {
   const ticketOK = check(ticketRes, {
     "ws ticket issued": (r) => r.status === 200,
   })
-  authErrors.add(!ticketOK)
   if (!ticketOK) {
+    authErrors.add(true)
     sleep(1)
     return
   }
   const ticket = ticketRes.json("ticket")
+  authErrors.add(false) // auth path completed for this iteration
 
   // 3. Hold a WebSocket open, send periodically, count broadcasts.
   const url = `${WS_URL}/chat/rooms/${roomID}/ws?ticket=${ticket}`
   const start = Date.now()
   let opened = false
+  let socketErrored = false
 
   const res = ws.connect(url, { headers: { Origin: ORIGIN } }, function (socket) {
     socket.on("open", () => {
@@ -137,14 +141,14 @@ export default function (data) {
     })
 
     socket.on("error", () => {
-      connectErrors.add(true)
+      socketErrored = true
     })
   })
 
   // ws.connect returns once the socket closes. 101 = successful upgrade.
   const upgradeOK = check(res, { "ws upgrade is 101": (r) => r && r.status === 101 })
-  connectErrors.add(!opened)
-  if (!upgradeOK) {
-    authErrors.add(true)
-  }
+  // k6's Rate counts every add() as a sample, so add each metric exactly once
+  // per iteration — otherwise the success/failure denominator is distorted and
+  // the thresholds lie. This is the only connect-error sample for the iteration.
+  connectErrors.add(!opened || socketErrored || !upgradeOK)
 }

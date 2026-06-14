@@ -26,6 +26,10 @@ and sends a message every ~15s while receiving the room's broadcasts. **One VU
 4. **Origin** — the WS upgrade validates `Origin` against
    `CORS_ALLOWED_ORIGINS`. The script sends `http://localhost:3000` by default;
    override with `ORIGIN=` to match the target's allowed origins.
+5. **Turnstile must be off.** When `TURNSTILE_SECRET` is set, `POST
+   /guest/session` requires a valid `captcha_token`, which the script doesn't
+   provide — every session would 403 and look like an auth failure. Run the
+   load-test backend with `TURNSTILE_SECRET` unset (captcha skipped).
 
 ## Run
 
