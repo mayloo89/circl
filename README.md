@@ -247,6 +247,14 @@ go test ./... -cover       # Run tests with coverage
 go vet ./...               # Static analysis
 ```
 
+### Load test (WebSocket)
+```bash
+# k6 — drives concurrent guest WS connections to a public room.
+# Target backend must run with per-IP limits disabled (single source IP):
+#   GLOBAL_IP_LIMIT=0 GUEST_IP_RATE=0 WS_IP_CONN_LIMIT=0 ./api
+PEAK_VUS=300 k6 run loadtest/ws-load-test.js   # see loadtest/README.md
+```
+
 ## API reference
 
 The full API reference is in [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.1.0, ~40 endpoints).

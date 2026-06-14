@@ -365,6 +365,14 @@ func main() {
 	notificationsHandler := notifications.NewHandler(hub, wsTicketStore)
 
 	guestSessionStore := guest.NewSessionStore(rdb)
+	// Per-IP guest-session creation cap. Exactly 0 disables it (set
+	// GUEST_IP_RATE=0 for single-IP load tests); a negative value is a misconfig
+	// that would silently disable the limiter, so fall back to the default.
+	guestIPRate := config.EnvIntOrDefault("GUEST_IP_RATE", 10)
+	if guestIPRate < 0 {
+		log.Warn().Int("value", guestIPRate).Msg("GUEST_IP_RATE is negative; using default 10")
+		guestIPRate = 10
+	}
 	guestCfg := guest.HandlerConfig{
 		Sessions:        guestSessionStore,
 		NicknameTaken:   chatSvc.NicknameTaken,
@@ -373,7 +381,7 @@ func main() {
 		ProfanityFilter: profanity.Check,
 		IPBanner:        guestSessionStore,
 		Limiter:         limiter,
-		GuestIPRate:     10,
+		GuestIPRate:     guestIPRate,
 		GuestIPWindow:   time.Minute,
 	}
 	// Anti-bot on guest entry. Enabled only when a Turnstile secret is set;
