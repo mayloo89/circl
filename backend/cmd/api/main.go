@@ -273,6 +273,11 @@ func main() {
 		contacts.WithLimiter(limiter),
 	)
 
+	// Build metrics and install the panic hook before any guarded goroutine
+	// starts, so a startup-time recovered panic still increments the counter.
+	m := metrics.New(pool)
+	logger.PanicHook = m.RecordPanic
+
 	chatHub := chat.NewHub(rdb)
 	logger.Go(log, "chat.hub", func() { chatHub.Run(appCtx) })
 
@@ -627,10 +632,7 @@ func main() {
 		testHandler = newTestHandler(pool, authSvc, profileStore, jwtSecret, tokenExpiry)
 	}
 
-	m := metrics.New(pool)
 	m.RegisterWSHub(chatHub)
-	// Route recovered goroutine panics (logger.Recover) to the panic counter.
-	logger.PanicHook = m.RecordPanic
 
 	h := server.New(server.Config{
 		DB:          pool,

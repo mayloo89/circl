@@ -6,6 +6,7 @@ package clienterror
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -44,7 +45,7 @@ func NewHandler() http.Handler {
 		zerolog.Ctx(r.Context()).Warn().
 			Str("event", "client_error").
 			Str("client_kind", truncate(rep.Kind, maxKind)).
-			Str("client_url", truncate(rep.URL, maxURL)).
+			Str("client_url", truncate(stripQuery(rep.URL), maxURL)).
 			Str("client_message", truncate(rep.Message, maxMessage)).
 			Str("client_stack", truncate(rep.Stack, maxStack)).
 			Msg("client error reported")
@@ -58,4 +59,17 @@ func truncate(s string, max int) string {
 		return s[:max]
 	}
 	return s
+}
+
+// stripQuery drops the query string and fragment so tokens/PII a client may
+// have included in the URL never reach the logs, even though the trusted
+// frontend already sends only origin+path.
+func stripQuery(rawURL string) string {
+	if before, _, found := strings.Cut(rawURL, "?"); found {
+		rawURL = before
+	}
+	if before, _, found := strings.Cut(rawURL, "#"); found {
+		rawURL = before
+	}
+	return rawURL
 }

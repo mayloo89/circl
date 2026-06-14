@@ -133,7 +133,7 @@ func New(cfg Config) http.Handler {
 		// Browser error ingest — unauthenticated by design (errors happen
 		// around auth too). Rate-limited and body-capped by the API group.
 		if cfg.ClientError != nil {
-			api.Handle("/client-errors", cfg.ClientError)
+			api.Method(http.MethodPost, "/client-errors", cfg.ClientError)
 		}
 
 		// /appeal/{token} is intentionally un-authenticated — the locked-out user

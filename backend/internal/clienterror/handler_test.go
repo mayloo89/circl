@@ -1,10 +1,13 @@
 package clienterror_test
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
 
 	"github.com/mayloo89/circl/backend/internal/clienterror"
 )
@@ -37,5 +40,24 @@ func TestHandler_RejectsInvalidJSON(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 for invalid JSON", rec.Code)
+	}
+}
+
+func TestHandler_StripsQueryAndFragmentFromLoggedURL(t *testing.T) {
+	var buf bytes.Buffer
+	log := zerolog.New(&buf)
+	h := clienterror.NewHandler()
+
+	body := `{"message":"x","url":"https://app/reset?token=secret123#frag"}`
+	req := httptest.NewRequest(http.MethodPost, "/client-errors", strings.NewReader(body))
+	req = req.WithContext(log.WithContext(req.Context()))
+	h.ServeHTTP(httptest.NewRecorder(), req)
+
+	logged := buf.String()
+	if strings.Contains(logged, "secret123") || strings.Contains(logged, "frag") {
+		t.Errorf("query/fragment leaked into log line: %s", logged)
+	}
+	if !strings.Contains(logged, "https://app/reset") {
+		t.Errorf("expected sanitized path in log, got: %s", logged)
 	}
 }

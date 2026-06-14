@@ -25,12 +25,12 @@ export function reportClientError(input: {
     error instanceof Error ? error.message : String(error ?? "unknown error")
   const stack = error instanceof Error ? error.stack : undefined
 
-  const report: ClientErrorReport = {
-    message,
-    stack,
-    url: window.location?.href,
-    kind,
-  }
+  // Send only origin + pathname — query strings and fragments can carry
+  // tokens/PII (reset tokens, tickets) that must not land in logs.
+  const loc = window.location
+  const url = loc ? `${loc.origin}${loc.pathname}` : undefined
+
+  const report: ClientErrorReport = { message, stack, url, kind }
 
   try {
     void fetch(`${API_URL}/client-errors`, {

@@ -23,7 +23,7 @@
 - Storage: S3/R2 + pre-signed URLs; image processing (EXIF strip, JPEG thumbnails) in asynq worker.
 - Infra: Frontend on Vercel; backend on Fly.io/Render/AWS; Postgres (Neon/RDS), Redis (Upstash/ElastiCache).
 - Quality: ESLint/Prettier, golangci-lint, Go tests, CI via GitHub Actions.
-- Observability: zerolog (structured JSON logs) → Loki; Prometheus (metrics) with client_golang; OpenTelemetry traces → Tempo; Grafana Alloy / OTel Collector as shipper; Grafana as unified viz layer; trace_id correlated across logs/metrics/traces; Sentry for frontend error tracking (post-launch).
+- Observability: zerolog (structured JSON logs) → Loki; Prometheus (metrics) with client_golang; OpenTelemetry traces → Tempo; Grafana Alloy / OTel Collector as shipper; Grafana as unified viz layer; trace_id correlated across logs/metrics/traces. Error tracking is Grafana-native (panic-recovery + `event=panic` logs, a `circl_panics_total` alert, and a `POST /client-errors` ingest for browser errors → `event=client_error`) — no third-party error-tracking SDK.
 
 ## 3. Logical architecture
 - Frontend: middleware-protected routes; CSR for chat; SSR only with a valid session.

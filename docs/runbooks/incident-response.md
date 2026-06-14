@@ -58,7 +58,7 @@ Logs are structured JSON. Key fields to look for:
 |-------|---------|
 | `"level":"error"` or `"level":"fatal"` | Unhandled errors |
 | `"status":5xx` | HTTP 5xx responses — check `"path"` and `"error"` |
-| `"event":"panic"` | A recovered panic — `"source"` is `http` or a goroutine name; `"stack"` has the trace. The request/goroutine was salvaged but this is a bug to fix. |
+| `"event":"panic"` | A recovered panic — `"source"` is `http` (a request) or a goroutine name (e.g. `chat.hub`, `worker.retention`); `"stack"` has the trace. The request or goroutine was salvaged but this is a bug to fix. |
 | `"event":"client_error"` | A browser-side error reported via `POST /client-errors` — `"client_message"`, `"client_stack"`, `"client_url"`, `"client_kind"`. |
 | `"component":"worker"` | Background job failures |
 | `"trace_id"` | Correlate with Grafana Tempo if observability is running |
