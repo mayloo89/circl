@@ -221,6 +221,80 @@ MinIO) via the `BACKUP_*` vars in `.env.prod`. Validate backups monthly with
 > Backups land in a Docker volume on the same host by default — enable the
 > off-site sync so a disk failure doesn't take your backups with it.
 
+## Observability (Grafana / Loki / Prometheus / Tempo)
+
+The full stack is **opt-in** — it adds ~1 GB of RAM, which is heavy for a small
+Pi, so it's off by default. It ships logs (Loki, fed by Alloy scraping container
+stdout), metrics (Prometheus), and traces (Tempo) into Grafana, with the
+dashboards and alert rules from `ops/` pre-provisioned.
+
+### Enable it
+
+In `.env.prod` (note `COMPOSE_PROFILES` is one comma-separated list — combine
+with `offsite` if you use it):
+
+```bash
+COMPOSE_PROFILES=observability        # or offsite,observability
+METRICS_TOKEN=<random>                # bearer Prometheus uses to scrape /metrics
+GRAFANA_ADMIN_PASSWORD=<random>
+OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318   # optional: backend traces → Tempo
+```
+
+```bash
+./deploy/update.sh
+```
+
+Generate the secrets with `openssl rand -base64 32`. The backend's `/metrics`
+returns 403 without `METRICS_TOKEN`, so Prometheus needs it; the value is
+written to a file inside the Prometheus container at startup so it never lives
+in a committed config.
+
+### Reach Grafana — SSH tunnel (default, nothing exposed)
+
+Grafana (`127.0.0.1:3001`) and Prometheus (`127.0.0.1:9090`) bind to loopback
+only and are never public. From your laptop:
+
+```bash
+ssh -L 3001:localhost:3001 -L 9090:localhost:9090 <user>@<pi>
+```
+
+Then open <http://localhost:3001> and log in (`admin` / your
+`GRAFANA_ADMIN_PASSWORD`). Pre-built dashboards: HTTP RED, DB pool, WebSocket,
+infrastructure. In **Explore**, query logs with LogQL (e.g.
+`{level="error"} | json | event="panic"`) and metrics with PromQL
+(`circl_panics_total`).
+
+### Optional — expose Grafana on a subdomain
+
+If you'd rather reach it from anywhere, put it behind your reverse proxy on a
+subdomain instead of the tunnel. Add a DNS record + TLS for
+`grafana.your.domain`, set `GRAFANA_ROOT_URL=https://grafana.your.domain` in
+`.env.prod`, and add an nginx vhost that proxies to `127.0.0.1:3001`:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name grafana.your.domain;
+
+    ssl_certificate     /etc/letsencrypt/live/grafana.your.domain/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/grafana.your.domain/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Grafana Live (WebSocket) for streaming panels
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+    }
+}
+```
+
+Grafana's own login is the auth boundary — keep anonymous access disabled
+(it is by default here) and use a strong `GRAFANA_ADMIN_PASSWORD`.
+
 ## Troubleshooting
 
 ### Frontend reports `(unhealthy)` even though the site responds
