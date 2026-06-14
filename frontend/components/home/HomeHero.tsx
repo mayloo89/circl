@@ -17,7 +17,7 @@ export default function HomeHero() {
         <Image
           src={theme === "dark" ? "/branding/logo-dark.svg" : "/branding/logo-light.svg"}
           alt="circl"
-          width={180}
+          width={85}
           height={48}
           priority
           className="mx-auto h-12 w-auto"
