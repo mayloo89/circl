@@ -644,7 +644,7 @@
     "suspendFailed": "Não foi possível suspender o usuário",
     "hardDeleteTitle": "Excluir conta permanentemente?",
     "hardDeleteWarningPre": "Isso excluirá imediatamente todos os dados de",
-    "hardDeleteWarningPost": " — as mensagens aparecerão como “usuário excluído”, mas o perfil, contatos e mídia serão apagados. Esta ação não pode ser desfeita.",
+    "hardDeleteWarningPost": " \u2014 as mensagens aparecer\u00e3o como \u201cusu\u00e1rio exclu\u00eddo\u201d, mas o perfil, contatos e m\u00eddia ser\u00e3o apagados. Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.",
     "deletePermanently": "Excluir permanentemente",
     "deleteFailed": "Não foi possível excluir o usuário",
     "changeRoleAction": "Alterar função",

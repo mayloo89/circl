@@ -644,7 +644,7 @@
     "suspendFailed": "Failed to suspend user",
     "hardDeleteTitle": "Permanently delete account?",
     "hardDeleteWarningPre": "This will immediately purge all data for",
-    "hardDeleteWarningPost": " — messages will show as “deleted user” but all profile, contacts, and media will be erased. This cannot be undone.",
+    "hardDeleteWarningPost": " \u2014 messages will show as \u201cdeleted user\u201d but all profile, contacts, and media will be erased. This cannot be undone.",
     "deletePermanently": "Delete permanently",
     "deleteFailed": "Failed to delete user",
     "changeRoleAction": "Change role",

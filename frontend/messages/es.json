@@ -644,7 +644,7 @@
     "suspendFailed": "No se pudo suspender al usuario",
     "hardDeleteTitle": "¿Eliminar cuenta permanentemente?",
     "hardDeleteWarningPre": "Esto eliminará de inmediato todos los datos de",
-    "hardDeleteWarningPost": " — los mensajes aparecerán como “usuario eliminado”, pero el perfil, contactos y archivos serán borrados. Esta acción no se puede deshacer.",
+    "hardDeleteWarningPost": " \u2014 los mensajes aparecer\u00e1n como \u201cusuario eliminado\u201d, pero el perfil, contactos y archivos ser\u00e1n borrados. Esta acci\u00f3n no se puede deshacer.",
     "deletePermanently": "Eliminar permanentemente",
     "deleteFailed": "No se pudo eliminar al usuario",
     "changeRoleAction": "Cambiar rol",
