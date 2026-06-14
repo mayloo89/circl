@@ -1,0 +1,28 @@
+# Production Prometheus config (single-host Docker deploy).
+#
+# Differs from the dev ops/prometheus/prometheus.yml in two ways:
+#   1. Scrapes the `backend` compose service over the internal network rather
+#      than host.docker.internal.
+#   2. Authenticates to /metrics with METRICS_TOKEN (the backend returns 403
+#      when the token is empty). The prometheus service writes the token from
+#      its environment to credentials_file at startup, so the secret lives
+#      only in .env.prod — not in this committed file.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: circl-backend
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /prometheus/metrics_token
+    static_configs:
+      - targets: ["backend:8080"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
