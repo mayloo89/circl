@@ -332,6 +332,35 @@ paths:
                   db:      { type: string, enum: [ok, error] }
                   redis:   { type: string, enum: [ok, error] }
 
+  /client-errors:
+    post:
+      tags: [System]
+      summary: Report a browser-side error
+      description: >
+        Ingests an uncaught client error or React error-boundary catch and
+        logs it (event=client_error) for Loki/Grafana. Unauthenticated by
+        design; rate-limited and body-capped like the rest of the API.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, description: Error message. }
+                stack:   { type: string, description: "Stack trace, if available." }
+                url:     { type: string, description: Page URL where the error occurred. }
+                kind:
+                  type: string
+                  enum: [error, unhandledrejection, boundary]
+                  description: Origin of the report.
+      responses:
+        "204":
+          description: Report accepted.
+        "400": { $ref: "#/components/responses/BadRequest" }
+
   # ── Auth ─────────────────────────────────────────────────────────────────────
 
   /auth/login:

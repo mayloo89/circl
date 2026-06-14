@@ -57,3 +57,15 @@ groups:
         annotations:
           summary: "circl-backend is unreachable"
           description: "Prometheus cannot scrape /metrics from the backend."
+
+      # Any recovered panic is a latent bug — the request/goroutine was salvaged
+      # but should never have panicked. Fire immediately; cross-reference the
+      # event=panic log line (with stack) in Loki for the offending request.
+      - alert: RecoveredPanics
+        expr: increase(circl_panics_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend recovered a panic"
+          description: "{{ $value | humanize }} panic(s) recovered in the last 5m (source: {{ $labels.source }})."

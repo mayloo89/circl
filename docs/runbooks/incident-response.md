@@ -58,19 +58,25 @@ Logs are structured JSON. Key fields to look for:
 |-------|---------|
 | `"level":"error"` or `"level":"fatal"` | Unhandled errors |
 | `"status":5xx` | HTTP 5xx responses — check `"path"` and `"error"` |
+| `"event":"panic"` | A recovered panic — `"source"` is `http` (a request) or a goroutine name (e.g. `chat.hub`, `worker.retention`); `"stack"` has the trace. The request or goroutine was salvaged but this is a bug to fix. |
+| `"event":"client_error"` | A browser-side error reported via `POST /client-errors` — `"client_message"`, `"client_stack"`, `"client_url"`, `"client_kind"`. |
 | `"component":"worker"` | Background job failures |
 | `"trace_id"` | Correlate with Grafana Tempo if observability is running |
+
+In Grafana/Loki, find recovered panics with `{job="circl"} | json | event="panic"` and
+client-side errors with `{job="circl"} | json | event="client_error"`.
 
 ---
 
 ## Step 3 — Prometheus alerts (if observability stack is running)
 
-Four alert rules fire automatically:
+These alert rules fire automatically:
 
 | Alert | Threshold | Severity |
 |-------|-----------|----------|
 | `BackendDown` | Backend unreachable for > 1 min | Critical |
 | `DBPoolExhausted` | DB connection pool > 90% for > 2 min | Critical |
+| `RecoveredPanics` | Any `circl_panics_total` increase over 5 min | Critical |
 | `HighErrorRate` | HTTP 5xx rate > 1% for > 5 min | Warning |
 | `HighLatencyP95` | p95 latency > 1s for > 5 min | Warning |
 

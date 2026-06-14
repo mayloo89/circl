@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/mayloo89/circl/backend/internal/logger"
 )
 
 // RetentionStore is the subset of the chat.Store interface required to sweep
@@ -38,6 +40,7 @@ func NewRetentionCleaner(store RetentionStore, storage DeletionStorage, notify f
 // Start launches the background sweep goroutine. It runs until ctx is cancelled.
 func (r *RetentionCleaner) Start(ctx context.Context) {
 	go func() {
+		defer logger.Recover(r.log, "worker.retention")
 		r.Sweep(ctx)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()

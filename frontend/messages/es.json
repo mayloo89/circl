@@ -1,4 +1,9 @@
 {
+  "error": {
+    "title": "Algo salió mal",
+    "description": "Ocurrió un error inesperado. Podés volver a intentarlo — si sigue pasando, probá de nuevo más tarde.",
+    "retry": "Reintentar"
+  },
   "common": {
     "appName": "Circl",
     "loading": "Cargando…",
