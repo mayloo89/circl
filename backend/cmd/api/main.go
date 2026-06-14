@@ -373,8 +373,10 @@ func main() {
 		ProfanityFilter: profanity.Check,
 		IPBanner:        guestSessionStore,
 		Limiter:         limiter,
-		GuestIPRate:     10,
-		GuestIPWindow:   time.Minute,
+		// Per-IP guest-session creation cap. 0 disables it — set GUEST_IP_RATE=0
+		// for single-IP load tests (loadtest/) that would otherwise be throttled.
+		GuestIPRate:   config.EnvIntOrDefault("GUEST_IP_RATE", 10),
+		GuestIPWindow: time.Minute,
 	}
 	// Anti-bot on guest entry. Enabled only when a Turnstile secret is set;
 	// without it the check is skipped (local dev needs no captcha keys).

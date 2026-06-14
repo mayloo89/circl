@@ -347,7 +347,7 @@
 - [ ] **Operational runbooks** under `docs/runbooks/` — incident playbooks (DB outage, Redis outage, message-delivery degraded), on-call rotation, alert response procedures, secret rotation.
 - [ ] **Final docs** — README polish, `CONTRIBUTING.md`, architecture diagram (component + data flow), `SECURITY.md` (responsible disclosure).
 - [ ] **Pre-launch smoke test** — register → verify email → login → complete profile → add contact → send DM → join channel → block + unblock → delete account → reactivate.
-- [ ] **Load test** concurrent WebSocket connections at expected peak.
+- [x] **Load test** concurrent WebSocket connections at expected peak — `loadtest/ws-load-test.js` (k6) drives the guest → public-room path: each VU creates a guest session, redeems a single-use WS ticket, opens a WebSocket (one VU = one held connection), and sends periodically while counting broadcast fan-out. Ramping-VUs profile (`PEAK_VUS`/`RAMP`/`HOLD`), thresholds on handshake latency (p95 < 1.5s), connect/auth error rates, and overall checks; exits non-zero on breach. Manual/on-demand (not in CI — needs a running backend with limits disabled and a public room). `loadtest/README.md` documents setup, the Grafana signals to watch (`circl_websocket_active_connections`, `circl_panics_total`), and result interpretation. Run with `GUEST_IP_RATE=0` (new env, see below) since all load comes from one IP.
 
 > Observability PRs (#56–#60) follow the OTel convention: logs via Loki, metrics via Prometheus, traces via Tempo, all correlated by `trace_id` and unified in Grafana. Production hosting (managed vs. self-hosted) is decided in Phase 4.
 
@@ -398,6 +398,7 @@
 | `REGISTER_IP_LIMIT` | `10` | Tune per environment |
 | `GLOBAL_IP_LIMIT` | `300` | Per-IP requests/minute across the whole API (backstop behind the per-endpoint limiters). `0` disables — CI E2E runs set this. |
 | `WS_IP_CONN_LIMIT` | `20` | Max concurrent WebSocket connections per IP. `0` disables. |
+| `GUEST_IP_RATE` | `10` | Guest-session creations per minute per IP. `0` disables — set for single-IP load tests. |
 | `TURNSTILE_SECRET` | unset (captcha skipped) | Cloudflare Turnstile **secret** key; enables anti-bot verification on guest entry. Pair with `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (frontend). |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | unset (widget hidden) | Cloudflare Turnstile **site** key (frontend build-time); renders the widget on the guest entry gate. |
 | `VAPID_PUBLIC_KEY` | — | Generate for Web Push |
