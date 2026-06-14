@@ -35,9 +35,11 @@
 #     below — the backend falls back to a NoopClassifier.
 #   - Uploads live in a named volume (`uploads_data`) and are served by the
 #     backend at /uploads/files/. No S3 needed for a single-host deploy.
-#   - No observability stack here — too heavy for many deploys. The backend
-#     auto-falls-back to a no-op exporter when OTEL_EXPORTER_OTLP_ENDPOINT
-#     is unset.
+#   - The full observability stack (Loki + Alloy + Tempo + Prometheus +
+#     Grafana) is available as an opt-in `observability` profile below,
+#     disabled by default to avoid ~1 GB RAM overhead on small hosts. When
+#     it's off the backend auto-falls-back to a no-op trace exporter (unset
+#     OTEL_EXPORTER_OTLP_ENDPOINT).
 
 services:
   postgres:
