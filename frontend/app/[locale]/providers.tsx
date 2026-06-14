@@ -74,10 +74,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
   const { collapsed } = useSidebar()
   const pathname = usePathname()
+  const locale = useLocale()
   const tNav = useTranslations("nav")
   const authenticated = status === "authenticated"
   const unauthenticated = status === "unauthenticated"
   const isOnboarding = pathname.includes("/onboarding")
+  // The public landing (home, logged-out) ships its own header + locale
+  // switcher, so the floating picker would duplicate it.
+  const isHome = pathname === `/${locale}`
 
   const outerClass = authenticated && !isOnboarding
     ? `flex h-dvh flex-col overflow-hidden pt-topbar pb-bottomnav transition-all duration-200 lg:pt-0 lg:pb-0 ${collapsed ? "lg:ml-16" : "lg:ml-64"}`
@@ -85,7 +89,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {unauthenticated && !pathname.includes("/rooms") && <AuthLocalePicker />}
+      {unauthenticated && !pathname.includes("/rooms") && !isHome && <AuthLocalePicker />}
       {authenticated && !isOnboarding && (
         <a
           href="#main-content"

@@ -1,10 +1,20 @@
+import { auth } from "@/lib/auth"
+import Landing from "@/components/landing/Landing"
 import HomeHero from "@/components/home/HomeHero"
 import ProfileCompletenessBanner from "@/components/home/ProfileCompletenessBanner"
 import PendingRequestsWidget from "@/components/home/PendingRequestsWidget"
 import NearbyProfilesWidget from "@/components/home/NearbyProfilesWidget"
 import RecentConversationsWidget from "@/components/home/RecentConversationsWidget"
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth()
+
+  // Logged-out visitors get the public marketing landing; the authenticated
+  // home (greeting + activity widgets) is only ever rendered for a session.
+  if (!session) {
+    return <Landing />
+  }
+
   return (
     <>
       <HomeHero />
