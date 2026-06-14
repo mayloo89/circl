@@ -28,6 +28,7 @@ type Metrics struct {
 	reg         *prometheus.Registry
 	reqsTotal   *prometheus.CounterVec
 	reqDuration *prometheus.HistogramVec
+	panics      *prometheus.CounterVec
 }
 
 // New creates a Metrics instance with Go runtime, process, HTTP, and DB pool
@@ -50,13 +51,24 @@ func New(pool DBStatter) *Metrics {
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method", "path"})
 
-	reg.MustRegister(reqsTotal, reqDuration)
+	panics := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "circl_panics_total",
+		Help: "Total recovered panics partitioned by source (http handler or named goroutine).",
+	}, []string{"source"})
+
+	reg.MustRegister(reqsTotal, reqDuration, panics)
 
 	if pool != nil {
 		reg.MustRegister(&dbPoolCollector{pool: pool})
 	}
 
-	return &Metrics{reg: reg, reqsTotal: reqsTotal, reqDuration: reqDuration}
+	return &Metrics{reg: reg, reqsTotal: reqsTotal, reqDuration: reqDuration, panics: panics}
+}
+
+// RecordPanic increments the recovered-panic counter for the given source.
+// Wired to logger.PanicHook and the HTTP Recoverer middleware at startup.
+func (m *Metrics) RecordPanic(source string) {
+	m.panics.WithLabelValues(source).Inc()
 }
 
 // RegisterWSHub adds a WebSocket active-connections gauge backed by hub.

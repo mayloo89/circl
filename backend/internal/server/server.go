@@ -34,6 +34,10 @@ type Config struct {
 	// RealIPMiddleware is inserted first so every subsequent middleware and
 	// handler sees the true client IP via middleware.ClientIP(r).
 	RealIPMiddleware func(http.Handler) http.Handler
+	// Recoverer catches handler panics, logs them with request context, and
+	// returns 500 instead of dropping the connection. Inserted right after
+	// the request logger so the panic log carries request_id/trace_id.
+	Recoverer func(http.Handler) http.Handler
 	// TracingMiddleware is inserted before RequestLogger so trace_id/span_id
 	// are available to the logger for log-trace correlation.
 	TracingMiddleware func(http.Handler) http.Handler
@@ -49,6 +53,7 @@ type Config struct {
 
 	// Sub-routers / handlers
 	Auth          http.Handler
+	ClientError   http.Handler // POST /client-errors browser error ingest; nil disables
 	WSTicket      http.Handler
 	GuestWSTicket http.Handler
 	Guest         http.Handler
@@ -92,6 +97,9 @@ func New(cfg Config) http.Handler {
 		r.Use(cfg.TracingMiddleware)
 	}
 	r.Use(middleware.RequestLogger(cfg.Log))
+	if cfg.Recoverer != nil {
+		r.Use(cfg.Recoverer)
+	}
 	r.Use(middleware.SecurityHeaders(cfg.Env))
 	if cfg.MetricsMiddleware != nil {
 		r.Use(cfg.MetricsMiddleware)
@@ -121,6 +129,12 @@ func New(cfg Config) http.Handler {
 
 		api.Mount("/auth", cfg.Auth)
 		api.Handle("/profiles/available", cfg.Available)
+
+		// Browser error ingest — unauthenticated by design (errors happen
+		// around auth too). Rate-limited and body-capped by the API group.
+		if cfg.ClientError != nil {
+			api.Handle("/client-errors", cfg.ClientError)
+		}
 
 		// /appeal/{token} is intentionally un-authenticated — the locked-out user
 		// it serves cannot log in. Auth is provided by the single-use token.

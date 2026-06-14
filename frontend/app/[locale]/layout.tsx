@@ -4,6 +4,7 @@ import { getMessages } from "next-intl/server"
 import { notFound } from "next/navigation"
 import { routing } from "@/i18n/routing"
 import { auth } from "@/lib/auth"
+import ClientErrorReporter from "@/components/ClientErrorReporter"
 import Providers from "./providers"
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
@@ -58,6 +59,7 @@ export default async function LocaleLayout({
 
   return (
     <NextIntlClientProvider messages={messages}>
+      <ClientErrorReporter />
       <Providers session={session}>{children}</Providers>
     </NextIntlClientProvider>
   )

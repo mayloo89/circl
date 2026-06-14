@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/mayloo89/circl/backend/internal/logger"
 )
 
 // EphemeralStore is the subset of the chat.Store interface required to sweep
@@ -47,6 +49,7 @@ func NewEphemeralCleaner(store EphemeralStore, storage DeletionStorage, notify f
 // Start launches the background sweep goroutine. It runs until ctx is cancelled.
 func (e *EphemeralCleaner) Start(ctx context.Context) {
 	go func() {
+		defer logger.Recover(e.log, "worker.ephemeral")
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for {

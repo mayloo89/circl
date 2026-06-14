@@ -15,11 +15,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/mayloo89/circl/backend/internal/apierror"
+	"github.com/mayloo89/circl/backend/internal/logger"
 	"github.com/mayloo89/circl/backend/internal/middleware"
 	"github.com/mayloo89/circl/backend/internal/ratelimit"
 	"github.com/mayloo89/circl/backend/internal/wsticket"
@@ -971,8 +973,12 @@ func wsHandler(svc Manager, hub *Hub, tickets wsticket.Redeemer, notifyNewMessag
 
 		hub.register <- client
 
-		go client.writePump()
-		go client.readPump(svc, notifyNewMessage)
+		// The pumps outlive this handler; guard them so a panic in one
+		// connection's goroutine can't crash the process. The request logger
+		// carries the upgrade's request_id/trace_id for attribution.
+		wsLog := *zerolog.Ctx(r.Context())
+		logger.Go(wsLog, "chat.ws.writePump", client.writePump)
+		logger.Go(wsLog, "chat.ws.readPump", func() { client.readPump(svc, notifyNewMessage) })
 	}
 }
 
