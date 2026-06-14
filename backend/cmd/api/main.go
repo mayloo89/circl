@@ -26,6 +26,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/auth"
 	"github.com/mayloo89/circl/backend/internal/captcha"
 	"github.com/mayloo89/circl/backend/internal/chat"
+	"github.com/mayloo89/circl/backend/internal/clienterror"
 	"github.com/mayloo89/circl/backend/internal/config"
 	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/db"
@@ -272,8 +273,13 @@ func main() {
 		contacts.WithLimiter(limiter),
 	)
 
+	// Build metrics and install the panic hook before any guarded goroutine
+	// starts, so a startup-time recovered panic still increments the counter.
+	m := metrics.New(pool)
+	logger.PanicHook = m.RecordPanic
+
 	chatHub := chat.NewHub(rdb)
-	go chatHub.Run(appCtx)
+	logger.Go(log, "chat.hub", func() { chatHub.Run(appCtx) })
 
 	presenceStore := presence.NewStore(rdb, pool)
 	presenceHandler := presence.NewHandler(presenceStore, hub, presencePrivacy{svc: profileSvc})
@@ -626,7 +632,6 @@ func main() {
 		testHandler = newTestHandler(pool, authSvc, profileStore, jwtSecret, tokenExpiry)
 	}
 
-	m := metrics.New(pool)
 	m.RegisterWSHub(chatHub)
 
 	h := server.New(server.Config{
@@ -638,6 +643,7 @@ func main() {
 		CORSOrigins: corsOrigins,
 
 		RealIPMiddleware:  middleware.RealIP(trustedCIDRs),
+		Recoverer:         middleware.Recoverer(m.RecordPanic),
 		TracingMiddleware: tracing.HTTPMiddleware("circl-api"),
 		MetricsHandler:    m.Handler(config.EnvOrDefault("METRICS_TOKEN", "")),
 		MetricsMiddleware: m.Middleware(),
@@ -646,6 +652,7 @@ func main() {
 		GlobalRateLimit: globalRateLimit,
 
 		Auth:           authHandler,
+		ClientError:    clienterror.NewHandler(),
 		WSTicket:       wsticket.NewHandler(wsTicketStore),
 		GuestWSTicket:  guestWSTicketHandler,
 		Guest:          guestHandler,
