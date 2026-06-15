@@ -278,7 +278,7 @@
 - [ ] **Status page or in-app degraded-service banner** driven by `/health`.
 - [ ] **Feature-flag system** — env-driven minimum, `unleash` long-term.
 - [ ] **Maintenance-mode flag** in config.
-- [ ] **Marketing landing page** for unauthenticated visitors.
+- [x] **Marketing landing page** for unauthenticated visitors — the home route (`app/[locale]/page.tsx`) now branches server-side on the session: no session renders the public landing (`components/landing/` — `Landing`, `LandingHeader`, `ConnectionMotif`), a session keeps the authenticated greeting + activity-widget home. `proxy.ts` treats the home path as public for anonymous visitors (previously every non-auth, non-public route redirected to `/login`); the floating `AuthLocalePicker` is suppressed on it (`AppShell` `isHome`) since the landing ships its own header + switcher. Built on the existing brand tokens (no new fonts/colors), imagery is a custom CSS/SVG orbit motif rather than stock photography, all motion sits behind the global `prefers-reduced-motion` override. Sections: hero (badge + headline + dual CTA to `/register` and `/rooms`), value pillars, how-it-works stepper, a brand-gradient privacy-posture panel, a no-account public-rooms teaser, and a closing CTA. New `landing` i18n namespace (38 keys × EN/ES/PT).
 
 ### Monetization — services marketplace
 

@@ -78,8 +78,11 @@ export default auth((req) => {
   const localePath = stripLocale(pathname)
   const isAuthPage = AUTH_PAGES.some((p) => localePath.startsWith(p))
   const isPublicPage = PUBLIC_PAGES.some((p) => localePath.startsWith(p))
+  // The home route serves the public marketing landing to logged-out visitors
+  // and the authenticated home to a session; the page itself branches on auth.
+  const isHome = localePath === "/"
 
-  if (!isLoggedIn && !isAuthPage && !isPublicPage) {
+  if (!isLoggedIn && !isAuthPage && !isPublicPage && !isHome) {
     const locale = getLocale(pathname)
     return finalize(NextResponse.redirect(new URL(`/${locale}/login`, req.url)))
   }
