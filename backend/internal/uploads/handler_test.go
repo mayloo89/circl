@@ -71,6 +71,9 @@ func (m *mockStore) SetThumbnailKey(_ context.Context, id, key string) error {
 
 func (m *mockStore) MarkApproved(_ context.Context, _ string) error          { return nil }
 func (m *mockStore) MarkRejected(_ context.Context, _ RejectionRecord) error { return nil }
+func (m *mockStore) MarkQuarantined(_ context.Context, _ RejectionRecord, _ string) error {
+	return nil
+}
 func (m *mockStore) ListExpiredRetained(_ context.Context, _ time.Time, _ int) ([]RetainedRejection, error) {
 	return nil, nil
 }

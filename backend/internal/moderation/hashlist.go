@@ -44,6 +44,11 @@ func NewHashList(store HashStore) *HashList {
 // Name returns the detector name.
 func (h *HashList) Name() string { return "hashlist" }
 
+// Severity is hard: the block list holds operator-curated known-bad
+// fingerprints, so a store error must fail closed (hold + retry), never fail
+// open and let a potentially blocked image through.
+func (h *HashList) Severity() Severity { return SeverityHard }
+
 // Check looks the hash up in the block list. A hit always rejects; a miss
 // allows. Store errors propagate up — the orchestrator decides whether to
 // fail open or hard. The reason returned to the user is intentionally
@@ -66,7 +71,9 @@ func (h *HashList) Check(ctx context.Context, in Input) (Decision, error) {
 	if entry.Reason != "" {
 		reason = entry.Reason
 	}
-	return Reject(CodeHashMatch, reason, h.Name()+":"+entry.Source), nil
+	// Operator block-list hits are purged, not retained for review — the
+	// object is known-bad and must not linger in storage.
+	return RejectWith(CodeHashMatch, reason, h.Name()+":"+entry.Source, DispositionPurge), nil
 }
 
 // pgHashStore is the Postgres-backed HashStore.

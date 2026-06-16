@@ -44,10 +44,46 @@ const (
 
 // Status values written to `uploads.moderation_status`.
 const (
-	StatusPending  = "pending"
-	StatusApproved = "approved"
-	StatusRejected = "rejected"
-	StatusSkipped  = "skipped"
+	StatusPending    = "pending"
+	StatusApproved   = "approved"
+	StatusRejected   = "rejected"
+	StatusSkipped    = "skipped"
+	StatusQuarantined = "quarantined"
+)
+
+// Severity tells the orchestration layer how to treat an *error* from a
+// moderator (a rejection is always honored — this only governs failures).
+//
+//   - SeveritySoft: fail open. A transient failure logs and allows, because
+//     the detector is a quality/policy filter (NSFW, heuristics) and we never
+//     want a flaky classifier to block legitimate uploads.
+//   - SeverityHard: fail closed. A failure must NOT allow the image through —
+//     the upload stays unapproved (never served) and is retried — because the
+//     detector is a legal floor (CSAM, NCII, the operator block list).
+type Severity int
+
+const (
+	SeveritySoft Severity = iota
+	SeverityHard
+)
+
+// Disposition is what the worker does with the stored object when a moderator
+// rejects. It rides on the Decision so the policy lives with the detector that
+// made the call, not in a switch downstream.
+//
+//   - DispositionRetain: keep the object in place for admin review (NSFW /
+//     heuristic — legal-to-store content that may be a false positive).
+//   - DispositionPurge: delete the object immediately (operator block-list and
+//     NCII matches — remove and do not retain).
+//   - DispositionQuarantine: move the object to a restricted, never-served
+//     location and preserve it (CSAM — destroying it can itself be unlawful;
+//     the legal duty is preserve + report).
+type Disposition int
+
+const (
+	DispositionRetain Disposition = iota
+	DispositionPurge
+	DispositionQuarantine
 )
 
 // Decision is what every Moderator returns.
@@ -68,15 +104,26 @@ type Decision struct {
 	// Categories are per-region labels the classifier returned (e.g.
 	// "FEMALE_BREAST_EXPOSED"). Populated by NSFW rejections; nil otherwise.
 	Categories []string
+	// Disposition is what the worker does with the stored object on a
+	// rejection. Zero value (DispositionRetain) keeps the file for admin
+	// review; detectors that must purge or quarantine set it explicitly.
+	Disposition Disposition
 }
 
 // Allow is the canonical "no objection" decision.
 func Allow() Decision { return Decision{Allowed: true} }
 
-// Reject builds a rejection decision. Source should be the package or
-// concrete moderator name so the audit row is self-explanatory.
+// Reject builds a rejection decision that retains the file for admin review.
+// Source should be the package or concrete moderator name so the audit row is
+// self-explanatory. Detectors that need a different file disposition use
+// RejectWith.
 func Reject(code, reason, source string) Decision {
-	return Decision{Allowed: false, Code: code, Reason: reason, Source: source}
+	return Decision{Allowed: false, Code: code, Reason: reason, Source: source, Disposition: DispositionRetain}
+}
+
+// RejectWith is Reject with an explicit file disposition (purge / quarantine).
+func RejectWith(code, reason, source string, d Disposition) Decision {
+	return Decision{Allowed: false, Code: code, Reason: reason, Source: source, Disposition: d}
 }
 
 // Input is the bag of data each moderator consumes. Bytes is optional —
@@ -105,13 +152,16 @@ func HashFor(b []byte) string {
 }
 
 // Moderator is the interface every detector implements. Errors signal an
-// infrastructure problem (DB unreachable, classifier crashed) — the
-// orchestration layer treats them as "fail open" by default (allow) and
-// logs them; we never block a user upload on transient backend trouble.
+// infrastructure problem (DB unreachable, classifier crashed). How the
+// orchestration layer treats an error is governed by Severity: SeveritySoft
+// detectors fail open (log + allow), SeverityHard detectors fail closed (the
+// upload stays unapproved and is retried — never allowed through on error).
 type Moderator interface {
 	Check(ctx context.Context, in Input) (Decision, error)
 	// Name is recorded in logs and in the audit trail.
 	Name() string
+	// Severity governs error handling — see Severity.
+	Severity() Severity
 }
 
 // Chain runs each moderator in order and returns on the first rejection.
@@ -132,13 +182,24 @@ func (c *Chain) Check(ctx context.Context, in Input) (Decision, error) {
 	for _, m := range c.mods {
 		d, err := m.Check(ctx, in)
 		if err != nil {
-			return Decision{}, &ChainError{Name: m.Name(), Err: err}
+			return Decision{}, &ChainError{Name: m.Name(), Err: err, Hard: m.Severity() == SeverityHard}
 		}
 		if !d.Allowed {
 			return d, nil
 		}
 	}
 	return Allow(), nil
+}
+
+// Severity reports the strictest severity among the chain's moderators, so a
+// nested Chain still fails closed when any member is a legal floor.
+func (c *Chain) Severity() Severity {
+	for _, m := range c.mods {
+		if m.Severity() == SeverityHard {
+			return SeverityHard
+		}
+	}
+	return SeveritySoft
 }
 
 // Name returns the composite name for logging.
@@ -150,10 +211,13 @@ func (c *Chain) Name() string {
 	return "chain[" + strings.Join(parts, ",") + "]"
 }
 
-// ChainError annotates which moderator failed inside a Chain.
+// ChainError annotates which moderator failed inside a Chain. Hard is true
+// when the failing moderator is SeverityHard, so the orchestration layer knows
+// it must fail closed (hold + retry) rather than fail open.
 type ChainError struct {
 	Name string
 	Err  error
+	Hard bool
 }
 
 func (e *ChainError) Error() string { return e.Name + ": " + e.Err.Error() }

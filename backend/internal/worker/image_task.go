@@ -63,6 +63,9 @@ type ThumbnailStore interface {
 type ModerationStore interface {
 	MarkApproved(ctx context.Context, uploadID string) error
 	MarkRejected(ctx context.Context, rec uploads.RejectionRecord) error
+	// MarkQuarantined records a CSAM-class hit whose object the worker has
+	// moved to the restricted quarantineKey (preserved, never served).
+	MarkQuarantined(ctx context.Context, rec uploads.RejectionRecord, quarantineKey string) error
 }
 
 // ImageProcessor handles the image:process task.
@@ -109,7 +112,11 @@ func EnqueueProcessImage(ctx context.Context, client *Client, p ImageProcessPayl
 	if err != nil {
 		return fmt.Errorf("worker: inject trace context: %w", err)
 	}
-	_, err = client.c.EnqueueContext(ctx, asynq.NewTask(TaskProcessImage, wrapped))
+	// MaxRetry bounds the "hold & retry" window for hard moderation failures
+	// (CSAM / NCII vendor outage). At the 5-minute retry-delay cap this is
+	// ~4 hours of re-checks; after that the task is archived but the upload
+	// stays moderation_status='pending' and is never served — failing closed.
+	_, err = client.c.EnqueueContext(ctx, asynq.NewTask(TaskProcessImage, wrapped), asynq.MaxRetry(48))
 	return err
 }
 
@@ -144,9 +151,14 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 	}
 
 	// Async moderation runs after decode (so we have dimensions) and before
-	// any further storage I/O. A rejection deletes the original from storage,
-	// marks the row, and short-circuits. Moderator errors are logged and
-	// treated as allow — we don't block uploads on a flaky classifier.
+	// any further storage I/O. A rejection disposes of the object per the
+	// decision (retain / purge / quarantine), marks the row, and short-circuits.
+	//
+	// Error handling is severity-aware: a SeverityHard detector (CSAM / NCII /
+	// operator block list) that errors causes the task to FAIL so asynq retries
+	// — the upload stays unapproved (never served) until a check completes. A
+	// SeveritySoft detector (NSFW / heuristic) that errors fails open, because
+	// a flaky classifier must never block legitimate uploads.
 	if p.moderator != nil && p.modStore != nil {
 		bounds := img.Bounds()
 		decision, modErr := p.moderator.Check(ctx, moderation.Input{
@@ -159,36 +171,18 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 			Context:     moderationContextFor(payload.Category),
 		})
 		if modErr != nil {
-			p.log.Warn().Err(modErr).Str("upload_id", payload.UploadID).Msg("moderator error; failing open")
+			if isHardModerationFailure(p.moderator, modErr) {
+				// Fail closed: return the error so asynq retries with backoff.
+				// The row's moderation_status stays 'pending', so the serve
+				// layer never exposes the object while a legal-floor check is
+				// unresolved.
+				p.log.Error().Err(modErr).Str("upload_id", payload.UploadID).Msg("hard moderation failure; holding for retry")
+				return fmt.Errorf("hard moderation failure: %w", modErr)
+			}
+			p.log.Warn().Err(modErr).Str("upload_id", payload.UploadID).Msg("soft moderator error; failing open")
 		} else if !decision.Allowed {
-			retain := retainFileFor(decision.Code)
-			p.log.Info().
-				Str("upload_id", payload.UploadID).
-				Str("code", decision.Code).
-				Str("source", decision.Source).
-				Float64("score", decision.Score).
-				Bool("retain_file", retain).
-				Msg("upload rejected by moderation")
-			if !retain {
-				if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
-					// Best-effort: the rejection mark is the source of truth. Failure
-					// to delete leaves an orphaned object that the storage GC sweep
-					// will clean up; we never serve it because the public URL is
-					// derived from a row whose moderation_status is 'rejected'.
-					p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete rejected upload failed")
-				}
-			}
-			rec := uploads.RejectionRecord{
-				UploadID:     payload.UploadID,
-				Code:         decision.Code,
-				Reason:       decision.Reason,
-				Source:       decision.Source,
-				Score:        decision.Score,
-				Categories:   decision.Categories,
-				FileRetained: retain,
-			}
-			if markErr := p.modStore.MarkRejected(ctx, rec); markErr != nil {
-				return fmt.Errorf("mark rejected: %w", markErr)
+			if err := p.disposeRejected(ctx, payload, raw, decision); err != nil {
+				return err
 			}
 			return nil
 		} else if markErr := p.modStore.MarkApproved(ctx, payload.UploadID); markErr != nil {
@@ -239,20 +233,77 @@ func moderationContextFor(category string) string {
 	return moderation.ContextPublic
 }
 
-// retainFileFor decides whether to keep the storage object for admin review
-// after a rejection. NSFW and heuristic rejections are legal-to-store adult
-// content (or benign metadata edge cases) — keep them so admins can verify
-// false positives. Hash-list matches target CSAM / NCII feeds; we must purge
-// those immediately and never expose them to the admin UI.
-func retainFileFor(code string) bool {
-	switch code {
-	case moderation.CodeNSFWDetected,
-		moderation.CodeSizeOutOfBounds,
-		moderation.CodeAspectOutOfBounds:
-		return true
-	default:
-		return false
+// disposeRejected executes the file disposition a rejection carries and records
+// the outcome. Retain keeps the object for admin review; Purge deletes it;
+// Quarantine moves it to a restricted, never-served prefix and preserves it
+// (CSAM — destroying it can itself be unlawful).
+func (p *ImageProcessor) disposeRejected(ctx context.Context, payload ImageProcessPayload, raw []byte, decision moderation.Decision) error {
+	rec := uploads.RejectionRecord{
+		UploadID:   payload.UploadID,
+		Code:       decision.Code,
+		Reason:     decision.Reason,
+		Source:     decision.Source,
+		Score:      decision.Score,
+		Categories: decision.Categories,
 	}
+	log := p.log.Info().
+		Str("upload_id", payload.UploadID).
+		Str("code", decision.Code).
+		Str("source", decision.Source).
+		Float64("score", decision.Score)
+
+	switch decision.Disposition {
+	case moderation.DispositionQuarantine:
+		log.Str("disposition", "quarantine").Msg("upload quarantined by moderation")
+		qKey := quarantineKeyFor(payload.StorageKey)
+		// Preserve the object under the restricted prefix, then remove the
+		// original so its public URL 404s. We already have the bytes in memory.
+		if putErr := p.storage.PutObject(ctx, qKey, payload.ContentType, bytes.NewReader(raw), int64(len(raw))); putErr != nil {
+			// Preservation is the legal priority; if we cannot preserve, fail the
+			// task so it retries rather than silently losing evidence.
+			return fmt.Errorf("quarantine put: %w", putErr)
+		}
+		if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
+			p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete original after quarantine failed")
+		}
+		if markErr := p.modStore.MarkQuarantined(ctx, rec, qKey); markErr != nil {
+			return fmt.Errorf("mark quarantined: %w", markErr)
+		}
+	case moderation.DispositionPurge:
+		log.Str("disposition", "purge").Msg("upload rejected by moderation")
+		if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
+			p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete rejected upload failed")
+		}
+		rec.FileRetained = false
+		if markErr := p.modStore.MarkRejected(ctx, rec); markErr != nil {
+			return fmt.Errorf("mark rejected: %w", markErr)
+		}
+	default: // DispositionRetain
+		log.Str("disposition", "retain").Msg("upload rejected by moderation")
+		rec.FileRetained = true
+		if markErr := p.modStore.MarkRejected(ctx, rec); markErr != nil {
+			return fmt.Errorf("mark rejected: %w", markErr)
+		}
+	}
+	return nil
+}
+
+// isHardModerationFailure reports whether a moderator error must fail closed.
+// A Chain wraps the failing moderator's severity in *ChainError; a bare
+// moderator (tests) is queried directly via Severity().
+func isHardModerationFailure(m moderation.Moderator, err error) bool {
+	var ce *moderation.ChainError
+	if errors.As(err, &ce) {
+		return ce.Hard
+	}
+	return m.Severity() == moderation.SeverityHard
+}
+
+// quarantineKeyFor returns the restricted storage key a quarantined object is
+// preserved under. The "quarantine/" prefix is the never-served namespace the
+// serve layer and storage GC both treat as off-limits.
+func quarantineKeyFor(storageKey string) string {
+	return "quarantine/" + storageKey
 }
 
 // thumbnailKey returns the storage key for the thumbnail of storageKey.

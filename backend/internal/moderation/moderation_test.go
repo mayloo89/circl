@@ -14,9 +14,11 @@ type fakeMod struct {
 	name string
 	d    moderation.Decision
 	err  error
+	sev  moderation.Severity
 }
 
-func (f *fakeMod) Name() string { return f.name }
+func (f *fakeMod) Name() string                 { return f.name }
+func (f *fakeMod) Severity() moderation.Severity { return f.sev }
 func (f *fakeMod) Check(_ context.Context, _ moderation.Input) (moderation.Decision, error) {
 	return f.d, f.err
 }

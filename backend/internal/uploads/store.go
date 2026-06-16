@@ -142,6 +142,33 @@ func (s *pgStore) MarkRejected(ctx context.Context, rec RejectionRecord) error {
 	return nil
 }
 
+// MarkQuarantined records a CSAM-class hit. The original storage object has
+// already been moved by the worker to quarantineKey (a restricted, never-served
+// prefix); here we set moderation_status to 'quarantined' and flip the
+// lifecycle status to 'failed' so the original public URL 404s. The object is
+// preserved, not purged — destroying it can itself be unlawful.
+func (s *pgStore) MarkQuarantined(ctx context.Context, rec RejectionRecord, quarantineKey string) error {
+	tag, err := s.db.Exec(ctx, `
+		UPDATE uploads
+		   SET moderation_status         = 'quarantined',
+		       moderation_code           = $2,
+		       moderation_reason         = $3,
+		       moderation_quarantine_key = $4,
+		       moderation_file_retained  = FALSE,
+		       moderated_at              = NOW(),
+		       status                    = 'failed'
+		 WHERE id = $1`,
+		rec.UploadID, rec.Code, rec.Reason, quarantineKey)
+	if err != nil {
+		return fmt.Errorf("uploads: mark quarantined: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	_ = rec.Source // recorded in logs at the worker layer; not persisted to keep the schema lean
+	return nil
+}
+
 // RetainedRejection describes a rejected upload whose storage object is
 // still kept for admin review. Returned by ListExpiredRetained for the
 // cleanup worker.

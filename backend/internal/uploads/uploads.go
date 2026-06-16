@@ -68,6 +68,11 @@ type Store interface {
 	// 'failed' (the storage object was purged); when true it stays
 	// 'committed' so the admin review tools can still load the file.
 	MarkRejected(ctx context.Context, rec RejectionRecord) error
+	// MarkQuarantined records a CSAM-class hit. The caller has already moved
+	// the original storage object to the restricted quarantineKey; this
+	// preserves the audit row, sets moderation_status to 'quarantined', and
+	// flips the lifecycle status to 'failed' so the original public URL 404s.
+	MarkQuarantined(ctx context.Context, rec RejectionRecord, quarantineKey string) error
 	// ListExpiredRetained returns rejected uploads whose retention window
 	// has elapsed and whose storage object is still kept for admin review.
 	// limit <= 0 falls back to a sensible default in the implementation.

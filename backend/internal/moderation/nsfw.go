@@ -45,6 +45,11 @@ func NewNSFW(classifier NSFWClassifier, threshold float64) *NSFW {
 // Name returns the detector name.
 func (n *NSFW) Name() string { return "nsfw" }
 
+// Severity is soft: the NSFW classifier is a policy filter for public
+// surfaces, and a transient model outage must never block uploads — errors
+// fail open. The legal floors (CSAM/NCII) are separate, SeverityHard detectors.
+func (n *NSFW) Severity() Severity { return SeveritySoft }
+
 // Check runs the classifier on the bytes and rejects if probability exceeds
 // the configured threshold. Private-context inputs (e.g. album-private
 // uploads) never reject on NSFW — explicit content is the legitimate use

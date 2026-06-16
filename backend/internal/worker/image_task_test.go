@@ -596,14 +596,16 @@ func TestProcess_ResizesOversizedPNG(t *testing.T) {
 type fakeModerator struct {
 	decision moderation.Decision
 	err      error
+	sev      moderation.Severity
 }
 
 func (f *fakeModerator) Check(_ context.Context, _ moderation.Input) (moderation.Decision, error) {
 	return f.decision, f.err
 }
-func (f *fakeModerator) Name() string { return "fake" }
+func (f *fakeModerator) Name() string                 { return "fake" }
+func (f *fakeModerator) Severity() moderation.Severity { return f.sev }
 
-// fakeModerationStore captures MarkApproved / MarkRejected calls.
+// fakeModerationStore captures MarkApproved / MarkRejected / MarkQuarantined calls.
 type fakeModerationStore struct {
 	approvedID         string
 	rejectedID         string
@@ -611,6 +613,8 @@ type fakeModerationStore struct {
 	rejectedScore      float64
 	rejectedCategories []string
 	rejectedRetained   bool
+	quarantinedID      string
+	quarantineKey      string
 }
 
 func (f *fakeModerationStore) MarkApproved(_ context.Context, id string) error {
@@ -623,6 +627,12 @@ func (f *fakeModerationStore) MarkRejected(_ context.Context, rec uploads.Reject
 	f.rejectedScore = rec.Score
 	f.rejectedCategories = rec.Categories
 	f.rejectedRetained = rec.FileRetained
+	return nil
+}
+func (f *fakeModerationStore) MarkQuarantined(_ context.Context, rec uploads.RejectionRecord, quarantineKey string) error {
+	f.quarantinedID = rec.UploadID
+	f.quarantineKey = quarantineKey
+	f.rejectedCode = rec.Code
 	return nil
 }
 
@@ -662,7 +672,7 @@ func TestProcess_ModerationRejectsDeletesOriginal(t *testing.T) {
 
 	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
 	proc.SetModeration(&fakeModerator{
-		decision: moderation.Reject(moderation.CodeHashMatch, "test reason", "fake"),
+		decision: moderation.RejectWith(moderation.CodeHashMatch, "test reason", "fake", moderation.DispositionPurge),
 	}, modStore)
 
 	err := proc.process(t.Context(), ImageProcessPayload{
@@ -747,19 +757,64 @@ func TestProcess_NSFWRejectionRetainsFileAndScore(t *testing.T) {
 	}
 }
 
-func TestRetainFileForPolicy(t *testing.T) {
-	// Hash-list matches must be purged immediately (CSAM / NCII policy);
-	// every other code keeps the file for the admin-review retention window.
-	cases := map[string]bool{
-		moderation.CodeHashMatch:         false,
-		moderation.CodeNSFWDetected:      true,
-		moderation.CodeSizeOutOfBounds:   true,
-		moderation.CodeAspectOutOfBounds: true,
-		"unknown_code":                   false,
+func TestProcess_QuarantineDispositionPreservesObject(t *testing.T) {
+	// A CSAM-class hit must preserve the object under the restricted prefix
+	// and remove the original — never delete outright.
+	key := "album-private/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{
+		decision: moderation.RejectWith(moderation.CodeHashMatch, "csam match", "photodna", moderation.DispositionQuarantine),
+	}, modStore)
+
+	if err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-q", StorageKey: key, ContentType: "image/png",
+	}); err != nil {
+		t.Fatalf("process error: %v", err)
 	}
-	for code, want := range cases {
-		if got := retainFileFor(code); got != want {
-			t.Errorf("retainFileFor(%q) = %v, want %v", code, got, want)
-		}
+	if modStore.quarantinedID != "u-q" {
+		t.Errorf("expected MarkQuarantined(u-q), got %q", modStore.quarantinedID)
+	}
+	if _, ok := st.objects[key]; ok {
+		t.Error("original should be removed after quarantine")
+	}
+	if _, ok := st.objects[quarantineKeyFor(key)]; !ok {
+		t.Error("object should be preserved under the quarantine prefix")
+	}
+	if store.thumbnailKey != "" {
+		t.Error("thumbnail should NOT be generated for a quarantined upload")
+	}
+}
+
+func TestProcess_HardModerationFailureHoldsForRetry(t *testing.T) {
+	// A SeverityHard detector that errors must fail the task (asynq retries)
+	// and leave the object untouched and unapproved — never served.
+	key := "album-private/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{
+		err: errors.New("photodna unreachable"),
+		sev: moderation.SeverityHard,
+	}, modStore)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-h", StorageKey: key, ContentType: "image/png",
+	})
+	if err == nil {
+		t.Fatal("expected process to fail so asynq retries")
+	}
+	if modStore.approvedID != "" {
+		t.Error("a held upload must not be approved")
+	}
+	if _, ok := st.objects[key]; !ok {
+		t.Error("original must remain untouched while held for retry")
 	}
 }
