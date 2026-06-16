@@ -194,6 +194,23 @@ func (s *Service) GetUploadForUser(ctx context.Context, uploadID, userID string)
 	return u, nil
 }
 
+// IsUploadServable reports whether an upload owned by ownerID may be exposed
+// to other users (attached to a message, album, or profile). Image uploads
+// must have cleared the moderation pipeline; non-image types are not scanned
+// by the image pipeline and are cleared on confirm. This is the attach-time
+// gate that keeps an un-moderated, rejected, or quarantined image from ever
+// reaching another user.
+func (s *Service) IsUploadServable(ctx context.Context, uploadID, ownerID string) (bool, error) {
+	u, err := s.GetUploadForUser(ctx, uploadID, ownerID)
+	if err != nil {
+		return false, err
+	}
+	if !strings.HasPrefix(u.ContentType, "image/") {
+		return true, nil
+	}
+	return u.ModerationStatus == "approved", nil
+}
+
 // ConfirmUpload marks a pending upload as committed. The caller must own
 // the upload. For image uploads, a background processing task is enqueued
 // to generate a thumbnail and strip EXIF metadata.

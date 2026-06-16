@@ -36,6 +36,10 @@ const (
 var (
 	ErrNotFound  = errors.New("chat: not found")
 	ErrForbidden = errors.New("chat: forbidden")
+	// ErrUploadNotApproved is returned when a message references an image
+	// attachment that has not cleared moderation (still pending, rejected, or
+	// quarantined). The image must never reach a recipient.
+	ErrUploadNotApproved = errors.New("chat: attachment not approved")
 )
 
 // RetentionDurations maps room types to their data-retention window. Messages
@@ -310,6 +314,11 @@ type Service struct {
 	store          Store
 	AreContacts    func(ctx context.Context, userA, userB string) (bool, error)
 	IsExemptSender func(ctx context.Context, senderID string) bool
+	// UploadApproved, when set, reports whether the image upload backing a
+	// message attachment (owned by senderID) has cleared moderation.
+	// SaveMessage refuses to persist a message whose attachment is not yet
+	// approved, so an un-moderated or rejected image never reaches a recipient.
+	UploadApproved func(ctx context.Context, uploadID, senderID string) (bool, error)
 }
 
 func NewService(store Store) *Service {
@@ -377,6 +386,18 @@ func (s *Service) ListRooms(ctx context.Context, userID string) ([]RoomSummary, 
 }
 
 func (s *Service) SaveMessage(ctx context.Context, p SaveMessageParams) (*Message, error) {
+	// Attach-time moderation gate: an image attachment must have cleared the
+	// pipeline before its message can be persisted and broadcast. This is what
+	// keeps a pending/rejected/quarantined image from ever reaching a recipient.
+	if p.UploadID != "" && s.UploadApproved != nil {
+		approved, err := s.UploadApproved(ctx, p.UploadID, p.SenderID)
+		if err != nil {
+			return nil, err
+		}
+		if !approved {
+			return nil, ErrUploadNotApproved
+		}
+	}
 	s.maybeRedact(ctx, &p)
 	return s.store.SaveMessage(ctx, p)
 }
