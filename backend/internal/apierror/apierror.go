@@ -80,6 +80,10 @@ const (
 
 	// Image moderation
 	CodeUploadRejectedModeration = "upload_rejected_moderation"
+	// CodeUploadNotApproved signals a transient state: the upload has not yet
+	// cleared moderation. The client should wait for approval and retry rather
+	// than treat it as a permanent rejection.
+	CodeUploadNotApproved = "upload_not_approved"
 
 	// Push
 	CodeServiceUnavailable = "service_unavailable"
