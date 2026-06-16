@@ -694,6 +694,33 @@ func TestUpdateAvatar_StorageURLValidation(t *testing.T) {
 	})
 }
 
+func TestUpdateAvatar_ModerationGate(t *testing.T) {
+	svc := NewService(&mockStore{})
+	svc.SetStoragePublicURL("https://cdn.example.com/")
+
+	t.Run("rejects unapproved media", func(t *testing.T) {
+		svc.MediaApproved = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+		err := svc.UpdateAvatar(t.Context(), "user-1", "https://cdn.example.com/avatars/x.jpg")
+		if !errors.Is(err, ErrMediaNotApproved) {
+			t.Errorf("got %v, want ErrMediaNotApproved", err)
+		}
+	})
+
+	t.Run("derives storage key without the public prefix", func(t *testing.T) {
+		var gotKey string
+		svc.MediaApproved = func(_ context.Context, storageKey, _ string) (bool, error) {
+			gotKey = storageKey
+			return true, nil
+		}
+		if err := svc.UpdateAvatar(t.Context(), "user-1", "https://cdn.example.com/avatars/x.jpg"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotKey != "avatars/x.jpg" {
+			t.Errorf("storage key = %q, want %q", gotKey, "avatars/x.jpg")
+		}
+	})
+}
+
 // --- DeletePhoto ---
 
 func TestDeletePhoto_Success(t *testing.T) {

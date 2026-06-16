@@ -55,6 +55,29 @@ func (s *pgStore) GetByID(ctx context.Context, id string) (*Upload, error) {
 	return &u, nil
 }
 
+// GetByStorageKey returns an upload by its storage key. Used by the attach-time
+// gate for surfaces (avatar, profile gallery) that reference media by URL
+// rather than upload ID.
+func (s *pgStore) GetByStorageKey(ctx context.Context, storageKey string) (*Upload, error) {
+	var u Upload
+	err := s.db.QueryRow(ctx, `
+		SELECT id, user_id, storage_key, filename, content_type, size_bytes, category, status,
+		       thumbnail_key, created_at, committed_at,
+		       moderation_status, moderation_code, moderation_reason, moderated_at
+		FROM uploads
+		WHERE storage_key = $1`, storageKey,
+	).Scan(&u.ID, &u.UserID, &u.StorageKey, &u.Filename, &u.ContentType, &u.SizeBytes, &u.Category, &u.Status,
+		&u.ThumbnailKey, &u.CreatedAt, &u.CommittedAt,
+		&u.ModerationStatus, &u.ModerationCode, &u.ModerationReason, &u.ModeratedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("uploads: get by storage key: %w", err)
+	}
+	return &u, nil
+}
+
 // SetThumbnailKey stores the thumbnail storage key after background processing.
 func (s *pgStore) SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error {
 	tag, err := s.db.Exec(ctx, `

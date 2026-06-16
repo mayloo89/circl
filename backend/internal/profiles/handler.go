@@ -261,7 +261,14 @@ func updateAvatar(svc ProfileManager) http.HandlerFunc {
 			return
 		}
 		if err := svc.UpdateAvatar(r.Context(), userID, req.AvatarURL); err != nil {
-			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			switch {
+			case errors.Is(err, ErrMediaNotApproved):
+				apierror.Write(w, http.StatusConflict, apierror.CodeUploadNotApproved, "image is still being reviewed")
+			case errors.Is(err, ErrInvalidInput):
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid avatar URL")
+			default:
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			}
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -345,11 +352,14 @@ func addPhoto(svc ProfileManager) http.HandlerFunc {
 
 		photo, err := svc.AddPhoto(r.Context(), userID, req.URL)
 		if err != nil {
-			if errors.Is(err, ErrInvalidInput) {
+			switch {
+			case errors.Is(err, ErrMediaNotApproved):
+				apierror.Write(w, http.StatusConflict, apierror.CodeUploadNotApproved, "image is still being reviewed")
+			case errors.Is(err, ErrInvalidInput):
 				apierror.Write(w, http.StatusUnprocessableEntity, apierror.CodeInvalidRequest, err.Error())
-				return
+			default:
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			}
-			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
 

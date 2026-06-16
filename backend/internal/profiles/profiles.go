@@ -21,6 +21,9 @@ var (
 	ErrPhotoNotFound   = errors.New("photo not found")
 	ErrInvalidInput    = errors.New("invalid input")
 	ErrUsernameTaken   = errors.New("username already taken")
+	// ErrMediaNotApproved is returned when avatar/photo media has not cleared
+	// moderation (still pending, rejected, or quarantined).
+	ErrMediaNotApproved = errors.New("media not approved")
 
 	usernameRe = regexp.MustCompile(`^[a-z0-9_]{3,30}$`)
 )
@@ -271,6 +274,11 @@ type Store interface {
 type Service struct {
 	store            Store
 	storagePublicURL string // non-empty: avatar/photo URLs must start with this prefix
+	// MediaApproved, when set, reports whether the image at storageKey (owned
+	// by userID) has cleared moderation. UpdateAvatar and AddPhoto refuse media
+	// that has not been approved, so an un-moderated or rejected image can
+	// never be published to the user's public profile surfaces.
+	MediaApproved func(ctx context.Context, storageKey, userID string) (bool, error)
 }
 
 // NewService creates a new profiles Service.
@@ -416,6 +424,9 @@ func (s *Service) UpdateAvatar(ctx context.Context, userID, avatarURL string) er
 	if s.storagePublicURL != "" && !strings.HasPrefix(avatarURL, s.storagePublicURL) {
 		return fmt.Errorf("%w: avatar URL must be a storage URL", ErrInvalidInput)
 	}
+	if err := s.requireMediaApproved(ctx, avatarURL, userID); err != nil {
+		return err
+	}
 	return s.store.UpdateAvatar(ctx, userID, avatarURL)
 }
 
@@ -428,6 +439,9 @@ func (s *Service) AddPhoto(ctx context.Context, userID, url string) (*ProfilePho
 	if s.storagePublicURL != "" && !strings.HasPrefix(url, s.storagePublicURL) {
 		return nil, fmt.Errorf("%w: photo URL must be a storage URL", ErrInvalidInput)
 	}
+	if err := s.requireMediaApproved(ctx, url, userID); err != nil {
+		return nil, err
+	}
 	count, err := s.store.CountPhotos(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -436,6 +450,25 @@ func (s *Service) AddPhoto(ctx context.Context, userID, url string) (*ProfilePho
 		return nil, fmt.Errorf("%w: maximum %d photos reached", ErrInvalidInput, MaxProfilePhotos)
 	}
 	return s.store.AddPhoto(ctx, userID, url)
+}
+
+// requireMediaApproved enforces the attach-time moderation gate for a public
+// media URL. It derives the storage key by stripping the configured public-URL
+// prefix and asks the MediaApproved hook whether the upload has cleared
+// moderation. A no-op when the hook or prefix is unset (dev / tests).
+func (s *Service) requireMediaApproved(ctx context.Context, mediaURL, userID string) error {
+	if s.MediaApproved == nil || s.storagePublicURL == "" {
+		return nil
+	}
+	storageKey := strings.TrimPrefix(strings.TrimPrefix(mediaURL, s.storagePublicURL), "/")
+	approved, err := s.MediaApproved(ctx, storageKey, userID)
+	if err != nil {
+		return err
+	}
+	if !approved {
+		return ErrMediaNotApproved
+	}
+	return nil
 }
 
 // DeletePhoto removes a showcase photo, verifying ownership.

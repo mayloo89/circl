@@ -493,9 +493,11 @@ func main() {
 		})
 	})
 
-	// Attach-time moderation gate: a chat image attachment may only be sent
-	// once its upload has cleared the pipeline.
+	// Attach-time moderation gate: a chat image attachment may only be sent,
+	// and avatar/profile-gallery media may only be published, once the backing
+	// upload has cleared the pipeline.
 	chatSvc.UploadApproved = uploadSvc.IsUploadServable
+	profileSvc.MediaApproved = uploadSvc.IsKeyServable
 
 	imageProcessor := worker.NewImageProcessor(fileStorage, uploadStore, config.EnvIntOrDefault("IMAGE_MAX_PX", 0), log)
 

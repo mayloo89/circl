@@ -58,6 +58,7 @@ type RejectionRecord struct {
 type Store interface {
 	Create(ctx context.Context, u *Upload) error
 	GetByID(ctx context.Context, id string) (*Upload, error)
+	GetByStorageKey(ctx context.Context, storageKey string) (*Upload, error)
 	Commit(ctx context.Context, id string) error
 	SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error
 	// MarkApproved records that moderation cleared the upload.
@@ -205,10 +206,31 @@ func (s *Service) IsUploadServable(ctx context.Context, uploadID, ownerID string
 	if err != nil {
 		return false, err
 	}
-	if !strings.HasPrefix(u.ContentType, "image/") {
-		return true, nil
+	return moderationCleared(u), nil
+}
+
+// IsKeyServable is IsUploadServable for surfaces that reference media by
+// storage key (avatar, profile gallery) rather than upload ID. The upload must
+// be owned by ownerID.
+func (s *Service) IsKeyServable(ctx context.Context, storageKey, ownerID string) (bool, error) {
+	u, err := s.store.GetByStorageKey(ctx, storageKey)
+	if err != nil {
+		return false, err
 	}
-	return u.ModerationStatus == "approved", nil
+	if u.UserID != ownerID {
+		return false, ErrForbidden
+	}
+	return moderationCleared(u), nil
+}
+
+// moderationCleared reports whether an upload may be exposed to other users:
+// image uploads must be moderation-approved; non-image types are not scanned
+// by the image pipeline and are cleared on confirm.
+func moderationCleared(u *Upload) bool {
+	if !strings.HasPrefix(u.ContentType, "image/") {
+		return true
+	}
+	return u.ModerationStatus == "approved"
 }
 
 // ConfirmUpload marks a pending upload as committed. The caller must own

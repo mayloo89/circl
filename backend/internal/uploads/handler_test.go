@@ -46,6 +46,15 @@ func (m *mockStore) GetByID(_ context.Context, id string) (*Upload, error) {
 	return u, nil
 }
 
+func (m *mockStore) GetByStorageKey(_ context.Context, storageKey string) (*Upload, error) {
+	for _, u := range m.uploads {
+		if u.StorageKey == storageKey {
+			return u, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 func (m *mockStore) Commit(_ context.Context, id string) error {
 	u, ok := m.uploads[id]
 	if !ok {
