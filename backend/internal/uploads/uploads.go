@@ -32,7 +32,7 @@ type Upload struct {
 	ThumbnailKey     *string    `json:"thumbnail_key,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	CommittedAt      *time.Time `json:"committed_at,omitzero"`
-	ModerationStatus string     `json:"moderation_status"`           // "pending" | "approved" | "rejected" | "skipped"
+	ModerationStatus string     `json:"moderation_status"`           // "pending" | "approved" | "rejected" | "skipped" | "quarantined"
 	ModerationCode   string     `json:"moderation_code,omitempty"`   // populated only on rejection
 	ModerationReason string     `json:"moderation_reason,omitempty"` // populated only on rejection
 	ModeratedAt      *time.Time `json:"moderated_at,omitzero"`
