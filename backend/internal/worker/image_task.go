@@ -263,16 +263,21 @@ func (p *ImageProcessor) disposeRejected(ctx context.Context, payload ImageProce
 			// task so it retries rather than silently losing evidence.
 			return fmt.Errorf("quarantine put: %w", putErr)
 		}
+		// The original MUST be removed — leaving it reachable at its public URL
+		// would violate the "never served" contract for a CSAM-class hit. If the
+		// delete fails, fail the task so asynq retries; do not mark it terminal.
 		if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
-			p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete original after quarantine failed")
+			return fmt.Errorf("delete original after quarantine: %w", delErr)
 		}
 		if markErr := p.modStore.MarkQuarantined(ctx, rec, qKey); markErr != nil {
 			return fmt.Errorf("mark quarantined: %w", markErr)
 		}
 	case moderation.DispositionPurge:
 		log.Str("disposition", "purge").Msg("upload rejected by moderation")
+		// Purge must actually remove the object before we mark it rejected;
+		// otherwise it stays reachable at its key. Fail + retry on delete error.
 		if delErr := p.storage.Delete(ctx, payload.StorageKey); delErr != nil {
-			p.log.Warn().Err(delErr).Str("storage_key", payload.StorageKey).Msg("delete rejected upload failed")
+			return fmt.Errorf("delete purged upload: %w", delErr)
 		}
 		rec.FileRetained = false
 		if markErr := p.modStore.MarkRejected(ctx, rec); markErr != nil {

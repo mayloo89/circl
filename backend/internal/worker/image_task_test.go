@@ -27,6 +27,7 @@ type fakeStorage struct {
 	objects     map[string]string
 	putErr      error
 	getErr      error
+	delErr      error
 	lastPutKey  string
 	lastPutType string
 }
@@ -62,6 +63,9 @@ func (f *fakeStorage) PutObject(_ context.Context, key, contentType string, r io
 }
 
 func (f *fakeStorage) Delete(_ context.Context, key string) error {
+	if f.delErr != nil {
+		return f.delErr
+	}
 	delete(f.objects, key)
 	return nil
 }
@@ -787,6 +791,33 @@ func TestProcess_QuarantineDispositionPreservesObject(t *testing.T) {
 	}
 	if store.thumbnailKey != "" {
 		t.Error("thumbnail should NOT be generated for a quarantined upload")
+	}
+}
+
+func TestProcess_QuarantineFailsTaskWhenDeleteFails(t *testing.T) {
+	// If the original object can't be removed, the task must fail (so asynq
+	// retries) rather than mark the row terminal — leaving a CSAM-class object
+	// reachable at its key would violate the "never served" contract.
+	key := "album-private/user/photo.png"
+	imgData := makePNG(t, 200, 200)
+	st := newFakeStorage(key, string(imgData))
+	st.delErr = errors.New("storage delete failed")
+	store := &fakeStore{}
+	modStore := &fakeModerationStore{}
+
+	proc := NewImageProcessor(st, store, 0, zerolog.Nop())
+	proc.SetModeration(&fakeModerator{
+		decision: moderation.RejectWith(moderation.CodeHashMatch, "csam match", "photodna", moderation.DispositionQuarantine),
+	}, modStore)
+
+	err := proc.process(t.Context(), ImageProcessPayload{
+		UploadID: "u-qf", StorageKey: key, ContentType: "image/png",
+	})
+	if err == nil {
+		t.Fatal("expected process to fail so asynq retries")
+	}
+	if modStore.quarantinedID != "" {
+		t.Error("must not mark quarantined when the original could not be deleted")
 	}
 }
 

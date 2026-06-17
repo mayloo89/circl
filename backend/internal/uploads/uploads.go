@@ -204,6 +204,12 @@ func (s *Service) GetUploadForUser(ctx context.Context, uploadID, userID string)
 func (s *Service) IsUploadServable(ctx context.Context, uploadID, ownerID string) (bool, error) {
 	u, err := s.GetUploadForUser(ctx, uploadID, ownerID)
 	if err != nil {
+		// A missing upload or an ownership mismatch is client input, not a
+		// server fault — treat it as "not servable" so callers return a clean
+		// block rather than a 500.
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
+			return false, nil
+		}
 		return false, err
 	}
 	return moderationCleared(u), nil
@@ -215,19 +221,29 @@ func (s *Service) IsUploadServable(ctx context.Context, uploadID, ownerID string
 func (s *Service) IsKeyServable(ctx context.Context, storageKey, ownerID string) (bool, error) {
 	u, err := s.store.GetByStorageKey(ctx, storageKey)
 	if err != nil {
+		// Unknown key is client input (a URL that maps to no upload) — block,
+		// don't 500.
+		if errors.Is(err, ErrNotFound) {
+			return false, nil
+		}
 		return false, err
 	}
 	if u.UserID != ownerID {
-		return false, ErrForbidden
+		// Ownership mismatch is a client-driven block, not a server error.
+		return false, nil
 	}
 	return moderationCleared(u), nil
 }
 
-// moderationCleared reports whether an upload may be exposed to other users:
-// image uploads must be moderation-approved; non-image types are not scanned
-// by the image pipeline and are cleared on confirm.
+// moderationCleared reports whether an upload may be exposed to other users.
+// The upload must be committed; image uploads must additionally be
+// moderation-approved; non-image types are not scanned by the image pipeline
+// and are cleared once committed.
 func moderationCleared(u *Upload) bool {
-	if !strings.HasPrefix(u.ContentType, "image/") {
+	if u.Status != "committed" {
+		return false
+	}
+	if !strings.HasPrefix(strings.ToLower(u.ContentType), "image/") {
 		return true
 	}
 	return u.ModerationStatus == "approved"

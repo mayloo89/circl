@@ -383,7 +383,9 @@ func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID s
 // image uploads must be moderation-approved; non-image types are not scanned
 // by the image pipeline and are cleared on confirm.
 func uploadServable(u *uploads.Upload) bool {
-	if !strings.HasPrefix(u.ContentType, "image/") {
+	// MIME types are case-insensitive; normalize so "Image/JPEG" can't slip
+	// past the image gate by looking like a non-image.
+	if !strings.HasPrefix(strings.ToLower(u.ContentType), "image/") {
 		return true
 	}
 	return u.ModerationStatus == "approved"
