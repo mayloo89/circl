@@ -229,4 +229,70 @@ describe("useUpload", () => {
     })
     expect(result.current.error).not.toMatch(/not allowed/i)
   })
+
+  it("treats a quarantined verdict as a rejection (no tip-off state)", async () => {
+    server.use(
+      http.get(`${API}/uploads/uid-1`, () =>
+        HttpResponse.json({
+          id: "uid-1",
+          moderation_status: "quarantined",
+          moderation_code: "hash_match",
+          moderation_reason: "matched a known-bad content fingerprint",
+        })
+      )
+    )
+    const { result } = renderHook(() => useUpload("token"))
+    let res: Awaited<ReturnType<typeof result.current.upload>>
+    await act(async () => {
+      res = await result.current.upload(makeFile(), "avatar")
+    })
+    expect(res!).toBeNull()
+    expect(result.current.rejection).toEqual({
+      code: "hash_match",
+      reason: "matched a known-bad content fingerprint",
+    })
+    expect(result.current.pendingReview).toBe(false)
+  })
+
+  it("eventually approves when the row is pending then approved", async () => {
+    let calls = 0
+    server.use(
+      http.get(`${API}/uploads/uid-1`, () => {
+        calls += 1
+        return HttpResponse.json({
+          id: "uid-1",
+          moderation_status: calls === 1 ? "pending" : "approved",
+        })
+      })
+    )
+    const { result } = renderHook(() => useUpload("token"))
+    let res: Awaited<ReturnType<typeof result.current.upload>>
+    await act(async () => {
+      res = await result.current.upload(makeFile(), "avatar")
+    })
+    expect(res!).not.toBeNull()
+    expect(result.current.pendingReview).toBe(false)
+    expect(calls).toBeGreaterThanOrEqual(2)
+  })
+
+  it("sets pendingReview (without faking approval) when review does not finish in time", async () => {
+    server.use(
+      http.get(`${API}/uploads/uid-1`, () =>
+        HttpResponse.json({ id: "uid-1", moderation_status: "pending" })
+      )
+    )
+    // Tiny poll window so the timeout path runs fast.
+    const { result } = renderHook(() => useUpload("token", { pollTimeoutMs: 60 }))
+    let res: Awaited<ReturnType<typeof result.current.upload>>
+    await act(async () => {
+      res = await result.current.upload(makeFile(), "avatar")
+    })
+    // Image is NOT returned — sending it would be rejected by the server gate.
+    expect(res!).toBeNull()
+    expect(result.current.pendingReview).toBe(true)
+    expect(result.current.rejection).toBeNull()
+    expect(result.current.error).toBe("")
+    act(() => result.current.clearPendingReview())
+    expect(result.current.pendingReview).toBe(false)
+  })
 })

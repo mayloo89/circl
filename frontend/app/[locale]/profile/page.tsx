@@ -352,7 +352,7 @@ export default function ProfilePage() {
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-  const { upload, uploading: uploadingAvatar, error: uploadError, rejection, clearRejection } = useUpload(session?.accessToken)
+  const { upload, uploading: uploadingAvatar, error: uploadError, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(session?.accessToken)
 
   const isDirty = profile !== null && (
     username !== (profile.username ?? "") ||
@@ -1032,7 +1032,14 @@ export default function ProfilePage() {
         />
 
       </div>
-      <UploadRejectionModal rejection={rejection} onClose={clearRejection} />
+      <UploadRejectionModal
+        rejection={rejection}
+        pendingReview={pendingReview}
+        onClose={() => {
+          clearRejection()
+          clearPendingReview()
+        }}
+      />
     </div>
   )
 }

@@ -146,7 +146,8 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   const [shareAlbumOpen, setShareAlbumOpen] = useState(false)
 
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
-  const { upload, uploading, rejection, clearRejection } = useUpload(token)
+  const { upload, uploading, reviewing, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(token)
+  const [attachPreview, setAttachPreview] = useState<string | null>(null)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
   const isMultiRoom = room?.type === "group" || room?.type === "channel"
@@ -441,8 +442,17 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   }
 
   async function handleAttach(file: File) {
-    const result = await upload(file, "chat-attachment")
-    if (result) sendAttachment(result.upload_id, result.url, file.type, buildOpts())
+    // Show the sender a local preview of their own image while moderation
+    // runs (the recipient sees nothing until the server approves it).
+    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null
+    setAttachPreview(previewUrl)
+    try {
+      const result = await upload(file, "chat-attachment")
+      if (result) sendAttachment(result.upload_id, result.url, file.type, buildOpts())
+    } finally {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setAttachPreview(null)
+    }
   }
 
   function scrollToBottom() {
@@ -678,6 +688,44 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
             </button>
           )}
           {surface !== "channels" && <TypingIndicator typers={typers} />}
+
+          {reviewing && attachPreview && (
+            <div
+              className="mx-3 mb-1 flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/80 px-3 py-2"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={attachPreview} alt="" aria-hidden="true" className="h-full w-full object-cover" />
+                <span className="absolute inset-0 animate-pulse bg-gray-950/40" aria-hidden="true" />
+              </span>
+              <span className="flex items-center gap-2 text-sm text-gray-300">
+                <svg className="h-4 w-4 animate-spin text-brand-primary" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.4 0 0 5.4 0 12h4z" />
+                </svg>
+                {t("reviewingImage")}
+              </span>
+            </div>
+          )}
+
+          {pendingReview && (
+            <div
+              className="mx-3 mb-1 flex items-start justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-sm text-amber-200">{t("stillReviewing")}</p>
+              <button
+                type="button"
+                onClick={clearPendingReview}
+                className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-amber-200 hover:bg-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                {t("dismissReview")}
+              </button>
+            </div>
+          )}
 
           <ChatInput
             connected={connected}

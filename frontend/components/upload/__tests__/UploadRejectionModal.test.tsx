@@ -27,6 +27,8 @@ const messages = {
     code_unknown: "The image didn't pass automated moderation.",
     guidelinesLink: "Read community guidelines",
     dismiss: "Got it",
+    pendingTitle: "Still reviewing your image",
+    pendingBody: "Your image is taking a little longer than usual to review.",
   },
 }
 
@@ -71,5 +73,27 @@ describe("UploadRejectionModal", () => {
     )
     fireEvent.click(screen.getByText("Got it"))
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it("renders the pending variant when pendingReview is set and there is no rejection", () => {
+    renderWithIntl(
+      <UploadRejectionModal rejection={null} pendingReview onClose={vi.fn()} />,
+    )
+    expect(screen.getByText("Still reviewing your image")).toBeInTheDocument()
+    expect(screen.getByText(/taking a little longer/)).toBeInTheDocument()
+    // Not framed as a rejection.
+    expect(screen.queryByText("Image rejected")).not.toBeInTheDocument()
+  })
+
+  it("prefers the rejection over pendingReview when both are set", () => {
+    renderWithIntl(
+      <UploadRejectionModal
+        rejection={{ code: "nsfw_detected" }}
+        pendingReview
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText("Image rejected")).toBeInTheDocument()
+    expect(screen.queryByText("Still reviewing your image")).not.toBeInTheDocument()
   })
 })

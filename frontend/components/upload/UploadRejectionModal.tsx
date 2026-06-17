@@ -20,6 +20,10 @@ export interface UploadRejection {
 interface Props {
   rejection: UploadRejection | null
   onClose: () => void
+  // pendingReview shows a non-error "still being reviewed" variant when the
+  // moderation poll timed out while the server still held the image (e.g. a
+  // vendor outage). Ignored when a rejection is present (rejection wins).
+  pendingReview?: boolean
 }
 
 const KNOWN_CODES: ReadonlySet<string> = new Set([
@@ -36,8 +40,52 @@ const KNOWN_CODES: ReadonlySet<string> = new Set([
  * shown as fine print below — useful for admins and developers debugging
  * an unexpected rejection without forcing the end-user to parse it.
  */
-export default function UploadRejectionModal({ rejection, onClose }: Props) {
+export default function UploadRejectionModal({ rejection, onClose, pendingReview }: Props) {
   const t = useTranslations("uploadRejection")
+
+  // Pending variant: not an error — the image is still under review. Rejection
+  // takes precedence when both are set.
+  if (!rejection && pendingReview) {
+    return (
+      <Modal open onClose={onClose}>
+        <div
+          className="w-full max-w-md rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-5 w-5"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold text-foreground">{t("pendingTitle")}</h2>
+              <p className="mt-1 text-sm text-gray-300">{t("pendingBody")}</p>
+            </div>
+          </div>
+          <div className="mt-5 flex items-center justify-end">
+            <Button variant="primary" size="sm" onClick={onClose}>
+              {t("dismiss")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
+
   if (!rejection) return null
 
   const codeKey = KNOWN_CODES.has(rejection.code) ? rejection.code : "unknown"

@@ -91,6 +91,8 @@
     "removePhotoFailed": "Não foi possível remover a foto."
   },
   "uploadRejection": {
+    "pendingTitle": "Ainda revisando sua imagem",
+    "pendingBody": "Sua imagem está demorando um pouco mais que o normal para ser revisada. Ela não foi rejeitada — tente novamente em instantes.",
     "title": "Imagem rejeitada",
     "intro": "Não conseguimos enviar sua imagem porque ela não cumpre as diretrizes da comunidade.",
     "fallback": "Por favor, tente outra imagem.",
@@ -820,6 +822,9 @@
   },
   "chatRoom": {
     "loading": "Carregando…",
+    "reviewingImage": "Revisando imagem…",
+    "stillReviewing": "Sua imagem ainda está em revisão. Estará pronta para enviar em instantes — tente novamente em breve.",
+    "dismissReview": "Dispensar",
     "leaveChannelTitle": "Sair do canal",
     "leaveChannelMessage": "Se você sair, perderá o acesso a todas as mensagens anteriores deste canal e não poderá lê-las novamente. Esta ação não pode ser desfeita.",
     "leaveGroupTitle": "Sair do grupo",
