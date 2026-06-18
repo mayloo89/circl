@@ -50,9 +50,15 @@ const POLL_INTERVAL_MS = 500
 async function pollModeration(uploadID: string, token: string, timeoutMs: number): Promise<ModerationVerdict> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    // Bound each request to the remaining window so a single hung GET can't keep
+    // the hook in `reviewing` past the deadline — without an AbortController the
+    // loop's deadline check never re-runs while one fetch stalls.
+    const controller = new AbortController()
+    const timeoutID = setTimeout(() => controller.abort(), deadline - Date.now())
     try {
       const res = await fetch(`${API_URL}/uploads/${uploadID}`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       })
       if (res.ok) {
         const data = await res.json()
@@ -69,9 +75,12 @@ async function pollModeration(uploadID: string, token: string, timeoutMs: number
         }
       }
     } catch {
-      // Network blip — retry on the next tick.
+      // Network blip or aborted request — retry on the next tick.
+    } finally {
+      clearTimeout(timeoutID)
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+    const sleepMs = Math.min(POLL_INTERVAL_MS, deadline - Date.now())
+    if (sleepMs > 0) await new Promise((r) => setTimeout(r, sleepMs))
   }
   return { status: "pending" } // still under review — do NOT fail open
 }

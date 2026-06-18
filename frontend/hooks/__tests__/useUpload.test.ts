@@ -295,4 +295,26 @@ describe("useUpload", () => {
     act(() => result.current.clearPendingReview())
     expect(result.current.pendingReview).toBe(false)
   })
+
+  it("aborts a hung poll request and still reaches pendingReview by the deadline", async () => {
+    // A GET that never resolves on its own: only the hook's per-request
+    // AbortController can end it. Without that abort, the poll would hang past
+    // the deadline instead of settling into pendingReview.
+    server.use(
+      http.get(`${API}/uploads/uid-1`, async ({ request }) => {
+        await new Promise((_, reject) => {
+          request.signal.addEventListener("abort", () => reject(new Error("aborted")))
+        })
+        return HttpResponse.json({ id: "uid-1", moderation_status: "pending" })
+      })
+    )
+    const { result } = renderHook(() => useUpload("token", { pollTimeoutMs: 60 }))
+    let res: Awaited<ReturnType<typeof result.current.upload>>
+    await act(async () => {
+      res = await result.current.upload(makeFile(), "avatar")
+    })
+    expect(res!).toBeNull()
+    expect(result.current.pendingReview).toBe(true)
+    expect(result.current.rejection).toBeNull()
+  })
 })
