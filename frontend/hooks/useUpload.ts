@@ -34,22 +34,39 @@ interface ModerationVerdict {
   reason?: string
 }
 
-// pollModeration GETs the upload row until moderation completes or the
-// timeout elapses. Returns the final verdict so the caller can show the
-// rejection reason. Failing open ("approved") on poll error is intentional
-// — a flaky API call should not look like a content rejection to the user.
-async function pollModeration(uploadID: string, token: string): Promise<ModerationVerdict> {
-  const deadline = Date.now() + 5000
+// Normal moderation completes in ~1s. The backend holds-and-retries on a
+// vendor outage (legal-floor detectors fail closed), so a `pending` row can
+// persist far longer; we poll for a bounded window and then report `pending`
+// rather than ever faking approval — sending an un-approved image would be
+// rejected by the server's attach-time gate anyway.
+const POLL_TIMEOUT_MS = 12000
+const POLL_INTERVAL_MS = 500
+
+// pollModeration GETs the upload row until moderation completes or the poll
+// window elapses. A poll-call failure (network blip) is retried on the next
+// tick; only a definitive `rejected`/`quarantined` row is treated as a content
+// block. Timing out returns `pending` — the image is still under review, not
+// approved, so the caller must not send it.
+async function pollModeration(uploadID: string, token: string, timeoutMs: number): Promise<ModerationVerdict> {
+  const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    // Bound each request to the remaining window so a single hung GET can't keep
+    // the hook in `reviewing` past the deadline — without an AbortController the
+    // loop's deadline check never re-runs while one fetch stalls.
+    const controller = new AbortController()
+    const timeoutID = setTimeout(() => controller.abort(), deadline - Date.now())
     try {
       const res = await fetch(`${API_URL}/uploads/${uploadID}`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       })
       if (res.ok) {
         const data = await res.json()
         const status = data.moderation_status as string
         if (status === "approved" || status === "skipped") return { status: "approved" }
-        if (status === "rejected") {
+        // A quarantined upload is a legal-floor (CSAM-class) hit; surface it to
+        // the user as a generic rejection — never as a distinct, tip-off state.
+        if (status === "rejected" || status === "quarantined") {
           return {
             status: "rejected",
             code: data.moderation_code,
@@ -58,11 +75,14 @@ async function pollModeration(uploadID: string, token: string): Promise<Moderati
         }
       }
     } catch {
-      // Network blip — retry on the next tick.
+      // Network blip or aborted request — retry on the next tick.
+    } finally {
+      clearTimeout(timeoutID)
     }
-    await new Promise((r) => setTimeout(r, 500))
+    const sleepMs = Math.min(POLL_INTERVAL_MS, deadline - Date.now())
+    if (sleepMs > 0) await new Promise((r) => setTimeout(r, sleepMs))
   }
-  return { status: "approved" } // timeout → fail open
+  return { status: "pending" } // still under review — do NOT fail open
 }
 
 function formatBytes(bytes: number): string {
@@ -77,10 +97,13 @@ function formatBytes(bytes: number): string {
  * 2. PUT the file to that URL
  * 3. POST /uploads/{id}/confirm → finalize and get the public URL
  */
-export function useUpload(token: string | undefined) {
+export function useUpload(token: string | undefined, opts?: { pollTimeoutMs?: number }) {
+  const pollTimeoutMs = opts?.pollTimeoutMs ?? POLL_TIMEOUT_MS
   const [uploading, setUploading] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
   const [error, setError] = useState("")
   const [rejection, setRejection] = useState<UploadRejection | null>(null)
+  const [pendingReview, setPendingReview] = useState(false)
 
   async function upload(
     file: File,
@@ -102,6 +125,7 @@ export function useUpload(token: string | undefined) {
     setUploading(true)
     setError("")
     setRejection(null)
+    setPendingReview(false)
 
     try {
       // Step 1: Request upload URL.
@@ -147,15 +171,26 @@ export function useUpload(token: string | undefined) {
       const result: UploadResult = await confirmRes.json()
 
       // Step 4: Poll the moderation outcome. The image pipeline runs async
-      // in the worker; for the small images we accept here it completes
-      // within ~1s. Rejections surface as a structured `rejection` value
-      // (not an `error` string) so consumers can render the dedicated
-      // localized modal instead of a generic inline error.
+      // in the worker; normally it completes within ~1s. Rejections surface as
+      // a structured `rejection` value (not an `error` string) so consumers can
+      // render the dedicated localized modal. A `pending` verdict (the poll
+      // window elapsed while the server still held the image — e.g. a vendor
+      // outage) surfaces as `pendingReview`: the image is NOT returned, because
+      // the server's attach-time gate would reject it.
       if (file.type.startsWith("image/")) {
-        const verdict = await pollModeration(upload_id, token)
-        if (verdict.status === "rejected") {
-          setRejection({ code: verdict.code ?? "unknown", reason: verdict.reason })
-          return null
+        setReviewing(true)
+        try {
+          const verdict = await pollModeration(upload_id, token, pollTimeoutMs)
+          if (verdict.status === "rejected") {
+            setRejection({ code: verdict.code ?? "unknown", reason: verdict.reason })
+            return null
+          }
+          if (verdict.status === "pending") {
+            setPendingReview(true)
+            return null
+          }
+        } finally {
+          setReviewing(false)
         }
       }
 
@@ -168,5 +203,14 @@ export function useUpload(token: string | undefined) {
     }
   }
 
-  return { upload, uploading, error, rejection, clearRejection: () => setRejection(null) }
+  return {
+    upload,
+    uploading,
+    reviewing,
+    error,
+    rejection,
+    pendingReview,
+    clearRejection: () => setRejection(null),
+    clearPendingReview: () => setPendingReview(false),
+  }
 }

@@ -26,7 +26,7 @@ export default function OnboardingPhotoPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  const { upload, uploading, rejection, clearRejection } = useUpload(session?.accessToken)
+  const { upload, uploading, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(session?.accessToken)
   const token = session?.accessToken
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -123,7 +123,14 @@ export default function OnboardingPhotoPage() {
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <UploadRejectionModal rejection={rejection} onClose={clearRejection} />
+      <UploadRejectionModal
+        rejection={rejection}
+        pendingReview={pendingReview}
+        onClose={() => {
+          clearRejection()
+          clearPendingReview()
+        }}
+      />
 
       <div className="flex flex-col gap-3">
         <Button

@@ -91,6 +91,8 @@
     "removePhotoFailed": "Failed to remove photo."
   },
   "uploadRejection": {
+    "pendingTitle": "Still reviewing your image",
+    "pendingBody": "Your image is taking a little longer than usual to review. It hasn't been rejected — please try again in a moment.",
     "title": "Image rejected",
     "intro": "We couldn't upload your image because it doesn't meet community guidelines.",
     "fallback": "Please try another image.",
@@ -820,6 +822,9 @@
   },
   "chatRoom": {
     "loading": "Loading…",
+    "reviewingImage": "Reviewing image…",
+    "stillReviewing": "Your image is still being reviewed. It will be ready to send in a moment — please try again shortly.",
+    "dismissReview": "Dismiss",
     "leaveChannelTitle": "Leave channel",
     "leaveChannelMessage": "If you leave, you'll lose access to all past messages in this channel and won't be able to read them again. This cannot be undone.",
     "leaveGroupTitle": "Leave group",

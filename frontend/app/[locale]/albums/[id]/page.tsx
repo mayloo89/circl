@@ -36,7 +36,7 @@ export default function AlbumDetailPage() {
   const [removeError, setRemoveError] = useState("")
 
   const fileRef = useRef<HTMLInputElement>(null)
-  const { upload, uploading, rejection, clearRejection, error: uploadErr } = useUpload(token)
+  const { upload, uploading, rejection, clearRejection, error: uploadErr, pendingReview, clearPendingReview } = useUpload(token)
 
   useEffect(() => {
     if (!token || !albumID) return
@@ -303,7 +303,14 @@ export default function AlbumDetailPage() {
         </Modal>
       )}
 
-      <UploadRejectionModal rejection={rejection} onClose={clearRejection} />
+      <UploadRejectionModal
+        rejection={rejection}
+        pendingReview={pendingReview}
+        onClose={() => {
+          clearRejection()
+          clearPendingReview()
+        }}
+      />
 
       <ConfirmDialog
         open={confirmDelete}
