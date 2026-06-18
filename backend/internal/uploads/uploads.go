@@ -32,7 +32,7 @@ type Upload struct {
 	ThumbnailKey     *string    `json:"thumbnail_key,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	CommittedAt      *time.Time `json:"committed_at,omitzero"`
-	ModerationStatus string     `json:"moderation_status"`           // "pending" | "approved" | "rejected" | "skipped"
+	ModerationStatus string     `json:"moderation_status"`           // "pending" | "approved" | "rejected" | "skipped" | "quarantined"
 	ModerationCode   string     `json:"moderation_code,omitempty"`   // populated only on rejection
 	ModerationReason string     `json:"moderation_reason,omitempty"` // populated only on rejection
 	ModeratedAt      *time.Time `json:"moderated_at,omitzero"`
@@ -58,6 +58,7 @@ type RejectionRecord struct {
 type Store interface {
 	Create(ctx context.Context, u *Upload) error
 	GetByID(ctx context.Context, id string) (*Upload, error)
+	GetByStorageKey(ctx context.Context, storageKey string) (*Upload, error)
 	Commit(ctx context.Context, id string) error
 	SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error
 	// MarkApproved records that moderation cleared the upload.
@@ -68,6 +69,11 @@ type Store interface {
 	// 'failed' (the storage object was purged); when true it stays
 	// 'committed' so the admin review tools can still load the file.
 	MarkRejected(ctx context.Context, rec RejectionRecord) error
+	// MarkQuarantined records a CSAM-class hit. The caller has already moved
+	// the original storage object to the restricted quarantineKey; this
+	// preserves the audit row, sets moderation_status to 'quarantined', and
+	// flips the lifecycle status to 'failed' so the original public URL 404s.
+	MarkQuarantined(ctx context.Context, rec RejectionRecord, quarantineKey string) error
 	// ListExpiredRetained returns rejected uploads whose retention window
 	// has elapsed and whose storage object is still kept for admin review.
 	// limit <= 0 falls back to a sensible default in the implementation.
@@ -187,6 +193,60 @@ func (s *Service) GetUploadForUser(ctx context.Context, uploadID, userID string)
 		return nil, ErrForbidden
 	}
 	return u, nil
+}
+
+// IsUploadServable reports whether an upload owned by ownerID may be exposed
+// to other users (attached to a message, album, or profile). Image uploads
+// must have cleared the moderation pipeline; non-image types are not scanned
+// by the image pipeline and are cleared on confirm. This is the attach-time
+// gate that keeps an un-moderated, rejected, or quarantined image from ever
+// reaching another user.
+func (s *Service) IsUploadServable(ctx context.Context, uploadID, ownerID string) (bool, error) {
+	u, err := s.GetUploadForUser(ctx, uploadID, ownerID)
+	if err != nil {
+		// A missing upload or an ownership mismatch is client input, not a
+		// server fault — treat it as "not servable" so callers return a clean
+		// block rather than a 500.
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
+			return false, nil
+		}
+		return false, err
+	}
+	return moderationCleared(u), nil
+}
+
+// IsKeyServable is IsUploadServable for surfaces that reference media by
+// storage key (avatar, profile gallery) rather than upload ID. The upload must
+// be owned by ownerID.
+func (s *Service) IsKeyServable(ctx context.Context, storageKey, ownerID string) (bool, error) {
+	u, err := s.store.GetByStorageKey(ctx, storageKey)
+	if err != nil {
+		// Unknown key is client input (a URL that maps to no upload) — block,
+		// don't 500.
+		if errors.Is(err, ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	if u.UserID != ownerID {
+		// Ownership mismatch is a client-driven block, not a server error.
+		return false, nil
+	}
+	return moderationCleared(u), nil
+}
+
+// moderationCleared reports whether an upload may be exposed to other users.
+// The upload must be committed; image uploads must additionally be
+// moderation-approved; non-image types are not scanned by the image pipeline
+// and are cleared once committed.
+func moderationCleared(u *Upload) bool {
+	if u.Status != "committed" {
+		return false
+	}
+	if !strings.HasPrefix(strings.ToLower(u.ContentType), "image/") {
+		return true
+	}
+	return u.ModerationStatus == "approved"
 }
 
 // ConfirmUpload marks a pending upload as committed. The caller must own

@@ -75,6 +75,8 @@ func writeServiceError(r *http.Request, w http.ResponseWriter, err error) {
 		apierror.Write(w, http.StatusForbidden, apierror.CodeForbidden, "forbidden")
 	case errors.Is(err, ErrInvalidRequest):
 		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request")
+	case errors.Is(err, ErrUploadNotApproved):
+		apierror.Write(w, http.StatusConflict, apierror.CodeUploadNotApproved, "image is still being reviewed")
 	case errors.Is(err, ErrGrantExists):
 		apierror.Write(w, http.StatusConflict, apierror.CodeInvalidRequest, "an open grant already exists for this user")
 	case errors.Is(err, ErrSelfGrant):

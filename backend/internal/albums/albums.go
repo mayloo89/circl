@@ -23,6 +23,9 @@ var (
 	ErrNotFound       = errors.New("albums: not found")
 	ErrForbidden      = errors.New("albums: forbidden")
 	ErrInvalidRequest = errors.New("albums: invalid request")
+	// ErrUploadNotApproved is returned when a photo's upload has not cleared
+	// moderation (still pending, rejected, or quarantined).
+	ErrUploadNotApproved = errors.New("albums: upload not approved")
 	ErrGrantExists    = errors.New("albums: open grant already exists")
 	ErrSelfGrant      = errors.New("albums: cannot grant access to yourself")
 )
@@ -296,8 +299,11 @@ func (s *Service) AddPhoto(ctx context.Context, callerID, albumID, uploadID stri
 	if u.Category != string(storage.CategoryAlbumPrivate) {
 		return ErrInvalidRequest
 	}
-	if u.ModerationStatus == "rejected" {
-		return ErrInvalidRequest
+	// Attach-time moderation gate: only an approved image may join an album.
+	// This blocks pending (not-yet-scanned), rejected, and quarantined uploads
+	// alike — not just rejected ones.
+	if !uploadServable(u) {
+		return ErrUploadNotApproved
 	}
 	return s.store.AddPhoto(ctx, albumID, uploadID, a.PhotoCount)
 }
@@ -359,12 +365,30 @@ func (s *Service) StreamPhoto(ctx context.Context, callerID, albumID, uploadID s
 	if err != nil {
 		return "", "", "", ErrNotFound
 	}
+	// Serve-time moderation gate: never stream an image that has not cleared
+	// the pipeline, even if it slipped into the album before scanning finished.
+	// Opaque 404 so the status isn't leaked.
+	if !uploadServable(u) {
+		return "", "", "", ErrNotFound
+	}
 	photo, err := s.store.GetPhoto(ctx, albumID, uploadID)
 	if err != nil {
 		return "", "", "", err
 	}
 	_ = photo
 	return u.StorageKey, u.ContentType, role, nil
+}
+
+// uploadServable reports whether an upload may be exposed to other users:
+// image uploads must be moderation-approved; non-image types are not scanned
+// by the image pipeline and are cleared on confirm.
+func uploadServable(u *uploads.Upload) bool {
+	// MIME types are case-insensitive; normalize so "Image/JPEG" can't slip
+	// past the image gate by looking like a non-image.
+	if !strings.HasPrefix(strings.ToLower(u.ContentType), "image/") {
+		return true
+	}
+	return u.ModerationStatus == "approved"
 }
 
 // InviteUser opens a 'pending' grant for grantee (owner → push). Returns

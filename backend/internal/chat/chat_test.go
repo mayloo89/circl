@@ -277,6 +277,38 @@ func TestService_SaveMessage_Error(t *testing.T) {
 	}
 }
 
+func TestService_SaveMessage_AttachmentNotApproved(t *testing.T) {
+	store := &mockStore{msg: &chat.Message{ID: "m-1"}}
+	svc := chat.NewService(store)
+	svc.UploadApproved = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID: "r-1", SenderID: "u-1", Type: chat.MessageTypeImage, Content: "url", UploadID: "up-1",
+	})
+	if !errors.Is(err, chat.ErrUploadNotApproved) {
+		t.Fatalf("expected ErrUploadNotApproved, got %v", err)
+	}
+	if store.savedParams != nil {
+		t.Error("message must not be persisted when the attachment is not approved")
+	}
+}
+
+func TestService_SaveMessage_AttachmentApproved(t *testing.T) {
+	store := &mockStore{msg: &chat.Message{ID: "m-1"}}
+	svc := chat.NewService(store)
+	svc.UploadApproved = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
+
+	_, err := svc.SaveMessage(t.Context(), chat.SaveMessageParams{
+		RoomID: "r-1", SenderID: "u-1", Type: chat.MessageTypeImage, Content: "url", UploadID: "up-1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.savedParams == nil {
+		t.Error("approved attachment should be persisted")
+	}
+}
+
 func TestService_ListMessages_Success(t *testing.T) {
 	want := []chat.Message{{ID: "m-1"}, {ID: "m-2"}}
 	svc := chat.NewService(&mockStore{msgs: want})

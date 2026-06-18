@@ -40,6 +40,10 @@ func NewHeuristic() *Heuristic {
 // Name returns the detector name.
 func (h *Heuristic) Name() string { return "heuristic" }
 
+// Severity is soft: a size/shape heuristic is a quality filter, not a legal
+// floor, and it cannot error anyway (pure arithmetic on Input).
+func (h *Heuristic) Severity() Severity { return SeveritySoft }
+
 // Check evaluates size and shape bounds; the first violation wins. Width and
 // Height are required — pass them as 0 only for non-image uploads that
 // should be skipped by the orchestrator, not by this detector.

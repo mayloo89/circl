@@ -203,15 +203,20 @@ func (s *fakeStore) HasActiveGrant(_ context.Context, albumID, viewerID string) 
 
 
 type fakeMedia struct {
-	owner    string
-	category string
+	owner            string
+	category         string
+	moderationStatus string // defaults to "approved"
 }
 
 func (f fakeMedia) GetForOwner(_ context.Context, uploadID, ownerID string) (*uploads.Upload, error) {
 	if ownerID != f.owner {
 		return nil, errors.New("forbidden")
 	}
-	return &uploads.Upload{ID: uploadID, UserID: ownerID, Category: f.category, ModerationStatus: "approved", StorageKey: "k/" + uploadID, ContentType: "image/jpeg"}, nil
+	status := f.moderationStatus
+	if status == "" {
+		status = "approved"
+	}
+	return &uploads.Upload{ID: uploadID, UserID: ownerID, Category: f.category, ModerationStatus: status, StorageKey: "k/" + uploadID, ContentType: "image/jpeg"}, nil
 }
 
 func newSvc(t *testing.T, ownerID, uploadCategory string) (*albums.Service, *fakeStore) {
@@ -336,6 +341,22 @@ func TestService_AddPhoto_AcceptsAlbumPrivateCategory(t *testing.T) {
 	a, _ := svc.CreateAlbum(t.Context(), "u-1", "x", "")
 	if err := svc.AddPhoto(t.Context(), "u-1", a.ID, "up-1"); err != nil {
 		t.Fatalf("add photo: %v", err)
+	}
+}
+
+func TestService_AddPhoto_RejectsUnmoderatedUpload(t *testing.T) {
+	// A still-pending (not-yet-scanned) upload must be blocked from joining an
+	// album — not just rejected ones.
+	store := newFakeStore()
+	svc := albums.NewService(store, nil, fakeMedia{
+		owner:            "u-1",
+		category:         string(storage.CategoryAlbumPrivate),
+		moderationStatus: "pending",
+	}, zerolog.Nop())
+	a, _ := svc.CreateAlbum(t.Context(), "u-1", "x", "")
+	err := svc.AddPhoto(t.Context(), "u-1", a.ID, "up-1")
+	if !errors.Is(err, albums.ErrUploadNotApproved) {
+		t.Errorf("err = %v, want ErrUploadNotApproved", err)
 	}
 }
 

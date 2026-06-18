@@ -55,6 +55,29 @@ func (s *pgStore) GetByID(ctx context.Context, id string) (*Upload, error) {
 	return &u, nil
 }
 
+// GetByStorageKey returns an upload by its storage key. Used by the attach-time
+// gate for surfaces (avatar, profile gallery) that reference media by URL
+// rather than upload ID.
+func (s *pgStore) GetByStorageKey(ctx context.Context, storageKey string) (*Upload, error) {
+	var u Upload
+	err := s.db.QueryRow(ctx, `
+		SELECT id, user_id, storage_key, filename, content_type, size_bytes, category, status,
+		       thumbnail_key, created_at, committed_at,
+		       moderation_status, moderation_code, moderation_reason, moderated_at
+		FROM uploads
+		WHERE storage_key = $1`, storageKey,
+	).Scan(&u.ID, &u.UserID, &u.StorageKey, &u.Filename, &u.ContentType, &u.SizeBytes, &u.Category, &u.Status,
+		&u.ThumbnailKey, &u.CreatedAt, &u.CommittedAt,
+		&u.ModerationStatus, &u.ModerationCode, &u.ModerationReason, &u.ModeratedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("uploads: get by storage key: %w", err)
+	}
+	return &u, nil
+}
+
 // SetThumbnailKey stores the thumbnail storage key after background processing.
 func (s *pgStore) SetThumbnailKey(ctx context.Context, id, thumbnailKey string) error {
 	tag, err := s.db.Exec(ctx, `
@@ -134,6 +157,33 @@ func (s *pgStore) MarkRejected(ctx context.Context, rec RejectionRecord) error {
 		rec.UploadID, rec.Code, rec.Reason, score, categories, rec.FileRetained, status)
 	if err != nil {
 		return fmt.Errorf("uploads: mark rejected: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	_ = rec.Source // recorded in logs at the worker layer; not persisted to keep the schema lean
+	return nil
+}
+
+// MarkQuarantined records a CSAM-class hit. The original storage object has
+// already been moved by the worker to quarantineKey (a restricted, never-served
+// prefix); here we set moderation_status to 'quarantined' and flip the
+// lifecycle status to 'failed' so the original public URL 404s. The object is
+// preserved, not purged — destroying it can itself be unlawful.
+func (s *pgStore) MarkQuarantined(ctx context.Context, rec RejectionRecord, quarantineKey string) error {
+	tag, err := s.db.Exec(ctx, `
+		UPDATE uploads
+		   SET moderation_status         = 'quarantined',
+		       moderation_code           = $2,
+		       moderation_reason         = $3,
+		       moderation_quarantine_key = $4,
+		       moderation_file_retained  = FALSE,
+		       moderated_at              = NOW(),
+		       status                    = 'failed'
+		 WHERE id = $1`,
+		rec.UploadID, rec.Code, rec.Reason, quarantineKey)
+	if err != nil {
+		return fmt.Errorf("uploads: mark quarantined: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound

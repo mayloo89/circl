@@ -5,10 +5,25 @@ package worker
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog"
 )
+
+// maxRetryDelay caps the exponential backoff between task retries. asynq's
+// default backoff grows without bound, which would space later retries days
+// apart — wrong for a moderation "hold & retry" where a hard-fail detector
+// (CSAM / NCII) must keep being re-checked at a steady cadence until the
+// vendor recovers. Capping at 5 minutes keeps held uploads moving without
+// hammering the vendor.
+const maxRetryDelay = 5 * time.Minute
+
+// cappedRetryDelay is exponential backoff (2^n seconds) clamped to maxRetryDelay.
+func cappedRetryDelay(n int, _ error, _ *asynq.Task) time.Duration {
+	d := time.Duration(1<<min(n, 20)) * time.Second
+	return min(d, maxRetryDelay)
+}
 
 // asynqLogger bridges asynq's Logger interface to a zerolog.Logger.
 type asynqLogger struct{ log zerolog.Logger }
@@ -40,9 +55,10 @@ type Server struct {
 // NewServer creates an asynq server that processes tasks from Redis.
 func NewServer(redisOpt asynq.RedisClientOpt, concurrency int, log zerolog.Logger) *Server {
 	srv := asynq.NewServer(redisOpt, asynq.Config{
-		Concurrency: concurrency,
-		Queues:      map[string]int{"default": 1},
-		Logger:      &asynqLogger{log: log.With().Str("component", "asynq").Logger()},
+		Concurrency:    concurrency,
+		Queues:         map[string]int{"default": 1},
+		Logger:         &asynqLogger{log: log.With().Str("component", "asynq").Logger()},
+		RetryDelayFunc: cappedRetryDelay,
 	})
 	return &Server{s: srv}
 }

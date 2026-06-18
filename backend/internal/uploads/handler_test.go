@@ -46,6 +46,15 @@ func (m *mockStore) GetByID(_ context.Context, id string) (*Upload, error) {
 	return u, nil
 }
 
+func (m *mockStore) GetByStorageKey(_ context.Context, storageKey string) (*Upload, error) {
+	for _, u := range m.uploads {
+		if u.StorageKey == storageKey {
+			return u, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 func (m *mockStore) Commit(_ context.Context, id string) error {
 	u, ok := m.uploads[id]
 	if !ok {
@@ -71,6 +80,9 @@ func (m *mockStore) SetThumbnailKey(_ context.Context, id, key string) error {
 
 func (m *mockStore) MarkApproved(_ context.Context, _ string) error          { return nil }
 func (m *mockStore) MarkRejected(_ context.Context, _ RejectionRecord) error { return nil }
+func (m *mockStore) MarkQuarantined(_ context.Context, _ RejectionRecord, _ string) error {
+	return nil
+}
 func (m *mockStore) ListExpiredRetained(_ context.Context, _ time.Time, _ int) ([]RetainedRejection, error) {
 	return nil, nil
 }
