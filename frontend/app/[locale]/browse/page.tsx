@@ -7,6 +7,8 @@ import { useTranslations } from "next-intl"
 
 import { Link } from "@/i18n/navigation"
 
+import { computeCompleteness, type ProfileFieldsForCompleteness } from "@/lib/profileCompleteness"
+
 import Avatar from "@/components/ui/Avatar"
 import BottomSheet from "@/components/ui/BottomSheet"
 import Button from "@/components/ui/Button"
@@ -446,6 +448,20 @@ export default function BrowsePage() {
 
   const fetchInFlight = useRef(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const [viewerCompleteness, setViewerCompleteness] = useState<number | null>(null)
+
+  // Deterministic per-session shuffle seed: stable on refresh (same tab/seed), varies across sessions.
+  const seedRef = useRef<string>("")
+  useEffect(() => {
+    const stored = sessionStorage.getItem("browse_seed")
+    if (stored) {
+      seedRef.current = stored
+    } else {
+      const fresh = crypto.randomUUID()
+      sessionStorage.setItem("browse_seed", fresh)
+      seedRef.current = fresh
+    }
+  }, [])
 
   const loadProfiles = useCallback(
     async (cursor: string | null, append: boolean, sortDist: boolean, interests: string[]) => {
@@ -460,7 +476,7 @@ export default function BrowsePage() {
         const sortParam = sortDist ? "&sort=distance" : ""
         const interestParams = interests.map((i) => `&interests=${encodeURIComponent(i)}`).join("")
         const res = await fetch(
-          `${API_URL}/profiles/browse?limit=${PAGE_SIZE}${cursorParam}${sortParam}${interestParams}`,
+          `${API_URL}/profiles/browse?limit=${PAGE_SIZE}${cursorParam}${sortParam}${interestParams}${seedRef.current ? `&seed=${encodeURIComponent(seedRef.current)}` : ""}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         if (!res.ok) throw new Error("Failed to load profiles.")
@@ -501,11 +517,25 @@ export default function BrowsePage() {
         (loadedPrefs.gender_preference ?? []).length === 0 &&
         !loadedPrefs.require_photo
 
-      if (prefsAreDefault && profileRes?.ok) {
-        const profile = await profileRes.json()
-        const lookingForGender: string[] = profile.looking_for_gender ?? []
-        const lookingForAgeMin: number | null = profile.looking_for_age_min ?? null
-        const lookingForAgeMax: number | null = profile.looking_for_age_max ?? null
+      // Parse the viewer's profile for both the "Looking For" seed and completeness gate.
+      let viewerProfile: Record<string, unknown> | null = null
+      if (profileRes?.ok) viewerProfile = await profileRes.json()
+
+      if (viewerProfile !== null) {
+        const fields: ProfileFieldsForCompleteness = {
+          avatar_url: viewerProfile.avatar_url as string | undefined,
+          bio: viewerProfile.bio as string | undefined,
+          interests: viewerProfile.interests as string[] | undefined,
+          date_of_birth: viewerProfile.date_of_birth as string | undefined,
+          location_text: viewerProfile.location_text as string | undefined,
+        }
+        if (!cancelled) setViewerCompleteness(computeCompleteness(fields).percent)
+      }
+
+      if (prefsAreDefault && viewerProfile !== null) {
+        const lookingForGender: string[] = viewerProfile.looking_for_gender as string[] ?? []
+        const lookingForAgeMin: number | null = viewerProfile.looking_for_age_min as number | null ?? null
+        const lookingForAgeMax: number | null = viewerProfile.looking_for_age_max as number | null ?? null
 
         if (lookingForGender.length > 0 || lookingForAgeMin !== null || lookingForAgeMax !== null) {
           const derived: Preferences = {
@@ -658,7 +688,27 @@ export default function BrowsePage() {
             </p>
           )}
 
-          {profiles.length === 0 && !error ? (
+          {viewerCompleteness !== null && viewerCompleteness < 40 ? (
+            // Completeness gate: show a blurred preview and a CTA to finish the profile.
+            <div className="relative">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 select-none" aria-hidden="true">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <ProfileCardSkeleton key={i} />
+                ))}
+              </div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-xl backdrop-blur-md bg-gray-950/60 px-6 text-center">
+                <p className="text-lg font-semibold text-foreground">{t("completeGateTitle")}</p>
+                <p className="text-sm text-gray-400 max-w-xs">{t("completeGateDesc")}</p>
+                <Link
+                  href="/profile"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-primary px-5 py-2 text-sm font-medium text-foreground hover:bg-brand-hover transition-colors"
+                >
+                  {t("completeGateCTA")}
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+                </Link>
+              </div>
+            </div>
+          ) : profiles.length === 0 && !error ? (
             <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
               <p className="text-lg font-semibold text-gray-300">{t("noResults")}</p>
               {filterCount > 0 && (

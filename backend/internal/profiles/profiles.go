@@ -101,6 +101,9 @@ type ProfilePreferences struct {
 	// Discovery filter — when true, browse hides profiles that don't have an
 	// avatar. Default false (no filter applied).
 	RequirePhoto bool
+	// When true, this user's profile is hidden from others' browse results.
+	// The user can still browse others. Default false.
+	DiscoveryPaused bool
 	// Privacy toggles. All default false.
 	HideDistanceFromNonContacts bool
 	HidePresence                bool
@@ -181,6 +184,7 @@ type PreferencesUpdate struct {
 	GenderPreference            *[]string
 	Locale                      *string
 	RequirePhoto                *bool
+	DiscoveryPaused             *bool
 	HideDistanceFromNonContacts *bool
 	HidePresence                *bool
 	HideReadReceipts            *bool
@@ -211,8 +215,10 @@ type BrowseProfile struct {
 	DistanceKm    *float64
 	FirstPhotoURL string
 	Interests     []string
-	// CreatedAt is used internally to encode the next-page cursor; not serialised to the API.
+	// CreatedAt is used internally for the distance-sort cursor; not serialised to the API.
 	CreatedAt time.Time
+	// Score is the relevance score from the browse ranking formula; not serialised to the API.
+	Score float64
 }
 
 // BrowsePage is a paginated set of browse results.
@@ -225,16 +231,23 @@ type BrowsePage struct {
 
 // browseCursor holds the keyset values needed to continue a Browse query.
 type browseCursor struct {
-	CreatedAt  time.Time `json:"ca"`
 	ID         string    `json:"id"`
-	DistanceKm *float64  `json:"dk,omitempty"`
+	CreatedAt  time.Time `json:"ca,omitzero"` // used only when sortByDistance
+	DistanceKm *float64  `json:"dk,omitempty"` // distance sort
+	Score      *float64  `json:"sc,omitempty"` // relevance sort (default)
+	AsOf       time.Time `json:"ao,omitzero"`  // recency anchor, pinned on first page
 }
 
 // EncodeBrowseCursor encodes the last profile of a page into an opaque cursor string.
-func EncodeBrowseCursor(p BrowseProfile, sortByDistance bool) string {
-	c := browseCursor{CreatedAt: p.CreatedAt, ID: p.ID}
+// asOf is the recency-anchor timestamp that was used for scoring on the first page;
+// it is carried through all subsequent pages so the score formula stays deterministic.
+func EncodeBrowseCursor(p BrowseProfile, sortByDistance bool, asOf time.Time) string {
+	c := browseCursor{ID: p.ID, AsOf: asOf}
 	if sortByDistance {
+		c.CreatedAt = p.CreatedAt
 		c.DistanceKm = p.DistanceKm
+	} else {
+		c.Score = &p.Score
 	}
 	b, _ := json.Marshal(c)
 	return base64.RawURLEncoding.EncodeToString(b)
@@ -267,7 +280,7 @@ type Store interface {
 	AcceptedContactIDs(ctx context.Context, userID string) ([]string, error)
 	UpsertPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
-	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) ([]BrowseProfile, error)
+	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string, seed string, asOf time.Time) ([]BrowseProfile, error)
 }
 
 // Service handles profile business logic.
@@ -546,15 +559,28 @@ func (s *Service) UpdateMyPreferences(ctx context.Context, userID string, update
 // Distance is suppressed (DistanceKm = nil) for any browsed profile whose
 // owner has set hide_distance_from_non_contacts and is not an accepted
 // contact of the caller.
-func (s *Service) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) (*BrowsePage, error) {
-	profiles, err := s.store.Browse(ctx, userID, limit+1, cursor, sortByDistance, interests)
+func (s *Service) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string, seed string) (*BrowsePage, error) {
+	if seed == "" {
+		seed = userID
+	}
+	// Pin the recency-scoring anchor to the first page so subsequent pages score
+	// consistently. A fresh first page always anchors to now.
+	var asOf time.Time
+	if cursor == "" {
+		asOf = time.Now()
+	} else if cur, err := DecodeBrowseCursor(cursor); err == nil && !cur.AsOf.IsZero() {
+		asOf = cur.AsOf
+	} else {
+		asOf = time.Now()
+	}
+	profiles, err := s.store.Browse(ctx, userID, limit+1, cursor, sortByDistance, interests, seed, asOf)
 	if err != nil {
 		return nil, err
 	}
 	var nextCursor string
 	if len(profiles) > limit {
 		profiles = profiles[:limit]
-		nextCursor = EncodeBrowseCursor(profiles[limit-1], sortByDistance)
+		nextCursor = EncodeBrowseCursor(profiles[limit-1], sortByDistance, asOf)
 	}
 
 	if len(profiles) > 0 {

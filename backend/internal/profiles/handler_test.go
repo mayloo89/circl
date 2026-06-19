@@ -114,7 +114,7 @@ func (m *mockProfileManager) SearchInterests(_ context.Context, _ string) ([]pro
 	return []profiles.InterestSuggestion{}, nil
 }
 
-func (m *mockProfileManager) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) (*profiles.BrowsePage, error) {
+func (m *mockProfileManager) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string, _ string) (*profiles.BrowsePage, error) {
 	if m.browseErr != nil {
 		return nil, m.browseErr
 	}

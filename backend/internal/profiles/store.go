@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -332,11 +333,17 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 //   $2 = interests filter (text[])
 //
 // Callers append an optional WHERE (cursor), ORDER BY, and LIMIT clause.
+// browseCTEBase is the core SQL for the browse/explore feed.
+// Params: $1=userID, $2=interests text[], $3=seed text, $4=asOf timestamptz.
+// The cursor WHERE clause and ORDER BY / LIMIT are appended dynamically.
 const browseCTEBase = `
 WITH r AS (
     SELECT latitude AS lat, longitude AS lng
     FROM profiles WHERE user_id = $1
     LIMIT 1
+),
+vi AS (
+    SELECT interest_id FROM profile_interests WHERE user_id = $1
 ),
 candidates AS (
     SELECT
@@ -368,10 +375,13 @@ candidates AS (
             JOIN interests i ON i.id = pi.interest_id
             WHERE pi.user_id = p.user_id
             ORDER BY i.name
-        ) AS interests
+        ) AS interests,
+        u.last_seen_at
     FROM profiles p
     LEFT JOIN LATERAL (SELECT lat, lng FROM r LIMIT 1) r ON true
     LEFT JOIN profile_preferences prefs ON prefs.user_id = $1
+    LEFT JOIN profile_preferences cand_prefs ON cand_prefs.user_id = p.user_id
+    JOIN users u ON u.id = p.user_id AND u.status = 'active'
     WHERE p.user_id <> $1
       AND p.username IS NOT NULL
       AND p.date_of_birth IS NOT NULL
@@ -412,9 +422,8 @@ candidates AS (
           WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
              OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
       )
-      AND EXISTS (
-          SELECT 1 FROM users u WHERE u.id = p.user_id AND u.status = 'active'
-      )
+      -- IS NOT TRUE is NULL-safe: no prefs row → not paused → candidate is visible.
+      AND cand_prefs.discovery_paused IS NOT TRUE
       -- "Hide profiles without a photo" filter — only applies when the
       -- viewer has the toggle on. IS NOT TRUE handles NULL safely (no
       -- preferences row → treat as off → no filter).
@@ -422,21 +431,45 @@ candidates AS (
           prefs.require_photo IS NOT TRUE
           OR (p.avatar_url IS NOT NULL AND p.avatar_url <> '')
       )
+),
+scored AS (
+    SELECT
+        c.id, c.user_id, c.username, c.display_name, c.avatar_url, c.date_of_birth,
+        c.gender, c.location_text, c.created_at, c.distance_km, c.first_photo_url, c.interests,
+        ROUND((
+            0.35 * (LEAST(
+                (SELECT count(*) FROM profile_interests pi2
+                 WHERE pi2.user_id = c.user_id
+                   AND pi2.interest_id IN (SELECT interest_id FROM vi)),
+                5)::numeric / 5)
+          + 0.30 * (CASE
+                      WHEN c.last_seen_at IS NULL                                   THEN 0
+                      WHEN c.last_seen_at > $4::timestamptz - interval '24 hours'   THEN 1.0
+                      WHEN c.last_seen_at > $4::timestamptz - interval '7 days'     THEN 0.7
+                      WHEN c.last_seen_at > $4::timestamptz - interval '30 days'    THEN 0.4
+                      WHEN c.last_seen_at > $4::timestamptz - interval '90 days'    THEN 0.2
+                      ELSE 0
+                    END)
+          + 0.25 * (CASE WHEN c.distance_km IS NULL THEN 0
+                         ELSE GREATEST(0, 1 - c.distance_km / 100.0) END)
+          + 0.10 * ((hashtext($3 || c.id::text) & 2147483647)::numeric / 2147483647)
+        )::numeric, 6) AS score
+    FROM candidates c
 )
 SELECT id, user_id, username, display_name, avatar_url, date_of_birth,
-       gender, location_text, created_at, distance_km, first_photo_url, interests
-FROM candidates`
+       gender, location_text, created_at, distance_km, first_photo_url, interests, score
+FROM scored`
 
 // Browse returns a cursor-paginated list of profiles for the browse/explore view.
 // cursor is an opaque token returned by a previous call ("" for the first page).
 // limit should be limit+1 (the caller trims and encodes the next cursor).
-func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) ([]BrowseProfile, error) {
+func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string, seed string, asOf time.Time) ([]BrowseProfile, error) {
 	if interests == nil {
 		interests = []string{}
 	}
 
-	args := []any{userID, interests} // $1, $2
-	nextArg := 3
+	args := []any{userID, interests, seed, asOf} // $1, $2, $3, $4
+	nextArg := 5
 
 	var cursorClause string
 	if cursor != "" {
@@ -467,13 +500,16 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 				nextArg += 2
 			}
 		} else {
-			// ORDER BY created_at DESC, id ASC
-			args = append(args, cur.CreatedAt, cur.ID)
-			p := [2]int{nextArg, nextArg + 1}
-			cursorClause = "\nWHERE created_at < $" + strconv.Itoa(p[0]) +
-				" OR (created_at = $" + strconv.Itoa(p[0]) +
-				" AND id > $" + strconv.Itoa(p[1]) + ")"
-			nextArg += 2
+			// ORDER BY score DESC, id ASC — relevance sort (default)
+			// If the cursor has no score (legacy/malformed), no WHERE clause → restart from page 1.
+			if cur.Score != nil {
+				args = append(args, *cur.Score, cur.ID)
+				p := [2]int{nextArg, nextArg + 1}
+				cursorClause = "\nWHERE score < $" + strconv.Itoa(p[0]) +
+					" OR (score = $" + strconv.Itoa(p[0]) +
+					" AND id > $" + strconv.Itoa(p[1]) + ")"
+				nextArg += 2
+			}
 		}
 	}
 
@@ -481,7 +517,7 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 	if sortByDistance {
 		orderBy = "distance_km ASC NULLS LAST, created_at DESC, id ASC"
 	} else {
-		orderBy = "created_at DESC, id ASC"
+		orderBy = "score DESC, id ASC"
 	}
 
 	args = append(args, limit)
@@ -502,7 +538,7 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 		if err := rows.Scan(
 			&p.ID, &p.UserID, &p.Username, &p.DisplayName, &p.AvatarURL,
 			&p.DateOfBirth, &p.Gender, &p.LocationText,
-			&p.CreatedAt, &p.DistanceKm, &firstPhotoURL, &p.Interests,
+			&p.CreatedAt, &p.DistanceKm, &firstPhotoURL, &p.Interests, &p.Score,
 		); err != nil {
 			return nil, fmt.Errorf("scan browse profile: %w", err)
 		}
@@ -527,7 +563,7 @@ func (s *pgStore) Browse(ctx context.Context, userID string, limit int, cursor s
 func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT user_id, min_age, max_age, max_distance_km, gender_preference, locale,
-		        require_photo,
+		        require_photo, discovery_paused,
 		        hide_distance_from_non_contacts, hide_presence, hide_read_receipts, hide_typing_indicator,
 		        notify_chat_messages, notify_contact_requests, notify_channel_mentions, notify_system
 		   FROM profile_preferences
@@ -537,7 +573,7 @@ func (s *pgStore) GetPreferences(ctx context.Context, userID string) (*ProfilePr
 	var p ProfilePreferences
 	if err := row.Scan(
 		&p.UserID, &p.MinAge, &p.MaxAge, &p.MaxDistanceKm, &p.GenderPreference, &p.Locale,
-		&p.RequirePhoto,
+		&p.RequirePhoto, &p.DiscoveryPaused,
 		&p.HideDistanceFromNonContacts, &p.HidePresence, &p.HideReadReceipts, &p.HideTypingIndicator,
 		&p.NotifyChatMessages, &p.NotifyContactRequests, &p.NotifyChannelMentions, &p.NotifySystem,
 	); err != nil {
@@ -664,6 +700,9 @@ func (s *pgStore) UpsertPreferences(ctx context.Context, userID string, update P
 	}
 	if update.RequirePhoto != nil {
 		addField("require_photo", *update.RequirePhoto)
+	}
+	if update.DiscoveryPaused != nil {
+		addField("discovery_paused", *update.DiscoveryPaused)
 	}
 	if update.HideDistanceFromNonContacts != nil {
 		addField("hide_distance_from_non_contacts", *update.HideDistanceFromNonContacts)

@@ -385,6 +385,8 @@
     "unblockFailed": "Não foi possível desbloquear o usuário. Tente novamente.",
     "privacy": "Privacidade",
     "symmetric": "Simétrico",
+    "pauseDiscovery": "Pausar descoberta",
+    "pauseDiscoveryDesc": "Oculta seu perfil do browse. Você ainda pode ver outros enquanto está pausado.",
     "hideDistance": "Ocultar minha distância para não contatos",
     "hideDistanceDesc": "Quando ativado, pessoas que não são seus contatos não verão a sua distância.",
     "hidePresence": "Ocultar meu status online e visto por último",
@@ -564,7 +566,10 @@
     "apply": "Aplicar",
     "addContact": "Adicionar contato",
     "requestSent": "Solicitação enviada",
-    "retry": "Tentar novamente"
+    "retry": "Tentar novamente",
+    "completeGateTitle": "Complete seu perfil para explorar",
+    "completeGateDesc": "Adicione uma foto, bio, interesses e localização para começar a descobrir pessoas.",
+    "completeGateCTA": "Completar perfil"
   },
   "admin": {
     "title": "Painel admin",

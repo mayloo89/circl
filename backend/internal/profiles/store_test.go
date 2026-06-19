@@ -643,7 +643,7 @@ func TestBrowse_Integration(t *testing.T) {
 	}
 
 	t.Run("returns other users with username and DOB", func(t *testing.T) {
-		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil)
+		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil, "seed1", time.Now())
 		if err != nil {
 			t.Fatalf("browse: %v", err)
 		}
@@ -662,7 +662,7 @@ func TestBrowse_Integration(t *testing.T) {
 	})
 
 	t.Run("excludes requester from results", func(t *testing.T) {
-		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil)
+		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil, "seed1", time.Now())
 		if err != nil {
 			t.Fatalf("browse: %v", err)
 		}
@@ -675,15 +675,16 @@ func TestBrowse_Integration(t *testing.T) {
 
 	t.Run("cursor pagination", func(t *testing.T) {
 		// Fetch page 1 with limit 1, extract cursor, fetch page 2; should not overlap.
-		page1, err := store.Browse(t.Context(), requesterID, 2, "", false, nil)
+		asOf := time.Now()
+		page1, err := store.Browse(t.Context(), requesterID, 2, "", false, nil, "test-seed", asOf)
 		if err != nil {
 			t.Fatalf("browse page 1: %v", err)
 		}
 		if len(page1) < 2 {
 			t.Skip("fewer than 2 results, skipping cursor pagination test")
 		}
-		cursor := EncodeBrowseCursor(page1[0], false)
-		page2, err := store.Browse(t.Context(), requesterID, 1, cursor, false, nil)
+		cursor := EncodeBrowseCursor(page1[0], false, asOf)
+		page2, err := store.Browse(t.Context(), requesterID, 1, cursor, false, nil, "test-seed", asOf)
 		if err != nil {
 			t.Fatalf("browse page 2: %v", err)
 		}
@@ -707,7 +708,7 @@ func TestBrowse_Integration(t *testing.T) {
 		})
 
 		// Browse should not return blocked user
-		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil)
+		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil, "seed1", time.Now())
 		if err != nil {
 			t.Fatalf("browse: %v", err)
 		}
@@ -736,7 +737,7 @@ func TestBrowse_Integration(t *testing.T) {
 		})
 
 		// Browse should not return target (who blocked requester)
-		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil)
+		results, err := store.Browse(t.Context(), requesterID, 20, "", false, nil, "seed1", time.Now())
 		if err != nil {
 			t.Fatalf("browse: %v", err)
 		}

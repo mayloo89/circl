@@ -25,7 +25,7 @@ type ProfileManager interface {
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpdateMyPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
-	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string) (*BrowsePage, error)
+	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string, seed string) (*BrowsePage, error)
 }
 
 type photoResponse struct {
@@ -78,6 +78,7 @@ type preferencesResponse struct {
 	GenderPreference            []string `json:"gender_preference"`
 	Locale                      string   `json:"locale"`
 	RequirePhoto                bool     `json:"require_photo"`
+	DiscoveryPaused             bool     `json:"discovery_paused"`
 	HideDistanceFromNonContacts bool     `json:"hide_distance_from_non_contacts"`
 	HidePresence                bool     `json:"hide_presence"`
 	HideReadReceipts            bool     `json:"hide_read_receipts"`
@@ -100,6 +101,7 @@ type updatePreferencesRequest struct {
 	GenderPreference            *[]string     `json:"gender_preference"`
 	Locale                      *string       `json:"locale"`
 	RequirePhoto                *bool         `json:"require_photo"`
+	DiscoveryPaused             *bool         `json:"discovery_paused"`
 	HideDistanceFromNonContacts *bool         `json:"hide_distance_from_non_contacts"`
 	HidePresence                *bool         `json:"hide_presence"`
 	HideReadReceipts            *bool         `json:"hide_read_receipts"`
@@ -314,6 +316,7 @@ func updateMyPreferences(svc ProfileManager) http.HandlerFunc {
 			GenderPreference:            req.GenderPreference,
 			Locale:                      req.Locale,
 			RequirePhoto:                req.RequirePhoto,
+			DiscoveryPaused:             req.DiscoveryPaused,
 			HideDistanceFromNonContacts: req.HideDistanceFromNonContacts,
 			HidePresence:                req.HidePresence,
 			HideReadReceipts:            req.HideReadReceipts,
@@ -562,6 +565,7 @@ func toPreferencesResponse(p *ProfilePreferences) preferencesResponse {
 		GenderPreference:            genderPref,
 		Locale:                      locale,
 		RequirePhoto:                p.RequirePhoto,
+		DiscoveryPaused:             p.DiscoveryPaused,
 		HideDistanceFromNonContacts: p.HideDistanceFromNonContacts,
 		HidePresence:                p.HidePresence,
 		HideReadReceipts:            p.HideReadReceipts,
@@ -610,8 +614,9 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 		cursor := r.URL.Query().Get("cursor")
 		sortByDistance := r.URL.Query().Get("sort") == "distance"
 		interests := r.URL.Query()["interests"]
+		seed := r.URL.Query().Get("seed")
 
-		result, err := svc.Browse(r.Context(), userID, limit, cursor, sortByDistance, interests)
+		result, err := svc.Browse(r.Context(), userID, limit, cursor, sortByDistance, interests, seed)
 		if err != nil {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
