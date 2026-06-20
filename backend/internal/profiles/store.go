@@ -297,9 +297,36 @@ func (s *pgStore) CountPhotos(ctx context.Context, userID string) (int, error) {
 	return count, nil
 }
 
-// AddPhoto inserts a new showcase photo and returns it.
+// syncAvatarToPrimary mirrors the first gallery photo (lowest position) to
+// profiles.avatar_url inside an open transaction. Clears avatar_url when the
+// gallery is empty.
+func syncAvatarToPrimary(ctx context.Context, tx pgx.Tx, userID string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE profiles
+		    SET avatar_url = NULLIF(COALESCE(
+		            (SELECT url FROM profile_photos WHERE user_id = $1 ORDER BY position, created_at LIMIT 1),
+		            ''
+		        ), ''),
+		        updated_at = now()
+		  WHERE user_id = $1`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("sync avatar to primary photo: %w", err)
+	}
+	return nil
+}
+
+// AddPhoto inserts a new showcase photo, then mirrors avatar_url to the first
+// gallery photo (position 0 becomes the main photo).
 func (s *pgStore) AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error) {
-	row := s.db.QueryRow(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	row := tx.QueryRow(ctx,
 		`INSERT INTO profile_photos (user_id, url, position)
 		 VALUES ($1, $2, (SELECT COALESCE(MAX(position) + 1, 0) FROM profile_photos WHERE user_id = $1))
 		 RETURNING id, url`,
@@ -309,12 +336,22 @@ func (s *pgStore) AddPhoto(ctx context.Context, userID, url string) (*ProfilePho
 	if err := row.Scan(&p.ID, &p.URL); err != nil {
 		return nil, fmt.Errorf("add profile photo: %w", err)
 	}
-	return &p, nil
+	if err := syncAvatarToPrimary(ctx, tx, userID); err != nil {
+		return nil, err
+	}
+	return &p, tx.Commit(ctx)
 }
 
-// DeletePhoto removes a photo, verifying it belongs to the given user.
+// DeletePhoto removes a photo verifying ownership, repacks positions to keep
+// them contiguous, then mirrors avatar_url to the new first gallery photo.
 func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error {
-	result, err := s.pool.Exec(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	result, err := tx.Exec(ctx,
 		`DELETE FROM profile_photos WHERE id = $1 AND user_id = $2`,
 		photoID, userID,
 	)
@@ -324,7 +361,78 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 	if result.RowsAffected() == 0 {
 		return ErrPhotoNotFound
 	}
-	return nil
+	// Repack positions to 0..n-1 after the delete.
+	if _, err := tx.Exec(ctx,
+		`WITH ranked AS (
+		     SELECT id,
+		            (ROW_NUMBER() OVER (ORDER BY position, created_at) - 1)::smallint AS new_pos
+		       FROM profile_photos WHERE user_id = $1
+		 )
+		 UPDATE profile_photos AS pp
+		    SET position = r.new_pos
+		   FROM ranked r WHERE pp.id = r.id`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("repack photo positions: %w", err)
+	}
+	if err := syncAvatarToPrimary(ctx, tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// ReorderPhotos reassigns positions according to orderedIDs (a permutation of
+// the user's current photo IDs) and mirrors avatar_url to the new first photo.
+func (s *pgStore) ReorderPhotos(ctx context.Context, userID string, orderedIDs []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx,
+		`SELECT id FROM profile_photos WHERE user_id = $1`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("fetch photo IDs: %w", err)
+	}
+	existing := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan photo ID: %w", err)
+		}
+		existing[id] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("fetch photo IDs: %w", err)
+	}
+
+	if len(orderedIDs) != len(existing) {
+		return fmt.Errorf("%w: reorder must include all %d photo(s)", ErrInvalidInput, len(existing))
+	}
+	for _, id := range orderedIDs {
+		if !existing[id] {
+			return ErrPhotoNotFound
+		}
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE profile_photos AS pp
+		    SET position = (ord.rn - 1)::smallint
+		   FROM unnest($2::uuid[]) WITH ORDINALITY AS ord(id, rn)
+		  WHERE pp.id = ord.id AND pp.user_id = $1`,
+		userID, orderedIDs,
+	); err != nil {
+		return fmt.Errorf("reorder photos: %w", err)
+	}
+	if err := syncAvatarToPrimary(ctx, tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // browseCTEBase is the first part of the browse query, a CTE that materialises

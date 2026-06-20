@@ -769,7 +769,35 @@ paths:
           schema: { type: string, format: uuid }
       responses:
         "204":
-          description: Photo deleted.
+          description: Photo deleted. avatar_url automatically mirrors the new first photo.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /profiles/me/photos/order:
+    put:
+      tags: [Profiles]
+      summary: Reorder profile photos
+      description: |
+        Reassigns gallery positions according to the provided ordering.
+        `photo_ids` must be a complete permutation of the user's current photo IDs.
+        The first photo in the new order automatically becomes the main photo
+        (avatar_url is mirrored server-side).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photo_ids]
+              properties:
+                photo_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: Ordered list of all photo IDs.
+      responses:
+        "204":
+          description: Photos reordered. avatar_url now mirrors the first photo.
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 

@@ -590,7 +590,7 @@ export default function PublicProfilePage() {
           </div>
         )}
 
-        <PhotoGallery photos={profile.photos} onPhotoClick={setLightbox} />
+        <PhotoGallery photos={profile.photos.slice(1)} onPhotoClick={setLightbox} />
       </div>
 
       {/* ── Mobile sticky action bar ── */}

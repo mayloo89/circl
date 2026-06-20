@@ -534,6 +534,11 @@
     "updateFailed": "No se pudo actualizar el perfil.",
     "addPhotoFailed": "No se pudo agregar la foto.",
     "deletePhotoFailed": "No se pudo eliminar la foto.",
+    "reorderPhotosFailed": "No se pudo reordenar las fotos.",
+    "mainPhoto": "Principal",
+    "makeMainPhoto": "Hacer principal",
+    "movePhotoBack": "Mover atrás",
+    "movePhotoForward": "Mover adelante",
     "removeInterest": "Eliminar {tag}",
     "locationSearching": "Buscando…",
     "incomplete": {

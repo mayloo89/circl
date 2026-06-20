@@ -22,7 +22,7 @@ export default function OnboardingPhotoPage() {
 
   const existing = profile?.avatar_url ?? ""
   const [preview, setPreview] = useState<string | null>(existing || null)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(existing || null)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(existing || null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
@@ -33,24 +33,24 @@ export default function OnboardingPhotoPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setError("")
-    const result = await upload(file, "avatar")
+    const result = await upload(file, "gallery")
     if (!result) return
     setPreview(result.url)
-    setAvatarUrl(result.url)
+    setPhotoUrl(result.url)
   }
 
   async function handleContinue() {
     if (!token) return
     const next = nextStepAfter(profile!, "photo")
 
-    if (avatarUrl && avatarUrl !== existing) {
+    if (photoUrl && photoUrl !== existing) {
       setSaving(true)
       setError("")
       try {
-        const res = await fetch(`${API_URL}/profiles/me/avatar`, {
-          method: "PUT",
+        const res = await fetch(`${API_URL}/profiles/me/photos`, {
+          method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ avatar_url: avatarUrl }),
+          body: JSON.stringify({ url: photoUrl }),
         })
         if (!res.ok) { setError(t("saveError")); return }
       } finally {
@@ -76,7 +76,7 @@ export default function OnboardingPhotoPage() {
     }
   }
 
-  const hasNewPhoto = !!avatarUrl && avatarUrl !== existing
+  const hasNewPhoto = !!photoUrl && photoUrl !== existing
 
   return (
     <div className="flex flex-col gap-8">
