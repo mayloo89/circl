@@ -521,6 +521,7 @@ export default function BrowsePage() {
       let viewerProfile: Record<string, unknown> | null = null
       if (profileRes?.ok) viewerProfile = await profileRes.json()
 
+      let completenessPercent: number | null = null
       if (viewerProfile !== null) {
         const fields: ProfileFieldsForCompleteness = {
           avatar_url: viewerProfile.avatar_url as string | undefined,
@@ -529,7 +530,8 @@ export default function BrowsePage() {
           date_of_birth: viewerProfile.date_of_birth as string | undefined,
           location_text: viewerProfile.location_text as string | undefined,
         }
-        if (!cancelled) setViewerCompleteness(computeCompleteness(fields).percent)
+        completenessPercent = computeCompleteness(fields).percent
+        if (!cancelled) setViewerCompleteness(completenessPercent)
       }
 
       if (prefsAreDefault && viewerProfile !== null) {
@@ -557,7 +559,11 @@ export default function BrowsePage() {
       }
 
       if (!cancelled) setPrefs(loadedPrefs)
-      if (!cancelled) loadProfiles(null, false, false, [])
+      if (!cancelled && (completenessPercent === null || completenessPercent >= 40)) {
+        loadProfiles(null, false, false, [])
+      } else if (!cancelled) {
+        setInitialLoading(false)
+      }
     }
 
     init()
