@@ -696,6 +696,7 @@ paths:
                     type: array
                     items: { type: string }
                   require_photo: { type: boolean }
+                  discovery_paused: { type: boolean }
                   hide_distance_from_non_contacts: { type: boolean }
                   hide_presence:         { type: boolean }
                   hide_read_receipts:    { type: boolean }
@@ -725,6 +726,7 @@ paths:
                   type: array
                   items: { type: string }
                 require_photo: { type: boolean }
+                discovery_paused: { type: boolean }
                 hide_distance_from_non_contacts: { type: boolean }
                 hide_presence:         { type: boolean }
                 hide_read_receipts:    { type: boolean }
@@ -785,6 +787,23 @@ paths:
         - in: query
           name: limit
           schema: { type: integer, default: 20 }
+        - in: query
+          name: sort
+          schema: { type: string, enum: [distance] }
+          description: Pass `distance` to sort by proximity instead of relevance score.
+        - in: query
+          name: seed
+          schema: { type: string }
+          description: |
+            Per-session shuffle seed. The client mints a UUID once per session
+            (stored in sessionStorage) and passes it on every request including
+            pagination. Same seed → same ranking order; different session → different order.
+        - in: query
+          name: interests
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+          description: Filter to profiles that share at least one of these interests.
       responses:
         "200":
           description: Paginated profile list.

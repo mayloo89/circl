@@ -167,6 +167,7 @@ interface Preferences {
   gender_preference: string[]
   locale: string
   require_photo: boolean
+  discovery_paused: boolean
   hide_distance_from_non_contacts: boolean
   hide_presence: boolean
   hide_read_receipts: boolean
@@ -178,6 +179,7 @@ interface Preferences {
 }
 
 type PrivacyKey =
+  | "discovery_paused"
   | "hide_distance_from_non_contacts"
   | "hide_presence"
   | "hide_read_receipts"
@@ -247,6 +249,15 @@ function PrivacySection({ token }: { token: string | undefined }) {
       </h2>
       <div className="rounded-lg bg-gray-800 ring-1 ring-gray-700">
         <div className="flex flex-col divide-y divide-gray-700">
+          <div className="px-5 py-4">
+            <Toggle
+              label={t("pauseDiscovery")}
+              description={t("pauseDiscoveryDesc")}
+              checked={prefs?.discovery_paused ?? false}
+              disabled={prefs === null || pendingKey !== null}
+              onChange={(e) => update("discovery_paused", e.target.checked)}
+            />
+          </div>
           <div className="px-5 py-4">
             <Toggle
               label={t("hideDistance")}

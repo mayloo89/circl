@@ -385,6 +385,8 @@
     "unblockFailed": "Failed to unblock user. Please try again.",
     "privacy": "Privacy",
     "symmetric": "Symmetric",
+    "pauseDiscovery": "Pause discovery",
+    "pauseDiscoveryDesc": "Hide your profile from browse. You can still browse others while paused.",
     "hideDistance": "Hide my distance from non-contacts",
     "hideDistanceDesc": "When on, people who aren't in your contacts won't see how far away you are.",
     "hidePresence": "Hide my online status and last seen",
@@ -564,7 +566,10 @@
     "apply": "Apply",
     "addContact": "Add contact",
     "requestSent": "Request sent",
-    "retry": "Retry"
+    "retry": "Retry",
+    "completeGateTitle": "Complete your profile to browse",
+    "completeGateDesc": "Add a photo, bio, interests, and location to start discovering people.",
+    "completeGateCTA": "Complete profile"
   },
   "admin": {
     "title": "Admin panel",

@@ -1,0 +1,2 @@
+ALTER TABLE profile_preferences
+    ADD COLUMN IF NOT EXISTS discovery_paused BOOLEAN NOT NULL DEFAULT FALSE;

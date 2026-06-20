@@ -10,6 +10,7 @@ import (
 type mockStore struct {
 	profile           *Profile
 	photos            []ProfilePhoto
+	browseFn          func(seed string)
 	photo             *ProfilePhoto
 	photoCount        int
 	prefs             *ProfilePreferences
@@ -119,6 +120,9 @@ func (m *mockStore) UpsertPreferences(_ context.Context, _ string, update Prefer
 	if update.RequirePhoto != nil {
 		out.RequirePhoto = *update.RequirePhoto
 	}
+	if update.DiscoveryPaused != nil {
+		out.DiscoveryPaused = *update.DiscoveryPaused
+	}
 	if update.HideDistanceFromNonContacts != nil {
 		out.HideDistanceFromNonContacts = *update.HideDistanceFromNonContacts
 	}
@@ -156,7 +160,10 @@ func (m *mockStore) SearchInterests(_ context.Context, _ string, _ int) ([]Inter
 	return []InterestSuggestion{}, nil
 }
 
-func (m *mockStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) ([]BrowseProfile, error) {
+func (m *mockStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string, seed string, _ time.Time) ([]BrowseProfile, error) {
+	if m.browseFn != nil {
+		m.browseFn(seed)
+	}
 	if m.browseErr != nil {
 		return nil, m.browseErr
 	}
@@ -975,7 +982,7 @@ func TestBrowse_ReturnsProfiles(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 10, "", false, nil)
+	page, err := svc.Browse(t.Context(), "requester", 10, "", false, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1001,7 +1008,7 @@ func TestBrowse_HasMore(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 2, "", false, nil)
+	page, err := svc.Browse(t.Context(), "requester", 2, "", false, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1016,7 +1023,7 @@ func TestBrowse_HasMore(t *testing.T) {
 func TestBrowse_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{browseErr: errors.New("db error")})
 
-	_, err := svc.Browse(t.Context(), "requester", 20, "", false, nil)
+	_, err := svc.Browse(t.Context(), "requester", 20, "", false, nil, "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1029,12 +1036,90 @@ func TestBrowse_NilDOBSkipsAge(t *testing.T) {
 		},
 	})
 
-	page, err := svc.Browse(t.Context(), "requester", 10, "", false, nil)
+	page, err := svc.Browse(t.Context(), "requester", 10, "", false, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if page.Profiles[0].Age != nil {
 		t.Error("Age should be nil when DateOfBirth is nil")
+	}
+}
+
+func TestBrowse_EmptySeedDefaultsToUserID(t *testing.T) {
+	var capturedSeed string
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	m := &mockStore{
+		browseProfiles: []BrowseProfile{{ID: "p1", UserID: "u1", DateOfBirth: &dob}},
+	}
+	m.browseFn = func(seed string) { capturedSeed = seed }
+	svc := NewService(m)
+
+	_, err := svc.Browse(t.Context(), "user-abc", 10, "", false, nil, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedSeed != "user-abc" {
+		t.Errorf("seed = %q, want %q (userID fallback)", capturedSeed, "user-abc")
+	}
+}
+
+func TestBrowse_CursorCarriesAsOf(t *testing.T) {
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	score := 0.75
+	svc := NewService(&mockStore{
+		browseProfiles: []BrowseProfile{
+			{ID: "p1", UserID: "u1", DateOfBirth: &dob},
+			{ID: "p2", UserID: "u2", DateOfBirth: &dob},
+			{ID: "p3", UserID: "u3", DateOfBirth: &dob},
+		},
+	})
+
+	page1, err := svc.Browse(t.Context(), "r", 2, "", false, nil, "seed-x")
+	if err != nil {
+		t.Fatalf("page 1: %v", err)
+	}
+	if page1.NextCursor == "" {
+		t.Fatal("expected next cursor on page 1")
+	}
+	cur, err := DecodeBrowseCursor(page1.NextCursor)
+	if err != nil {
+		t.Fatalf("decode cursor: %v", err)
+	}
+	if cur.AsOf.IsZero() {
+		t.Error("cursor AsOf should be set on first page")
+	}
+	_ = score
+}
+
+func TestBrowse_SeedPassedToStore(t *testing.T) {
+	var capturedSeed string
+	dob := time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC)
+	m := &mockStore{
+		browseProfiles: []BrowseProfile{{ID: "p1", UserID: "u1", DateOfBirth: &dob}},
+	}
+	m.browseFn = func(seed string) { capturedSeed = seed }
+	svc := NewService(m)
+
+	_, err := svc.Browse(t.Context(), "user-1", 10, "", false, nil, "custom-seed-42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedSeed != "custom-seed-42" {
+		t.Errorf("seed = %q, want %q", capturedSeed, "custom-seed-42")
+	}
+}
+
+func TestBrowse_DiscoveryPausedInPreferences(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	paused := true
+	update := PreferencesUpdate{DiscoveryPaused: &paused}
+	prefs, err := svc.UpdateMyPreferences(t.Context(), "u1", update)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !prefs.DiscoveryPaused {
+		t.Error("DiscoveryPaused should be true after update")
 	}
 }
 
@@ -1118,7 +1203,7 @@ func TestBrowse_SuppressesDistanceForNonContactsWhenViewedHidesDistance(t *testi
 		contactIDs: []string{"alice"}, // viewer is contacts with alice only.
 	})
 
-	page, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil)
+	page, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1146,7 +1231,7 @@ func TestBrowse_PrivacyFlagsErrorPropagates(t *testing.T) {
 		privacyFlagsErr: errors.New("db error"),
 	})
 
-	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil)
+	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil, "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1160,7 +1245,7 @@ func TestBrowse_AcceptedContactIDsErrorPropagates(t *testing.T) {
 		contactIDsErr:  errors.New("db error"),
 	})
 
-	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil)
+	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil, "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

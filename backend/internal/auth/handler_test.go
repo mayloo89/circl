@@ -234,7 +234,7 @@ func (m *mockProfileStore) UpsertPreferences(_ context.Context, _ string, _ prof
 func (m *mockProfileStore) SearchInterests(_ context.Context, _ string, _ int) ([]profiles.InterestSuggestion, error) {
 	return nil, nil
 }
-func (m *mockProfileStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string) ([]profiles.BrowseProfile, error) {
+func (m *mockProfileStore) Browse(_ context.Context, _ string, _ int, _ string, _ bool, _ []string, _ string, _ time.Time) ([]profiles.BrowseProfile, error) {
 	return nil, nil
 }
 func (m *mockProfileStore) GetPrivacyFlagsByIDs(_ context.Context, _ []string) (map[string]profiles.PrivacyFlags, error) {
