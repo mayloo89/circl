@@ -793,6 +793,8 @@ paths:
                 photo_ids:
                   type: array
                   items: { type: string, format: uuid }
+                  minItems: 1
+                  uniqueItems: true
                   description: Ordered list of all photo IDs.
       responses:
         "204":

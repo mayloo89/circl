@@ -53,6 +53,7 @@ export default function OnboardingPhotoPage() {
           body: JSON.stringify({ url: photoUrl }),
         })
         if (!res.ok) { setError(t("saveError")); return }
+        await refresh()
       } finally {
         setSaving(false)
       }

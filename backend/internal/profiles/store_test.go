@@ -535,6 +535,24 @@ func TestProfiles_Integration(t *testing.T) {
 		_ = svc.DeletePhoto(t.Context(), userID, ph.ID)
 	})
 
+	t.Run("reorder with duplicate photo IDs returns ErrInvalidInput", func(t *testing.T) {
+		ph1, err := svc.AddPhoto(t.Context(), userID, "https://example.com/dup1.jpg")
+		if err != nil {
+			t.Fatalf("add photo 1: %v", err)
+		}
+		ph2, err := svc.AddPhoto(t.Context(), userID, "https://example.com/dup2.jpg")
+		if err != nil {
+			t.Fatalf("add photo 2: %v", err)
+		}
+		err = svc.ReorderPhotos(t.Context(), userID, []string{ph1.ID, ph1.ID})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("got %v, want ErrInvalidInput", err)
+		}
+		// cleanup
+		_ = svc.DeletePhoto(t.Context(), userID, ph1.ID)
+		_ = svc.DeletePhoto(t.Context(), userID, ph2.ID)
+	})
+
 	t.Run("reorder with foreign photo ID returns ErrPhotoNotFound", func(t *testing.T) {
 		ph, err := svc.AddPhoto(t.Context(), userID, "https://example.com/y.jpg")
 		if err != nil {

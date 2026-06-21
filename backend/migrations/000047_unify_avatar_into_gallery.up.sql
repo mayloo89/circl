@@ -49,18 +49,20 @@ WITH avatar_not_first AS (
       AND p.avatar_url <> ''
       AND pp.position <> 0
 ),
--- Assign new positions: avatar row gets 0; others get their relative rank + 1.
+-- Assign new positions: avatar leads (sort key 0), others follow in their
+-- existing order. A single ROW_NUMBER avoids gaps that the CASE approach produces.
 new_positions AS (
     SELECT
         ph.id,
         ph.user_id,
-        CASE
-            WHEN ph.id = anf.avatar_photo_id THEN 0
-            ELSE (ROW_NUMBER() OVER (
-                    PARTITION BY ph.user_id
-                    ORDER BY ph.position, ph.created_at
-                  ))::int
-        END AS new_pos
+        (ROW_NUMBER() OVER (
+            PARTITION BY ph.user_id
+            ORDER BY
+                CASE WHEN ph.id = anf.avatar_photo_id THEN 0 ELSE 1 END,
+                ph.position,
+                ph.created_at,
+                ph.id
+        ) - 1)::int AS new_pos
     FROM profile_photos ph
     JOIN avatar_not_first anf ON anf.user_id = ph.user_id
 )

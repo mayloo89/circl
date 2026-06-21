@@ -414,7 +414,12 @@ func (s *pgStore) ReorderPhotos(ctx context.Context, userID string, orderedIDs [
 	if len(orderedIDs) != len(existing) {
 		return fmt.Errorf("%w: reorder must include all %d photo(s)", ErrInvalidInput, len(existing))
 	}
+	seen := make(map[string]struct{}, len(orderedIDs))
 	for _, id := range orderedIDs {
+		if _, dup := seen[id]; dup {
+			return fmt.Errorf("%w: duplicate photo id", ErrInvalidInput)
+		}
+		seen[id] = struct{}{}
 		if !existing[id] {
 			return ErrPhotoNotFound
 		}

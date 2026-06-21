@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 
 import Button from "@/components/ui/Button"
@@ -38,6 +38,7 @@ export default function PhotoGallery({
   const tc = useTranslations("common")
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [reordering, setReordering] = useState(false)
+  const reorderingRef = useRef(false)
 
   if (!editable) {
     if (photos.length === 0) return null
@@ -66,7 +67,8 @@ export default function PhotoGallery({
   }
 
   async function move(fromIdx: number, toIdx: number) {
-    if (!onReorder || reordering) return
+    if (!onReorder || reorderingRef.current) return
+    reorderingRef.current = true
     const next = [...photos]
     const [item] = next.splice(fromIdx, 1)
     next.splice(toIdx, 0, item)
@@ -74,6 +76,7 @@ export default function PhotoGallery({
     try {
       await onReorder(next.map((p) => p.id))
     } finally {
+      reorderingRef.current = false
       setReordering(false)
     }
   }

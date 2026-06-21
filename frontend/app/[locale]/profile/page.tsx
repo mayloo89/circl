@@ -437,13 +437,16 @@ export default function ProfilePage() {
   // (which drives the nav avatar) without resetting unsaved form fields.
   async function refreshPhotoState() {
     if (!token) return
-    const res = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
-    if (res.ok) {
+    try {
+      const res = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { setGalleryError(t("loadFailed")); return }
       const data: Profile = await res.json()
       setProfile((prev) => prev ? { ...prev, photos: data.photos, avatar_url: data.avatar_url } : prev)
       setAvatarURL(data.avatar_url ?? "")
+      await ctxRefresh()
+    } catch {
+      setGalleryError(t("loadFailed"))
     }
-    await ctxRefresh()
   }
 
   async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
