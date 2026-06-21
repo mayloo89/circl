@@ -32,6 +32,7 @@ type mockProfileManager struct {
 	publicErr         error
 	addPhotoErr       error
 	deletePhotoErr    error
+	reorderPhotoErr   error
 	getPrefsErr       error
 	updatePrefsErr    error
 	searchIntErr      error
@@ -64,6 +65,10 @@ func (m *mockProfileManager) AddPhoto(_ context.Context, _, _ string) (*profiles
 
 func (m *mockProfileManager) DeletePhoto(_ context.Context, _, _ string) error {
 	return m.deletePhotoErr
+}
+
+func (m *mockProfileManager) ReorderPhotos(_ context.Context, _ string, _ []string) error {
+	return m.reorderPhotoErr
 }
 
 func (m *mockProfileManager) UpdateAvatar(_ context.Context, _, _ string) error {
@@ -1184,6 +1189,92 @@ func TestGetPublicProfile_NonOwner_NoDOBOrCoords(t *testing.T) {
 	}
 	if resp["age"] == nil {
 		t.Error("age should be present for non-owner when DOB is set")
+	}
+}
+
+// --- PUT /profiles/me/photos/order ---
+
+func TestReorderPhotos_OK(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/photos/order", `{"photo_ids":["ph-1","ph-2"]}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestReorderPhotos_Unauthorized(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := httptest.NewRequest(http.MethodPut, "/profiles/me/photos/order", strings.NewReader(`{"photo_ids":["ph-1"]}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestReorderPhotos_MalformedJSON(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/photos/order", "{bad")
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReorderPhotos_EmptyPhotoIDs(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/photos/order", `{"photo_ids":[]}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReorderPhotos_InvalidInput(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{reorderPhotoErr: profiles.ErrInvalidInput})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/photos/order", `{"photo_ids":["ph-1"]}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReorderPhotos_PhotoNotFound(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{reorderPhotoErr: profiles.ErrPhotoNotFound})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/photos/order", `{"photo_ids":["ph-unknown"]}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestReorderPhotos_ServiceError(t *testing.T) {
+	h := profiles.NewHandler(&mockProfileManager{reorderPhotoErr: errors.New("db error")})
+
+	req := authedReq(t, http.MethodPut, "/profiles/me/photos/order", `{"photo_ids":["ph-1"]}`)
+	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
 

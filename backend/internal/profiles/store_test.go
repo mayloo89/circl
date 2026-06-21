@@ -167,34 +167,8 @@ func TestPgStore_CountPhotos_Error(t *testing.T) {
 	}
 }
 
-// --- AddPhoto ---
-
-func TestPgStore_AddPhoto_Success(t *testing.T) {
-	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(dest ...any) error {
-		*dest[0].(*string) = "ph-1"
-		*dest[1].(*string) = "https://example.com/1.jpg"
-		return nil
-	}}}}
-
-	p, err := store.AddPhoto(t.Context(), "user-1", "https://example.com/1.jpg")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if p.ID != "ph-1" {
-		t.Errorf("ID = %q, want ph-1", p.ID)
-	}
-}
-
-func TestPgStore_AddPhoto_Error(t *testing.T) {
-	store := &pgStore{db: &mockQuerier{row: &mockRow{scanFn: func(_ ...any) error {
-		return errors.New("db error")
-	}}}}
-
-	_, err := store.AddPhoto(t.Context(), "user-1", "https://example.com/1.jpg")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
+// AddPhoto, DeletePhoto, and ReorderPhotos use pool transactions and are
+// covered by the integration tests below (they cannot be tested via mockQuerier).
 
 // --- GetPreferences ---
 
@@ -484,34 +458,112 @@ func TestProfiles_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("add and delete profile photos", func(t *testing.T) {
-		ph, err := svc.AddPhoto(t.Context(), userID, "https://example.com/1.jpg")
+	t.Run("add mirrors avatar to first photo", func(t *testing.T) {
+		store := NewStore(pool)
+
+		ph1, err := svc.AddPhoto(t.Context(), userID, "https://example.com/1.jpg")
 		if err != nil {
-			t.Fatalf("add photo error: %v", err)
+			t.Fatalf("add first photo: %v", err)
 		}
-		if ph.ID == "" {
-			t.Fatal("expected non-empty photo ID")
+		p, err := store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile: %v", err)
+		}
+		if p.AvatarURL != "https://example.com/1.jpg" {
+			t.Errorf("avatar_url = %q, want first photo URL after add", p.AvatarURL)
 		}
 
-		p, err := svc.GetMyProfile(t.Context(), userID)
+		ph2, err := svc.AddPhoto(t.Context(), userID, "https://example.com/2.jpg")
 		if err != nil {
-			t.Fatalf("get profile error: %v", err)
+			t.Fatalf("add second photo: %v", err)
 		}
-		if len(p.Photos) != 1 {
-			t.Errorf("photos len = %d, want 1", len(p.Photos))
+		p, err = store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile: %v", err)
+		}
+		if p.AvatarURL != "https://example.com/1.jpg" {
+			t.Errorf("avatar_url = %q, want first photo unchanged after adding second", p.AvatarURL)
 		}
 
-		if err := svc.DeletePhoto(t.Context(), userID, ph.ID); err != nil {
-			t.Fatalf("delete photo error: %v", err)
+		// Reorder so photo 2 is first — avatar should update.
+		if err := svc.ReorderPhotos(t.Context(), userID, []string{ph2.ID, ph1.ID}); err != nil {
+			t.Fatalf("reorder photos: %v", err)
+		}
+		p, err = store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile: %v", err)
+		}
+		if p.AvatarURL != "https://example.com/2.jpg" {
+			t.Errorf("avatar_url = %q, want second photo URL after reorder", p.AvatarURL)
 		}
 
-		p, err = svc.GetMyProfile(t.Context(), userID)
+		// Delete the first (now photo 2 by position) → photo 1 becomes the only one.
+		if err := svc.DeletePhoto(t.Context(), userID, ph2.ID); err != nil {
+			t.Fatalf("delete photo: %v", err)
+		}
+		p, err = store.GetByUserID(t.Context(), userID)
 		if err != nil {
-			t.Fatalf("get profile after delete error: %v", err)
+			t.Fatalf("get profile: %v", err)
 		}
-		if len(p.Photos) != 0 {
-			t.Errorf("photos len = %d, want 0 after delete", len(p.Photos))
+		if p.AvatarURL != "https://example.com/1.jpg" {
+			t.Errorf("avatar_url = %q, want remaining photo URL after delete", p.AvatarURL)
 		}
+
+		// Delete the last photo — avatar should clear.
+		if err := svc.DeletePhoto(t.Context(), userID, ph1.ID); err != nil {
+			t.Fatalf("delete last photo: %v", err)
+		}
+		p, err = store.GetByUserID(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("get profile: %v", err)
+		}
+		if p.AvatarURL != "" {
+			t.Errorf("avatar_url = %q, want empty after deleting all photos", p.AvatarURL)
+		}
+	})
+
+	t.Run("reorder with wrong count returns ErrInvalidInput", func(t *testing.T) {
+		ph, err := svc.AddPhoto(t.Context(), userID, "https://example.com/x.jpg")
+		if err != nil {
+			t.Fatalf("add photo: %v", err)
+		}
+		err = svc.ReorderPhotos(t.Context(), userID, []string{ph.ID, "extra-id"})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("got %v, want ErrInvalidInput", err)
+		}
+		// cleanup
+		_ = svc.DeletePhoto(t.Context(), userID, ph.ID)
+	})
+
+	t.Run("reorder with duplicate photo IDs returns ErrInvalidInput", func(t *testing.T) {
+		ph1, err := svc.AddPhoto(t.Context(), userID, "https://example.com/dup1.jpg")
+		if err != nil {
+			t.Fatalf("add photo 1: %v", err)
+		}
+		ph2, err := svc.AddPhoto(t.Context(), userID, "https://example.com/dup2.jpg")
+		if err != nil {
+			t.Fatalf("add photo 2: %v", err)
+		}
+		err = svc.ReorderPhotos(t.Context(), userID, []string{ph1.ID, ph1.ID})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("got %v, want ErrInvalidInput", err)
+		}
+		// cleanup
+		_ = svc.DeletePhoto(t.Context(), userID, ph1.ID)
+		_ = svc.DeletePhoto(t.Context(), userID, ph2.ID)
+	})
+
+	t.Run("reorder with foreign photo ID returns ErrPhotoNotFound", func(t *testing.T) {
+		ph, err := svc.AddPhoto(t.Context(), userID, "https://example.com/y.jpg")
+		if err != nil {
+			t.Fatalf("add photo: %v", err)
+		}
+		err = svc.ReorderPhotos(t.Context(), userID, []string{"00000000-0000-0000-0000-000000000000"})
+		if !errors.Is(err, ErrPhotoNotFound) {
+			t.Errorf("got %v, want ErrPhotoNotFound", err)
+		}
+		// cleanup
+		_ = svc.DeletePhoto(t.Context(), userID, ph.ID)
 	})
 
 	t.Run("get public profile by ID", func(t *testing.T) {

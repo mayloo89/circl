@@ -225,6 +225,9 @@ func (m *mockProfileStore) AddPhoto(_ context.Context, _, _ string) (*profiles.P
 	return nil, nil
 }
 func (m *mockProfileStore) DeletePhoto(_ context.Context, _, _ string) error { return nil }
+func (m *mockProfileStore) ReorderPhotos(_ context.Context, _ string, _ []string) error {
+	return nil
+}
 func (m *mockProfileStore) GetPreferences(_ context.Context, _ string) (*profiles.ProfilePreferences, error) {
 	return nil, nil
 }

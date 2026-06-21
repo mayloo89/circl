@@ -22,6 +22,7 @@ type ProfileManager interface {
 	IsUsernameAvailable(ctx context.Context, username string) (bool, error)
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, userID, photoID string) error
+	ReorderPhotos(ctx context.Context, userID string, orderedIDs []string) error
 	GetMyPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	UpdateMyPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string) ([]InterestSuggestion, error)
@@ -116,6 +117,10 @@ type addPhotoRequest struct {
 	URL string `json:"url"`
 }
 
+type reorderPhotosRequest struct {
+	PhotoIDs []string `json:"photo_ids"`
+}
+
 
 // NewHandler returns an http.Handler with all profile routes.
 func NewHandler(svc ProfileManager) http.Handler {
@@ -127,6 +132,7 @@ func NewHandler(svc ProfileManager) http.Handler {
 	mux.HandleFunc("PUT /profiles/me/preferences", updateMyPreferences(svc))
 	mux.HandleFunc("POST /profiles/me/photos", addPhoto(svc))
 	mux.HandleFunc("DELETE /profiles/me/photos/{photoID}", deletePhoto(svc))
+	mux.HandleFunc("PUT /profiles/me/photos/order", reorderPhotos(svc))
 	mux.HandleFunc("GET /profiles/browse", browseProfiles(svc))
 	mux.HandleFunc("GET /profiles/interests", searchInterests(svc))
 	mux.HandleFunc("GET /profiles/available", checkUsernameAvailable(svc))
@@ -385,6 +391,40 @@ func deletePhoto(svc ProfileManager) http.HandlerFunc {
 				return
 			}
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func reorderPhotos(svc ProfileManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			apierror.Write(w, http.StatusUnauthorized, apierror.CodeUnauthorized, "unauthorized")
+			return
+		}
+
+		var req reorderPhotosRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid request body")
+			return
+		}
+		if len(req.PhotoIDs) == 0 {
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "photo_ids is required")
+			return
+		}
+
+		if err := svc.ReorderPhotos(r.Context(), userID, req.PhotoIDs); err != nil {
+			switch {
+			case errors.Is(err, ErrInvalidInput):
+				apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, err.Error())
+			case errors.Is(err, ErrPhotoNotFound):
+				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "one or more photos not found")
+			default:
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			}
 			return
 		}
 

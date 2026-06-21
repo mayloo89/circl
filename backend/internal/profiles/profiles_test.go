@@ -28,6 +28,7 @@ type mockStore struct {
 	countErr          error
 	addErr            error
 	deleteErr         error
+	reorderErr        error
 	prefsErr          error
 	upsertPrefsErr    error
 	searchIntErr      error
@@ -77,6 +78,10 @@ func (m *mockStore) AddPhoto(_ context.Context, _, _ string) (*ProfilePhoto, err
 
 func (m *mockStore) DeletePhoto(_ context.Context, _, _ string) error {
 	return m.deleteErr
+}
+
+func (m *mockStore) ReorderPhotos(_ context.Context, _ string, _ []string) error {
+	return m.reorderErr
 }
 
 func (m *mockStore) UpdateAvatar(_ context.Context, _, _ string) error {
@@ -751,6 +756,43 @@ func TestDeletePhoto_StoreError(t *testing.T) {
 	svc := NewService(&mockStore{deleteErr: errors.New("db error")})
 
 	err := svc.DeletePhoto(t.Context(), "user-1", "ph-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- ReorderPhotos ---
+
+func TestReorderPhotos_Success(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	if err := svc.ReorderPhotos(t.Context(), "user-1", []string{"ph-1", "ph-2"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestReorderPhotos_InvalidInput(t *testing.T) {
+	svc := NewService(&mockStore{reorderErr: ErrInvalidInput})
+
+	err := svc.ReorderPhotos(t.Context(), "user-1", []string{"ph-1"})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("got %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestReorderPhotos_NotFound(t *testing.T) {
+	svc := NewService(&mockStore{reorderErr: ErrPhotoNotFound})
+
+	err := svc.ReorderPhotos(t.Context(), "user-1", []string{"ph-unknown"})
+	if !errors.Is(err, ErrPhotoNotFound) {
+		t.Errorf("got %v, want ErrPhotoNotFound", err)
+	}
+}
+
+func TestReorderPhotos_StoreError(t *testing.T) {
+	svc := NewService(&mockStore{reorderErr: errors.New("db error")})
+
+	err := svc.ReorderPhotos(t.Context(), "user-1", []string{"ph-1"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

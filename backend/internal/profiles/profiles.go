@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	MaxProfilePhotos = 6
+	MaxProfilePhotos = 7
 	MaxInterests     = 20
 )
 
@@ -275,6 +275,7 @@ type Store interface {
 	CountPhotos(ctx context.Context, userID string) (int, error)
 	AddPhoto(ctx context.Context, userID, url string) (*ProfilePhoto, error)
 	DeletePhoto(ctx context.Context, photoID, userID string) error
+	ReorderPhotos(ctx context.Context, userID string, orderedIDs []string) error
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (map[string]PrivacyFlags, error)
 	AcceptedContactIDs(ctx context.Context, userID string) ([]string, error)
@@ -487,6 +488,13 @@ func (s *Service) requireMediaApproved(ctx context.Context, mediaURL, userID str
 // DeletePhoto removes a showcase photo, verifying ownership.
 func (s *Service) DeletePhoto(ctx context.Context, userID, photoID string) error {
 	return s.store.DeletePhoto(ctx, photoID, userID)
+}
+
+// ReorderPhotos reassigns gallery positions according to orderedIDs, which
+// must be a permutation of the user's current photo IDs. The first photo in
+// the new order automatically becomes the main photo (avatar_url mirror).
+func (s *Service) ReorderPhotos(ctx context.Context, userID string, orderedIDs []string) error {
+	return s.store.ReorderPhotos(ctx, userID, orderedIDs)
 }
 
 // GetMyPreferences returns the discovery preferences for the given user.

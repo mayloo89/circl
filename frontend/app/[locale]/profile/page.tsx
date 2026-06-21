@@ -14,6 +14,7 @@ import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
 import PhotoGallery from "@/components/profile/PhotoGallery"
 import { computeCompleteness, type MissingField } from "@/lib/profileCompleteness"
+import { useProfileContext } from "@/contexts/ProfileContext"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
@@ -23,7 +24,7 @@ interface PhotonFeature {
 }
 
 const MAX_BIO = 280
-const MAX_PHOTOS = 6
+const MAX_PHOTOS = 7
 const MAX_INTERESTS = 20
 
 // Canonical "Looking for" gender keys — must match backend's LookingForGenders.
@@ -290,6 +291,8 @@ export default function ProfilePage() {
     await signOut()
   }
 
+  const { refresh: ctxRefresh } = useProfileContext()
+
   const [profile, setProfile] = useState<Profile | null>(null)
   const [username, setUsername] = useState("")
   const [displayName, setDisplayName] = useState("")
@@ -315,8 +318,6 @@ export default function ProfilePage() {
   const interestRef = useRef<HTMLDivElement>(null)
   const [formError, setFormError] = useState("")
   const [formSuccess, setFormSuccess] = useState("")
-  const [avatarSuccess, setAvatarSuccess] = useState("")
-  const [avatarError, setAvatarError] = useState("")
   const [galleryError, setGalleryError] = useState("")
   const [loadError, setLoadError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -344,15 +345,12 @@ export default function ProfilePage() {
   }, [clearLocationSuggestions, clearInterestSuggestions])
 
   useAutoReset(formSuccess, setFormSuccess)
-  useAutoReset(avatarSuccess, setAvatarSuccess)
-  useAutoReset(avatarError, setAvatarError)
 
   useEffect(() => { setLocationActiveIdx(-1) }, [locationSuggestions])
   useEffect(() => { setInterestActiveIdx(-1) }, [interestSuggestions])
 
-  const avatarInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-  const { upload, uploading: uploadingAvatar, error: uploadError, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(session?.accessToken)
+  const { upload, error: uploadError, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(session?.accessToken)
 
   const isDirty = profile !== null && (
     username !== (profile.username ?? "") ||
@@ -376,7 +374,7 @@ export default function ProfilePage() {
         setUsername(data.username ?? "")
         setDisplayName(data.display_name ?? "")
         setBio(data.bio ?? "")
-        setAvatarURL(data.avatar_url)
+        setAvatarURL(data.avatar_url ?? "")
         setDateOfBirth(data.date_of_birth ?? "")
         if (data.gender && !GENDER_OPTIONS.includes(data.gender)) {
           setGender(CUSTOM_GENDER)
@@ -428,29 +426,27 @@ export default function ProfilePage() {
       const updated: Profile = await res.json()
       setProfile(updated)
       setUsername(updated.username ?? "")
-      setAvatarURL(updated.avatar_url)
-      setAvatarSuccess("")
+      setAvatarURL(updated.avatar_url ?? "")
       setFormSuccess(t("profileUpdated"))
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setAvatarSuccess("")
-    setAvatarError("")
-    const result = await upload(file, "avatar")
-    if (!result) return
-    const res = await fetch(`${API_URL}/profiles/me/avatar`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ avatar_url: result.url }),
-    })
-    if (!res.ok) { setAvatarError(t("avatarSaveFailed")); return }
-    setAvatarURL(result.url)
-    setAvatarSuccess(t("avatarUpdated"))
+  // Re-fetches photos + avatar_url from the server and updates ProfileContext
+  // (which drives the nav avatar) without resetting unsaved form fields.
+  async function refreshPhotoState() {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/profiles/me`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { setGalleryError(t("loadFailed")); return }
+      const data: Profile = await res.json()
+      setProfile((prev) => prev ? { ...prev, photos: data.photos, avatar_url: data.avatar_url } : prev)
+      setAvatarURL(data.avatar_url ?? "")
+      await ctxRefresh()
+    } catch {
+      setGalleryError(t("loadFailed"))
+    }
   }
 
   async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -467,8 +463,7 @@ export default function ProfilePage() {
         body: JSON.stringify({ url: result.url }),
       })
       if (!res.ok) { const data = await res.json(); setGalleryError(data.error ?? t("addPhotoFailed")); return }
-      const photo: ProfilePhoto = await res.json()
-      setProfile((prev) => prev ? { ...prev, photos: [...prev.photos, photo] } : prev)
+      await refreshPhotoState()
     } finally {
       setUploadingPhoto(false)
       if (photoInputRef.current) photoInputRef.current.value = ""
@@ -482,7 +477,18 @@ export default function ProfilePage() {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) { setGalleryError(t("deletePhotoFailed")); return }
-    setProfile((prev) => prev ? { ...prev, photos: prev.photos.filter((p) => p.id !== photoID) } : prev)
+    await refreshPhotoState()
+  }
+
+  async function handleReorderPhotos(orderedIds: string[]) {
+    setGalleryError("")
+    const res = await fetch(`${API_URL}/profiles/me/photos/order`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ photo_ids: orderedIds }),
+    })
+    if (!res.ok) { const data = await res.json(); setGalleryError(data.error ?? t("reorderPhotosFailed")); return }
+    await refreshPhotoState()
   }
 
   function addInterest(name: string) {
@@ -661,33 +667,18 @@ export default function ProfilePage() {
 
         {/* Profile card */}
         <div className="rounded-lg bg-gray-900 p-6 shadow-xl ring-1 ring-gray-800">
-          {/* Avatar upload — custom interactive widget */}
           <div className="flex flex-col items-center gap-3">
-            <button
-              type="button"
-              aria-label={t("changeAvatar")}
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={uploadingAvatar}
-              className="group relative h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-brand-hover focus:outline-none focus:ring-brand-hover"
-            >
+            <div className="h-24 w-24 overflow-hidden rounded-full bg-gray-800 ring-2 ring-gray-700">
               {avatarURL ? (
                 <Image src={avatarURL} alt={t("avatarAlt")} width={96} height={96} className="h-full w-full object-cover" />
               ) : (
-                <span className="flex h-full w-full items-center justify-center text-3xl text-gray-500 group-hover:text-gray-300">
+                <span className="flex h-full w-full items-center justify-center text-3xl text-gray-500">
                   {displayName ? displayName[0].toUpperCase() : "?"}
                 </span>
               )}
-              <span className="absolute inset-0 flex items-center justify-center bg-gray-950/70 text-xs text-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                {uploadingAvatar ? t("uploading") : t("changePhoto")}
-              </span>
-            </button>
-            <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={handleAvatarChange} className="hidden" />
+            </div>
             <p className="text-sm text-gray-500">{session?.user?.email}</p>
-            {(uploadError || avatarError || avatarSuccess) && (
-              <p className={`text-xs ${(uploadError || avatarError) ? "text-red-400" : "text-green-400"}`}>
-                {uploadError || avatarError || avatarSuccess}
-              </p>
-            )}
+            {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -1004,7 +995,7 @@ export default function ProfilePage() {
               type="submit"
               variant={isDirty ? "warning" : "primary"}
               loading={saving}
-              disabled={saving || uploadingAvatar || !isDirty || (!profile?.username && (usernameStatus === "checking" || usernameStatus === "taken" || usernameStatus === "invalid"))}
+              disabled={saving || !isDirty || (!profile?.username && (usernameStatus === "checking" || usernameStatus === "taken" || usernameStatus === "invalid"))}
               className="w-full focus:ring-offset-gray-900"
             >
               {saving ? t("saving") : isDirty ? t("save") : t("save")}
@@ -1019,6 +1010,7 @@ export default function ProfilePage() {
           uploading={uploadingPhoto}
           onAdd={() => photoInputRef.current?.click()}
           onDelete={handleDeletePhoto}
+          onReorder={handleReorderPhotos}
           error={galleryError}
         />
 

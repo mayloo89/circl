@@ -534,6 +534,11 @@
     "updateFailed": "Failed to update profile.",
     "addPhotoFailed": "Failed to add photo.",
     "deletePhotoFailed": "Failed to delete photo.",
+    "reorderPhotosFailed": "Failed to reorder photos.",
+    "mainPhoto": "Main",
+    "makeMainPhoto": "Make main",
+    "movePhotoBack": "Move back",
+    "movePhotoForward": "Move forward",
     "removeInterest": "Remove {tag}",
     "locationSearching": "Searching…",
     "incomplete": {
