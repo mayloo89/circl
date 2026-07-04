@@ -60,22 +60,19 @@ export default auth((req) => {
   // Apply CSP and harden the NEXT_LOCALE locale cookie (Secure + HttpOnly).
   // next-intl sets the cookie via low-level Set-Cookie headers, not the Next.js
   // cookies API, so res.cookies.get("NEXT_LOCALE") is unreliable. Instead we
-  // derive the locale from the incoming pathname and always write a hardened
-  // cookie so the flags are guaranteed on every locale-prefixed request.
+  // derive the locale from the incoming pathname — falling back to the default
+  // locale via getLocale() for unprefixed requests (localePrefix is "as-needed",
+  // so the default locale has no path segment) — and always write a hardened
+  // cookie so the flags are guaranteed on every request, prefixed or not.
   const finalize = (res: NextResponse): NextResponse => {
     if (csp) res.headers.set("Content-Security-Policy", csp)
-    const locale = routing.locales.find(
-      (l) => req.nextUrl.pathname.startsWith(`/${l}/`) || req.nextUrl.pathname === `/${l}`
-    )
-    if (locale) {
-      res.cookies.set("NEXT_LOCALE", locale, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      })
-    }
+    res.cookies.set("NEXT_LOCALE", getLocale(req.nextUrl.pathname), {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    })
     return res
   }
 
