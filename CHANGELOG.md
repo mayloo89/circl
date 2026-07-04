@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`NEXT_LOCALE` cookie hardening was silently a no-op**: `proxy.ts` re-applied the `httpOnly`/`secure`/`sameSite` flags by reading back `res.cookies.get("NEXT_LOCALE")`, but next-intl's middleware sets that cookie via a raw `Set-Cookie` header rather than the Next.js cookies API, so the read never found it and the hardening never ran. The locale is now derived directly from the request pathname and the cookie is always (re)written with the hardened flags plus an explicit one-year `maxAge`.
+
 ### Added
 
 - **Unified photo gallery — first photo is the main photo**: the gallery and the avatar are now one unified set. The first photo in the gallery is automatically used as the avatar across browse cards, the nav, chat, contacts, and the public-profile header; server-side, `avatar_url` is kept as a maintained mirror of `profile_photos` position 0 so no consumer code needed to change. A `PUT /profiles/me/photos/order` endpoint accepts a full ordered permutation of the user's photo IDs and repacks positions atomically, mirroring avatar_url to the new first photo. Add and delete also mirror. Gallery slots increased from 6 to 7 (migration `000047`) so that an existing full gallery can absorb a distinct legacy avatar during the backfill without dropping a photo. The standalone avatar upload widget has been removed from the profile-edit page; the gallery is the only photo manager. The onboarding photo step now uploads into the gallery (which becomes the main photo via the mirror) instead of hitting the avatar endpoint. The public profile gallery grid skips the first photo because the header already shows it as the avatar. Editable gallery tiles gain accessible reorder controls — a move-back/move-forward pair and a star "make main" shortcut (at position 1), all keyboard-accessible — and the first tile carries a "Main" badge. New `profile.*` i18n keys in EN/ES/PT.
