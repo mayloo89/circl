@@ -329,6 +329,44 @@ func TestListRooms_Success(t *testing.T) {
 	}
 }
 
+func TestListRooms_PopulatesAreAcceptedContacts(t *testing.T) {
+	rooms := []chat.RoomSummary{
+		{ID: "r-1", Type: chat.RoomTypeDM, PeerID: "accepted-peer"},
+		{ID: "r-2", Type: chat.RoomTypeDM, PeerID: "non-contact-peer"},
+		{ID: "r-3", Type: chat.RoomTypeGroup},
+	}
+	cfg := chat.HandlerConfig{
+		AreContacts: func(_ context.Context, _, peerID string) (bool, error) {
+			return peerID == "accepted-peer", nil
+		},
+	}
+	h := chat.NewHandler(&mockManager{rooms: rooms}, cfg)
+
+	req := authedReq(httptest.NewRequest(http.MethodGet, "/rooms", nil))
+	rec := httptest.NewRecorder()
+	serveWithAuth(h, req, rec)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got []chat.RoomSummary
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3", len(got))
+	}
+	if !got[0].AreAcceptedContacts {
+		t.Error("r-1 (accepted peer) are_accepted_contacts = false, want true")
+	}
+	if got[1].AreAcceptedContacts {
+		t.Error("r-2 (non-contact peer) are_accepted_contacts = true, want false")
+	}
+	if got[2].AreAcceptedContacts {
+		t.Error("r-3 (group room) are_accepted_contacts = true, want false")
+	}
+}
+
 func TestListRooms_NoUserInContext(t *testing.T) {
 	h := chat.NewHandler(&mockManager{})
 	req := httptest.NewRequest(http.MethodGet, "/rooms", nil)

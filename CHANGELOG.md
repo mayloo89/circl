@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **DM contact warning shown for every chat, even accepted contacts**: `ChatInput`'s "sharing contact info outside accepted contacts" warning is driven by `room.are_accepted_contacts`, but `GET /chat/rooms` (the endpoint `RoomView` actually loads room state from) never populated that field — only the single-room and create-DM endpoints did — so it was always `undefined`/falsy and the warning rendered in every DM regardless of contact status. `chat.RoomSummary` gained an `are_accepted_contacts` field and `listRoomsHandler` now resolves it per DM room via the same `HandlerConfig.AreContacts` callback the other endpoints already used.
+
 - **`NEXT_LOCALE` cookie hardening skipped unprefixed routes**: a Wapiti scan flagged the `NEXT_LOCALE` cookie as missing `Secure`/`HttpOnly` on `/es/login`. An earlier fix in `proxy.ts` derived the locale from the request pathname (since next-intl sets the cookie via a raw `Set-Cookie` header rather than the Next.js cookies API, so reading it back never worked), but only matched locale-prefixed paths — the default locale (`es`) uses `localePrefix: "as-needed"` and is reachable unprefixed (`/`, `/login`, etc.), so those responses still carried the un-hardened cookie. `finalize()` now reuses the existing `getLocale()` helper, which falls back to `routing.defaultLocale` when no prefix matches, so the hardened cookie is written on every response regardless of whether the path carries a locale segment.
 
 ### Added
