@@ -100,15 +100,7 @@ export default function Landing() {
           />
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:pb-24 lg:pt-20">
             <div>
-              <span className="landing-rise inline-flex items-center gap-2 rounded-full bg-brand-accent/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-brand-accent ring-1 ring-brand-accent/25">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-accent" />
-                {t("badge")}
-              </span>
-
-              <h1
-                className="landing-rise mt-6 font-display text-[clamp(2.5rem,6vw,4.25rem)] font-extrabold leading-[1.05] tracking-tight"
-                style={{ animationDelay: "0.08s" }}
-              >
+              <h1 className="landing-rise font-display text-[clamp(2.5rem,6vw,4.25rem)] font-extrabold leading-[1.05] tracking-tight">
                 {t("heroTitle")}
               </h1>
 
