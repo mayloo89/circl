@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Landing page ambient animations ran at full speed under reduced motion**: the global `prefers-reduced-motion` rule in `globals.css` only squashed `animation-duration` to `0.01ms`, which settles one-shot `forwards` reveals on their final frame but does nothing for `infinite`-looping animations — they just kept repeating at the same speed, which visitors with reduced motion enabled saw as the landing's orbit rings, aurora glow, and floating chat bubbles spinning/pulsing very fast instead of being calmed down. Those ambient elements (`components/landing/ConnectionMotif.tsx`) are now tagged with `.landing-orbit-el` / `.landing-aurora-el` / `.landing-float-el` classes and turned off outright (`animation: none !important`) under `prefers-reduced-motion: reduce`.
+
 - **`NEXT_LOCALE` cookie hardening skipped unprefixed routes**: a Wapiti scan flagged the `NEXT_LOCALE` cookie as missing `Secure`/`HttpOnly` on `/es/login`. An earlier fix in `proxy.ts` derived the locale from the request pathname (since next-intl sets the cookie via a raw `Set-Cookie` header rather than the Next.js cookies API, so reading it back never worked), but only matched locale-prefixed paths — the default locale (`es`) uses `localePrefix: "as-needed"` and is reachable unprefixed (`/`, `/login`, etc.), so those responses still carried the un-hardened cookie. `finalize()` now reuses the existing `getLocale()` helper, which falls back to `routing.defaultLocale` when no prefix matches, so the hardened cookie is written on every response regardless of whether the path carries a locale segment.
 
 ### Added
@@ -37,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Landing page hero — removed the "Adults only, 18+" badge**: dropped the standalone eyebrow badge above the headline in `components/landing/Landing.tsx` along with the now-unused `landing.badge` i18n key (EN/ES/PT).
 - **Go test modernization**: replaced all `context.Background()` calls inside unit test functions with `t.Context()` across 5 test files (`hub_test.go`, `turnstile_test.go`, `email_test.go`, `retention_test.go`, `ephemeral_test.go`) — 18 call sites total; unused `context` imports removed from `turnstile_test.go` and `email_test.go`.
 - **Admin panel — full i18n pass**: all 7 admin pages fully localized. ~120 new keys added to the `admin` namespace across EN/ES/PT. Hardcoded label dictionaries (`STATUS_LABELS`, `PRIORITY_LABELS`, `REASON_LABELS`) removed and replaced with locale-aware maps computed via `t()` inside each component. All `toLocaleDateString()` / `toLocaleString()` calls gain an explicit locale arg from `useLocale()`. All modal backdrops changed from `bg-black/60` to `bg-gray-950/80` (brand invariant: no hardcoded #000 — every neutral is blue-tinted).
 - **Legal pages — draft banner gated on env var**: the amber "pending legal review" banner previously rendered unconditionally on all four routes (`/privacy`, `/terms`, `/guidelines`, `/safety`). The `draft` prop is now driven by `LEGAL_DRAFT=true`; set the env var in staging, omit it in production.
