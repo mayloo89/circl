@@ -10,7 +10,7 @@ type RingProps = {
 function Ring({ className, duration, reverse, children }: RingProps) {
   return (
     <div
-      className={`absolute ${className}`}
+      className={`absolute landing-orbit-el ${className}`}
       style={{
         animation: `${reverse ? "landing-orbit-reverse" : "landing-orbit"} ${duration}s linear infinite`,
       }}
@@ -41,7 +41,7 @@ export default function ConnectionMotif() {
     >
       {/* Aurora wash — brand blue + rose, soft and drifting */}
       <div
-        className="absolute left-[8%] top-[6%] h-[60%] w-[60%] rounded-full blur-3xl"
+        className="landing-aurora-el absolute left-[8%] top-[6%] h-[60%] w-[60%] rounded-full blur-3xl"
         style={{
           background: "radial-gradient(circle, var(--brand-primary), transparent 70%)",
           opacity: 0.45,
@@ -49,7 +49,7 @@ export default function ConnectionMotif() {
         }}
       />
       <div
-        className="absolute bottom-[6%] right-[8%] h-[58%] w-[58%] rounded-full blur-3xl"
+        className="landing-aurora-el absolute bottom-[6%] right-[8%] h-[58%] w-[58%] rounded-full blur-3xl"
         style={{
           background: "radial-gradient(circle, var(--brand-accent), transparent 70%)",
           opacity: 0.4,
@@ -85,14 +85,14 @@ export default function ConnectionMotif() {
 
       {/* Drifting message bubbles */}
       <div
-        className="absolute left-[2%] top-[34%] rounded-2xl rounded-bl-sm bg-brand-surface-elevated px-3 py-2.5 shadow-card ring-1 ring-brand-light/60"
+        className="landing-float-el absolute left-[2%] top-[34%] rounded-2xl rounded-bl-sm bg-brand-surface-elevated px-3 py-2.5 shadow-card ring-1 ring-brand-light/60"
         style={{ animation: "landing-float 6s ease-in-out infinite" }}
       >
         <span className="block h-1.5 w-12 rounded-full bg-brand-muted/60" />
         <span className="mt-1.5 block h-1.5 w-8 rounded-full bg-brand-muted/40" />
       </div>
       <div
-        className="absolute bottom-[20%] right-[1%] rounded-2xl rounded-br-sm bg-brand-accent px-3 py-2.5 shadow-card"
+        className="landing-float-el absolute bottom-[20%] right-[1%] rounded-2xl rounded-br-sm bg-brand-accent px-3 py-2.5 shadow-card"
         style={{ animation: "landing-float 7s ease-in-out infinite 1.5s" }}
       >
         <span className="block h-1.5 w-10 rounded-full bg-white/80" />

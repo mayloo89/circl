@@ -183,6 +183,16 @@ h1, h2, h3, h4, h5, h6 {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+
+  /* The rule above only squashes duration, so infinite-looping animations
+     (unlike one-shot `forwards` reveals) keep repeating just as fast as
+     ever — visually indistinguishable from spinning at full speed. Turn
+     these off outright instead of relying on the duration squash. */
+  .landing-orbit-el,
+  .landing-aurora-el,
+  .landing-float-el {
+    animation: none !important;
+  }
 }
 
 html {
@@ -191,9 +201,14 @@ html {
 
 /* ─────────────────────────────────────────────────────────────────
    Landing page — entrance reveals + ambient motif motion.
-   All of these are disabled by the global prefers-reduced-motion
-   override above, which collapses animation-duration to 0.01ms so
-   elements settle on their final (visible) frame instantly.
+   The one-shot `landing-rise` reveal is disabled by the global
+   prefers-reduced-motion override above, which collapses its
+   animation-duration to 0.01ms so it settles on its final (visible)
+   frame instantly. The infinite ambient loops (orbit/aurora/float,
+   used in ConnectionMotif) are turned off outright by the
+   .landing-orbit-el/.landing-aurora-el/.landing-float-el rules
+   above instead — duration-squashing alone would just make an
+   infinite loop repeat just as fast, not stop.
 ───────────────────────────────────────────────────────────────── */
 @keyframes landing-rise {
   from { opacity: 0; transform: translateY(18px); }
