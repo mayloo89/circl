@@ -74,7 +74,7 @@ export default auth((req) => {
     if (csp) res.headers.set("Content-Security-Policy", csp)
     const localePath = stripLocale(req.nextUrl.pathname)
     const indexable = INDEXABLE_PAGES.some((p) =>
-      p === "/" ? localePath === "/" : localePath.startsWith(p),
+      p === "/" ? localePath === "/" : localePath === p || localePath.startsWith(`${p}/`),
     )
     if (!indexable) res.headers.set("X-Robots-Tag", "noindex")
     res.cookies.set("NEXT_LOCALE", getLocale(req.nextUrl.pathname), {
