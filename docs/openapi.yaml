@@ -105,6 +105,11 @@ components:
         description:  { type: [string, "null"] }
         avatar_url:   { type: [string, "null"], format: uri }
         unread_count: { type: integer }
+        are_accepted_contacts:
+          type: boolean
+          description: >-
+            DM rooms only: whether the two participants are mutual accepted
+            contacts. Always false for group/channel rooms.
         last_message:
           type: [object, "null"]
           properties:

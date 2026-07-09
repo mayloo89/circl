@@ -145,10 +145,15 @@ type RoomSummary struct {
 	PeerAvatarURL string `json:"peer_avatar_url,omitempty"`
 	// PeerLastReadAt is the peer's last_read_at timestamp for DM rooms.
 	// Used to seed the initial read-receipt state without a round-trip.
-	PeerLastReadAt *time.Time      `json:"peer_last_read_at,omitzero"`
-	LastMessage    *MessageSummary `json:"last_message"`
-	UnreadCount    int             `json:"unread_count"`
-	CreatedAt      time.Time       `json:"created_at"`
+	PeerLastReadAt *time.Time `json:"peer_last_read_at,omitzero"`
+	// AreAcceptedContacts reports, for DM rooms, whether the two participants
+	// have a mutual accepted contact relationship. Populated by the handler
+	// (not the store) via HandlerConfig.AreContacts; always false for
+	// non-DM rooms.
+	AreAcceptedContacts bool            `json:"are_accepted_contacts"`
+	LastMessage         *MessageSummary `json:"last_message"`
+	UnreadCount         int             `json:"unread_count"`
+	CreatedAt           time.Time       `json:"created_at"`
 }
 
 // Message is the full representation of a chat message including sender info.

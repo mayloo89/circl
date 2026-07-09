@@ -227,7 +227,7 @@ func NewHandler(svc Manager, cfg ...HandlerConfig) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/rooms/dm", getDMHandler(svc, c))
 	r.Post("/rooms", createGroupHandler(svc))
-	r.Get("/rooms", listRoomsHandler(svc))
+	r.Get("/rooms", listRoomsHandler(svc, c))
 	r.Get("/rooms/{id}", getRoomHandler(svc, c))
 	r.Put("/rooms/{id}", updateGroupHandler(svc))
 	r.Get("/rooms/{id}/members", listGroupMembersHandler(svc, c))
@@ -410,7 +410,7 @@ func getRoomHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 }
 
 // GET /chat/rooms
-func listRoomsHandler(svc Manager) http.HandlerFunc {
+func listRoomsHandler(svc Manager, cfg HandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
@@ -422,6 +422,18 @@ func listRoomsHandler(svc Manager) http.HandlerFunc {
 		if err != nil {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
+		}
+
+		if cfg.AreContacts != nil {
+			for i := range rooms {
+				if rooms[i].Type != RoomTypeDM || rooms[i].PeerID == "" {
+					continue
+				}
+				accepted, accErr := cfg.AreContacts(r.Context(), userID, rooms[i].PeerID)
+				if accErr == nil {
+					rooms[i].AreAcceptedContacts = accepted
+				}
+			}
 		}
 
 		apierror.WriteJSON(w, http.StatusOK, rooms)
