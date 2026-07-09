@@ -36,6 +36,12 @@ const AUTH_PAGES = [
 // public-readable bucket from AUTH_PAGES.
 const PUBLIC_PAGES = ["/terms", "/privacy", "/guidelines", "/safety", "/appeal", "/rooms"]
 
+// Marketing/acquisition surface search engines may index. Everything else gets
+// an X-Robots-Tag: noindex header — robots.txt (app/robots.ts) only stops
+// crawling, while this header keeps privately-linked URLs (profiles, chats,
+// appeal tokens) out of the index even when discovered.
+const INDEXABLE_PAGES = ["/", "/login", "/register", "/terms", "/privacy", "/guidelines", "/safety", "/rooms"]
+
 function getLocale(pathname: string): string {
   return (
     routing.locales.find(
@@ -66,6 +72,11 @@ export default auth((req) => {
   // cookie so the flags are guaranteed on every request, prefixed or not.
   const finalize = (res: NextResponse): NextResponse => {
     if (csp) res.headers.set("Content-Security-Policy", csp)
+    const localePath = stripLocale(req.nextUrl.pathname)
+    const indexable = INDEXABLE_PAGES.some((p) =>
+      p === "/" ? localePath === "/" : localePath.startsWith(p),
+    )
+    if (!indexable) res.headers.set("X-Robots-Tag", "noindex")
     res.cookies.set("NEXT_LOCALE", getLocale(req.nextUrl.pathname), {
       httpOnly: true,
       secure: isProd,

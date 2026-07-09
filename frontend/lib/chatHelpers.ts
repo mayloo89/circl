@@ -11,13 +11,18 @@ export function sameCalendarDay(a: string, b: string): boolean {
   )
 }
 
-export function formatDaySeparator(dateStr: string, nowMs: number): string {
+export function formatDaySeparator(
+  dateStr: string,
+  nowMs: number,
+  locale: string,
+  labels: { today: string; yesterday: string },
+): string {
   const now = new Date(nowMs)
   const yesterday = new Date(nowMs)
   yesterday.setDate(now.getDate() - 1)
-  if (sameCalendarDay(dateStr, now.toISOString())) return "Today"
-  if (sameCalendarDay(dateStr, yesterday.toISOString())) return "Yesterday"
-  return new Date(dateStr).toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })
+  if (sameCalendarDay(dateStr, now.toISOString())) return labels.today
+  if (sameCalendarDay(dateStr, yesterday.toISOString())) return labels.yesterday
+  return new Date(dateStr).toLocaleDateString(locale, { weekday: "long", month: "long", day: "numeric" })
 }
 
 export function isFirstInGroup(msgs: AnyMessage[], i: number): boolean {
@@ -42,15 +47,19 @@ export function isLastInGroup(msgs: AnyMessage[], i: number): boolean {
   return false
 }
 
-export function formatExpiry(expiresAt: string, nowMs: number): string {
+export type ExpiryCountdown =
+  | { unit: "expired" | "underMinute" }
+  | { unit: "days" | "hours" | "minutes"; value: number }
+
+export function expiryCountdown(expiresAt: string, nowMs: number): ExpiryCountdown {
   const diff = new Date(expiresAt).getTime() - nowMs
-  if (diff <= 0) return "expired"
+  if (diff <= 0) return { unit: "expired" }
   const h = Math.floor(diff / 3_600_000)
   const m = Math.floor((diff % 3_600_000) / 60_000)
-  if (h >= 24) return `${Math.floor(h / 24)}d left`
-  if (h >= 1) return `${h}h left`
-  if (m >= 1) return `${m}m left`
-  return "< 1m"
+  if (h >= 24) return { unit: "days", value: Math.floor(h / 24) }
+  if (h >= 1) return { unit: "hours", value: h }
+  if (m >= 1) return { unit: "minutes", value: m }
+  return { unit: "underMinute" }
 }
 
 export function expiryColorClass(expiresAt: string, nowMs: number): string {

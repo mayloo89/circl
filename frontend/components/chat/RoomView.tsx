@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "@/i18n/navigation"
 import { useEffect, useRef, useState } from "react"
 
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type SendOpts } from "@/hooks/useChat"
 import { usePresence, formatLastSeen } from "@/hooks/usePresence"
@@ -96,6 +96,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   const router = useRouter()
 
   const t = useTranslations("chatRoom")
+  const locale = useLocale()
   const token = session?.accessToken
   const userID = session?.user?.id
 
@@ -654,7 +655,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
 
                   return (
                     <div key={msg.id}>
-                      {showDateSep && <DateSeparator label={formatDaySeparator(msg.created_at, now)} />}
+                      {showDateSep && <DateSeparator label={formatDaySeparator(msg.created_at, now, locale, { today: t("today"), yesterday: t("yesterday") })} />}
                       <MessageBubble
                         msg={msg}
                         isOwn={isOwn}

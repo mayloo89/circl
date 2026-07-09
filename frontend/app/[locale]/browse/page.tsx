@@ -63,12 +63,6 @@ function ProfileCardSkeleton() {
   )
 }
 
-function formatDistance(km: number | null): string | null {
-  if (km === null) return null
-  if (km < 1) return "< 1 km away"
-  return `${Math.round(km)} km away`
-}
-
 function SendRequestButton({ userID, token }: { userID: string; token: string }) {
   const t = useTranslations("browse")
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle")
@@ -106,8 +100,14 @@ function SendRequestButton({ userID, token }: { userID: string; token: string })
 }
 
 function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string }) {
+  const t = useTranslations("browse")
   const heroURL = profile.avatar_url
-  const distance = formatDistance(profile.distance_km)
+  const distance =
+    profile.distance_km === null
+      ? null
+      : profile.distance_km < 1
+      ? t("distanceUnder1Km")
+      : t("distanceKmAway", { km: Math.round(profile.distance_km) })
 
   return (
     <Link
