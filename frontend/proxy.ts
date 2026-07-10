@@ -87,7 +87,12 @@ export default auth((req) => {
     return res
   }
 
-  const isLoggedIn = !!req.auth
+  // NextAuth sets req.auth to a truthy *error object* ({ message: "There was
+  // a problem with the server configuration…" }) instead of null when session
+  // resolution fails (e.g. UntrustedHost). Checking req.auth.user instead of
+  // req.auth keeps the auth wall failing closed on misconfiguration — an
+  // anonymous visitor must never be treated as logged in.
+  const isLoggedIn = !!req.auth?.user
   const { pathname } = req.nextUrl
   const localePath = stripLocale(pathname)
   const isAuthPage = AUTH_PAGES.some((p) => localePath.startsWith(p))

@@ -343,6 +343,7 @@
 - [x] **WebSocket connection rate limit** — `ratelimit.ConcurrentLimiter` (in-memory by design: WS connections are process-local, so counts stay exact across crashes) caps concurrent WS connections per client IP (`WS_IP_CONN_LIMIT`, default 20, `0` disables). Checked in `wsHandler` after auth/membership, before the upgrade; the slot is released when `readPump` exits. Covers registered users and guests alike.
 - [ ] **`next/image` remote patterns** — replace dev `localhost:9000` MinIO entry with the production CDN hostname.
 - [ ] **NextAuth cookie verification** — confirm `secure: true` / `httpOnly: true` / `sameSite: "lax"` are applied (automatic when `NEXTAUTH_URL` is `https://`, but worth confirming on first deploy).
+- [x] **Auth middleware fail-closed hardening** — `proxy.ts` computed `isLoggedIn = !!req.auth`, but NextAuth v5 sets `req.auth` to a truthy error object (not `null`) when session resolution fails (e.g. `UntrustedHost` on a production build without a trusted host), which silently opened the auth wall: anonymous visitors got 200 on private routes and were redirected away from `/login`. Now checks `req.auth?.user` (fails closed — verified by reintroducing the config error and confirming private routes still 307 to login), sets `trustHost: true` in `lib/auth.ts` (credentials-only auth, always behind the operator's reverse proxy), and adds E2E regression tests: anonymous → `/contacts`/`/chat`/`/browse`/`/settings` must redirect to login; `/login` must stay reachable.
 
 ### Phase 5 — Final polish & launch
 

@@ -85,6 +85,29 @@ test.describe("auth", () => {
   })
 })
 
+// Regression: the middleware computed isLoggedIn as !!req.auth, but NextAuth
+// sets req.auth to a truthy error object (not null) when session resolution
+// fails, which silently opened the auth wall — anonymous visitors reached
+// private routes and were redirected *away* from /login. These tests pin the
+// wall's behavior in both directions.
+test.describe("auth wall", () => {
+  test.describe.configure({ mode: "parallel" })
+
+  for (const path of ["/en/contacts", "/en/chat", "/en/browse", "/en/settings"]) {
+    test(`redirects the anonymous visitor from ${path} to login`, async ({ page }) => {
+      await page.goto(path)
+      await page.waitForURL(/\/en\/login$/)
+      await expect(page.locator("#email")).toBeVisible()
+    })
+  }
+
+  test("keeps the login page reachable for the anonymous visitor", async ({ page }) => {
+    await page.goto("/en/login")
+    await expect(page).toHaveURL(/\/en\/login$/)
+    await expect(page.locator("#email")).toBeVisible()
+  })
+})
+
 test.describe("legal pages and footer", () => {
   test.describe.configure({ mode: "parallel" })
 
