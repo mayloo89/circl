@@ -241,8 +241,8 @@
 ### Web / desktop polish
 
 - [ ] **Browse filter state synced to URL** `searchParams` so filters survive refresh and URLs are shareable; restored on mount.
-- [ ] **Form-error a11y** — `Input.tsx` lacks `aria-invalid` and `aria-describedby`; on submit error, move focus to the first invalid field. Should pass axe-core CI for form pages.
-- [ ] **`app/robots.ts`** with `Disallow: /` (or selectively indexable); `metadata.robots: { index: false }` on profile/chat/contacts/admin layouts.
+- [x] **Form-error a11y (attribute half)** — `Input.tsx` now sets `aria-invalid` on error and links error/helper text via `aria-describedby`, with a `React.useId` fallback when no `id` prop is passed. Still open: on submit error, move focus to the first invalid field; axe-core CI gate for form pages (tracked under the WCAG audit in Phase 5).
+- [x] **`app/robots.ts`** — selectively indexable: robots.txt disallows every private path (bare + per locale prefix, since the default locale is unprefixed); landing, login/register, legal pages, and `/rooms` stay crawlable. Instead of per-layout `metadata.robots` (the chat and onboarding layouts are client components and can't export metadata), the middleware stamps `X-Robots-Tag: noindex` on every response outside the indexable allowlist — one enforcement point covering all routes.
 - [ ] **Color-contrast audit** — any remaining `text-gray-500/600` body text on `bg-gray-900` lifted to `text-gray-400` minimum (most fixed in earlier UX passes; sweep remaining call sites).
 - [ ] **Browse card double-action cleanup** — card is a `<Link>` and the contact button blocks navigation via `e.preventDefault()`; replace with explicit two-action layout to remove the gestural ambiguity on mobile.
 - [ ] **Contacts search results separation** — currently mixed with the established-contacts sections; render a dedicated search-results view above the lists or as a switch.
@@ -254,8 +254,8 @@
 
 ### i18n cleanup
 
-- [ ] **Hardcoded `"en"` in `chatHelpers.ts`** `toLocaleDateString` calls — replace with `useLocale()`.
-- [ ] **Hardcoded English distance strings** in browse ("km away", "< 1 km away") — move to `messages/*.json`.
+- [x] **Hardcoded `"en"` in `chatHelpers.ts`** — `formatDaySeparator` now takes the active locale + translated today/yesterday labels (RoomView passes `useLocale()` and `chatRoom.today`/`.yesterday`); the expiry badge strings ("3h left", "expired", "< 1m") were hardcoded too, so `formatExpiry` became `expiryCountdown` returning a structured `{unit, value}` that `MessageBubble` renders via new `chatRoom.expiry*` keys. EN/ES/PT.
+- [x] **Hardcoded English distance strings** in browse — moved to `browse.distanceUnder1Km` / `browse.distanceKmAway` keys. EN/ES/PT.
 - [ ] **BottomNav label wrap test** — verify ES/PT labels don't wrap at 360px viewport width.
 - [x] **Locale picker on unauthenticated pages** ([PR #97](https://github.com/mayloo89/circl/pull/97)) — new `AuthLocalePicker` (`components/AuthLocalePicker.tsx`) renders fixed top-right ES / EN / PT pills on every unauthenticated route. Mounted in `Providers.AppShell` only when `status === "unauthenticated"` so it doesn't appear during the loading flicker or on authenticated pages. Switching pills uses next-intl's `router.replace(pathname, { locale })`, which updates the URL prefix and the `NEXT_LOCALE` cookie so the choice persists into the session and across reconnects. We deliberately don't persist to `profile_preferences.locale` at register time because the registration endpoint is unauthenticated and creating a parallel "set locale before signin" path would be over-engineered for one field; the cookie + URL prefix already carry the choice forward, and the user can refine via Settings → Language after login.
 - [x] **Locale-aware `DateOfBirthPicker` field order** ([PR #97](https://github.com/mayloo89/circl/pull/97)) — picker reads `useLocale()` and renders MM/DD/YYYY for `en` (US/UK convention) and DD/MM/YYYY for `es`/`pt`. Year stays last in both orderings. Three vitest cases cover the locale → ordering mapping by introspecting `select` aria-labels.
@@ -270,8 +270,8 @@
 ### Polish
 
 - [x] **Admin user list shows real presence** ([PR #98](https://github.com/mayloo89/circl/pull/98)) — added an "Activity" column to `/admin/users` separate from the moderation `status` column. Backend handler enriches each `UserRecord` with `online` + `last_seen_at` via a new `PresenceLookupFunc` injected into `admin.NewHandler`; main.go provides the adapter on top of `presence.Store.GetPresence` so admin stays decoupled from the presence package. UI shows a green dot + "Online" when present, a gray dot + relative "X ago" using the existing `formatLastSeen` helper otherwise (with the absolute timestamp on hover via `title`), and "Never" for users who have never connected. Three handler tests cover the overlay, the Redis-down propagation as a 500, and the legacy nil-lookup fallback.
-- [ ] **Branded `not-found.tsx`** per locale.
-- [ ] **`app/manifest.ts`** for PWA add-to-home.
+- [x] **Branded `not-found.tsx`** per locale — `app/[locale]/not-found.tsx` (in-brand 404 with localized title/description + home CTA, styled to match the error boundary) plus an `app/[locale]/[...rest]` catch-all so unknown paths inside a valid locale render it instead of Next's default 404. New `notFound` namespace, EN/ES/PT.
+- [x] **PWA manifest** — already shipped as `public/manifest.webmanifest` (name, standalone display, theme colors, 192/512 + maskable icons), linked from the locale layout's `metadata.manifest`; an `app/manifest.ts` route would duplicate it. Verified done, no code change.
 - [ ] **Pull-to-refresh** on chat list and browse.
 - [ ] **Offline banner** driven by `navigator.onLine`.
 - [ ] **In-app notification inbox** — persistent log of past SSE events.

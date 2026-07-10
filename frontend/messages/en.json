@@ -4,6 +4,11 @@
     "description": "An unexpected error occurred. You can try again — if it keeps happening, please come back in a little while.",
     "retry": "Try again"
   },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you're looking for doesn't exist or may have been moved.",
+    "goHome": "Go to home"
+  },
   "common": {
     "appName": "Circl",
     "loading": "Loading…",
@@ -573,7 +578,9 @@
     "retry": "Retry",
     "completeGateTitle": "Complete your profile to browse",
     "completeGateDesc": "Add a photo, bio, interests, and location to start discovering people.",
-    "completeGateCTA": "Complete profile"
+    "completeGateCTA": "Complete profile",
+    "distanceUnder1Km": "< 1 km away",
+    "distanceKmAway": "{km} km away"
   },
   "admin": {
     "title": "Admin panel",
@@ -655,7 +662,7 @@
     "suspendFailed": "Failed to suspend user",
     "hardDeleteTitle": "Permanently delete account?",
     "hardDeleteWarningPre": "This will immediately purge all data for",
-    "hardDeleteWarningPost": " \u2014 messages will show as \u201cdeleted user\u201d but all profile, contacts, and media will be erased. This cannot be undone.",
+    "hardDeleteWarningPost": " — messages will show as “deleted user” but all profile, contacts, and media will be erased. This cannot be undone.",
     "deletePermanently": "Delete permanently",
     "deleteFailed": "Failed to delete user",
     "changeRoleAction": "Change role",
@@ -924,7 +931,14 @@
     "mute24h": "Mute 24 hours",
     "moderationMenu": "Moderation options",
     "kickDone": "User kicked",
-    "muteDone": "User muted"
+    "muteDone": "User muted",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "expiryExpired": "expired",
+    "expiryDaysLeft": "{count}d left",
+    "expiryHoursLeft": "{count}h left",
+    "expiryMinutesLeft": "{count}m left",
+    "expiryUnderMinute": "< 1m"
   },
   "publicProfile": {
     "title": "Profile",

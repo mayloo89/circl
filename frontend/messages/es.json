@@ -4,6 +4,11 @@
     "description": "Ocurrió un error inesperado. Podés volver a intentarlo — si sigue pasando, probá de nuevo más tarde.",
     "retry": "Reintentar"
   },
+  "notFound": {
+    "title": "Página no encontrada",
+    "description": "La página que buscás no existe o pudo haber sido movida.",
+    "goHome": "Ir al inicio"
+  },
   "common": {
     "appName": "Circl",
     "loading": "Cargando…",
@@ -573,7 +578,9 @@
     "retry": "Reintentar",
     "completeGateTitle": "Completa tu perfil para explorar",
     "completeGateDesc": "Agrega una foto, bio, intereses y ubicación para comenzar a descubrir personas.",
-    "completeGateCTA": "Completar perfil"
+    "completeGateCTA": "Completar perfil",
+    "distanceUnder1Km": "a menos de 1 km",
+    "distanceKmAway": "a {km} km"
   },
   "admin": {
     "title": "Panel de admin",
@@ -655,7 +662,7 @@
     "suspendFailed": "No se pudo suspender al usuario",
     "hardDeleteTitle": "¿Eliminar cuenta permanentemente?",
     "hardDeleteWarningPre": "Esto eliminará de inmediato todos los datos de",
-    "hardDeleteWarningPost": " \u2014 los mensajes aparecer\u00e1n como \u201cusuario eliminado\u201d, pero el perfil, contactos y archivos ser\u00e1n borrados. Esta acci\u00f3n no se puede deshacer.",
+    "hardDeleteWarningPost": " — los mensajes aparecerán como “usuario eliminado”, pero el perfil, contactos y archivos serán borrados. Esta acción no se puede deshacer.",
     "deletePermanently": "Eliminar permanentemente",
     "deleteFailed": "No se pudo eliminar al usuario",
     "changeRoleAction": "Cambiar rol",
@@ -924,7 +931,14 @@
     "mute24h": "Silenciar 24 horas",
     "moderationMenu": "Opciones de moderación",
     "kickDone": "Usuario expulsado",
-    "muteDone": "Usuario silenciado"
+    "muteDone": "Usuario silenciado",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "expiryExpired": "expirado",
+    "expiryDaysLeft": "quedan {count} d",
+    "expiryHoursLeft": "quedan {count} h",
+    "expiryMinutesLeft": "quedan {count} min",
+    "expiryUnderMinute": "< 1 min"
   },
   "publicProfile": {
     "title": "Perfil",

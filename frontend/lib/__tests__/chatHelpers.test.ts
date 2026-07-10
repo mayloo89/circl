@@ -4,7 +4,7 @@ import {
   formatDaySeparator,
   isFirstInGroup,
   isLastInGroup,
-  formatExpiry,
+  expiryCountdown,
   expiryColorClass,
 } from "@/lib/chatHelpers"
 import type { AnyMessage } from "@/types/chat"
@@ -53,27 +53,28 @@ describe("sameCalendarDay", () => {
 
 // ─── formatDaySeparator ─────────────────────────────────────────────────────
 
+const dayLabels = { today: "Today", yesterday: "Yesterday" }
+
 describe("formatDaySeparator", () => {
-  it("returns 'Today' for the current date", () => {
+  it("returns the today label for the current date", () => {
     const now = new Date()
     const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0)
-    expect(formatDaySeparator(todayNoon.toISOString(), now.getTime())).toBe("Today")
+    expect(formatDaySeparator(todayNoon.toISOString(), now.getTime(), "en", dayLabels)).toBe("Today")
   })
 
-  it("returns 'Yesterday' for the previous date", () => {
+  it("returns the yesterday label for the previous date", () => {
     const now = new Date()
     const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
     const d = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 12, 0, 0)
-    expect(formatDaySeparator(d.toISOString(), now.getTime())).toBe("Yesterday")
+    expect(formatDaySeparator(d.toISOString(), now.getTime(), "en", dayLabels)).toBe("Yesterday")
   })
 
-  it("returns a formatted string for dates older than yesterday", () => {
+  it("formats older dates in the given locale", () => {
     const old = "2020-06-15T12:00:00Z"
-    const result = formatDaySeparator(old, Date.now())
-    expect(result).not.toBe("Today")
-    expect(result).not.toBe("Yesterday")
-    expect(result.length).toBeGreaterThan(0)
+    expect(formatDaySeparator(old, Date.now(), "en", dayLabels)).toContain("June")
+    expect(formatDaySeparator(old, Date.now(), "es", dayLabels)).toContain("junio")
+    expect(formatDaySeparator(old, Date.now(), "pt", dayLabels)).toContain("junho")
   })
 })
 
@@ -174,33 +175,33 @@ describe("isLastInGroup", () => {
   })
 })
 
-// ─── formatExpiry ───────────────────────────────────────────────────────────
+// ─── expiryCountdown ────────────────────────────────────────────────────────
 
-describe("formatExpiry", () => {
+describe("expiryCountdown", () => {
   const now = Date.now()
 
-  it("returns 'expired' when diff is zero", () => {
-    expect(formatExpiry(new Date(now).toISOString(), now)).toBe("expired")
+  it("returns expired when diff is zero", () => {
+    expect(expiryCountdown(new Date(now).toISOString(), now)).toEqual({ unit: "expired" })
   })
 
-  it("returns 'expired' when diff is negative", () => {
-    expect(formatExpiry(new Date(now - 1000).toISOString(), now)).toBe("expired")
+  it("returns expired when diff is negative", () => {
+    expect(expiryCountdown(new Date(now - 1000).toISOString(), now)).toEqual({ unit: "expired" })
   })
 
-  it("returns '< 1m' when less than 1 minute remains", () => {
-    expect(formatExpiry(new Date(now + 30_000).toISOString(), now)).toBe("< 1m")
+  it("returns underMinute when less than 1 minute remains", () => {
+    expect(expiryCountdown(new Date(now + 30_000).toISOString(), now)).toEqual({ unit: "underMinute" })
   })
 
   it("returns minutes when less than 1 hour remains", () => {
-    expect(formatExpiry(new Date(now + 30 * 60_000).toISOString(), now)).toBe("30m left")
+    expect(expiryCountdown(new Date(now + 30 * 60_000).toISOString(), now)).toEqual({ unit: "minutes", value: 30 })
   })
 
   it("returns hours when less than 24 hours remain", () => {
-    expect(formatExpiry(new Date(now + 3 * 3_600_000).toISOString(), now)).toBe("3h left")
+    expect(expiryCountdown(new Date(now + 3 * 3_600_000).toISOString(), now)).toEqual({ unit: "hours", value: 3 })
   })
 
   it("returns days when 24+ hours remain", () => {
-    expect(formatExpiry(new Date(now + 2 * 24 * 3_600_000).toISOString(), now)).toBe("2d left")
+    expect(expiryCountdown(new Date(now + 2 * 24 * 3_600_000).toISOString(), now)).toEqual({ unit: "days", value: 2 })
   })
 })
 

@@ -50,4 +50,28 @@ describe("Input", () => {
     const input = screen.getByPlaceholderText("Enter password")
     expect(input).toHaveAttribute("type", "password")
   })
+
+  it("sets aria-invalid and links the error message via aria-describedby", () => {
+    render(<Input label="Email" id="email" error="This field is required" />)
+    const input = screen.getByLabelText("Email")
+    expect(input).toHaveAttribute("aria-invalid", "true")
+    expect(input).toHaveAccessibleDescription("This field is required")
+  })
+
+  it("links helper text via aria-describedby without aria-invalid", () => {
+    render(<Input label="Bio" id="bio" helper="Max 280 characters" />)
+    const input = screen.getByLabelText("Bio")
+    expect(input).not.toHaveAttribute("aria-invalid")
+    expect(input).toHaveAccessibleDescription("Max 280 characters")
+  })
+
+  it("has no aria-describedby without error or helper", () => {
+    render(<Input label="Name" id="name" />)
+    expect(screen.getByLabelText("Name")).not.toHaveAttribute("aria-describedby")
+  })
+
+  it("associates the label with a generated id when none is passed", () => {
+    render(<Input label="Nickname" />)
+    expect(screen.getByLabelText("Nickname")).toBeInTheDocument()
+  })
 })

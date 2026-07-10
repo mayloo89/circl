@@ -4,6 +4,11 @@
     "description": "Ocorreu um erro inesperado. Você pode tentar novamente — se continuar acontecendo, volte daqui a pouco.",
     "retry": "Tentar de novo"
   },
+  "notFound": {
+    "title": "Página não encontrada",
+    "description": "A página que você procura não existe ou pode ter sido movida.",
+    "goHome": "Ir para o início"
+  },
   "common": {
     "appName": "Circl",
     "loading": "Carregando…",
@@ -573,7 +578,9 @@
     "retry": "Tentar novamente",
     "completeGateTitle": "Complete seu perfil para explorar",
     "completeGateDesc": "Adicione uma foto, bio, interesses e localização para começar a descobrir pessoas.",
-    "completeGateCTA": "Completar perfil"
+    "completeGateCTA": "Completar perfil",
+    "distanceUnder1Km": "a menos de 1 km",
+    "distanceKmAway": "a {km} km"
   },
   "admin": {
     "title": "Painel admin",
@@ -655,7 +662,7 @@
     "suspendFailed": "Não foi possível suspender o usuário",
     "hardDeleteTitle": "Excluir conta permanentemente?",
     "hardDeleteWarningPre": "Isso excluirá imediatamente todos os dados de",
-    "hardDeleteWarningPost": " \u2014 as mensagens aparecer\u00e3o como \u201cusu\u00e1rio exclu\u00eddo\u201d, mas o perfil, contatos e m\u00eddia ser\u00e3o apagados. Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.",
+    "hardDeleteWarningPost": " — as mensagens aparecerão como “usuário excluído”, mas o perfil, contatos e mídia serão apagados. Esta ação não pode ser desfeita.",
     "deletePermanently": "Excluir permanentemente",
     "deleteFailed": "Não foi possível excluir o usuário",
     "changeRoleAction": "Alterar função",
@@ -924,7 +931,14 @@
     "mute24h": "Silenciar 24 horas",
     "moderationMenu": "Opções de moderação",
     "kickDone": "Usuário expulso",
-    "muteDone": "Usuário silenciado"
+    "muteDone": "Usuário silenciado",
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "expiryExpired": "expirado",
+    "expiryDaysLeft": "restam {count} d",
+    "expiryHoursLeft": "restam {count} h",
+    "expiryMinutesLeft": "restam {count} min",
+    "expiryUnderMinute": "< 1 min"
   },
   "publicProfile": {
     "title": "Perfil",

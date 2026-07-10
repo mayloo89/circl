@@ -5,13 +5,28 @@ import Image from "next/image"
 import { useTranslations } from "next-intl"
 
 import type { AnyMessage } from "@/types/chat"
-import { formatExpiry, expiryColorClass } from "@/lib/chatHelpers"
+import { expiryCountdown, expiryColorClass, type ExpiryCountdown } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
 import AlbumShareBubble from "@/components/chat/AlbumShareBubble"
 
 // Sentinel emitted by the backend redact package in place of contact info.
 // Kept in sync with backend/internal/redact.RedactionToken.
 const REDACTION_TOKEN = "[contact hidden]"
+
+function expiryLabel(t: ReturnType<typeof useTranslations>, expiry: ExpiryCountdown): string {
+  switch (expiry.unit) {
+    case "expired":
+      return t("expiryExpired")
+    case "underMinute":
+      return t("expiryUnderMinute")
+    case "days":
+      return t("expiryDaysLeft", { count: expiry.value })
+    case "hours":
+      return t("expiryHoursLeft", { count: expiry.value })
+    case "minutes":
+      return t("expiryMinutesLeft", { count: expiry.value })
+  }
+}
 
 interface MessageBubbleProps {
   msg: AnyMessage
@@ -228,7 +243,7 @@ export default function MessageBubble({
                     <circle cx="12" cy="12" r="9" />
                     <path strokeLinecap="round" d="M12 7v5l3 3" />
                   </svg>
-                  {formatExpiry(msg.expires_at, now)}
+                  {expiryLabel(t, expiryCountdown(msg.expires_at, now))}
                 </span>
               )}
               <span className="text-xs text-gray-600">
