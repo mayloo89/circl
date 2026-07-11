@@ -23,8 +23,13 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Stop containers on exit
+# Stop the backgrounded API and containers on exit. Killing API_PID here
+# matters because `set -e` can abort after the API is started (e.g. a failing
+# e2e run) and skip the explicit kill, leaking a server on port 8080.
 cleanup() {
+    if [ -n "${API_PID:-}" ]; then
+        kill "$API_PID" 2>/dev/null || true
+    fi
     log_info "Stopping containers..."
     docker compose -f /tmp/circl-ci-compose.yml down 2>/dev/null || true
 }
@@ -144,16 +149,16 @@ EOF
         sleep 1
     done
 
-    log_info "Running migrations..."
+    log_info "Building API..."
+    go build -o /tmp/circl-api ./cmd/api
+
+    log_info "Starting API server (runs migrations on boot) for health check..."
     DATABASE_URL="postgres://circl_user:circl_password@localhost:5432/circl_db?sslmode=disable" \
     REDIS_URL="redis://localhost:6379/0" \
     ASYNQ_REDIS_URL="redis://localhost:6379/1" \
     JWT_SECRET="integration-test-jwt-secret-32chars!!" \
     STORAGE_PROVIDER="local" \
     CORS_ALLOWED_ORIGINS="http://localhost" \
-    go build -o /tmp/circl-api ./cmd/api
-
-    log_info "Starting API server for health check..."
     /tmp/circl-api &
     API_PID=$!
     

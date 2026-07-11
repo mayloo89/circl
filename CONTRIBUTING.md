@@ -30,7 +30,7 @@ MinIO, Mailpit, and the observability suite) is available via
 - No conventional-commit prefixes (`feat:`, `fix:`, `chore:`).
 - No commit body, no trailers.
 
-```
+```text
 Fail closed in auth middleware when NextAuth session resolution errors
 ```
 
