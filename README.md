@@ -343,10 +343,12 @@ circl/
 ```
 
 ## Contributing
-1. Branch off `develop`: `git checkout -b feature/your-feature`
-2. Make changes and write tests (target: 98%+ coverage)
-3. Commit with descriptive messages in English
-4. Push and open a PR targeting `develop`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, commit conventions,
+quality gates, and the architectural invariants to respect. Security issues go
+through [SECURITY.md](SECURITY.md) — never a public issue.
 
 ## License
-MIT
+
+[GNU AGPL-3.0](LICENSE). If you run a modified version of Circl as a network
+service, you must make your modified source available to its users.
