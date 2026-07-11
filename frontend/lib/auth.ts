@@ -141,4 +141,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
     strategy: "jwt",
   },
+  // Production builds refuse session resolution with UntrustedHost unless the
+  // host is trusted (dev auto-trusts localhost). We only do credentials auth —
+  // no OAuth redirect URLs are derived from the Host header — and the app
+  // always sits behind the operator's own reverse proxy, so trusting it is
+  // safe and keeps local production builds and host-header variations from
+  // silently degrading the middleware auth wall.
+  trustHost: true,
 })
