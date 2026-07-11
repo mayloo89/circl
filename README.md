@@ -1,122 +1,82 @@
 # Circl — Private contact platform with secure chat
 
-Private profiles and real-time chat. Only authenticated users can view, search, and message other users.
+Circl is a privacy-first platform for private profiles and real-time chat.
+Only authenticated users can view, search, and message each other; public
+"guest" chat rooms lower the barrier for newcomers without exposing the
+private network. It is built as a best-practices showcase — a Go backend and a
+Next.js frontend, fully internationalized (Spanish, English, Portuguese), with
+a security and accessibility posture held to production standards.
+
+> **Status:** feature-complete MVP, in pre-v1 hardening. The living roadmap,
+> PR-by-PR history, and production env-var reference are in
+> [`docs/implementation-plan.md`](docs/implementation-plan.md); every change is
+> logged in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Stack
-- **Frontend**: Next.js 16+ (App Router) + React 19 + TypeScript + Tailwind CSS 4
-- **Backend**: Go 1.25+ (chi router) + WebSockets
-- **Auth**: NextAuth.js (Auth.js) v5 — JWT + httpOnly cookies
-- **DB**: PostgreSQL 17+, migrations via golang-migrate
-- **Cache / real-time**: Redis 7+ (presence, Pub/Sub, rate limits)
-- **Queues**: asynq (image processing, maintenance tasks)
-- **Storage**: S3/R2 + CDN
-- **Observability**: zerolog → Loki (logs); Prometheus (metrics); OpenTelemetry → Tempo (traces); Grafana (unified dashboards + alerts)
-- **CI/CD**: GitHub Actions (secret-scan, golangci-lint, govulncheck, npm audit, unit, integration, e2e, OpenAPI lint)
 
-## Documentation
-- [Implementation plan](docs/implementation-plan.md)
-- [API reference (OpenAPI 3.1.0)](docs/openapi.yaml)
+- **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 4
+  + next-intl (prefix-routed `/es/`, `/en/`, `/pt/`) + NextAuth v5 (credentials,
+  JWT, httpOnly cookies). Vitest + Testing Library + MSW for unit; Playwright for E2E.
+- **Backend**: Go 1.25 (chi router) + pgx/v5 + gorilla/websocket. Postgres for
+  persistence, Redis for presence, Pub/Sub fan-out, WS-ticket auth, and rate limits.
+  asynq worker for image processing, ephemeral cleanup, and account purge.
+- **Storage**: pluggable `Storage` interface — `LocalStorage` for dev, `S3Storage`
+  (MinIO / S3 / R2 via minio-go) for production.
+- **Observability**: zerolog → Loki (logs), prometheus/client_golang → Prometheus
+  (metrics), OpenTelemetry → Tempo (traces), unified in Grafana; `trace_id`
+  correlated across all three.
+- **CI/CD**: GitHub Actions — secret-scan (gitleaks), golangci-lint, govulncheck,
+  `npm audit`, unit + integration + E2E, OpenAPI lint, and pull-based image deploy.
 
-## Project status
-- ✅ **Foundation** ([PR #1](https://github.com/mayloo89/circl/pull/1)): repo structure, linters, CI/CD
-- ✅ **Auth** ([PR #2](https://github.com/mayloo89/circl/pull/2)): registration, login, JWT tokens, NextAuth.js session
-- ✅ **Private profiles** ([PR #2](https://github.com/mayloo89/circl/pull/2)): display name, bio — `GET /profiles/me`, `PUT /profiles/me`
-- ✅ **Contacts** ([PR #9](https://github.com/mayloo89/circl/pull/9), [PR #10](https://github.com/mayloo89/circl/pull/10)): search, send/accept/decline/remove requests — full contacts lifecycle
-- ✅ **Real-time notifications** ([PR #14](https://github.com/mayloo89/circl/pull/14)): SSE (`GET /notifications/stream`), global nav badge, contact request/accepted/removed events
-- ✅ **Chat and rooms** ([PR #14](https://github.com/mayloo89/circl/pull/14)): WebSocket DMs and group rooms, Redis Pub/Sub fan-out, message history, unread counts
-- ✅ **Presence** ([PR #15](https://github.com/mayloo89/circl/pull/15)): online/offline dot on contacts list, "Online" / "Last seen X ago" in DM chat header, instant updates via SSE
-- ✅ **Storage infrastructure** ([PR #16](https://github.com/mayloo89/circl/pull/16)): Storage interface abstraction, LocalStorage (dev), uploads API (request → confirm lifecycle)
-- ✅ **Profile avatars** ([PR #17](https://github.com/mayloo89/circl/pull/17)): upload from profile page, displayed in navbar, contacts list, chat list, chat room header, and message bubbles
-- ✅ **Chat attachments** ([PR #18](https://github.com/mayloo89/circl/pull/18)): images, videos, and files in chat; ephemeral (view-once + TTL) messages
-- ✅ **S3-compatible storage** ([PR #19](https://github.com/mayloo89/circl/pull/19)): MinIO backend with pre-signed PUT URLs; Docker Compose dev and prod setup
-- ✅ **Image processing** ([PR #20](https://github.com/mayloo89/circl/pull/20)): asynq background worker — EXIF strip and 480px thumbnail generation for JPEG/PNG uploads
-- ✅ **Typing indicators** ([PR #22](https://github.com/mayloo89/circl/pull/22)): real-time "X is typing…" via WebSocket with 2s server-side debounce
-- ✅ **Read receipts** ([PR #23](https://github.com/mayloo89/circl/pull/23)): ✓ / ✓✓ on sent messages; updates in real time via WebSocket
-- ✅ **Image thumbnails in chat** ([PR #24](https://github.com/mayloo89/circl/pull/24)): thumbnails served from storage instead of full-res URLs in message list
-- ✅ **Chat UI** ([PR #25](https://github.com/mayloo89/circl/pull/25), [PR #26](https://github.com/mayloo89/circl/pull/26)): message grouping, date separators, skeleton loaders, new-message animation, relative timestamps, attachment type previews
-- ✅ **Public profiles + gallery** ([PR #27](https://github.com/mayloo89/circl/pull/27)): public profile view, photo gallery (up to 6 photos), profile navigation from contacts and chat header
-- ✅ **Usernames** ([PR #36](https://github.com/mayloo89/circl/pull/36)): unique handles (`[a-z0-9_]`, 3–30 chars), immutable once set, used in all profile URLs (`/profile/[username]`)
-- ✅ **Extended profiles** ([PR #35](https://github.com/mayloo89/circl/pull/35)): date of birth (18+ enforced), gender, location (autocomplete via Photon/OSM), interests tags
-- ✅ **Registration with profile seeding** ([PR #36](https://github.com/mayloo89/circl/pull/36)): username + DOB collected at signup, profile seeded immediately after account creation
-- ✅ **User blocking** ([PR #39](https://github.com/mayloo89/circl/pull/39)): block/unblock users, bidirectional suppression in browse/search/contacts/chat, WebSocket message filtering, performance-optimized batch queries
-- ✅ **User reporting** ([PR #40](https://github.com/mayloo89/circl/pull/40)): report users with reason, rate limited (10/hour), auto-suspend after 3+ reports in 7 days
-- ✅ **Admin moderation** ([PR #41](https://github.com/mayloo89/circl/pull/41)): admin role, user suspension/activation, report management (resolve/dismiss with notes)
-- ✅ **Account safety** ([PR #42](https://github.com/mayloo89/circl/pull/42)): login lockout (5 failed attempts = 15 min lockout), password complexity (8+ chars, upper/lower/number/special), rate limiting (configurable per IP)
-- ✅ **Web Push Notifications** ([PR #43](https://github.com/mayloo89/circl/pull/43)): subscribe/unsubscribe, service worker, push delivery on chat/contact events
-- ✅ **Cursor-based pagination** ([PR #44](https://github.com/mayloo89/circl/pull/44)): cursor-based for browse and chat history, infinite scroll in chat room
-- ✅ **Group chat** ([PR #45](https://github.com/mayloo89/circl/pull/45)): create groups, rename (admin), add/remove members, member panel UI
-- ✅ **Public chat channels** ([PR #46](https://github.com/mayloo89/circl/pull/46)): IRC-style open rooms — browse, enter, chat; ephemeral membership (WS connection = presence); no message history; live participant sidebar with filter; admin-only channel creation; leave confirmation guard
-- ✅ **Settings page** ([PR #47](https://github.com/mayloo89/circl/pull/47)): push notifications toggle, change password with live validation, delete account, avatar dropdown menu
-- ✅ **UX improvements** ([PR #48](https://github.com/mayloo89/circl/pull/48)): contact removal confirmation dialog, clickable profile from search results, registration inline validation with live password checklist
-- ✅ **Chat upload restrictions + image resizing** ([PR #49](https://github.com/mayloo89/circl/pull/49)): chat attachments restricted to images and videos; JPEG/PNG originals resized to max 1024px (configurable); thumbnails remain at 480px
-- ✅ **Email verification + forgot/reset password** ([PR #50](https://github.com/mayloo89/circl/pull/50)): hard email enforcement (login blocked until verified); forgot/reset password flow; Mailpit for local email dev; `ConsoleSender` for testing; `SMTPSender` for production
-- ✅ **Reversible account deletion** ([PR #51](https://github.com/mayloo89/circl/pull/51)): soft delete with 30-day grace period; login automatically reactivates account within the grace period and shows a confirmation modal; deletion warning email sent on delete; daily background worker fully purges expired accounts — deletes S3 files (originals + thumbnails), removes all DB records, anonymizes the users row
-- ✅ **Admin panel: channel management, RBAC, hard delete** ([PR #52](https://github.com/mayloo89/circl/pull/52)): create/edit/delete public channels from admin UI; super_admin can promote/demote admins; hard-delete permanently removes all user data from DB and S3
-- ✅ **UX polish** ([PR #53](https://github.com/mayloo89/circl/pull/53)): touched-state inline validation, backend error codes surfaced in UI, 429 differentiated on login, change-password collapsible, delete-account modal, extended gender options (trans male/female, non-binary, custom)
-- ✅ **Internationalisation — ES / EN / PT** ([PR #54](https://github.com/mayloo89/circl/pull/54)): next-intl with prefix-based routing (`/es/`, `/en/`, `/pt/`); all pages and components translated (ChatInput, MessageBubble, GroupMembersPanel, CreateGroupModal, ConfirmDialog, ReportDialog, PushPrompt, ContactCard, SearchBar, PhotoGallery); language switcher in NavBar and Settings persists preference to backend; shared `apierror` package with stable machine-readable error codes across all handlers; migration `000025` adds `locale` to `profile_preferences`
-- ✅ **Structured logging** ([PR #55](https://github.com/mayloo89/circl/pull/55)): zerolog replaces stdlib `log` across the entire backend; `RequestLogger` middleware generates a `request_id` per request (xid), attaches it to context, sets `X-Request-ID` response header, and writes one access-log entry with `method`, `path`, `status`, `latency_ms`; `RequireAuth` enriches the context logger with `user_id` so every authenticated log line carries full traceability; all background workers tagged with `component`; asynq internal logs routed through zerolog; no PII in logs; `LOG_LEVEL` env var (default: `info`); dev: colored console, prod: JSON
-- ✅ **Prometheus metrics + health checks** ([PR #56](https://github.com/mayloo89/circl/pull/56)): `prometheus/client_golang`; Go runtime, HTTP handler, WebSocket, and DB pool collectors; `/metrics` endpoint; enhanced `/health` with DB + Redis ping and version field; `HEALTHCHECK` in backend and frontend Dockerfiles; non-root `USER` in both images
-- ✅ **OpenTelemetry distributed tracing** ([PR #57](https://github.com/mayloo89/circl/pull/57)): OTel SDK with OTLP HTTP exporter (no-op fallback when endpoint unset); chi HTTP middleware with route-pattern span names; pgx QueryTracer for per-query DB spans; asynq trace context propagation via `taskEnvelope`; WebSocket session and per-message spans; `trace_id`/`span_id` injected into zerolog for log-trace correlation; graceful shutdown via `signal.NotifyContext` + `http.Server.Shutdown`
-- ✅ **Log shipping pipeline** ([PR #58](https://github.com/mayloo89/circl/pull/58)): Loki 3.4.2 + Grafana Alloy v1.7.5 in `docker-compose.yml`; Alloy collects all container stdout via Docker socket; JSON stage indexes `level` and `component` as Loki labels; 7-day retention; `ops/loki/logql-examples.md` query cookbook
-- ✅ **Frontend fetch hardening + auto sign-out** ([PR #59](https://github.com/mayloo89/circl/pull/59)): all API fetch chains check `r.ok` before `.json()` — prevents TypeError crashes when the backend returns an error object; `SessionGuard` detects expired backend JWT via `exp` claim and calls `signOut()` automatically
-- ✅ **Grafana observability stack** ([PR #60](https://github.com/mayloo89/circl/pull/60)): Tempo 2.7.2, Prometheus v3.3.1, and Grafana 11.5.2 added to `docker-compose.yml`; Grafana auto-provisioned with Prometheus + Loki + Tempo datasources (cross-datasource exemplar/trace-to-log links); 4 dashboards-as-code (HTTP RED, WebSocket, DB pool, Go runtime); Prometheus recording rules + 4 alert rules (HighErrorRate, HighLatencyP95, DBPoolExhausted, BackendDown); `internal/logger/loki.go` batching writer ships backend logs directly to Loki over HTTP (no file tailing); OTel export errors routed through zerolog at warn level
-- ✅ **Security hardening** ([PR #61](https://github.com/mayloo89/circl/pull/61)): `SecurityHeaders` middleware sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cache-Control`, and HSTS (production only) on every response; WebSocket `CheckOrigin` validates against `CORS_ALLOWED_ORIGINS` instead of accepting all origins; `X-Request-ID` added to CORS exposed headers; `next.config.ts` applies CSP, HSTS, and `Permissions-Policy` via Next.js `headers()`; gitleaks secret-scanning job added to CI
-- ✅ **Refresh token rotation + Redis blacklist** ([PR #62](https://github.com/mayloo89/circl/pull/62)): access tokens reduced to 15-min TTL; opaque 7-day refresh tokens stored hashed in Redis; `POST /auth/refresh` rotates (delete-before-issue); `POST /auth/logout` invalidates server-side; password change and account deletion revoke all tokens via timestamp-based `rt:revoked_at:<userID>` key; frontend silently refreshes on expiry via NextAuth JWT callback
-- ✅ **OpenAPI spec** ([PR #63](https://github.com/mayloo89/circl/pull/63)): `docs/openapi.yaml` — OpenAPI 3.1.0 spec covering all ~40 endpoints across 12 tag groups; reusable schemas, responses, and `bearerAuth` security scheme; `@redocly/cli lint` CI job
-- ✅ **OpenAPI spec — full audit** ([PR #112](https://github.com/mayloo89/circl/pull/112)): 17 corrections across spec v3.1.0. `POST /ws-ticket` added; SSE + WS endpoints updated to `?ticket=`; `Profile` gains location/age/looking-for fields; preferences schema expanded to all 15 fields; `AlbumGrant` gains `expires_at`; invite grants documented as immediately active; stale view-log references removed; `album_share` message type added; `category` field on upload request.
-- ✅ **UX overhaul — visual rebrand** ([PR #67](https://github.com/mayloo89/circl/pull/67)): Nunito (headings) + DM Sans (body) via `next/font/google`; Tailwind v4 brand token system (`--color-brand-*`, `--radius-card`, `--shadow-card`); `accent` Button variant (CTA orange #F97316); conversion CTAs in browse and profile migrated to `accent`
-- ✅ **Light/dark mode + brand palette refresh** ([PR #113](https://github.com/mayloo89/circl/pull/113)): trans-flag blue + rose palette; blue-tinted light-surface gray scale; `ThemeContext` + `ThemeToggle` with localStorage + `prefers-color-scheme`; full light-mode contrast audit; branding assets regenerated
-- ✅ **Home page redesign + UI polish** ([PR #116](https://github.com/mayloo89/circl/pull/116)): full-width hero with logo mark, ambient blobs, personalised greeting; four contextual home widgets (completeness banner, pending requests, nearby profiles, recent conversations); light-mode contrast fixes for avatar fallback circles and card ring borders; collapsed sidebar shows logo mark with dedicated expand button in nav list.
-- ✅ **Operational runbooks** (`docs/runbooks/`): `deploy.md` (first-deploy checklist, release procedure, rollback), `db-backup-restore.md` (daily backups, restore, drill log, migration state), `incident-response.md` (severity levels, log guide, Prometheus alerts, common scenarios, post-incident steps), `secret-rotation.md` (JWT, VAPID, DB, S3 credentials).
-- ✅ **UI audit — home, nav, and contacts** ([PR #117](https://github.com/mayloo89/circl/pull/117)): hero replaced with theme-aware logo (no decorative blobs); home widgets gain error states with retry; inline decline confirmation in `PendingRequestsWidget`; "Get started" section in completeness banner for new users; sidebar separator + dynamic push toggle label; `TopBar` route titles expanded and touch targets standardised; contacts page aligned to home card design tokens + decline `ConfirmDialog` added; `Button` `danger` variant softened to semi-transparent red; `ContactCard` accept and message buttons changed to `accent` (rose) for visual consistency.
-- ✅ **React 19 hydration hardening** ([PR #115](https://github.com/mayloo89/circl/pull/115)): eliminated three classes of server/client mismatch. `ThemeContext` and `SidebarContext` rewritten with `useSyncExternalStore` (removes the `react-hooks/set-state-in-effect` lint error and the localStorage server/client divergence). Theme cookie read server-side in root layout so `<html class="dark">` is rendered correctly on first paint — no FOUC, no React 19 script-tag warning. `generateMetadata` converted to an async function so the server uses the Suspense path matching the client router, fixing the persistent `MetadataWrapper hidden` hydration error. Session pre-fetched in `LocaleLayout` and passed to `SessionProvider`. `middleware.ts` renamed to `proxy.ts` per Next.js 16 convention. Upgraded to Next.js 16.2.6, React 19.2.6, Tailwind 4.3.0.
-- ✅ **UX overhaul — critical bugfixes** ([PR #66](https://github.com/mayloo89/circl/pull/66)): browse subtitle bug, unblock dialog wrong message, back buttons destroying browser history, login `blue-*`→`indigo-*` color alignment, register success emoji→SVG, WCAG contrast fix on block/report buttons, chat skeleton loading state, active locale highlighted in language switcher, contacts sorted online-first
-- ✅ **UX overhaul — navigation** ([PR #68](https://github.com/mayloo89/circl/pull/68)): `BottomNav` (mobile, 5 slots, SVG icons + unread/pending badges, iOS safe-area padding) + `Sidebar` (desktop ≥1024px, same 5 items + language switcher + settings + user row) + `TopBar` (minimal mobile header with logo, active-route label, push toggle, avatar shortcut); `ProfileContext` single `/profiles/me` fetch per session; old monolithic `NavBar.tsx` removed
-- ✅ **UX overhaul — home dashboard** ([PR #69](https://github.com/mayloo89/circl/pull/69)): `PendingRequestsWidget` (inline Accept/Decline, reacts to SSE contact events), `NearbyProfilesWidget` (horizontal scroll, skeleton), `RecentConversationsWidget` (avatar, last-message preview, unread badge), `ProfileCompletenessBanner` (progress bar, sessionStorage dismiss); `lib/profileCompleteness.ts` pure utility
-- ✅ **UX overhaul — browse** ([PR #70](https://github.com/mayloo89/circl/pull/70)): `RangeSlider` (single-thumb filled-track) + `BottomSheet` (slide-up mobile sheet, Escape + scroll-lock) primitives; filter panel redesign with active-count badge; age and distance sliders (500 km = "Any"); "Clear filters" on empty state; backend fix to exclude profiles with unknown coordinates when distance filter is active
-- ✅ **UX overhaul — public profile hero** ([PR #71](https://github.com/mayloo89/circl/pull/71)): 55vh full-bleed hero photo with gradient overlay; initials fallback; back button + ⋯ overflow menu (Block/Unblock/Report) over hero via backdrop-blur; sticky mobile action bar above bottom nav (Message/Add contact/Request sent/Accept); "Preview as visitor" button on own profile
-- ✅ **UX overhaul — onboarding wizard** ([PR #72](https://github.com/mayloo89/circl/pull/72)): 4-step wizard at `/onboarding/{photo,bio,interests,location}`; step-dot progress bar; "Skip" on every step; pre-filled from existing profile data; `AppShell` redirects unonboarded users to wizard and suppresses nav; `ProfileCompletenessCard` on own profile (progress bar + per-field links to wizard); backend migration `000026` adds `onboarded_at TIMESTAMPTZ`
-- ✅ **UX overhaul — chat polish + auth UX + onboarding smart steps** ([PR #74](https://github.com/mayloo89/circl/pull/74)): `PasswordField` with show/hide toggle (registration, login, settings); `DateOfBirthPicker` with three equal-width DD/MM/YYYY selects; scroll-to-bottom FAB in chat room; chat list search + 10s silent polling; onboarding smart steps skip already-complete fields and redirect to first incomplete step on entry
-- ✅ **Modern Go + UX/UI audit** ([PR #75](https://github.com/mayloo89/circl/pull/75)): 19 Go modernizations (`errors.Is`, `omitzero`, `max()`, `for range n`, `strings.Cut`); frontend a11y + usability pass — `cursor-pointer` global, focus rings on all raw buttons, `prefers-reduced-motion` + `scroll-padding-top` + `scrollbar-hide` in globals.css, 5 emoji→SVG icon replacements, descriptive `alt` text on 6 images, layout-shift fixes (`scale-*` → `opacity-*`), BottomNav icon size normalization
-- ✅ **Privacy hardening** ([PR #82](https://github.com/mayloo89/circl/pull/82)): public profile strips DOB + exact coordinates for non-owners (returns computed age instead); presence gated to accepted contacts; soft-deleted users excluded from presence; contact requests rate-limited 100/day
-- ✅ **WebSocket ticket auth + CSP nonce** ([PR #83](https://github.com/mayloo89/circl/pull/83), [PR #84](https://github.com/mayloo89/circl/pull/84)): single-use Redis tickets (60 s TTL) replace JWT in WS query strings; per-request CSP nonce removes `'unsafe-inline'` from `script-src`
-- ✅ **Mobile UX + navigation audit** ([PR #86](https://github.com/mayloo89/circl/pull/86)): iOS safe-area insets on `TopBar`/`BottomNav`/`AppShell`/`Toast`/profile sticky bar via `@utility` directives; `text-base` on inputs prevents iOS auto-zoom; auto-growing `<textarea>` chat composer; `capture` attributes on file inputs; push prompt deferred until first conversation; 44 pt touch targets audited across all interactive elements; BottomNav restructured (5 items: Home, Browse, Messages, Channels, Contacts); back buttons removed from top-level pages; profile preview mode on `/profile/[username]`; layout width consistency across all pages
-- ✅ **Desktop UX + accessibility — phase 1** (PR #87): chat routes restructured around a `(messages)` route group with a layout-owned, persistent `ChatListPane` (no flicker on thread switch); channel rooms moved to dedicated `/chat/channels/[channelId]` outside the group so they never inherit the DM list — channels stay single-pane to keep leaving a conscious, confirmed action; the room body extracted into `RoomView` shared by both surfaces; skip-to-content link + `<main id="main-content">` landmark in `AppShell`; channel-leave copy hardened across EN/ES/PT to spell out irreversible message-access loss
-- ✅ **Accessibility deep pass** (PR #88): centralised dialog focus management in `hooks/useFocusTrap.ts` (capture trigger, auto-focus first child, trap Tab, optional Escape, scroll-lock, restore focus on close) — `Modal`, `BottomSheet`, and `GroupMembersPanel` all delegate; `hooks/useMenuKeyboard.ts` implements WAI-ARIA menu keyboard semantics (ArrowUp/Down wrap, Home/End, Escape, focus restoration) wired into public-profile overflow menu and chat ephemeral-message menu; all 77 SVGs in the codebase now carry `aria-hidden`/`aria-label`/`role`; hardcoded `aria-label`s localized; `RangeSlider` gains `aria-label` + `aria-valuetext`
-- ✅ **`PUT /profiles/me/preferences` partial-update fix** ([PR #93](https://github.com/mayloo89/circl/pull/93)): the endpoint MERGES instead of REPLACES — locale-only PUTs no longer clobber browse filters / privacy / notification toggles. `PreferencesUpdate` value type with a generic `Optional[T]` distinguishes omit / explicit null / value for the three nullable filter ints so the browse "Clear filters" affordance still works. Store builds dynamic SQL (only the columns the caller set appear in the write); empty PUT degenerates to `INSERT ... ON CONFLICT DO NOTHING`. `PrivacySection` and `NotificationsSection` simplified to PUT only `{[key]: value}`
-- ✅ **Per-category notification toggles** ([PR #92](https://github.com/mayloo89/circl/pull/92)): migration `000028` adds four `notify_*` boolean columns to `profile_preferences` (default true); `cmd/api/main.go`'s `notifyUser` helper takes a category-gate closure run against `profileSvc.GetNotificationFlags` so the chat `new_message` push is gated on `ChatMessages` and the three contact events on `ContactRequests`; SSE is unsuppressed so in-app badges keep working; `channel_mentions` and `system` columns persist user intent today and will gate automatically when those push surfaces ship; new sub-section in Settings → Notifications with four toggles backed by the `Toggle` primitive and the fetch-then-PUT pattern; full EN/ES/PT i18n
-- ✅ **Privacy toggles — distance / presence / read receipts / typing** ([PR #91](https://github.com/mayloo89/circl/pull/91)): migration `000027` adds four boolean columns to `profile_preferences`; backend gates the toggles on browse (distance suppressed for non-contacts when the viewed user hides), presence (symmetric — caller hides → all offline; target hides → that entry offline; SSE fanout dropped for transitioning user and skipped per-recipient), and the chat hub (symmetric `typing` and `read_receipt` frame suppression at both emit and receive). New `Toggle` UI primitive (native checkbox + `role="switch"`, 44 pt touch target, focus ring); new `PrivacySection` in `/settings` with a "Symmetric" badge on the three reciprocal toggles; full localization in EN/ES/PT
-- ✅ **Privacy controls UI — manage blocked users in Settings** ([PR #90](https://github.com/mayloo89/circl/pull/90)): a dedicated "Blocked users" section in `/settings` lists everyone the user has blocked (avatar + display name + Unblock per row), with a localized empty state; the blocked-users list is removed from `/contacts` so Settings is the canonical home for account-level privacy management; the unblock confirm dialog and `DELETE /contacts/{id}/block` flow are unchanged; the public-profile overflow-menu unblock path was state-walked across all peer-profile states and confirmed correct in every state
-- ✅ **Pi deploy fixes — local storage URL + CSP + image optimization** ([PR #78](https://github.com/mayloo89/circl/pull/78), [PR #79](https://github.com/mayloo89/circl/pull/79), [PR #80](https://github.com/mayloo89/circl/pull/80)): `LOCAL_STORAGE_BASE_URL` env var so file URLs resolve correctly behind nginx; CSP `script-src` and `style-src` updated to allow Next.js App Router hydration and Google Fonts; `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` build arg disables `/_next/image` optimizer (appropriate for low-power Pi deployments)
-- ✅ **Terms / Privacy / Community / Safety + registration consent** ([PR #101](https://github.com/mayloo89/circl/pull/101)): four MDX-driven legal pages (`/terms`, `/privacy`, `/guidelines`, `/safety`) in ES (canonical) / EN / PT with AR-specific framing — Ley 25.326, AAIP, Ley 27.736 ("Ley Olimpia"), línea 144, Buenos Aires venue; consent checkbox on registration backed by migration `000031` (`terms_accepted_at`, `privacy_accepted_at`, `accepted_policy_version`); new `Checkbox` UI primitive and `Footer` component mounted on every auth page and `/settings`; `Authenticator.Register` now takes a `RegistrationInput` struct so consent timestamps flow to the store; new `apierror.CodeTermsNotAccepted` returned on a missing or false `accept_terms` flag
-- ✅ **Generic production-deploy templates** — `docs/deploy/` ships an infrastructure-agnostic starting point (compose, env example, nginx vhost, walkthrough). Captures the two non-obvious Next.js v16 fixes (`HOSTNAME=0.0.0.0` + `pgrep` healthcheck override) inline so customisers don't strip them. The obsolete root `/docker-compose.prod.yml` (MinIO, old env-var names) is removed. Each operator's actual `deploy/` folder (their domain, secrets, certificate paths, runbook quirks) stays gitignored. See **Deploying to production** below.
-- ✅ **Private albums with consented per-user sharing** — owners group `album-private` uploads into named albums; access is per-album, not blanket. Three entry points feed the grant lifecycle: owner invites contact (push), viewer requests access (pull), owner shares in a DM (auto-grant via the new `MessageTypeAlbumShare` chat message). Migration `000036` adds 4 tables; the `roleFor()` predicate at the service layer is the single read gate. Photos still flow through the moderation pipeline; photo bytes stream through `GET /albums/{id}/photos/{upload_id}/file` with `Cache-Control: private, max-age=60`. Frontend: new `/albums` route + sidebar entry, `MembersPanel` with revoke confirmation that warns the viewer's browser cache can't be invalidated retroactively, share-album button in DM chat input. Watermark + NSFW-tag-mode for private uploads land in a follow-up.
-- ✅ **Browse gender filter + preference seeding**: fixed `GENDER_OPTIONS` in the browse filter panel — values now match the canonical gender values stored in `profiles.gender` (`"Male"`, `"Female"`, `"Trans male"`, `"Trans female"`, `"Non-binary"`) so the `= ANY(prefs.gender_preference)` SQL filter actually works. On first visit to browse when no preferences have been saved, the user's profile "Looking for" fields (`looking_for_gender`, `looking_for_age_min`, `looking_for_age_max`) are automatically seeded as default browse preferences and persisted so results are filtered server-side from the first page load. Preferences now load before the initial browse fetch to avoid flashing a "0 active filters" badge.
-- ✅ **Admin panel — mobile-responsive layout and UX**: replaced the fixed sidebar (unusable on mobile, consumed ~60% of viewport) with a slide-over drawer on small screens, triggered by a hamburger button in a sticky top bar. All six admin pages get responsive padding. Table columns hide progressively by breakpoint so identity, status, and action columns stay visible at every size. The users table collapses per-row Suspend/Ban/Reactivate/Role/Delete buttons into a single "Actions ▾" dropdown with keyboard-navigable menu (`ArrowUp`/`ArrowDown`, `Escape`, focus-restore) and full ARIA wiring.
-- ✅ **Image-rejection UX + admin review surface**: closes the visible gap from the moderation pipeline. End-users see a dedicated `UploadRejectionModal` (focus-trapped, EN/ES/PT bodies routed off `moderation_code`) instead of a buried inline error; `useUpload` exposes rejections as a structured `rejection` field separate from generic `error`. Backend persists `moderation_score` + `moderation_categories` (migration `000035`) plus a per-code retention policy: NSFW + heuristic rejection files are kept for `MODERATION_REJECTED_RETENTION_DAYS` (default 30) so admins can verify false positives; hash-list matches purge immediately (CSAM / NCII posture). New admin surface `/admin/moderation` with thumbnail, score, categories, code filter and authenticated full-size lightbox via `GET /admin/moderation/{id}/image`. Daily cleanup `worker.PurgeExpiredModerationFiles`.
-- ✅ **NudeNet sidecar — real NSFW detection**: `ops/moderation/` is a FastAPI + NudeNet container that exposes `POST /classify`. When the backend's `MODERATION_API_URL` env var is set (default in docker-compose: `http://localhost:8081`), the existing `NSFW` moderator in `internal/moderation` swaps the bundled `NoopClassifier` for `HTTPNSFWClassifier` — same interface, no pipeline changes. `NSFW_THRESHOLD` tunes the reject cutoff (default `0.80`). The sidecar aggregates NudeNet's per-region detections to a single `nsfw_score` so the Go side stays vendor-agnostic.
-- ✅ **Pending-until-approved upload UX**: frontend pair to the attach-time gate. `useUpload` reports a distinct `pendingReview` state instead of faking approval on a slow review; chat shows the sender a local "Reviewing image…" preview (recipients see nothing until approval) and a "still being reviewed" notice on a long hold; quarantined verdicts surface as a generic rejection. `UploadRejectionModal` gained a non-error pending variant across avatar/onboarding/album flows. EN/ES/PT.
-- ✅ **Moderation pipeline — fail-closed + attach-time serve-gating**: detectors declare a **severity** (legal-floor detectors fail *closed* — a vendor/store error holds the upload `pending` and asynq retries over a ~4 h window, never serving it; NSFW/heuristic stay fail-open) and a **disposition** (`Retain` / `Purge` / `Quarantine` — CSAM-class hits are moved to a restricted `quarantine/` prefix and **preserved**, not deleted). Uploads are gated at attach time on `moderation_status='approved'` so an un-moderated/rejected/quarantined image never reaches another user — chat attachments, album photos (add + serve-time), and avatar/gallery media. Migration `000045`; new transient `409 upload_not_approved`. Sets up the PhotoDNA (CSAM) and StopNCII/PDQ (NCII) adapters to drop into the existing `Chain`.
-- ✅ **Image moderation pipeline**: per-upload framework (`internal/moderation`) with a `Moderator` interface + `Chain` short-circuit, three bundled detectors (`HashList` against the new `image_block_hashes` table, `Heuristic` for size/dimension/aspect bounds, `NSFW` with a pluggable classifier — `NoopClassifier` by default until NudeNet/Rekognition lands). Worker runs the chain after image decode; rejections delete the object + mark the row + short-circuit; moderator errors fail open. New `GET /admin/moderation` lists rejected uploads, `POST /admin/moderation/hashes` curates the local block list. Frontend `useUpload` polls `GET /uploads/{id}` after confirm and surfaces the rejection reason. `apierror.CodeUploadRejectedModeration`. Designed so StopNCII (hash feed) and a real NSFW classifier plug in behind the same interfaces with zero pipeline changes.
-- ✅ **Habeas Data / GDPR Art. 20 data export**: users can request a zip of their data — machine-readable JSON (`data.json`) of profile, preferences, contacts, blocks, rooms, sent messages, filed reports, age attestations, and uploads, plus the bytes of every media file they own — built async via asynq, delivered via a single-use 14-day download link emailed to them. New `POST/GET /users/me/exports` + un-authenticated `GET /account/export/{token}` (the path token is the bearer credential). Migration `000033` adds the `export_requests` table with a unique partial index that lets at most one in-flight build per user; a 24h cool-down is enforced atomically inside `Create`. New `internal/exports` package + `export:user` asynq task type + `DataExportSection` in `/settings`. EN/ES/PT.
-- ✅ **Expanded reports + priority queue + age-verification audit + appeals**: migration `000032` adds three new report reasons (`non_consensual_intimate_images`, `digital_gender_violence` / "Ley Olimpia", `csam`), a `priority` column on `reports` with index, the `age_verification_audit` table (preserved across hard-delete via ON DELETE SET NULL), and the `appeals` table (token hashed, 30-day TTL, one open appeal per suspension). Priority is derived from the reason server-side so callers can't downgrade CSAM or NCII reports — admin list is ordered critical → high → normal → newest-first. Register handler captures IP + User-Agent + DOB to the audit table after `Register` succeeds. New `internal/appeals` package + public `/appeal/{token}` (un-authenticated) + admin `/admin/appeals` (mounted via `admin.WithAppealsHandler`). Suspend / Ban fires the new `admin.SuspensionNotifier` async hook which mints a token, persists the appeal row, and emails the appeal link; approving an appeal reactivates the user; denying leaves the suspension in place; either way a resolution email is sent. New `Appeals` admin sidebar entry, new `apierror.CodeAppealAlreadyResolved`. Full EN/ES/PT.
-- ✅ **Security hardening — phase 2** ([PR #111](https://github.com/mayloo89/circl/pull/111)): eleven backend security fixes. Trusted proxy middleware (`middleware.RealIP`) prevents rate-limit bypass via spoofed `X-Forwarded-For` — only trusted when the connection arrives from a configured CIDR (`TRUSTED_PROXIES` env var). SSE notifications auth migrated from `?token=JWT` to single-use tickets (matching the WebSocket pattern). Metrics endpoint requires `METRICS_TOKEN` (returns 403 when empty). bcrypt cost raised from 10 to 12. Refresh tokens revoked after password reset. Avatar and gallery URLs validated against the configured storage prefix to prevent external-image embedding. Rate-limit counters made atomic via a Lua script. Request body capped at 1 MiB across all JSON API routes. `Permissions-Policy` header added. Chat `?limit=` capped at 200. Forgot-password and resend-verification endpoints rate-limited per IP.
-- ✅ **DM external-contact masking**: server-side detection and redaction of contact info (phones, emails, URLs, handles) in DMs between non-accepted contacts. New `internal/redact` package with two-tier normalizer, regex detection, and keyword-boosted thresholds. `Service.maybeRedact()` wired into chat send path; raw data never touches DB. `AreAcceptedContacts` on contacts store; `GetDMPeerID` on chat store; `IsExemptSender` placeholder for future service-profile logic. Migration `000042` adds `redacted` column to `messages`. Frontend: system message pill, redaction token with i18n, amber contact-sharing warning in non-accepted DMs. EN/ES/PT. Fixed: `GET /chat/rooms` (the room-list endpoint the chat UI actually loads state from) now also resolves `are_accepted_contacts` per DM, so the warning banner correctly hides for accepted contacts instead of always showing.
-- ✅ **Message data retention**: daily background sweep hard-deletes messages past the retention window for their room type (DM: 3 months, public: 24h). Retention-driven expiry removes the row entirely (no placeholder), unlike user-set self-destruct / view-once which tombstone. `RetentionCleaner` (`worker/retention.go`) runs on a 24h ticker, queries `ListRetentionEligibleMessages` (joins messages + rooms by type, excludes tombstoned and `expires_at`-set rows), hard-deletes via `DeleteMessage`, cleans object-storage files, and broadcasts `message_deleted`. `chat.RetentionDurations` map defines per-type windows.
-- ✅ **Public rooms with guest-access tier (Phase 1 / MVP)**: admin-created open chat rooms where unregistered guests can enter with a nickname + age-of-majority declaration. Guest sessions are ephemeral Redis-backed (4h TTL); guests are text-only, restricted to public rooms, rate-limited at 6 msgs/min (`GUEST_MSG_RATE`). Contact masking applies unconditionally to guest messages. 24h hard-delete retention. Migration `000044` (adds `public` room type + `visibility`; makes `messages.sender_id` nullable + adds `sender_label` for guest senders, who have no `users` row). Backend: `internal/guest` package (`POST /guest/session`, `GET /guest/rooms`); guest WS ticket flow (`POST /guest/ws-ticket`); admin CRUD (`POST/GET/DELETE /admin/public-rooms`); `SaveMessage` guest path (NULL sender + `sender_label`); `NicknameTaken` protected namespace. Frontend: `/rooms` listing, `/rooms/[roomId]` guest entry gate, `useGuestChat` hook, `GuestRoomView`; navigation links in Sidebar + BottomNav. EN/ES/PT i18n.
-- ✅ **In-room moderation for public rooms**: admin-only kick/mute for any participant (guest or registered). Kick is real-time (hub `kickCmds` channel → `kicked` WS event → close connection); guests also receive a 24h IP ban (SHA-256 hash in Redis). Mute is Redis TTL-based (15 min / 1 h / 24 h), checked before each message save — sender gets `you_are_muted` event, message dropped. Nickname profanity filter at guest entry (`internal/profanity`, ~50 worst-case slurs EN/ES/PT with leet-speak normalization); IP-ban check at `POST /guest/session` when `room_id` supplied. Frontend: `isKicked` / `isMuted` state in `useGuestChat` / `useChat`; full-screen removal modal + amber muted banner in `PublicRoomShell`; admin `•••` overflow menu per roster participant with keyboard navigation. EN/ES/PT i18n. No migration needed (Redis-only state).
-- ✅ **Frontend polish pass — admin i18n + legal page fixes**: full i18n pass across all 7 admin pages — ~120 new keys added to the `admin` locale namespace (EN/ES/PT); hardcoded label dictionaries removed; `toLocaleDateString()`/`toLocaleString()` calls gain explicit locale from `useLocale()`; modal backdrops changed to `bg-gray-950/80`. Legal pages: `LegalPage` gains a localized back-link; `draft` banner gated on `LEGAL_DRAFT=true` env var; blockquote side-stripe replaced with full border + tint; `<ol>` styles added; `Footer` links gain `focus-visible` ring.
-- ✅ **Global rate limiting**: per-IP request budget across the whole JSON API (`GLOBAL_IP_LIMIT`, default 300 req/min) as a backstop behind the per-endpoint limiters, failing open on Redis errors; plus an in-memory cap on concurrent WebSocket connections per IP (`WS_IP_CONN_LIMIT`, default 20) covering registered users and guests.
-- ✅ **Automated database backups**: in-stack `backup` service takes a daily rotated `pg_dump` into a Docker volume (no host crontab), with an opt-in off-site sync to S3 / Cloudflare R2 and a one-command monthly restore drill (`deploy/restore-drill.sh`). See [`docs/runbooks/db-backup-restore.md`](docs/runbooks/db-backup-restore.md).
-- ✅ **Error tracking via Grafana (no third-party SDK)**: panic-recovery middleware + guarded background goroutines (a panic is logged with a stack trace and a `circl_panics_total` metric instead of crashing the process), and a frontend error boundary + `window` error reporter that posts to `POST /client-errors` — all errors land in Loki/Prometheus/Grafana with a `RecoveredPanics` alert, nothing leaves your infrastructure.
-- ✅ **Self-hosted observability (opt-in)**: the full Loki + Alloy + Tempo + Prometheus + Grafana stack ships in the production compose behind an `observability` profile (off by default). Prod-hardened — Grafana with a real login bound to localhost, Prometheus authenticating to `/metrics`, bounded retention — reached over an SSH tunnel by default or an nginx subdomain. Pre-provisioned dashboards + alerts. See [`docs/deploy/README.md`](docs/deploy/README.md#observability-grafana--loki--prometheus--tempo).
-- ✅ **Public marketing landing page**: logged-out visitors at `/` get a real pre-signup landing instead of an immediate redirect to `/login`. The home route branches server-side on the session — no session renders the landing (`components/landing/`), a session keeps the authenticated activity home. Built on the existing brand tokens with a custom CSS/SVG "private circle" motif (no stock imagery): hero with dual CTA (register / browse public rooms as a guest), value pillars, how-it-works steps, a privacy-posture panel, and a closing CTA. Fully localized (EN/ES/PT) and accessible (skip link, focus rings, reduced-motion respected).
-- ✅ **Browse ranking, pause-discovery, and completeness gate**: the browse/explore feed ranks candidates by a relevance score (35% shared interests + 30% activity recency + 25% proximity + 10% deterministic per-session shuffle). Clients mint a random seed once per session (`sessionStorage["browse_seed"]`) and pass it as `?seed=` on every paginated request so the feed order is stable on refresh but varies across sessions. A new `discovery_paused` toggle in **Settings → Privacy** hides the user from others while letting them still browse (migration `000046`). Viewers whose own profile is under 40% complete see a blurred placeholder grid with a "Complete your profile" CTA instead of results.
-- ✅ **Unified photo gallery — first photo is the main photo**: gallery and avatar merged into one reorderable set. The first gallery photo is always used everywhere (browse cards, nav, chat, contacts, public-profile header). `avatar_url` is maintained server-side as a mirror of `profile_photos` position 0, updated atomically on add/delete/reorder. New `PUT /profiles/me/photos/order` endpoint for reordering. Gallery capacity increased 6→7 (migration `000047`). Standalone avatar widget removed; the gallery is the sole photo manager. The onboarding photo step posts to the gallery. The public-profile gallery grid skips photo #0 (shown by the header). Accessible move-back/forward + make-main controls on each tile.
-- ✅ **`NEXT_LOCALE` cookie hardening — unprefixed-route gap fix**: the earlier Wapiti-scan fix derived the locale from the request pathname in `proxy.ts`, but only matched locale-prefixed paths — the default locale (`es`) is reachable unprefixed (`/`, `/login`, …), so those responses still carried the un-hardened cookie. `finalize()` now reuses the existing `getLocale()` helper (which falls back to the default locale) so the hardened `NEXT_LOCALE` cookie (`httpOnly`, `secure` in prod, `sameSite: "lax"`) is written on every response.
-- ✅ **Dependency vulnerability sweep**: all five vulnerabilities `govulncheck` reported as reachable from this codebase are cleared — `pgx/v5` bumped past a SQL-injection advisory in the driver the whole DB layer runs on, `golang.org/x/image` past three decode-time panic/memory-exhaustion advisories reachable from user-uploaded image processing, and the `go.mod` directive raised to 1.25.12 for the `crypto/tls` ECH fix. On the frontend, `next` 16.2.10 plus an npm `overrides` entry patching `next`'s vendored `postcss` takes `npm audit` to 0 vulnerabilities.
-- ✅ **Auth-wall fail-closed fix**: the middleware treated NextAuth's configuration-error object as a logged-in session (`!!req.auth`), silently opening the private-route wall on production builds with an untrusted host — anonymous visitors reached private routes and were redirected away from `/login`. The middleware now checks `req.auth?.user` (fails closed under any session-resolution error), `trustHost` is set explicitly, and new E2E regression tests pin the wall in both directions.
-- ✅ **Frontend quick wins — i18n gaps, crawl policy, branded 404, form a11y**: chat day separators and message-expiry countdowns now render in the active locale (they were hardcoded English); browse distance labels moved to i18n keys; new `robots.txt` (via `app/robots.ts`) plus an `X-Robots-Tag: noindex` middleware header keep every private surface out of search engines while the marketing landing, auth pages, legal pages, and public rooms stay crawlable; a branded, localized 404 page with a `[...rest]` catch-all replaces Next's default; and `Input` announces validation errors to screen readers via `aria-invalid` + `aria-describedby`.
+## Features
+
+- **Accounts & profiles** — email/password auth with mandatory email
+  verification, 15-minute access JWTs plus opaque refresh tokens, login lockout,
+  and reversible (soft) account deletion with a 30-day grace period and a
+  background purge. Rich profiles: username, age (18+ enforced), gender,
+  geolocated discovery, interests, and a reorderable photo gallery.
+- **Discovery** — a browse feed ranked by shared interests, activity recency, and
+  proximity, with a pause-discovery toggle and a profile-completeness gate.
+  Redacted public profiles for non-contacts; soft-deleted users are filtered out.
+- **Contacts & chat** — full contact-request lifecycle, real-time DMs and group
+  chat over WebSockets with Redis Pub/Sub fan-out, presence, typing indicators,
+  read receipts, image/video attachments, and view-once / TTL ephemeral messages.
+- **Public rooms & guest tier** — IRC-style open rooms a guest can join with just
+  a nickname (Turnstile-gated), with in-room admin moderation (kick / mute) — the
+  top-of-funnel that avoids the cold-start problem.
+- **Trust & safety** — blocking, reporting with auto-suspension, a full admin
+  moderation panel, an appeals flow, a fail-closed image-moderation pipeline
+  (ready for a CSAM/NCII vendor to be plugged in), DM contact-info masking between
+  non-contacts, message-retention sweeps, and GDPR-style data export.
+- **Notifications** — in-app SSE stream plus Web Push (VAPID) for chat and
+  contact events.
+- **Private albums** — share photo sets per-recipient with a consent trail and
+  a per-viewer watermark; access is revocable.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full, dated history and
+[`docs/implementation-plan.md`](docs/implementation-plan.md) for the roadmap and
+open backlog.
+
+## Architecture highlights
+
+The decisions that make this a showcase rather than a CRUD app:
+
+- **WebSocket auth never carries a JWT in the URL** — clients exchange a
+  short-lived, single-use Redis ticket (`POST /ws-ticket`) at connect time.
+- **CSP uses a per-request nonce** minted in the middleware; `'unsafe-inline'` is
+  never allowed in `script-src`.
+- **Fail-closed by default** — the auth middleware treats an unresolvable session
+  as logged-out, and legal-floor image moderation holds an upload as `pending`
+  (never served) if a detector errors, retrying with backoff.
+- **Privacy is enforced server-side** — contact-info masking rewrites DMs *before
+  persistence*, public profiles are redacted for non-contacts, and presence is
+  gated to accepted contacts.
+- **Fully internationalized** — every user-facing string (including `aria-label`s)
+  flows through next-intl in all three locales; no hardcoded copy in components.
+- **Accessibility as an invariant** — focus-trapped dialogs, keyboard-navigable
+  menus, and `aria-invalid`/`aria-describedby` on form errors.
+
+For the visual and product design language, see [`DESIGN.md`](DESIGN.md).
 
 ## Local setup
 
@@ -188,6 +148,12 @@ Open [http://localhost:3000](http://localhost:3000).
 
 **Test credentials**: `test@example.com` / `password`
 
+### Full stack via Docker
+
+```bash
+docker compose up   # API, Postgres, Redis, MinIO, Mailpit, and the observability suite
+```
+
 ## Deploying to production
 
 Generic templates and a walkthrough live in [`docs/deploy/`](docs/deploy/README.md)
@@ -221,13 +187,11 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 See [`docs/deploy/README.md`](docs/deploy/README.md) for the full walkthrough,
-env-var reference, and the troubleshooting section (frontend `unhealthy`
-flag root cause, kernel cgroup-memory advisory, slow first build, migration
-failures).
+env-var reference, and the troubleshooting section.
 
 ## Environment variables
 
-Each folder has a `.env.example` — copy it and fill in the values. These files are gitignored and never committed.
+Each folder has a `.env.example` — copy it and fill in the values. These files are gitignored and never committed. The production env-var reference lives in [`docs/implementation-plan.md`](docs/implementation-plan.md).
 
 | File | Copy to |
 |------|---------|
@@ -244,6 +208,7 @@ npm run build          # Production build
 npm run lint           # ESLint
 npm run test           # Vitest unit tests
 npm run test:coverage  # Unit tests with the coverage gate CI enforces
+npx playwright test    # E2E tests
 ```
 
 ### Backend
@@ -254,6 +219,12 @@ go build ./cmd/api         # Build binary
 go test ./...              # Run tests
 go test ./... -cover       # Run tests with coverage
 go vet ./...               # Static analysis
+golangci-lint run          # Linter (config in .golangci.yml)
+```
+
+### Full local CI
+```bash
+./run-ci-local.sh          # Spins up Postgres + Redis in Docker and runs the whole pipeline
 ```
 
 ### Load test (WebSocket)
@@ -274,70 +245,48 @@ All protected routes require `Authorization: Bearer <token>`. Short-lived access
 
 ```
 circl/
-├── frontend/               # Next.js app
-│   ├── app/
-│   │   ├── [locale]/      # All pages under locale prefix (/es/, /en/, /pt/)
-│   │   │   ├── admin/     # Admin panel (dashboard, users, reports, channels)
-│   │   │   ├── browse/    # Profile discovery
-│   │   │   ├── chat/      # Chat list, room, and channels pages
-│   │   │   ├── contacts/  # Contacts page
-│   │   │   ├── login/     # Login page
-│   │   │   ├── profile/   # Own profile (edit) + [username] public view
-│   │   │   ├── settings/  # Settings (notifications, language, password, delete)
-│   │   │   └── layout.tsx # Locale layout: <html lang>, NextIntlClientProvider
-│   │   ├── layout.tsx     # Minimal root shell (no html/body)
-│   │   └── page.tsx       # Redirects → /es
-│   ├── i18n/              # next-intl config (routing, request, navigation)
-│   ├── messages/          # Translation files: en.json, es.json, pt.json
-│   ├── middleware.ts       # Auth guard + intl locale routing (merged)
-│   ├── components/        # Shared UI components (NavBar, ui/*, profile/*, chat/*)
-│   ├── contexts/          # React contexts (NotificationsContext, PushContext)
-│   ├── hooks/             # Custom hooks (useChat, usePresence, useUpload, …)
-│   ├── lib/               # Auth config (NextAuth.js)
-│   ├── types/             # next-auth type augmentation
-│   └── package.json
-├── backend/               # Go API
-│   ├── cmd/api/           # Server entry point (main.go)
-│   ├── internal/          # Business logic (clean architecture)
-│   │   ├── apierror/      # Shared error writer + stable error code constants
-│   │   ├── auth/          # Register/login/refresh handler, service, store
-│   │   ├── admin/         # Admin moderation handler, service, store
-│   │   ├── chat/          # Chat rooms, Hub (WebSocket fan-out), store, handler
-│   │   ├── config/        # Env helpers
-│   │   ├── contacts/      # Contacts handler, service, store
-│   │   ├── db/            # Connection pool, migrations runner
-│   │   ├── email/         # Sender interface, ConsoleSender, SMTPSender
-│   │   ├── logger/        # zerolog setup (dev: console, prod: JSON) + Loki writer
-│   │   ├── metrics/       # Prometheus collectors (HTTP, WS, DB pool, runtime)
-│   │   ├── middleware/    # RequireAuth, RequireAdmin, SecurityHeaders, RequestLogger
-│   │   ├── notifications/ # SSE Hub, Notifier interface, stream handler
-│   │   ├── presence/      # Redis heartbeat, offline, batch presence query
-│   │   ├── profiles/ # Profile handler, service, store; preferences (locale)
-│   │   ├── push/ # Web Push (VAPID) handler, service, store
-│   │   ├── ratelimit/ # Redis-backed rate limiter (per-IP and per-user)
-│   │   ├── redact/ # Contact-info detection + redaction (normalize, detect, redact)
-│   │   ├── reports/ # User report handler, service, store
-│   │   ├── server/        # Chi router, CORS, /health, /metrics endpoints
-│   │   ├── storage/       # Storage interface, LocalStorage, S3Storage
-│   │   ├── testutil/      # Integration test helpers (OpenDB, CreateUser, NewRedis)
-│   │   ├── token/         # JWT generate/validate
-│   │   ├── tracing/       # OTel SDK init, chi middleware, pgx tracer
-│   │   ├── uploads/       # Upload lifecycle (request → confirm), Postgres tracking
-│ │ └── worker/ # asynq tasks: image processing, ephemeral + retention cleanup, purge
-│ ├── migrations/ # SQL migrations (up + down), currently at 000042
+├── frontend/                 # Next.js app
+│   ├── app/[locale]/         # All pages under a locale prefix (/es/, /en/, /pt/)
+│   │   ├── admin/            # Admin panel (users, reports, channels, appeals, moderation)
+│   │   ├── browse/           # Profile discovery
+│   │   ├── chat/             # Chat list, DM/group rooms, and (separate) channels
+│   │   ├── contacts/         # Contacts page
+│   │   ├── profile/          # Own profile (edit) + [username] public view
+│   │   ├── rooms/            # Public guest rooms
+│   │   └── settings/         # Notifications, language, password, delete account
+│   ├── components/           # Shared UI (nav, chat, ui primitives, admin, landing)
+│   ├── contexts/             # React contexts (Profile, Notifications, Push, Theme)
+│   ├── hooks/                # useChat, usePresence, useUpload, useFocusTrap, …
+│   ├── i18n/                 # next-intl config (routing, request, navigation)
+│   ├── lib/                  # NextAuth config + client helpers
+│   ├── messages/             # Translation catalogs: en.json, es.json, pt.json
+│   ├── proxy.ts              # Middleware: auth guard + intl routing + per-request CSP nonce
+│   └── e2e/                  # Playwright specs
+├── backend/                  # Go API
+│   ├── cmd/api/              # Server entry point (main.go)
+│   ├── internal/             # Business logic (handler / service / store per package)
+│   │   ├── auth/             # Register / login / refresh
+│   │   ├── admin/            # Admin moderation
+│   │   ├── albums/           # Private albums + consent grants + watermarking
+│   │   ├── chat/             # Rooms, Hub (WebSocket fan-out), WS-ticket auth
+│   │   ├── contacts/ · profiles/ · presence/ · reports/ · uploads/
+│   │   ├── guest/            # Guest sessions + public-room entry
+│   │   ├── moderation/       # Image-moderation pipeline + admin queue
+│   │   ├── notifications/    # SSE hub + Notifier
+│   │   ├── push/             # Web Push (VAPID)
+│   │   ├── ratelimit/        # Redis-backed per-IP / per-user limiters
+│   │   ├── redact/           # DM contact-info detection + redaction
+│   │   ├── storage/          # Storage interface, LocalStorage, S3Storage
+│   │   ├── worker/           # asynq tasks: image processing, cleanup, purge
+│   │   └── logger/ · metrics/ · middleware/ · tracing/ · token/ · apierror/
+│   ├── migrations/           # Numbered SQL (up + down) via golang-migrate
 │   └── go.mod
-├── ops/                   # Local observability stack (dev only)
-│   ├── alloy/             # Grafana Alloy config — scrapes container stdout → Loki
-│   ├── grafana/           # Provisioning YAML (datasources + dashboards-as-code)
-│   ├── loki/              # Loki single-binary config, 7-day retention
-│   ├── prometheus/        # prometheus.yml + alert rules
-│   └── tempo/             # Tempo config (OTLP receivers, 7-day trace retention)
-├── docs/
-│   ├── implementation-plan.md
-│   └── openapi.yaml       # OpenAPI 3.1.0 spec (~40 endpoints)
-├── .github/workflows/     # CI: secret-scan, frontend, backend, backend-integration, e2e, openapi-lint
-├── .gitleaks.toml         # Gitleaks allowlist for known test-only secrets
-├── docker-compose.yml     # Full dev stack (API, Postgres, Redis, MinIO, Mailpit, observability)
+├── ops/                      # Local observability stack (Loki, Alloy, Tempo, Prometheus, Grafana)
+├── loadtest/                 # k6 WebSocket load test
+├── docs/                     # implementation-plan.md, openapi.yaml, deploy/, runbooks/
+├── .github/workflows/        # CI pipeline
+├── docker-compose.yml        # Full dev stack
+├── CONTRIBUTING.md · SECURITY.md · LICENSE
 ├── CHANGELOG.md
 └── README.md
 ```
