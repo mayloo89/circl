@@ -386,18 +386,6 @@ func TestListReports_InternalError(t *testing.T) {
 
 // --- UpdateReportStatus (admin) ---
 
-// serveWithID routes PUT /{id}/status through chi so URL params are parsed.
-func serveWithID(h http.Handler, r *http.Request, rec *httptest.ResponseRecorder, id string) {
-	router := chi.NewRouter()
-	router.Put("/{id}/status", func(w http.ResponseWriter, req *http.Request) {
-		h.ServeHTTP(w, req)
-	})
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", id)
-	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-	middleware.RequireAuth(testSecret)(h).ServeHTTP(rec, r)
-}
-
 func TestUpdateReportStatus_AdminSuccess(t *testing.T) {
 	report := &reports.Report{
 		ID:             "r-1",

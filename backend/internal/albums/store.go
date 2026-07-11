@@ -125,7 +125,7 @@ func (s *pgStore) AddPhoto(ctx context.Context, albumID, uploadID string, positi
 	if err != nil {
 		return fmt.Errorf("albums: begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO private_album_photos (album_id, upload_id, position)
 		VALUES ($1, $2, $3)`, albumID, uploadID, position); err != nil {
@@ -146,7 +146,7 @@ func (s *pgStore) RemovePhoto(ctx context.Context, albumID, uploadID string) err
 	if err != nil {
 		return fmt.Errorf("albums: begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	tag, err := tx.Exec(ctx, `
 		DELETE FROM private_album_photos
 		 WHERE album_id = $1 AND upload_id = $2`, albumID, uploadID)

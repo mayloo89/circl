@@ -138,7 +138,7 @@ func (p *ImageProcessor) process(ctx context.Context, payload ImageProcessPayloa
 	if err != nil {
 		return fmt.Errorf("get object: %w", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	raw, err := io.ReadAll(rc)
 	if err != nil {

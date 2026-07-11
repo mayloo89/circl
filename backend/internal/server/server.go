@@ -224,7 +224,7 @@ func healthHandler(db DBPinger, redisPing func(context.Context) error, env, vers
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","env":"%s","version":"%s","db":"%s","redis":"%s"}`,
+		_, _ = fmt.Fprintf(w, `{"status":"ok","env":"%s","version":"%s","db":"%s","redis":"%s"}`,
 			env, version, dbStatus, redisStatus)
 	}
 }

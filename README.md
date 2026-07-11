@@ -11,7 +11,7 @@ Private profiles and real-time chat. Only authenticated users can view, search, 
 - **Queues**: asynq (image processing, maintenance tasks)
 - **Storage**: S3/R2 + CDN
 - **Observability**: zerolog → Loki (logs); Prometheus (metrics); OpenTelemetry → Tempo (traces); Grafana (unified dashboards + alerts)
-- **CI/CD**: GitHub Actions (secret-scan, lint, unit, integration, e2e)
+- **CI/CD**: GitHub Actions (secret-scan, golangci-lint, govulncheck, npm audit, unit, integration, e2e, OpenAPI lint)
 
 ## Documentation
 - [Implementation plan](docs/implementation-plan.md)

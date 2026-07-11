@@ -91,7 +91,7 @@ func (c *HTTPNSFWClassifier) Classify(ctx context.Context, raw []byte) (NSFWResu
 	if err != nil {
 		return NSFWResult{}, fmt.Errorf("moderation/nudenet: do: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		// Drain a small chunk of the body for diagnostics without letting a

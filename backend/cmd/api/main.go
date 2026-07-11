@@ -167,7 +167,7 @@ func main() {
 		log.Fatal().Err(err).Msg("invalid Redis URL")
 	}
 	rdb := redis.NewClient(redisOpt)
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	if err := rdb.Ping(appCtx).Err(); err != nil {
 		log.Fatal().Err(err).Msg("redis connection failed")

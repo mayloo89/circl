@@ -1000,7 +1000,7 @@ func (c *Client) readPump(svc Manager, notifyNewMessage func(recipientID, roomID
 	defer func() {
 		trace.SpanFromContext(c.ctx).End()
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close()
 		if c.releaseConn != nil {
 			c.releaseConn()
 		}
@@ -1314,7 +1314,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	for {
