@@ -45,9 +45,6 @@ PRODUCT.md
 AGENTS.md
 .cursor/
 
-# Local CI script
-run-ci-local.sh
-
 # Operator-specific deploy config (each maintainer keeps their own copy:
 # their domain, their nginx specifics, their secrets). The committed
 # generic templates live in docs/deploy/. The leading slash anchors this
