@@ -275,7 +275,7 @@ func streamPhoto(svc *Service, store storage.Storage, cfg *handlerConfig) http.H
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "failed to fetch photo")
 			return
 		}
-		defer obj.Close()
+		defer func() { _ = obj.Close() }()
 
 		// Owners receive the raw bytes. Viewers get a deterrence watermark
 		// stamped with their immutable user ID so unauthorized redistribution
@@ -286,13 +286,13 @@ func streamPhoto(svc *Service, store storage.Storage, cfg *handlerConfig) http.H
 				zerolog.Ctx(r.Context()).Warn().Err(wErr).Msg("albums: watermark failed, serving original")
 				// Fall through to serve the un-watermarked bytes from the
 				// already-consumed reader — re-fetch from storage.
-				obj.Close()
+				_ = obj.Close()
 				obj2, ferr := store.GetObject(r.Context(), key)
 				if ferr != nil {
 					apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "failed to fetch photo")
 					return
 				}
-				defer obj2.Close()
+				defer func() { _ = obj2.Close() }()
 				w.Header().Set("Content-Type", contentType)
 				w.Header().Set("Cache-Control", "private, max-age=60")
 				_, _ = io.Copy(w, obj2)

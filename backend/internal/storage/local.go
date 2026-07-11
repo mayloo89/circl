@@ -100,9 +100,14 @@ func (ls *LocalStorage) PutObject(_ context.Context, key, _ string, r io.Reader,
 	if err != nil {
 		return fmt.Errorf("local storage: create %q: %w", key, err)
 	}
-	defer f.Close()
 	if _, err := io.Copy(f, r); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("local storage: write %q: %w", key, err)
+	}
+	// Check the close error on the write path — a failed flush can mean the
+	// bytes never reached disk, which must surface as a failed PutObject.
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("local storage: close %q: %w", key, err)
 	}
 	return nil
 }

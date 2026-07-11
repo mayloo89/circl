@@ -41,7 +41,7 @@ func uploadHandler(ls *LocalStorage) http.HandlerFunc {
 
 		// Limit the request body to the declared max size + 1 byte to detect oversized bodies.
 		body := http.MaxBytesReader(w, r.Body, params.MaxSize)
-		defer body.Close()
+		defer func() { _ = body.Close() }()
 
 		dest := ls.FilePath(params.Key)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
@@ -54,14 +54,22 @@ func uploadHandler(ls *LocalStorage) http.HandlerFunc {
 			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
 			return
 		}
-		defer f.Close()
 
 		if _, err := io.Copy(f, body); err != nil {
-			os.Remove(dest)
+			_ = f.Close()
+			_ = os.Remove(dest)
 			if isMaxBytesError(err) {
 				http.Error(w, `{"error":"file too large"}`, http.StatusRequestEntityTooLarge)
 				return
 			}
+			http.Error(w, `{"error":"upload failed"}`, http.StatusInternalServerError)
+			return
+		}
+
+		// Surface a flush failure as a failed upload rather than reporting
+		// success for bytes that may never have reached disk.
+		if err := f.Close(); err != nil {
+			_ = os.Remove(dest)
 			http.Error(w, `{"error":"upload failed"}`, http.StatusInternalServerError)
 			return
 		}

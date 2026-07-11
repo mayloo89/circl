@@ -176,7 +176,7 @@ func (s *pgStore) SyncInterests(ctx context.Context, userID string, names []stri
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err = tx.Exec(ctx, `DELETE FROM profile_interests WHERE user_id = $1`, userID); err != nil {
 		return fmt.Errorf("clear interests: %w", err)
@@ -324,7 +324,7 @@ func (s *pgStore) AddPhoto(ctx context.Context, userID, url string) (*ProfilePho
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	row := tx.QueryRow(ctx,
 		`INSERT INTO profile_photos (user_id, url, position)
@@ -349,7 +349,7 @@ func (s *pgStore) DeletePhoto(ctx context.Context, photoID, userID string) error
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	result, err := tx.Exec(ctx,
 		`DELETE FROM profile_photos WHERE id = $1 AND user_id = $2`,
@@ -388,7 +388,7 @@ func (s *pgStore) ReorderPhotos(ctx context.Context, userID string, orderedIDs [
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx,
 		`SELECT id FROM profile_photos WHERE user_id = $1`,

@@ -103,7 +103,7 @@ func download(svc *Service) http.HandlerFunc {
 			}
 			return
 		}
-		defer rc.Close()
+		defer func() { _ = rc.Close() }()
 		w.Header().Set("Content-Type", "application/zip")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="circl-export-%s.zip"`, req.ID))
 		w.WriteHeader(http.StatusOK)

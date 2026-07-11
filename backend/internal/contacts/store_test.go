@@ -884,8 +884,7 @@ func TestIntegration_BlockFlow(t *testing.T) {
 	}
 
 	// u1 sends a new request to u2.
-	contact, err = store.SendRequest(ctx, u1, u2)
-	if err != nil {
+	if _, err = store.SendRequest(ctx, u1, u2); err != nil {
 		t.Fatalf("SendRequest for pending test: %v", err)
 	}
 

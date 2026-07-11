@@ -70,7 +70,7 @@ func NewHandler(hub *Hub, redeemer TicketRedeemer) http.HandlerFunc {
 			case e := <-ch:
 				writeEvent(w, flusher, e)
 			case <-time.After(25 * time.Second):
-				fmt.Fprintf(w, ": heartbeat\n\n")
+				_, _ = fmt.Fprintf(w, ": heartbeat\n\n")
 				flusher.Flush()
 			case <-r.Context().Done():
 				return
@@ -81,6 +81,6 @@ func NewHandler(hub *Hub, redeemer TicketRedeemer) http.HandlerFunc {
 
 func writeEvent(w http.ResponseWriter, f http.Flusher, e Event) {
 	data, _ := json.Marshal(e)
-	fmt.Fprintf(w, "data: %s\n\n", data)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 	f.Flush()
 }

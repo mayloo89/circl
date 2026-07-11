@@ -132,7 +132,7 @@ func (s *Service) Send(ctx context.Context, userID string, n Notification) {
 			continue
 		}
 		log.Debug().Int("status", resp.StatusCode).Str("endpoint", sub.Endpoint).Msg("sent")
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		// 404 / 410 mean the subscription is no longer valid — remove it.
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {

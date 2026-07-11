@@ -251,7 +251,7 @@ func (s *Service) writeMedia(ctx context.Context, zw *zip.Writer, m MediaItem) e
 	if err != nil {
 		return fmt.Errorf("get %s: %w", m.StorageKey, err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	w, err := zw.Create(m.ArchivePath)
 	if err != nil {
 		return fmt.Errorf("zip create %s: %w", m.ArchivePath, err)

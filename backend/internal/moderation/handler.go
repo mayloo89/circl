@@ -226,7 +226,7 @@ func streamImage(store AdminStore, images ImageFetcher) http.HandlerFunc {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "failed to fetch image")
 			return
 		}
-		defer obj.Close()
+		defer func() { _ = obj.Close() }()
 		w.Header().Set("Content-Type", row.ContentType)
 		w.Header().Set("Cache-Control", "private, no-store")
 		_, _ = io.Copy(w, obj)
