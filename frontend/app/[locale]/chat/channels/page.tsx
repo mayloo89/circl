@@ -193,7 +193,7 @@ export default function ChannelsPage() {
         {error && (
           <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
             <p className="text-sm text-red-400">{error}</p>
-            <Button variant="danger" size="sm" onClick={() => { setLoading(true); setError(""); loadRooms() }} className="ml-3 shrink-0">{tc("retry")}</Button>
+            <Button variant="danger" size="sm" loading={loading} onClick={() => { setLoading(true); setError(""); loadRooms() }} className="ml-3 shrink-0">{tc("retry")}</Button>
           </div>
         )}
 

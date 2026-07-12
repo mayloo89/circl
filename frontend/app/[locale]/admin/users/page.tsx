@@ -375,6 +375,15 @@ export default function AdminUsersPage() {
 
   const [refreshKey, setRefreshKey] = useState(0)
 
+  // Show the loading skeleton on every refetch (search, status filter,
+  // pagination or refresh) without a synchronous setState in the effect.
+  const fetchKey = `${query}|${status}|${offset}|${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
+    setLoading(true)
+  }
+
   useEffect(() => {
     const token = session?.accessToken
     if (!token) return

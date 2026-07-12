@@ -168,6 +168,15 @@ export default function AdminChannelsPage() {
   const [deleteError, setDeleteError] = useState("")
   const [refreshKey, setRefreshKey] = useState(0)
 
+  // Show the loading skeleton on every refetch (post-action refresh) without a
+  // synchronous setState in the effect.
+  const fetchKey = `${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
+    setLoading(true)
+  }
+
   useEffect(() => {
     const token = session?.accessToken
     if (!token) return

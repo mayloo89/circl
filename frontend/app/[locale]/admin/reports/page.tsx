@@ -244,6 +244,15 @@ export default function AdminReportsPage() {
   const [reviewTarget, setReviewTarget] = useState<Report | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
+  // Show the loading skeleton on every refetch (filter change or post-action
+  // refresh) without a synchronous setState in the effect.
+  const fetchKey = `${statusFilter}|${priorityFilter}|${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
+    setLoading(true)
+  }
+
   useEffect(() => {
     const token = session?.accessToken
     if (!token) return

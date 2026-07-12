@@ -268,7 +268,7 @@ export default function ChatListPane({ selectedRoomId, variant = "page" }: ChatL
         {error && (
           <div className="flex items-center justify-between rounded-md bg-red-950 p-3 ring-1 ring-red-900">
             <p className="text-sm text-red-400">{error}</p>
-            <Button variant="danger" size="sm" onClick={() => { setError(""); setLoading(true); loadRooms() }} className="ml-3 shrink-0">{t("retry")}</Button>
+            <Button variant="danger" size="sm" loading={loading} onClick={() => { setError(""); setLoading(true); loadRooms() }} className="ml-3 shrink-0">{t("retry")}</Button>
           </div>
         )}
 

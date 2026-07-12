@@ -44,6 +44,17 @@ export default function NewChatModal({ open, token, onClose, onCreated }: Props)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
 
+  // The modal stays mounted while `open` toggles, so reset the contact-loading
+  // state on each open transition to avoid showing a stale list during refetch.
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) {
+      setLoadingContacts(true)
+      setError("")
+    }
+  }
+
   useEffect(() => {
     if (!open || !token) return
     fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })

@@ -499,6 +499,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
       {groupPanelOpen && (room?.type === "group" || room?.type === "channel") && token && userID && roomId && (
         <div className="absolute inset-0 z-30 bg-gray-950">
           <GroupMembersPanel
+            key={roomId}
             roomId={roomId}
             roomName={groupName || room.name}
             roomType={room.type}
