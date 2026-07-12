@@ -199,21 +199,28 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
     }
   }, [room?.type, router])
 
-  // Update the members sidebar in real-time from participant_join / participant_leave events.
-  useEffect(() => {
-    if (participantEvents.length === 0 || room?.type !== "channel") return
-    for (const ev of participantEvents) {
-      if (ev.type === "join") {
-        setMembers((prev) => {
-          if (prev.some((m) => m.user_id === ev.userId)) return prev
-          return [...prev, { user_id: ev.userId, username: ev.username, display_name: ev.displayName, avatar_url: ev.avatarURL, is_admin: false }]
-        })
-      } else {
-        setMembers((prev) => prev.filter((m) => m.user_id !== ev.userId))
-      }
+  // Update the members sidebar in real-time from participant_join / participant_leave
+  // events. Folded during render (not in an effect) so the roster stays in sync without
+  // an extra commit; the full event list is re-folded whenever it changes.
+  const [foldedEvents, setFoldedEvents] = useState(participantEvents)
+  if (participantEvents !== foldedEvents) {
+    setFoldedEvents(participantEvents)
+    if (participantEvents.length > 0 && room?.type === "channel") {
+      setMembers((prev) => {
+        let next = prev
+        for (const ev of participantEvents) {
+          if (ev.type === "join") {
+            if (!next.some((m) => m.user_id === ev.userId)) {
+              next = [...next, { user_id: ev.userId, username: ev.username, display_name: ev.displayName, avatar_url: ev.avatarURL, is_admin: false }]
+            }
+          } else {
+            next = next.filter((m) => m.user_id !== ev.userId)
+          }
+        }
+        return next
+      })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participantEvents])
+  }
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId || !room) return
@@ -237,14 +244,14 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
         if (found) {
           setRoom(found)
           if (found.type === "group" || found.type === "channel") setGroupName(found.name)
-          if (found.type === "channel") setMemberSidebarOpen(true)
+          if (found.type === "channel") { setMemberSidebarOpen(true); setHistoryLoading(false) }
           return
         }
         // Not in list — likely a channel. Fetch it directly.
         return fetch(`${API_URL}/chat/rooms/${roomId}`, { headers: { Authorization: `Bearer ${token}` } })
           .then((r) => r.ok ? r.json() : null)
           .then((data: RoomSummary | null) => {
-            if (data) { setRoom(data); if (data.type === "channel") { setGroupName(data.name); setMemberSidebarOpen(true) } }
+            if (data) { setRoom(data); if (data.type === "channel") { setGroupName(data.name); setMemberSidebarOpen(true); setHistoryLoading(false) } }
           })
       })
       .catch(() => {})
@@ -252,10 +259,9 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
 
   useEffect(() => {
     if (status !== "authenticated" || !token || !roomId || !room) return
-    if (room.type === "channel") {
-      setHistoryLoading(false)
-      return
-    }
+    // Channels have no message history; historyLoading is cleared when the room
+    // is resolved above.
+    if (room.type === "channel") return
     fetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : []))
       .then((data: HistoryMessage[]) => {
@@ -493,6 +499,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
       {groupPanelOpen && (room?.type === "group" || room?.type === "channel") && token && userID && roomId && (
         <div className="absolute inset-0 z-30 bg-gray-950">
           <GroupMembersPanel
+            key={roomId}
             roomId={roomId}
             roomName={groupName || room.name}
             roomType={room.type}

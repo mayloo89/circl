@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Skeleton from "@/components/ui/Skeleton"
@@ -159,33 +159,46 @@ export default function AdminChannelsPage() {
   const t = useTranslations("admin")
   const locale = useLocale()
   const [channels, setChannels] = useState<Channel[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Channel | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Channel | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState("")
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const fetchChannels = useCallback(async () => {
-    if (!session?.accessToken) return
+  // Show the loading skeleton on every refetch (post-action refresh) without a
+  // synchronous setState in the effect.
+  const fetchKey = `${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
     setLoading(true)
-    setError("")
-    try {
-      const res = await fetch(`${API_URL}/admin/channels`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      if (!res.ok) throw new Error(String(res.status))
-      const data = await res.json()
-      setChannels(Array.isArray(data) ? data : [])
-    } catch {
-      setError(t("loadAdminChannelsFailed"))
-    } finally {
-      setLoading(false)
-    }
-  }, [session, t])
+  }
 
-  useEffect(() => { fetchChannels() }, [fetchChannels])
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_URL}/admin/channels`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (cancelled) return
+        setChannels(Array.isArray(data) ? data : [])
+        setError("")
+      } catch {
+        if (!cancelled) setError(t("loadAdminChannelsFailed"))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [session, t, refreshKey])
 
   async function confirmDelete() {
     if (!deleteTarget || !session?.accessToken) return
@@ -202,7 +215,7 @@ export default function AdminChannelsPage() {
         return
       }
       setDeleteTarget(null)
-      await fetchChannels()
+      setRefreshKey((k) => k + 1)
     } finally {
       setDeleteLoading(false)
     }
@@ -283,7 +296,7 @@ export default function AdminChannelsPage() {
       {createOpen && session?.accessToken && (
         <CreateModal
           token={session.accessToken}
-          onDone={() => { setCreateOpen(false); fetchChannels() }}
+          onDone={() => { setCreateOpen(false); setRefreshKey((k) => k + 1) }}
           onClose={() => setCreateOpen(false)}
         />
       )}
@@ -292,7 +305,7 @@ export default function AdminChannelsPage() {
         <EditModal
           channel={editTarget}
           token={session.accessToken}
-          onDone={() => { setEditTarget(null); fetchChannels() }}
+          onDone={() => { setEditTarget(null); setRefreshKey((k) => k + 1) }}
           onClose={() => setEditTarget(null)}
         />
       )}

@@ -27,8 +27,12 @@ export default function OnboardingInterestsPage() {
   const listboxId = "interests-listbox"
 
   useEffect(() => {
-    if (!query.trim() || !token) { setSuggestions([]); return }
     const id = setTimeout(async () => {
+      if (!query.trim() || !token) {
+        setSuggestions([])
+        setActiveIdx(-1)
+        return
+      }
       try {
         const res = await fetch(
           `${API_URL}/profiles/interests?q=${encodeURIComponent(query)}&limit=8`,
@@ -37,18 +41,18 @@ export default function OnboardingInterestsPage() {
         if (!res.ok) return
         const data: { name: string }[] = await res.json()
         setSuggestions(data.map((d) => d.name).filter((n) => !interests.includes(n)))
+        setActiveIdx(-1)
       } catch { /* ignore */ }
     }, 250)
     return () => clearTimeout(id)
   }, [query, token, interests])
-
-  useEffect(() => { setActiveIdx(-1) }, [suggestions])
 
   function addInterest(name: string) {
     if (interests.includes(name) || interests.length >= MAX_INTERESTS) return
     setInterests((prev) => [...prev, name])
     setQuery("")
     setSuggestions([])
+    setActiveIdx(-1)
   }
 
   function removeInterest(name: string) {

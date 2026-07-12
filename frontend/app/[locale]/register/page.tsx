@@ -49,13 +49,14 @@ export default function RegisterPage() {
 
   useEffect(() => {
     const usernameRegex = /^[a-z0-9_]{3,30}$/
-    if (!usernameRegex.test(username)) {
-      setUsernameAvailable(null)
-      return
-    }
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    setUsernameChecking(true)
     debounceRef.current = setTimeout(async () => {
+      if (!usernameRegex.test(username)) {
+        setUsernameAvailable(null)
+        setUsernameChecking(false)
+        return
+      }
+      setUsernameChecking(true)
       try {
         const res = await fetch(`${API_URL}/profiles/available?username=${encodeURIComponent(username)}`)
         if (res.ok) {

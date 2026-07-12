@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
@@ -363,7 +363,7 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState("")
   const [offset, setOffset] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [suspendTarget, setSuspendTarget] = useState<UserRecord | null>(null)
   const [hardDeleteTarget, setHardDeleteTarget] = useState<UserRecord | null>(null)
@@ -373,30 +373,44 @@ export default function AdminUsersPage() {
   const isSuperAdmin = session?.role === "super_admin"
   const limit = 20
 
-  const fetchUsers = useCallback(async () => {
-    if (!session?.accessToken) return
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  // Show the loading skeleton on every refetch (search, status filter,
+  // pagination or refresh) without a synchronous setState in the effect.
+  const fetchKey = `${query}|${status}|${offset}|${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
     setLoading(true)
-    setError("")
-    try {
-      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
-      if (query) params.set("q", query)
-      if (status) params.set("status", status)
+  }
 
-      const res = await fetch(`${API_URL}/admin/users?${params}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      if (!res.ok) throw new Error(String(res.status))
-      const data = await res.json()
-      setUsers(data.users ?? [])
-      setTotal(data.total ?? 0)
-    } catch {
-      setError(t("loadUsersFailed"))
-    } finally {
-      setLoading(false)
-    }
-  }, [session, query, status, offset, t])
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+        if (query) params.set("q", query)
+        if (status) params.set("status", status)
 
-  useEffect(() => { fetchUsers() }, [fetchUsers])
+        const res = await fetch(`${API_URL}/admin/users?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (cancelled) return
+        setUsers(data.users ?? [])
+        setTotal(data.total ?? 0)
+        setError("")
+      } catch {
+        if (!cancelled) setError(t("loadUsersFailed"))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [session, query, status, offset, t, refreshKey])
 
   async function doAction(user: UserRecord, action: "ban" | "reactivate") {
     if (!session?.accessToken) return
@@ -415,7 +429,7 @@ export default function AdminUsersPage() {
         setError(text.trim() || (action === "ban" ? t("banFailed") : t("reactivateFailed")))
         return
       }
-      await fetchUsers()
+      setRefreshKey((k) => k + 1)
     } finally {
       setActionLoading(null)
     }
@@ -424,7 +438,7 @@ export default function AdminUsersPage() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     setOffset(0)
-    fetchUsers()
+    setRefreshKey((k) => k + 1)
   }
 
   const totalPages = Math.ceil(total / limit)
@@ -580,7 +594,7 @@ export default function AdminUsersPage() {
         <SuspendModal
           user={suspendTarget}
           token={session.accessToken}
-          onDone={() => { setSuspendTarget(null); fetchUsers() }}
+          onDone={() => { setSuspendTarget(null); setRefreshKey((k) => k + 1) }}
           onClose={() => setSuspendTarget(null)}
         />
       )}
@@ -589,7 +603,7 @@ export default function AdminUsersPage() {
         <HardDeleteModal
           user={hardDeleteTarget}
           token={session.accessToken}
-          onDone={() => { setHardDeleteTarget(null); fetchUsers() }}
+          onDone={() => { setHardDeleteTarget(null); setRefreshKey((k) => k + 1) }}
           onClose={() => setHardDeleteTarget(null)}
         />
       )}
@@ -598,7 +612,7 @@ export default function AdminUsersPage() {
         <RoleModal
           user={roleTarget}
           token={session.accessToken}
-          onDone={() => { setRoleTarget(null); fetchUsers() }}
+          onDone={() => { setRoleTarget(null); setRefreshKey((k) => k + 1) }}
           onClose={() => setRoleTarget(null)}
         />
       )}

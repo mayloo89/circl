@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
 
@@ -154,31 +154,44 @@ export default function AdminAppealsPage() {
 
   const [appeals, setAppeals] = useState<Appeal[]>([])
   const [statusFilter, setStatusFilter] = useState<string>("submitted")
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [reviewTarget, setReviewTarget] = useState<Appeal | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const fetchAppeals = useCallback(async () => {
-    if (!session?.accessToken) return
+  // Show the loading skeleton on every refetch (filter change or post-action
+  // refresh) without a synchronous setState in the effect.
+  const fetchKey = `${statusFilter}|${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
     setLoading(true)
-    setError("")
-    try {
-      const params = new URLSearchParams()
-      if (statusFilter) params.set("status", statusFilter)
-      const res = await fetch(`${API_URL}/admin/appeals?${params}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      if (!res.ok) throw new Error(String(res.status))
-      const data = await res.json()
-      setAppeals(Array.isArray(data) ? data : [])
-    } catch {
-      setError(t("loadAppealsFailed"))
-    } finally {
-      setLoading(false)
-    }
-  }, [session, statusFilter, t])
+  }
 
-  useEffect(() => { fetchAppeals() }, [fetchAppeals])
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const params = new URLSearchParams()
+        if (statusFilter) params.set("status", statusFilter)
+        const res = await fetch(`${API_URL}/admin/appeals?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (cancelled) return
+        setAppeals(Array.isArray(data) ? data : [])
+        setError("")
+      } catch {
+        if (!cancelled) setError(t("loadAppealsFailed"))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [session, statusFilter, t, refreshKey])
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
@@ -269,7 +282,7 @@ export default function AdminAppealsPage() {
         <ReviewModal
           appeal={reviewTarget}
           token={session.accessToken}
-          onDone={() => { setReviewTarget(null); fetchAppeals() }}
+          onDone={() => { setReviewTarget(null); setRefreshKey((k) => k + 1) }}
           onClose={() => setReviewTarget(null)}
         />
       )}

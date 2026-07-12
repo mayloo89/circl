@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
@@ -94,32 +94,45 @@ export default function AdminPublicRoomsPage() {
   const t = useTranslations("admin")
   const locale = useLocale()
   const [rooms, setRooms] = useState<PublicRoom[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PublicRoom | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState("")
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const fetchRooms = useCallback(async () => {
-    if (!session?.accessToken) return
+  // Show the loading skeleton on every refetch (post-action refresh) without a
+  // synchronous setState in the effect.
+  const fetchKey = `${refreshKey}`
+  const [loadingKey, setLoadingKey] = useState(fetchKey)
+  if (loadingKey !== fetchKey) {
+    setLoadingKey(fetchKey)
     setLoading(true)
-    setError("")
-    try {
-      const res = await fetch(`${API_URL}/admin/public-rooms`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      if (!res.ok) throw new Error(String(res.status))
-      const data = await res.json()
-      setRooms(Array.isArray(data) ? data : [])
-    } catch {
-      setError(t("loadAdminPublicRoomsFailed"))
-    } finally {
-      setLoading(false)
-    }
-  }, [session, t])
+  }
 
-  useEffect(() => { fetchRooms() }, [fetchRooms])
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_URL}/admin/public-rooms`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (cancelled) return
+        setRooms(Array.isArray(data) ? data : [])
+        setError("")
+      } catch {
+        if (!cancelled) setError(t("loadAdminPublicRoomsFailed"))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [session, t, refreshKey])
 
   async function confirmDelete() {
     if (!deleteTarget || !session?.accessToken) return
@@ -136,7 +149,7 @@ export default function AdminPublicRoomsPage() {
         return
       }
       setDeleteTarget(null)
-      await fetchRooms()
+      setRefreshKey((k) => k + 1)
     } finally {
       setDeleteLoading(false)
     }
@@ -215,7 +228,7 @@ export default function AdminPublicRoomsPage() {
       {createOpen && session?.accessToken && (
         <CreateModal
           token={session.accessToken}
-          onDone={() => { setCreateOpen(false); fetchRooms() }}
+          onDone={() => { setCreateOpen(false); setRefreshKey((k) => k + 1) }}
           onClose={() => setCreateOpen(false)}
         />
       )}
