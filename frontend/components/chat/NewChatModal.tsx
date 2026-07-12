@@ -39,15 +39,13 @@ export default function NewChatModal({ open, token, onClose, onCreated }: Props)
   const tc = useTranslations("common")
 
   const [contacts, setContacts] = useState<Contact[]>([])
-  const [loadingContacts, setLoadingContacts] = useState(false)
+  const [loadingContacts, setLoadingContacts] = useState(true)
   const [creatingFor, setCreatingFor] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
 
   useEffect(() => {
     if (!open || !token) return
-    setLoadingContacts(true)
-    setError("")
     fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data: AcceptedContact[]) => {
@@ -63,6 +61,7 @@ export default function NewChatModal({ open, token, onClose, onCreated }: Props)
           (a.display_name || a.username).localeCompare(b.display_name || b.username, undefined, { sensitivity: "base" })
         )
         setContacts(mapped)
+        setError("")
       })
       .catch(() => setError(tg("failedLoadContacts")))
       .finally(() => setLoadingContacts(false))

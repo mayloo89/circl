@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
 import Skeleton from "@/components/ui/Skeleton"
 import { Link } from "@/i18n/navigation"
@@ -239,32 +239,36 @@ export default function AdminReportsPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [statusFilter, setStatusFilter] = useState<string>("pending")
   const [priorityFilter, setPriorityFilter] = useState<string>("")
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [reviewTarget, setReviewTarget] = useState<Report | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const fetchReports = useCallback(async () => {
-    if (!session?.accessToken) return
-    setLoading(true)
-    setError("")
-    try {
-      const params = new URLSearchParams()
-      if (statusFilter) params.set("status", statusFilter)
-      if (priorityFilter) params.set("priority", priorityFilter)
-      const res = await fetch(`${API_URL}/reports?${params}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      if (!res.ok) throw new Error(String(res.status))
-      const data = await res.json()
-      setReports(Array.isArray(data) ? data : [])
-    } catch {
-      setError(t("loadReportsFailed"))
-    } finally {
-      setLoading(false)
-    }
-  }, [session, statusFilter, priorityFilter, t])
-
-  useEffect(() => { fetchReports() }, [fetchReports])
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const params = new URLSearchParams()
+        if (statusFilter) params.set("status", statusFilter)
+        if (priorityFilter) params.set("priority", priorityFilter)
+        const res = await fetch(`${API_URL}/reports?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (cancelled) return
+        setReports(Array.isArray(data) ? data : [])
+        setError("")
+      } catch {
+        if (!cancelled) setError(t("loadReportsFailed"))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [session, statusFilter, priorityFilter, t, refreshKey])
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
@@ -387,7 +391,7 @@ export default function AdminReportsPage() {
         <ReviewModal
           report={reviewTarget}
           token={session.accessToken}
-          onDone={() => { setReviewTarget(null); fetchReports() }}
+          onDone={() => { setReviewTarget(null); setRefreshKey((k) => k + 1) }}
           onClose={() => setReviewTarget(null)}
         />
       )}

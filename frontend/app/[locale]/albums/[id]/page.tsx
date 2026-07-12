@@ -41,7 +41,6 @@ export default function AlbumDetailPage() {
   useEffect(() => {
     if (!token || !albumID) return
     let cancelled = false
-    setLoadError(null)
     Promise.all([
       albumsApi.get(token, albumID),
       albumsApi.listPhotos(token, albumID),
@@ -49,6 +48,7 @@ export default function AlbumDetailPage() {
     ])
       .then(([a, p, grants]) => {
         if (cancelled) return
+        setLoadError(null)
         setAlbum(a)
         setPhotos(p)
         if (a.role === "viewer") {

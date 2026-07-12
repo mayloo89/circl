@@ -75,19 +75,23 @@ export default function GroupMembersPanel({
   const isAdmin = members.some((m) => m.user_id === currentUserId && m.is_admin)
   const memberIds = new Set(members.map((m) => m.user_id))
 
-  function loadMembers() {
-    setLoading(true)
-    setError("")
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
     fetch(`${API_URL}/chat/rooms/${roomId}/members`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((data: MemberProfile[]) => setMembers(Array.isArray(data) ? data : []))
-      .catch(() => setError(t("failedLoadMembers")))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { loadMembers() }, [roomId, token]) // eslint-disable-line react-hooks/exhaustive-deps
+      .then((data: MemberProfile[]) => {
+        if (cancelled) return
+        setMembers(Array.isArray(data) ? data : [])
+        setError("")
+      })
+      .catch(() => { if (!cancelled) setError(t("failedLoadMembers")) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [roomId, token, refreshKey, t])
 
   async function handleRename() {
     if (!newName.trim()) return
@@ -138,7 +142,7 @@ export default function GroupMembersPanel({
       })
       if (res.ok) {
         setAddingMember(false)
-        loadMembers()
+        setRefreshKey((k) => k + 1)
       } else {
         const data = await res.json().catch(() => ({}))
         setError((data as { error?: string }).error ?? t("failedAddMember"))
@@ -172,7 +176,7 @@ export default function GroupMembersPanel({
         if (isSelf) {
           onLeft()
         } else {
-          loadMembers()
+          setRefreshKey((k) => k + 1)
         }
       } else {
         const data = await res.json().catch(() => ({}))

@@ -53,8 +53,12 @@ export default function OnboardingLocationPage() {
   }, [token])
 
   useEffect(() => {
-    if (query.length < 2) { setSuggestions([]); return }
     const id = setTimeout(async () => {
+      if (query.length < 2) {
+        setSuggestions([])
+        setActiveIdx(-1)
+        return
+      }
       try {
         const res = await fetch(
           `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`,
@@ -73,14 +77,14 @@ export default function OnboardingLocationPage() {
           return [{ label, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }]
         })
         setSuggestions(results)
+        setActiveIdx(-1)
       } catch {
         setSuggestions([])
+        setActiveIdx(-1)
       }
     }, 350)
     return () => clearTimeout(id)
   }, [query])
-
-  useEffect(() => { setActiveIdx(-1) }, [suggestions])
 
   function selectSuggestion(s: LocationSuggestion) {
     setLocationText(s.label)

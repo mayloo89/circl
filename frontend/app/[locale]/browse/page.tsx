@@ -195,15 +195,15 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
   const [interestActiveIdx, setInterestActiveIdx] = useState(-1)
   const tokenRef = useRef(token)
 
-  useEffect(() => { setDraft(prefs) }, [prefs])
-  useEffect(() => { setDraftSort(sortByDistance) }, [sortByDistance])
-  useEffect(() => { setDraftInterests(selectedInterests) }, [selectedInterests])
   useEffect(() => { tokenRef.current = token }, [token])
-  useEffect(() => { setInterestActiveIdx(-1) }, [interestSuggestions])
 
   useEffect(() => {
-    if (interestQuery.length < 1) { setInterestSuggestions([]); return }
     const id = setTimeout(async () => {
+      if (interestQuery.length < 1) {
+        setInterestSuggestions([])
+        setInterestActiveIdx(-1)
+        return
+      }
       try {
         const res = await fetch(`${API_URL}/profiles/interests?q=${encodeURIComponent(interestQuery)}&limit=8`, {
           headers: { Authorization: `Bearer ${tokenRef.current}` },
@@ -211,6 +211,7 @@ function FilterPanel({ prefs, sortByDistance, selectedInterests, token, onApply,
         if (!res.ok) return
         const data: { name: string }[] = await res.json()
         setInterestSuggestions(data.map((d) => d.name).filter((n) => !draftInterests.includes(n)))
+        setInterestActiveIdx(-1)
       } catch { /* ignore */ }
     }, 250)
     return () => clearTimeout(id)
@@ -609,6 +610,9 @@ export default function BrowsePage() {
   }
 
   const filterCount = activeFilterCount(prefs, filterInterests)
+  // Remount the filter panels when the applied filters change so their draft
+  // state re-initializes from props (replaces prop-sync effects).
+  const filterKey = `${sortByDistance}|${filterInterests.join(",")}|${JSON.stringify(prefs)}`
 
   if (status === "loading" || initialLoading) {
     return (
@@ -661,6 +665,7 @@ export default function BrowsePage() {
       {/* Mobile BottomSheet */}
       <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t("filters")}>
         <FilterPanel
+          key={filterKey}
           prefs={prefs}
           sortByDistance={sortByDistance}
           selectedInterests={filterInterests}
@@ -676,6 +681,7 @@ export default function BrowsePage() {
           <div className="sticky top-6 rounded-xl bg-gray-900 ring-1 ring-gray-800 p-5">
             <p className="mb-5 text-sm font-semibold text-foreground">{t("filters")}</p>
             <FilterPanel
+              key={filterKey}
               prefs={prefs}
               sortByDistance={sortByDistance}
               selectedInterests={filterInterests}

@@ -32,6 +32,8 @@ export default function MembersPanel({ albumID, token }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [confirmRevoke, setConfirmRevoke] = useState<Grant | null>(null)
+  // Freeze "now" at mount so access-expiry labels stay pure across renders.
+  const [now] = useState(() => Date.now())
 
   useEffect(() => {
     let cancelled = false
@@ -103,7 +105,7 @@ export default function MembersPanel({ albumID, token }: Props) {
 
   function accessTimeLabel(expiresAt: string | null | undefined): string {
     if (!expiresAt) return t("accessPermanent")
-    const diffMs = new Date(expiresAt).getTime() - Date.now()
+    const diffMs = new Date(expiresAt).getTime() - now
     if (diffMs <= 0) return t("accessExpired")
     const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
     if (days < 1) return t("accessToday")

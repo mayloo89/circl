@@ -346,8 +346,18 @@ export default function ProfilePage() {
 
   useAutoReset(formSuccess, setFormSuccess)
 
-  useEffect(() => { setLocationActiveIdx(-1) }, [locationSuggestions])
-  useEffect(() => { setInterestActiveIdx(-1) }, [interestSuggestions])
+  // Reset the highlighted suggestion whenever the list changes (adjusted during
+  // render rather than in an effect to avoid an extra commit).
+  const [prevLocationSuggestions, setPrevLocationSuggestions] = useState(locationSuggestions)
+  if (locationSuggestions !== prevLocationSuggestions) {
+    setPrevLocationSuggestions(locationSuggestions)
+    setLocationActiveIdx(-1)
+  }
+  const [prevInterestSuggestions, setPrevInterestSuggestions] = useState(interestSuggestions)
+  if (interestSuggestions !== prevInterestSuggestions) {
+    setPrevInterestSuggestions(interestSuggestions)
+    setInterestActiveIdx(-1)
+  }
 
   const photoInputRef = useRef<HTMLInputElement>(null)
   const { upload, error: uploadError, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(session?.accessToken)

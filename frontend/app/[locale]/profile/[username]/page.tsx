@@ -353,7 +353,7 @@ export default function PublicProfilePage() {
   const age = formatAge(profile.date_of_birth)
   const subtitle = [age, profile.gender].filter(Boolean).join(" · ")
 
-  const ActionButtons = ({ className = "" }: { className?: string }) => {
+  const renderActionButtons = (className = "") => {
     if (isBlocked) {
       return (
         <Button variant="ghost" className={className} onClick={handleUnblock} disabled={actionLoading} loading={actionLoading}>
@@ -586,7 +586,7 @@ export default function PublicProfilePage() {
         {/* Desktop inline actions */}
         {!isOwnProfile && contactStatus !== "loading" && (
           <div className="hidden lg:block pt-1">
-            <ActionButtons />
+            {renderActionButtons()}
           </div>
         )}
 
@@ -602,7 +602,7 @@ export default function PublicProfilePage() {
             paddingBottom: "0.75rem",
           }}
         >
-          <ActionButtons />
+          {renderActionButtons()}
         </div>
       )}
     </>

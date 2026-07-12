@@ -39,16 +39,14 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
   const [contacts, setContacts] = useState<Contact[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
-  const [loadingContacts, setLoadingContacts] = useState(false)
+  const [loadingContacts, setLoadingContacts] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (!open || !token) return
-    setLoadingContacts(true)
-    setError("")
     fetch(`${API_URL}/contacts`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((data: AcceptedContact[]) =>
+      .then((data: AcceptedContact[]) => {
         setContacts(
           (Array.isArray(data) ? data : []).map((c) => ({
             user_id: c.user_id,
@@ -57,7 +55,8 @@ export default function CreateGroupModal({ open, token, onClose, onCreated }: Pr
             avatar_url: c.avatar_url,
           }))
         )
-      )
+        setError("")
+      })
       .catch(() => setError(t("failedLoadContacts")))
       .finally(() => setLoadingContacts(false))
   }, [open, token, t])

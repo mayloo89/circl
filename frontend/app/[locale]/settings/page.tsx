@@ -655,7 +655,7 @@ function DataExportSection({ token }: { token: string | undefined }) {
   const t = useTranslations("settings")
   const tc = useTranslations("common")
   const [status, setStatus] = useState<ExportStatusResponse | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
 
@@ -676,7 +676,6 @@ function DataExportSection({ token }: { token: string | undefined }) {
         if (!cancelled) setLoading(false)
       }
     }
-    setLoading(true)
     load()
     return () => { cancelled = true }
   }, [token])
