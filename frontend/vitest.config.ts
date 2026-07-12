@@ -22,7 +22,7 @@ export default defineConfig({
       ],
       // Ratchet thresholds: set at the current floor so coverage can only
       // move up. Raise them as the remaining untested components gain tests.
-      thresholds: { lines: 48, functions: 42, branches: 37, statements: 46 },
+      thresholds: { lines: 61, functions: 57, branches: 51, statements: 58 },
     },
   },
   resolve: {
