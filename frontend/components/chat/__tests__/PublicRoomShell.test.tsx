@@ -145,6 +145,10 @@ describe("PublicRoomShell", () => {
   it("disables the composer and shows a notice when muted", () => {
     renderWithIntl(<PublicRoomShell {...baseProps} isMuted />)
     expect(screen.getByRole("status")).toBeInTheDocument()
+    // The composer is wired connected={connected && !isMuted}, so muting
+    // disables the send control even with the socket connected.
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "blocked" } })
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled()
   })
 
   it("lets an admin kick a roster member", async () => {
