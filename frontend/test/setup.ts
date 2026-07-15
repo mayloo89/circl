@@ -20,6 +20,12 @@ if (globalThis.localStorage == null) {
   Object.defineProperty(globalThis, "localStorage", { value: impl, configurable: true })
 }
 
+// jsdom implements neither of these layout APIs; chat views call them in
+// scroll effects. No-op stubs keep those effects from throwing.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {}
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: "warn" }))
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
