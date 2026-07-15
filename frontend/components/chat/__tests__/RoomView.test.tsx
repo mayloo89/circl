@@ -163,6 +163,8 @@ describe("RoomView", () => {
     seed(CHANNEL, [], [{ user_id: "u2", username: "bea", display_name: "Bea", avatar_url: "", is_admin: false }])
     renderWithIntl(<RoomView roomId="r1" surface="channels" />)
     expect(await screen.findByText(/General/)).toBeInTheDocument()
+    // Channels auto-open the members sidebar — the seeded member must show.
+    expect(await screen.findByText("Bea")).toBeInTheDocument()
   })
 
   it("renders a tombstone for a deleted message", async () => {
@@ -170,6 +172,8 @@ describe("RoomView", () => {
     chat.value.deletedIds = new Set(["h1"])
     renderWithIntl(<RoomView roomId="r1" surface="messages" />)
     await screen.findByText("Bea")
+    // The original content is gone and the localized tombstone stands in its place.
     await waitFor(() => expect(screen.queryByText("secret")).not.toBeInTheDocument())
+    expect(screen.getByText("Message expired")).toBeInTheDocument()
   })
 })

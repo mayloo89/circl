@@ -71,17 +71,22 @@ describe("GroupMembersPanel", () => {
   })
 
   it("adds a contact as a new member", async () => {
+    let posted: { user_id?: string } | null = null
     server.use(
       http.get(`${API}/contacts`, () =>
         HttpResponse.json([{ user_id: "u3", username: "cid", email: "", display_name: "Cid", avatar_url: "" }]),
       ),
-      http.post(`${API}/chat/rooms/r1/members`, () => HttpResponse.json({ ok: true })),
+      http.post(`${API}/chat/rooms/r1/members`, async ({ request }) => {
+        posted = (await request.json()) as { user_id?: string }
+        return HttpResponse.json({ ok: true })
+      }),
     )
     renderWithIntl(<GroupMembersPanel {...baseProps} />)
     await screen.findByText("Ada")
     fireEvent.click(screen.getByRole("button", { name: /add member/i }))
-    const addBtn = await screen.findByText("Cid")
-    expect(addBtn).toBeInTheDocument()
+    const row = (await screen.findByText("Cid")).closest("li") as HTMLElement
+    fireEvent.click(within(row).getByRole("button", { name: "Add" }))
+    await waitFor(() => expect(posted).toEqual({ user_id: "u3" }))
   })
 
   it("removes a non-admin member after confirmation", async () => {
@@ -102,13 +107,16 @@ describe("GroupMembersPanel", () => {
   })
 
   it("leaves a channel immediately without a delete call", async () => {
+    const deleteSpy = vi.fn()
     mockMembers([{ ...MEMBER, user_id: "me", display_name: "Ada", is_admin: false }])
+    server.use(http.delete(`${API}/chat/rooms/r1/members/me`, () => { deleteSpy(); return HttpResponse.json({ ok: true }) }))
     renderWithIntl(<GroupMembersPanel {...baseProps} roomType="channel" />)
     await screen.findByText("Ada")
     fireEvent.click(screen.getByRole("button", { name: /leave/i }))
     const dialog = (await screen.findByText("Leave channel")).closest('[role="dialog"]') as HTMLElement
     fireEvent.click(within(dialog).getByRole("button", { name: /^leave$/i }))
     await waitFor(() => expect(baseProps.onLeft).toHaveBeenCalled())
+    expect(deleteSpy).not.toHaveBeenCalled()
   })
 
   it("does not offer rename or remove controls to non-admins", async () => {

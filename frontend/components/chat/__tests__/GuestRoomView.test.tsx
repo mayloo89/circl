@@ -74,9 +74,15 @@ describe("GuestRoomView", () => {
   })
 
   it("shows the guest badge in the header", async () => {
+    // Sender name "Member" so the only "Guest" text is the header badge itself.
+    server.use(
+      http.get(`${API}/chat/rooms/r1/messages`, () =>
+        HttpResponse.json([msg({ id: "h1", sender_name: "Member", content: "old history" })]),
+      ),
+    )
     renderWithIntl(<GuestRoomView roomId="r1" sessionId="guest-1" />)
     await screen.findByText("Public Lobby")
-    expect(screen.getAllByText(/guest/i).length).toBeGreaterThan(0)
+    expect(screen.getByText("Guest")).toBeInTheDocument()
   })
 
   it("merges live messages and deduplicates by id", async () => {
