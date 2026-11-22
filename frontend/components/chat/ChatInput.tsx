@@ -66,7 +66,7 @@ export default function ChatInput({
 
   function handleSend() {
     const content = input.trim()
-    if (!content) return
+    if (!content || !connected) return
     onSend(content)
     setInput("")
     const el = effectiveRef.current
