@@ -32,11 +32,14 @@ describe("useHeartbeat", () => {
     await waitFor(() => expect(callCount).toBeGreaterThanOrEqual(1))
   })
 
-  it("sets up the 20-second polling interval", () => {
+  it("sets up the 20-second polling interval", async () => {
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval")
-    server.use(http.post(HEARTBEAT_URL, () => new HttpResponse(null)))
+    let callCount = 0
+    server.use(http.post(HEARTBEAT_URL, () => { callCount++; return new HttpResponse(null) }))
     renderHook(() => useHeartbeat("my-token"))
     expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 20_000)
+    // Let the mount heartbeat land so it can't leak into the next test's handler.
+    await waitFor(() => expect(callCount).toBe(1))
   })
 
   it("does not send a heartbeat when the tab is hidden", async () => {

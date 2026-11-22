@@ -20,34 +20,34 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   openapi-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 26
       - name: Lint OpenAPI spec
         run: npx --yes @redocly/cli@latest lint docs/openapi.yaml --format=stylish
 
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check if frontend exists
         id: check
         run: test -f frontend/package.json && echo "exists=true" >> $GITHUB_OUTPUT || echo "exists=false" >> $GITHUB_OUTPUT
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.check.outputs.exists == 'true'
         with:
-          node-version: 20
+          node-version: 26
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - name: Install
@@ -66,28 +66,28 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check if backend exists
         id: check
         run: test -f backend/go.mod && echo "exists=true" >> $GITHUB_OUTPUT || echo "exists=false" >> $GITHUB_OUTPUT
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         if: steps.check.outputs.exists == 'true'
         with:
-          go-version: '1.25'
+          go-version: '1.27'
       - name: Vet
         if: steps.check.outputs.exists == 'true'
         run: cd backend && go vet ./...
       - name: golangci-lint
         if: steps.check.outputs.exists == 'true'
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12.2
+          version: v2.15.0
           working-directory: backend
           args: --timeout 5m
       - name: govulncheck
         if: steps.check.outputs.exists == 'true'
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.5.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
           cd backend && "$(go env GOPATH)/bin/govulncheck" ./...
       - name: Test
         if: steps.check.outputs.exists == 'true'
@@ -119,14 +119,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check if backend exists
         id: check
         run: test -f backend/go.mod && echo "exists=true" >> $GITHUB_OUTPUT || echo "exists=false" >> $GITHUB_OUTPUT
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         if: steps.check.outputs.exists == 'true'
         with:
-          go-version: '1.25'
+          go-version: '1.27'
       - name: Run migrations
         if: steps.check.outputs.exists == 'true'
         run: |
@@ -174,13 +174,13 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
-      - uses: actions/setup-node@v4
+          go-version: '1.27'
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 26
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
@@ -210,7 +210,7 @@ jobs:
           NEXTAUTH_SECRET: 'e2e-test-secret-for-playwright-32chars!'
           BACKEND_URL: 'http://localhost:8080'
           NEXT_PUBLIC_API_URL: 'http://localhost:8080'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -257,19 +257,19 @@ jobs:
         run: echo "build=${{ matrix.image != 'frontend' || vars.DEPLOY_DOMAIN != '' }}" >> "$GITHUB_OUTPUT"
       # This job holds packages:write credentials, so its actions are pinned
       # to commit SHAs rather than floating major tags.
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.build == 'true'
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         if: steps.gate.outputs.build == 'true'
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         if: steps.gate.outputs.build == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         if: steps.gate.outputs.build == 'true'
         id: meta
         with:
@@ -277,7 +277,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         if: steps.gate.outputs.build == 'true'
         with:
           context: ${{ matrix.context }}

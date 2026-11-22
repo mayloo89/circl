@@ -17,7 +17,7 @@ a security and accessibility posture held to production standards.
 - **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 4
   + next-intl (prefix-routed `/es/`, `/en/`, `/pt/`) + NextAuth v5 (credentials,
   JWT, httpOnly cookies). Vitest + Testing Library + MSW for unit; Playwright for E2E.
-- **Backend**: Go 1.25 (chi router) + pgx/v5 + gorilla/websocket. Postgres for
+- **Backend**: Go 1.27 (chi router) + pgx/v5 + gorilla/websocket. Postgres for
   persistence, Redis for presence, Pub/Sub fan-out, WS-ticket auth, and rate limits.
   asynq worker for image processing, ephemeral cleanup, and account purge.
 - **Storage**: pluggable `Storage` interface — `LocalStorage` for dev, `S3Storage`
@@ -81,8 +81,8 @@ For the visual and product design language, see [`DESIGN.md`](DESIGN.md).
 ## Local setup
 
 ### Requirements
-- Node.js 20+
-- Go 1.25+
+- Node.js 26+
+- Go 1.27+
 - PostgreSQL 17+ (e.g. [Postgres.app](https://postgresapp.com) on macOS)
 - Redis 7+ (e.g. `brew install redis && brew services start redis` on macOS)
 

@@ -1,4 +1,4 @@
-import "@testing-library/jest-dom"
+import "@testing-library/jest-dom/vitest"
 import { beforeAll, afterEach, afterAll } from "vitest"
 import { server } from "./msw-server"
 
@@ -20,6 +20,6 @@ if (globalThis.localStorage == null) {
   Object.defineProperty(globalThis, "localStorage", { value: impl, configurable: true })
 }
 
-beforeAll(() => server.listen({ onUnhandledRequest: "warn" }))
+beforeAll(() => server.listen({ onUnhandledFrame: "warn" }))
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
