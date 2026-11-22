@@ -102,12 +102,15 @@ function SendRequestButton({ userID, token }: { userID: string; token: string })
 function ProfileCard({ profile, token }: { profile: BrowseProfile; token: string }) {
   const t = useTranslations("browse")
   const heroURL = profile.avatar_url
+  // distance_km is a server-side band: 0 means under 1 km, 100 means 100 km or more.
   const distance =
     profile.distance_km === null
       ? null
-      : profile.distance_km < 1
+      : profile.distance_km === 0
       ? t("distanceUnder1Km")
-      : t("distanceKmAway", { km: Math.round(profile.distance_km) })
+      : profile.distance_km >= 100
+      ? t("distanceOver100Km")
+      : t("distanceKmAway", { km: profile.distance_km })
 
   return (
     <Link

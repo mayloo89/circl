@@ -121,7 +121,6 @@ type reorderPhotosRequest struct {
 	PhotoIDs []string `json:"photo_ids"`
 }
 
-
 // NewHandler returns an http.Handler with all profile routes.
 func NewHandler(svc ProfileManager) http.Handler {
 	mux := http.NewServeMux()
@@ -500,7 +499,6 @@ func checkUsernameAvailable(svc ProfileManager) http.HandlerFunc {
 	}
 }
 
-
 func toResponse(p *Profile) profileResponse {
 	photos := make([]photoResponse, len(p.Photos))
 	for i, ph := range p.Photos {
@@ -626,7 +624,7 @@ type browseProfileResponse struct {
 	Age           *int     `json:"age,omitempty"`
 	Gender        string   `json:"gender"`
 	LocationText  string   `json:"location_text"`
-	DistanceKm    *float64 `json:"distance_km"`
+	DistanceKm    *int     `json:"distance_km"`
 	FirstPhotoURL string   `json:"first_photo_url"`
 	Interests     []string `json:"interests"`
 }
@@ -689,7 +687,6 @@ func browseProfiles(svc ProfileManager) http.HandlerFunc {
 		})
 	}
 }
-
 
 // PublicAvailableHandler returns an http.HandlerFunc for GET /profiles/available
 // that does not require authentication. Used at registration time.

@@ -18,10 +18,12 @@ interface NearbyProfile {
   location_text: string
 }
 
+// km is a server-side band: 0 means under 1 km, 100 means 100 km or more.
 function formatDistance(km: number | null): string | null {
   if (km === null) return null
-  if (km < 1) return "< 1 km"
-  return `${Math.round(km)} km`
+  if (km === 0) return "< 1 km"
+  if (km >= 100) return "100+ km"
+  return `${km} km`
 }
 
 function ProfileChip({ profile }: { profile: NearbyProfile }) {

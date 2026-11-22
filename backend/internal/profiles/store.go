@@ -442,8 +442,9 @@ func (s *pgStore) ReorderPhotos(ctx context.Context, userID string, orderedIDs [
 
 // browseCTEBase is the first part of the browse query, a CTE that materialises
 // all candidate profiles with their computed distance. It uses two fixed params:
-//   $1 = userID (the requester)
-//   $2 = interests filter (text[])
+//
+//	$1 = userID (the requester)
+//	$2 = interests filter (text[])
 //
 // Callers append an optional WHERE (cursor), ORDER BY, and LIMIT clause.
 // browseCTEBase is the core SQL for the browse/explore feed.
@@ -469,16 +470,7 @@ candidates AS (
         COALESCE(p.gender, '') AS gender,
         COALESCE(p.location_text, '') AS location_text,
         p.created_at,
-        CASE
-            WHEN r.lat IS NOT NULL AND r.lng IS NOT NULL
-                 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-            THEN 6371.0 * 2.0 * ASIN(SQRT(
-                POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
-                COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
-                POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
-            ))
-            ELSE NULL
-        END AS distance_km,
+        dist.band AS distance_km,
         (SELECT url FROM profile_photos ph
          WHERE ph.user_id = p.user_id
          ORDER BY ph.position, ph.created_at
@@ -495,6 +487,32 @@ candidates AS (
     LEFT JOIN profile_preferences prefs ON prefs.user_id = $1
     LEFT JOIN profile_preferences cand_prefs ON cand_prefs.user_id = p.user_id
     JOIN users u ON u.id = p.user_id AND u.status = 'active'
+    -- Distance is computed between stored cell centers and only exposed as a
+    -- coarse band. A candidate who hides their distance gets NULL, which keeps
+    -- them out of the distance sort, the distance filter, and the score: any
+    -- of those would let a viewer locate them by moving their own position.
+    LEFT JOIN LATERAL (
+        SELECT CASE
+            WHEN r.lat IS NULL OR r.lng IS NULL
+                 OR p.latitude IS NULL OR p.longitude IS NULL
+                 OR cand_prefs.hide_distance_from_non_contacts IS TRUE
+            THEN NULL
+            ELSE 6371.0 * 2.0 * ASIN(SQRT(
+                POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
+                COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
+                POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
+            ))
+        END AS km
+    ) raw ON true
+    LEFT JOIN LATERAL (
+        SELECT raw.km, CASE
+            WHEN raw.km IS NULL THEN NULL
+            WHEN raw.km < 1     THEN 0
+            WHEN raw.km < 10    THEN ROUND(raw.km::numeric)::int
+            WHEN raw.km < 100   THEN LEAST(ROUND((raw.km / 5)::numeric) * 5, 95)::int
+            ELSE 100
+        END AS band
+    ) dist ON true
     WHERE p.user_id <> $1
       AND p.username IS NOT NULL
       AND p.date_of_birth IS NOT NULL
@@ -510,18 +528,7 @@ candidates AS (
       AND (prefs.gender_preference IS NULL
            OR array_length(prefs.gender_preference, 1) IS NULL
            OR COALESCE(p.gender, '') = ANY(prefs.gender_preference))
-      AND (
-          prefs.max_distance_km IS NULL
-          OR (
-              r.lat IS NOT NULL AND r.lng IS NOT NULL
-              AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-              AND 6371.0 * 2.0 * ASIN(SQRT(
-                  POWER(SIN(RADIANS((p.latitude - r.lat) / 2.0)), 2.0) +
-                  COS(RADIANS(r.lat)) * COS(RADIANS(p.latitude)) *
-                  POWER(SIN(RADIANS((p.longitude - r.lng) / 2.0)), 2.0)
-              )) <= prefs.max_distance_km
-          )
-      )
+      AND (prefs.max_distance_km IS NULL OR dist.km <= prefs.max_distance_km)
       AND (
           cardinality($2::text[]) = 0
           OR EXISTS (
@@ -747,33 +754,6 @@ func (s *pgStore) GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (m
 		out[id] = flags
 	}
 	return out, rows.Err()
-}
-
-// AcceptedContactIDs returns the user IDs of the given user's accepted
-// contacts. Used to gate per-viewer visibility in browse and presence.
-func (s *pgStore) AcceptedContactIDs(ctx context.Context, userID string) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT CASE
-			WHEN requester_id = $1 THEN addressee_id::text
-			ELSE requester_id::text
-		END AS contact_user_id
-		FROM contacts
-		WHERE (requester_id = $1 OR addressee_id = $1)
-		  AND status = 'accepted'`, userID)
-	if err != nil {
-		return nil, fmt.Errorf("accepted contact ids: %w", err)
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("accepted contact ids: scan: %w", err)
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }
 
 // UpsertPreferences applies a partial update to the user's preferences row,

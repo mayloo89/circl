@@ -17,7 +17,6 @@ type mockStore struct {
 	interests         []InterestSuggestion
 	browseProfiles    []BrowseProfile
 	privacyFlags      map[string]PrivacyFlags
-	contactIDs        []string
 	lastUpsertUpdate  *PreferencesUpdate
 	browseErr         error
 	usernameAvailable bool
@@ -34,7 +33,6 @@ type mockStore struct {
 	searchIntErr      error
 	usernameAvailErr  error
 	privacyFlagsErr   error
-	contactIDsErr     error
 }
 
 func (m *mockStore) GetByUserID(_ context.Context, _ string) (*Profile, error) {
@@ -188,13 +186,6 @@ func (m *mockStore) GetPrivacyFlagsByIDs(_ context.Context, _ []string) (map[str
 	return map[string]PrivacyFlags{}, nil
 }
 
-func (m *mockStore) AcceptedContactIDs(_ context.Context, _ string) ([]string, error) {
-	if m.contactIDsErr != nil {
-		return nil, m.contactIDsErr
-	}
-	return m.contactIDs, nil
-}
-
 // validDOB returns a DOB 25 years in the past (always valid for 18+ check).
 func validDOB() *time.Time {
 	t := time.Now().AddDate(-25, 0, 0)
@@ -285,6 +276,35 @@ func TestUpdateMyProfile_Success(t *testing.T) {
 	}
 	if p.DisplayName != "Alice" {
 		t.Errorf("DisplayName = %q, want %q", p.DisplayName, "Alice")
+	}
+}
+
+func TestUpdateMyProfile_StoresOnlyTheCellCenter(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	p, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+		DateOfBirth: validDOB(),
+		Latitude:    new(-34.603722),
+		Longitude:   new(-58.381592),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantLat, wantLng := SnapToCell(-34.603722, -58.381592)
+	if p.Latitude == nil || *p.Latitude != wantLat || p.Longitude == nil || *p.Longitude != wantLng {
+		t.Errorf("stored (%v, %v), want cell center (%v, %v)", p.Latitude, p.Longitude, wantLat, wantLng)
+	}
+}
+
+func TestUpdateMyProfile_RejectsInvalidCoordinates(t *testing.T) {
+	svc := NewService(&mockStore{})
+
+	_, err := svc.UpdateMyProfile(t.Context(), "user-1", ProfileInput{
+		DateOfBirth: validDOB(),
+		Latitude:    new(-34.6),
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("error = %v, want ErrInvalidInput", err)
 	}
 }
 
@@ -1222,72 +1242,6 @@ func TestGetPublicProfileByUsername_PhotosError(t *testing.T) {
 	})
 
 	_, err := svc.GetPublicProfileByUsername(t.Context(), "bob")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-// --- Browse: distance suppression for non-contacts ---
-
-func TestBrowse_SuppressesDistanceForNonContactsWhenViewedHidesDistance(t *testing.T) {
-	d1, d2, d3 := 5.0, 12.0, 30.0
-	svc := NewService(&mockStore{
-		browseProfiles: []BrowseProfile{
-			{ID: "p1", UserID: "alice", DistanceKm: &d1},
-			{ID: "p2", UserID: "bob", DistanceKm: &d2},
-			{ID: "p3", UserID: "carol", DistanceKm: &d3},
-		},
-		privacyFlags: map[string]PrivacyFlags{
-			"alice": {HideDistanceFromNonContacts: true},
-			"bob":   {HideDistanceFromNonContacts: true},
-			// carol has no row → defaults to all false; distance must remain.
-		},
-		contactIDs: []string{"alice"}, // viewer is contacts with alice only.
-	})
-
-	page, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(page.Profiles) != 3 {
-		t.Fatalf("got %d profiles, want 3", len(page.Profiles))
-	}
-	// alice is a contact → distance preserved despite the flag.
-	if page.Profiles[0].DistanceKm == nil || *page.Profiles[0].DistanceKm != d1 {
-		t.Errorf("alice distance = %v, want %v (contact, flag does not apply)", page.Profiles[0].DistanceKm, d1)
-	}
-	// bob is not a contact and has the flag → distance must be nil.
-	if page.Profiles[1].DistanceKm != nil {
-		t.Errorf("bob distance = %v, want nil (non-contact + flag)", page.Profiles[1].DistanceKm)
-	}
-	// carol has no flag → distance preserved.
-	if page.Profiles[2].DistanceKm == nil || *page.Profiles[2].DistanceKm != d3 {
-		t.Errorf("carol distance = %v, want %v (no flag)", page.Profiles[2].DistanceKm, d3)
-	}
-}
-
-func TestBrowse_PrivacyFlagsErrorPropagates(t *testing.T) {
-	d := 5.0
-	svc := NewService(&mockStore{
-		browseProfiles:  []BrowseProfile{{ID: "p1", UserID: "alice", DistanceKm: &d}},
-		privacyFlagsErr: errors.New("db error"),
-	})
-
-	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil, "")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestBrowse_AcceptedContactIDsErrorPropagates(t *testing.T) {
-	d := 5.0
-	svc := NewService(&mockStore{
-		browseProfiles: []BrowseProfile{{ID: "p1", UserID: "alice", DistanceKm: &d}},
-		privacyFlags:   map[string]PrivacyFlags{"alice": {HideDistanceFromNonContacts: true}},
-		contactIDsErr:  errors.New("db error"),
-	})
-
-	_, err := svc.Browse(t.Context(), "viewer", 10, "", false, nil, "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

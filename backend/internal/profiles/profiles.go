@@ -17,10 +17,10 @@ const (
 )
 
 var (
-	ErrNotFound        = errors.New("profile not found")
-	ErrPhotoNotFound   = errors.New("photo not found")
-	ErrInvalidInput    = errors.New("invalid input")
-	ErrUsernameTaken   = errors.New("username already taken")
+	ErrNotFound      = errors.New("profile not found")
+	ErrPhotoNotFound = errors.New("photo not found")
+	ErrInvalidInput  = errors.New("invalid input")
+	ErrUsernameTaken = errors.New("username already taken")
 	// ErrMediaNotApproved is returned when avatar/photo media has not cleared
 	// moderation (still pending, rejected, or quarantined).
 	ErrMediaNotApproved = errors.New("media not approved")
@@ -203,16 +203,19 @@ type InterestSuggestion struct {
 
 // BrowseProfile is a profile summary for the browse/explore view.
 type BrowseProfile struct {
-	ID            string
-	UserID        string
-	Username      string
-	DisplayName   string
-	AvatarURL     string
-	DateOfBirth   *time.Time
-	Age           *int
-	Gender        string
-	LocationText  string
-	DistanceKm    *float64
+	ID           string
+	UserID       string
+	Username     string
+	DisplayName  string
+	AvatarURL    string
+	DateOfBirth  *time.Time
+	Age          *int
+	Gender       string
+	LocationText string
+	// DistanceKm is a coarse band (0 = under 1 km, 100 = 100 km or more), never
+	// an exact distance. Nil when either side has no location or the candidate
+	// hides their distance.
+	DistanceKm    *int
 	FirstPhotoURL string
 	Interests     []string
 	// CreatedAt is used internally for the distance-sort cursor; not serialised to the API.
@@ -232,8 +235,8 @@ type BrowsePage struct {
 // browseCursor holds the keyset values needed to continue a Browse query.
 type browseCursor struct {
 	ID         string    `json:"id"`
-	CreatedAt  time.Time `json:"ca,omitzero"` // used only when sortByDistance
-	DistanceKm *float64  `json:"dk,omitempty"` // distance sort
+	CreatedAt  time.Time `json:"ca,omitzero"`  // used only when sortByDistance
+	DistanceKm *int      `json:"dk,omitempty"` // distance band, distance sort
 	Score      *float64  `json:"sc,omitempty"` // relevance sort (default)
 	AsOf       time.Time `json:"ao,omitzero"`  // recency anchor, pinned on first page
 }
@@ -278,7 +281,6 @@ type Store interface {
 	ReorderPhotos(ctx context.Context, userID string, orderedIDs []string) error
 	GetPreferences(ctx context.Context, userID string) (*ProfilePreferences, error)
 	GetPrivacyFlagsByIDs(ctx context.Context, userIDs []string) (map[string]PrivacyFlags, error)
-	AcceptedContactIDs(ctx context.Context, userID string) ([]string, error)
 	UpsertPreferences(ctx context.Context, userID string, update PreferencesUpdate) (*ProfilePreferences, error)
 	SearchInterests(ctx context.Context, query string, limit int) ([]InterestSuggestion, error)
 	Browse(ctx context.Context, userID string, limit int, cursor string, sortByDistance bool, interests []string, seed string, asOf time.Time) ([]BrowseProfile, error)
@@ -381,6 +383,13 @@ func (s *Service) UpdateMyProfile(ctx context.Context, userID string, in Profile
 	}
 	if err := validateLookingFor(in); err != nil {
 		return nil, err
+	}
+	if err := validateCoordinates(in.Latitude, in.Longitude); err != nil {
+		return nil, err
+	}
+	if in.Latitude != nil {
+		lat, lng := SnapToCell(*in.Latitude, *in.Longitude)
+		in.Latitude, in.Longitude = new(lat), new(lng)
 	}
 	profile, err := s.store.Upsert(ctx, userID, in)
 	if err != nil {
@@ -589,34 +598,6 @@ func (s *Service) Browse(ctx context.Context, userID string, limit int, cursor s
 	if len(profiles) > limit {
 		profiles = profiles[:limit]
 		nextCursor = EncodeBrowseCursor(profiles[limit-1], sortByDistance, asOf)
-	}
-
-	if len(profiles) > 0 {
-		ids := make([]string, len(profiles))
-		for i, p := range profiles {
-			ids[i] = p.UserID
-		}
-		flags, err := s.store.GetPrivacyFlagsByIDs(ctx, ids)
-		if err != nil {
-			return nil, err
-		}
-		contactIDs, err := s.store.AcceptedContactIDs(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-		isContact := make(map[string]struct{}, len(contactIDs))
-		for _, id := range contactIDs {
-			isContact[id] = struct{}{}
-		}
-		for i := range profiles {
-			if !flags[profiles[i].UserID].HideDistanceFromNonContacts {
-				continue
-			}
-			if _, ok := isContact[profiles[i].UserID]; ok {
-				continue
-			}
-			profiles[i].DistanceKm = nil
-		}
 	}
 
 	now := time.Now()

@@ -86,8 +86,14 @@ components:
           type: [integer, "null"]
           description: Computed age in years. Returned instead of raw date_of_birth for non-owners.
         distance_km:
-          type: [number, "null"]
-          description: Distance from the requesting user in km. Null when unavailable or hidden.
+          type: [integer, "null"]
+          enum: [null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
+          description: >-
+            Coarse distance band from the requesting user, never an exact distance.
+            0 means under 1 km, 1-10 are whole kilometres, 10-95 are rounded to the
+            nearest 5, and 100 means 100 km or more. Null when either side has no
+            location or the profile hides its distance; such profiles are also
+            excluded from distance sorting and the max-distance filter.
         location_text:  { type: [string, "null"] }
         onboarded_at:   { type: [string, "null"], format: date-time }
         looking_for_gender:
@@ -645,8 +651,18 @@ paths:
                 gender:        { type: string }
                 interests:     { type: array, items: { type: string } }
                 location_text:     { type: string }
-                latitude:          { type: number, format: double }
-                longitude:         { type: number, format: double }
+                latitude:
+                  type: number
+                  format: double
+                  minimum: -90
+                  maximum: 90
+                  description: Must be sent together with longitude. Stored only as the center of a ~500 m cell.
+                longitude:
+                  type: number
+                  format: double
+                  minimum: -180
+                  maximum: 180
+                  description: Must be sent together with latitude. Stored only as the center of a ~500 m cell.
                 mark_onboarded:    { type: boolean }
                 looking_for_gender:
                   type: array
