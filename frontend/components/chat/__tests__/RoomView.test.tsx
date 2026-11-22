@@ -184,8 +184,9 @@ describe("RoomView", () => {
     chat.value.deletedIds = new Set(["h1"])
     renderWithIntl(<RoomView roomId="r1" surface="messages" />)
     await screen.findByText("Bea")
-    // The original content is gone and the localized tombstone stands in its place.
-    await waitFor(() => expect(screen.queryByText("secret")).not.toBeInTheDocument())
-    expect(screen.getByText("Message expired")).toBeInTheDocument()
+    // Wait for the tombstone itself: asserting absence first would pass before
+    // history loads. Once it renders, the original content must be gone.
+    expect(await screen.findByText("Message expired")).toBeInTheDocument()
+    expect(screen.queryByText("secret")).not.toBeInTheDocument()
   })
 })
