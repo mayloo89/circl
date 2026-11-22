@@ -134,6 +134,18 @@ describe("RoomView", () => {
     expect(send.mock.calls[0][0]).toBe("hello")
   })
 
+  it("keeps the draft instead of sending while the socket is down", async () => {
+    chat.value.connected = false
+    seed(DM)
+    renderWithIntl(<RoomView roomId="r1" surface="messages" />)
+    await screen.findByText("Bea")
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "hello" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(send).not.toHaveBeenCalled()
+    expect(input).toHaveValue("hello")
+  })
+
   it("blocks the peer after confirmation and returns to the chat list", async () => {
     let blocked = false
     seed(DM)

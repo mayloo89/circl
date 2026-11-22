@@ -142,13 +142,18 @@ describe("PublicRoomShell", () => {
     expect(baseProps.onBack).toHaveBeenCalled()
   })
 
-  it("disables the composer and shows a notice when muted", () => {
-    renderWithIntl(<PublicRoomShell {...baseProps} isMuted />)
+  it("blocks sending and shows a notice when muted", () => {
+    const onSend = vi.fn()
+    renderWithIntl(<PublicRoomShell {...baseProps} onSend={onSend} isMuted />)
     expect(screen.getByRole("status")).toBeInTheDocument()
     // The composer is wired connected={connected && !isMuted}, so muting
-    // disables the send control even with the socket connected.
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "blocked" } })
+    // blocks both the send button and the Enter key with the socket connected.
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "blocked" } })
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled()
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onSend).not.toHaveBeenCalled()
+    expect(input).toHaveValue("blocked")
   })
 
   it("lets an admin kick a roster member", async () => {

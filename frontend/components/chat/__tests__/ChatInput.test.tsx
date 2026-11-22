@@ -47,6 +47,16 @@ describe("ChatInput", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled()
   })
 
+  it("keeps the draft and does not send on Enter while disconnected", () => {
+    const onSend = vi.fn()
+    renderWithIntl(<ChatInput {...baseProps} connected={false} onSend={onSend} />)
+    const input = screen.getByLabelText("Message…")
+    fireEvent.change(input, { target: { value: "draft" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onSend).not.toHaveBeenCalled()
+    expect(input).toHaveValue("draft")
+  })
+
   it("shows the contact-sharing warning when enabled", () => {
     renderWithIntl(<ChatInput {...baseProps} showContactWarning />)
     expect(
