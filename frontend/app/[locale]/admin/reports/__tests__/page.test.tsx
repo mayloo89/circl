@@ -43,8 +43,11 @@ const REVIEW_TITLE = "Review report"
 
 const MESSAGE = { id: "m1", room_id: "r1", type: "text", content: "the reported words", sent_at: "2026-11-01T11:59:00Z" }
 
-function seed(reports: object[]) {
-  server.use(http.get(`${API}/reports`, () => HttpResponse.json(reports)))
+function seed(reports: object[], evidence: object[] = []) {
+  server.use(
+    http.get(`${API}/reports`, () => HttpResponse.json(reports)),
+    http.get(`${API}/reports/:id/evidence`, () => HttpResponse.json(evidence)),
+  )
 }
 
 describe("AdminReportsPage evidence", () => {
@@ -60,6 +63,16 @@ describe("AdminReportsPage evidence", () => {
     renderWithIntl(<AdminReportsPage />)
     expect(await screen.findByText("Account deleted")).toBeInTheDocument()
     expect(screen.queryByRole("link", { name: /Bea/ })).not.toBeInTheDocument()
+  })
+
+  it("lists preserved media in the dialog and locks CSAM evidence", async () => {
+    const file = { id: "f1", report_id: "rep1", kind: "profile_photo", content_type: "image/png", size_bytes: 10, sha256: "feed", created_at: "2026-11-01T12:00:00Z" }
+    seed([report({ reason: "csam", priority: "critical" })], [file])
+    renderWithIntl(<AdminReportsPage />)
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }))
+    expect(await screen.findByText(/sha256:feed/)).toBeInTheDocument()
+    expect(screen.getByText(/Preserved for law enforcement/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Show image" })).not.toBeInTheDocument()
   })
 
   it("shows the reported message copy in the review dialog", async () => {

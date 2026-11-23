@@ -170,6 +170,19 @@ components:
         sent_at:   { type: string, format: date-time }
         purged_at: { type: string, format: date-time }
 
+    ReportEvidenceFile:
+      type: object
+      description: A copy of reported media, held in storage that is never served by URL.
+      required: [id, report_id, kind, content_type, size_bytes, sha256, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        report_id: { type: string, format: uuid }
+        kind: { type: string, enum: [message_media, profile_photo] }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        sha256: { type: string, description: "Hex digest of the copied bytes, for matching without viewing." }
+        created_at: { type: string, format: date-time }
+
     Report:
       type: object
       description: |
@@ -2041,7 +2054,7 @@ paths:
       tags: [Reports]
       summary: Update report status (admin only)
       description: |
-        Dismissing a report purges its message copy. An optional `action`
+        Dismissing a report purges its message copy and preserved media. An optional `action`
         suspends or bans the reported account and is allowed only with
         `status: reviewed`. The action runs first, and the status changes only
         if it succeeds: a hard-deleted or purged account answers
@@ -2072,6 +2085,61 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: '`reported_account_gone` (deleted or purged account) or `already_moderated` (already suspended or banned). The report status is unchanged.'
+
+  /reports/{id}/evidence:
+    get:
+      tags: [Reports]
+      summary: List a report's preserved media (admin only)
+      description: |
+        Copies of the reported message's attachments and, for critical-priority
+        reports, the reported account's profile photos, taken when the report
+        was filed. They are kept until the report is dismissed or, once
+        reviewed, for `REPORT_EVIDENCE_RETENTION_DAYS` (default 365).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Preserved files, oldest first. Empty when none were kept.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReportEvidenceFile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /reports/{id}/evidence/{fileId}:
+    get:
+      tags: [Reports]
+      summary: Download one preserved file (admin only)
+      description: |
+        Streams the file with `Cache-Control: no-store` and
+        `Content-Disposition: attachment`. Every access is logged with the
+        admin's ID. Files of CSAM reports are kept for law enforcement and are
+        never served: they answer `evidence_restricted` (403) and only their
+        metadata and hash are available from the list.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: fileId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The file bytes.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not an admin, or `evidence_restricted` for a CSAM report.
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Appeals ───────────────────────────────────────────────────────────────────
   # The public /appeal/{token} routes are intentionally un-authenticated — the

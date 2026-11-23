@@ -104,3 +104,60 @@ func TestLocalHandler_ServePathTraversal(t *testing.T) {
 	}
 }
 
+func TestServeHandler_NeverServesRestrictedKeysOrDirectories(t *testing.T) {
+	dir := t.TempDir()
+	ls := NewLocalStorage(dir, "http://x/uploads/files")
+	for _, key := range []string{"quarantine/chat/a.jpg", "evidence/r1/f1.jpg", "exports/u1/r1.zip", "chat/ok.jpg"} {
+		p := filepath.Join(dir, filepath.FromSlash(key))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("bytes"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewLocalHandler(ls)
+	get := func(target string) int {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		return rec.Code
+	}
+
+	for _, target := range []string{
+		"/quarantine/chat/a.jpg",
+		"/evidence/r1/f1.jpg",
+		"/exports/u1/r1.zip",
+		"//quarantine/chat/a.jpg",
+		"/./evidence/r1/f1.jpg",
+		"/Evidence/r1/f1.jpg",
+		"/chat/",
+		"/quarantine/",
+	} {
+		if code := get(target); code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", target, code)
+		}
+	}
+	if code := get("/chat/ok.jpg"); code != http.StatusOK {
+		t.Errorf("GET /chat/ok.jpg = %d, want 200", code)
+	}
+}
+
+func TestIsRestrictedKey(t *testing.T) {
+	cases := map[string]bool{
+		"quarantine/a.jpg": true,
+		"evidence/r/f.jpg": true,
+		"exports/u/r.zip":  true,
+		"/evidence/x":      true,
+		"EXPORTS/u/r.zip":  true,
+		"evidence":         true,
+		"chat/evidence/x":  false,
+		"evidence-like/x":  false,
+		"avatars/u/a.jpg":  false,
+		"thumbnails/c.jpg": false,
+	}
+	for key, want := range cases {
+		if got := IsRestrictedKey(key); got != want {
+			t.Errorf("IsRestrictedKey(%q) = %v, want %v", key, got, want)
+		}
+	}
+}

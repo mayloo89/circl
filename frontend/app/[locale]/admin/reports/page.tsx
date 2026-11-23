@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
 import { useEffect, useId, useState } from "react"
+import ReportEvidenceFiles from "@/components/admin/ReportEvidenceFiles"
 import Button from "@/components/ui/Button"
 import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
@@ -192,6 +193,8 @@ function ReviewModal({
         </div>
 
         {report.message && <ReportedMessageSnapshot message={report.message} />}
+
+        <ReportEvidenceFiles reportId={report.id} restricted={report.reason === "csam"} token={token} />
 
         {!readOnly && (
           <>
