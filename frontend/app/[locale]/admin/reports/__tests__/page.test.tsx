@@ -131,4 +131,17 @@ describe("AdminReportsPage evidence", () => {
     fireEvent.click(await screen.findByRole("button", { name: "View" }))
     expect(await screen.findByText(/message copy was deleted/i)).toBeInTheDocument()
   })
+
+  it("explains an already-moderated account", async () => {
+    seed([report()])
+    server.use(
+      http.put(`${API}/reports/rep1/status`, () =>
+        HttpResponse.json({ code: "already_moderated", error: "x" }, { status: 409 }),
+      ),
+    )
+    renderWithIntl(<AdminReportsPage />)
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Submit" }))
+    expect(await screen.findByText(/already suspended or banned/i)).toBeInTheDocument()
+  })
 })

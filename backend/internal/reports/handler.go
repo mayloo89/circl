@@ -1,6 +1,7 @@
 package reports
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -179,10 +180,17 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check the target before changing status so a failed action never leaves
-	// a report marked reviewed with nothing done.
-	if req.Action != "" {
-		gone, err := m.svc.ReportedAccountGone(r.Context(), reportID)
+	if req.Action != "" && req.Status != StatusReviewed {
+		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, ErrActionNeedsReview.Error())
+		return
+	}
+
+	// The action runs before the status change, so a failed action never
+	// leaves a report marked reviewed with nothing done. If the status write
+	// fails afterwards, the action stands and the report stays pending for the
+	// moderator to resolve again.
+	if req.Action != "" && m.moderator != nil {
+		existing, err := m.svc.GetByID(r.Context(), reportID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "report not found")
@@ -191,8 +199,16 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		if gone {
-			apierror.Write(w, http.StatusConflict, apierror.CodeReportedAccountGone, ErrReportedUserGone.Error())
+		if err := m.moderate(r.Context(), existing, req.Action, req.Reason, req.DurationDays, reviewerID); err != nil {
+			switch {
+			case errors.Is(err, ErrReportedUserGone):
+				apierror.Write(w, http.StatusConflict, apierror.CodeReportedAccountGone, ErrReportedUserGone.Error())
+			case errors.Is(err, ErrAlreadyModerated):
+				apierror.Write(w, http.StatusConflict, apierror.CodeAlreadyModerated, ErrAlreadyModerated.Error())
+			default:
+				zerolog.Ctx(r.Context()).Error().Err(err).Str("report_id", reportID).Msg("reports: moderation action failed")
+				apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			}
 			return
 		}
 	}
@@ -210,19 +226,17 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if m.moderator != nil && report.ReportedUserID != nil {
-		target := *report.ReportedUserID
-		switch req.Action {
-		case "suspend":
-			if err := m.moderator.SuspendUser(r.Context(), target, req.Reason, req.DurationDays, reviewerID); err != nil {
-				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", target).Msg("reports: suspend user failed")
-			}
-		case "ban":
-			if err := m.moderator.BanUser(r.Context(), target, req.Reason, reviewerID); err != nil {
-				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", target).Msg("reports: ban user failed")
-			}
-		}
-	}
-
 	apierror.WriteJSON(w, http.StatusOK, report)
+}
+
+// moderate applies a report's moderation action to the reported account.
+func (m *Manager) moderate(ctx context.Context, report *Report, action, reason string, durationDays int, reviewerID string) error {
+	if report.ReportedUserID == nil {
+		return ErrReportedUserGone
+	}
+	target := *report.ReportedUserID
+	if action == "suspend" {
+		return m.moderator.SuspendUser(ctx, target, reason, durationDays, reviewerID)
+	}
+	return m.moderator.BanUser(ctx, target, reason, reviewerID)
 }

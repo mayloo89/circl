@@ -2042,9 +2042,11 @@ paths:
       summary: Update report status (admin only)
       description: |
         Dismissing a report purges its message copy. An optional `action`
-        suspends or bans the reported account; it is rejected with
-        `reported_account_gone` (409) before the status changes when that
-        account was hard-deleted or purged.
+        suspends or bans the reported account and is allowed only with
+        `status: reviewed`. The action runs first, and the status changes only
+        if it succeeds: a hard-deleted or purged account answers
+        `reported_account_gone` (409) and an already suspended or banned one
+        `already_moderated` (409).
       parameters:
         - in: path
           name: id
@@ -2069,7 +2071,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: '`reported_account_gone`: the action targets a deleted account.'
+          description: '`reported_account_gone` (deleted or purged account) or `already_moderated` (already suspended or banned). The report status is unchanged.'
 
   # ── Appeals ───────────────────────────────────────────────────────────────────
   # The public /appeal/{token} routes are intentionally un-authenticated — the

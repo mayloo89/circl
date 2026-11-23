@@ -7,6 +7,9 @@ import (
 )
 
 // AdminModerator applies moderation actions to users.
+// Implementations return an error wrapping ErrReportedUserGone when the account
+// was purged or deleted, and ErrAlreadyModerated when it is already suspended
+// or banned.
 type AdminModerator interface {
 	SuspendUser(ctx context.Context, userID, reason string, durationDays int, adminID string) error
 	BanUser(ctx context.Context, userID, reason, adminID string) error
@@ -80,6 +83,10 @@ var (
 	// ErrReportedUserGone is returned when an action targets an account that
 	// was hard-deleted after the report was filed.
 	ErrReportedUserGone = errors.New("reported account no longer exists")
+	ErrAlreadyModerated = errors.New("reported account already suspended or banned")
+	// ErrActionNeedsReview rejects a moderation action on a dismissal, which
+	// would act on the account while wiping the evidence behind it.
+	ErrActionNeedsReview = errors.New("moderation actions require status reviewed")
 )
 
 // Report represents a user report. ReporterID and ReportedUserID are nil only
@@ -153,9 +160,6 @@ type Store interface {
 	// critical first, then high, then normal, and newest-first within each
 	// priority bucket so admin sees the worst items at the top of the table.
 	List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo, error)
-	// ReportedAccountGone reports whether the reported account was purged or
-	// hard-deleted. Returns ErrNotFound when the report does not exist.
-	ReportedAccountGone(ctx context.Context, id string) (bool, error)
 	// UpdateStatus updates a report's status and records who reviewed it.
 	// Dismissing a report purges its message copy.
 	UpdateStatus(ctx context.Context, id, status, reviewedBy string) (*Report, error)
@@ -198,12 +202,6 @@ func (s *Service) Create(ctx context.Context, reporterID string, target Target, 
 // GetByID retrieves a report by ID.
 func (s *Service) GetByID(ctx context.Context, id string) (*Report, error) {
 	return s.store.GetByID(ctx, id)
-}
-
-// ReportedAccountGone reports whether the reported account was purged or
-// hard-deleted, so no moderation action can apply to it.
-func (s *Service) ReportedAccountGone(ctx context.Context, id string) (bool, error) {
-	return s.store.ReportedAccountGone(ctx, id)
 }
 
 // List returns reports matching the given filter.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,7 +69,6 @@ type mockHandlerStore struct {
 	updateErr   error
 	getByIDErr  error
 	updated     bool
-	accountGone bool
 }
 
 func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
@@ -77,10 +77,6 @@ func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _, _ string) (*rep
 
 func (m *mockHandlerStore) CreateForMessage(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
 	return m.report, m.createErr
-}
-
-func (m *mockHandlerStore) ReportedAccountGone(_ context.Context, _ string) (bool, error) {
-	return m.accountGone, m.getByIDErr
 }
 
 func (m *mockHandlerStore) GetByID(_ context.Context, _ string) (*reports.Report, error) {
@@ -685,57 +681,6 @@ func TestUpdateReportStatus_NoUserIDInContext(t *testing.T) {
 	}
 }
 
-func TestUpdateReportStatus_ModeratorSuspendError_StillReturns200(t *testing.T) {
-	report := &reports.Report{
-		ID:             "r-1",
-		ReporterID:     new("u-1"),
-		ReportedUserID: new("u-2"),
-		Status:         "reviewed",
-	}
-	store := &mockHandlerStore{report: report}
-	svc := reports.NewService(store)
-	mod := &mockModerator{suspendErr: errors.New("already suspended")}
-	mgr := reports.NewManager(svc, reports.WithModerator(mod))
-
-	body := `{"status":"reviewed","action":"suspend","reason":"spam"}`
-	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(body)))
-	rec := httptest.NewRecorder()
-
-	router := chi.NewRouter()
-	router.Put("/{id}/status", mgr.UpdateReportStatus)
-	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
-
-	// Moderator error is logged but does not affect the HTTP response.
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-}
-
-func TestUpdateReportStatus_ModeratorBanError_StillReturns200(t *testing.T) {
-	report := &reports.Report{
-		ID:             "r-1",
-		ReporterID:     new("u-1"),
-		ReportedUserID: new("u-2"),
-		Status:         "reviewed",
-	}
-	store := &mockHandlerStore{report: report}
-	svc := reports.NewService(store)
-	mod := &mockModerator{banErr: errors.New("ban failed")}
-	mgr := reports.NewManager(svc, reports.WithModerator(mod))
-
-	body := `{"status":"reviewed","action":"ban","reason":"severe violation"}`
-	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(body)))
-	rec := httptest.NewRecorder()
-
-	router := chi.NewRouter()
-	router.Put("/{id}/status", mgr.UpdateReportStatus)
-	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-}
-
 // --- Message reports ---
 
 func postReport(t *testing.T, store *mockHandlerStore, body string) *httptest.ResponseRecorder {
@@ -802,7 +747,7 @@ func TestCreateReport_ErrorMapping(t *testing.T) {
 }
 
 func TestUpdateReportStatus_ActionOnDeletedAccountIsRejectedBeforeStatusChange(t *testing.T) {
-	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", Status: "pending"}, accountGone: true}
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", Status: "pending"}}
 	mod := &mockModerator{}
 	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
 
@@ -852,4 +797,93 @@ func TestUpdateReportStatus_ActionLookupError(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
+}
+
+func putStatus(t *testing.T, mgr *reports.Manager, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	router := chi.NewRouter()
+	router.Put("/{id}/status", mgr.UpdateReportStatus)
+	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
+	return rec
+}
+
+func TestUpdateReportStatus_FailedActionLeavesStatusUntouched(t *testing.T) {
+	cases := []struct {
+		name     string
+		modErr   error
+		wantCode int
+		wantErr  string
+	}{
+		{"account purged during review", fmt.Errorf("%w: purged", reports.ErrReportedUserGone), http.StatusConflict, "reported_account_gone"},
+		{"already moderated", reports.ErrAlreadyModerated, http.StatusConflict, "already_moderated"},
+		{"moderator failure", errors.New("db down"), http.StatusInternalServerError, "internal_error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReportedUserID: new("u-2"), Status: "pending"}}
+			mod := &mockModerator{suspendErr: tc.modErr, banErr: tc.modErr}
+			mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+			rec := putStatus(t, mgr, `{"status":"reviewed","action":"ban","reason":"x"}`)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if got := errorCode(t, rec); got != tc.wantErr {
+				t.Errorf("error code = %q, want %q", got, tc.wantErr)
+			}
+			if store.updated {
+				t.Error("report status changed although the action failed")
+			}
+		})
+	}
+}
+
+func TestUpdateReportStatus_ActionRunsBeforeStatusChange(t *testing.T) {
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReportedUserID: new("u-2"), Status: "pending"}}
+	mod := &orderModerator{store: store}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+	if rec := putStatus(t, mgr, `{"status":"reviewed","action":"suspend","duration_days":3}`); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !mod.ran || mod.statusChangedFirst {
+		t.Errorf("moderation ran=%v, status changed before it=%v; want the action first", mod.ran, mod.statusChangedFirst)
+	}
+	if !store.updated {
+		t.Error("status was not updated after a successful action")
+	}
+}
+
+func TestUpdateReportStatus_ActionRequiresReviewed(t *testing.T) {
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReportedUserID: new("u-2"), Status: "pending"}}
+	mod := &mockModerator{}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+	rec := putStatus(t, mgr, `{"status":"dismissed","action":"ban","reason":"x"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if mod.banned || store.updated {
+		t.Error("a dismissal must neither run an action nor change status")
+	}
+}
+
+// orderModerator records whether the report status had already changed when
+// the moderation action ran.
+type orderModerator struct {
+	store              *mockHandlerStore
+	ran                bool
+	statusChangedFirst bool
+}
+
+func (o *orderModerator) SuspendUser(_ context.Context, _, _ string, _ int, _ string) error {
+	o.ran, o.statusChangedFirst = true, o.store.updated
+	return nil
+}
+
+func (o *orderModerator) BanUser(_ context.Context, _, _, _ string) error {
+	o.ran, o.statusChangedFirst = true, o.store.updated
+	return nil
 }

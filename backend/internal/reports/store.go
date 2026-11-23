@@ -207,25 +207,6 @@ func (s *pgStore) List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo,
 	return results, nil
 }
 
-// ReportedAccountGone uses the same rule as List's reported_account_gone: a
-// hard-deleted account (NULL reference) or a purged one.
-func (s *pgStore) ReportedAccountGone(ctx context.Context, id string) (bool, error) {
-	var gone bool
-	err := s.db.QueryRow(ctx, `
-		SELECT u.id IS NULL
-		  FROM reports r
-		  LEFT JOIN users u ON u.id = r.reported_user_id AND u.status <> 'purged'
-		 WHERE r.id = $1`, id,
-	).Scan(&gone)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, ErrNotFound
-		}
-		return false, fmt.Errorf("check reported account: %w", err)
-	}
-	return gone, nil
-}
-
 // UpdateStatus updates a report's status and records who reviewed it. A
 // dismissal wipes the message copy: evidence is kept only for reports that
 // were acted on or are still open.

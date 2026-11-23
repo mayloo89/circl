@@ -32,10 +32,6 @@ func (m *mockStore) CreateForMessage(_ context.Context, _, messageID, _, priorit
 	return m.report, m.createErr
 }
 
-func (m *mockStore) ReportedAccountGone(_ context.Context, _ string) (bool, error) {
-	return false, m.getErr
-}
-
 func (m *mockStore) GetByID(_ context.Context, _ string) (*reports.Report, error) {
 	return m.report, m.getErr
 }
@@ -294,12 +290,5 @@ func TestCreate_MessageTargetValidatesReason(t *testing.T) {
 	svc := newService(&mockStore{})
 	if _, err := svc.Create(t.Context(), "u-1", reports.Target{MessageID: "m-1"}, "bogus", ""); !errors.Is(err, reports.ErrInvalidReason) {
 		t.Errorf("error = %v, want ErrInvalidReason", err)
-	}
-}
-
-func TestService_ReportedAccountGone_DelegatesToStore(t *testing.T) {
-	svc := newService(&mockStore{getErr: reports.ErrNotFound})
-	if _, err := svc.ReportedAccountGone(t.Context(), "r-1"); !errors.Is(err, reports.ErrNotFound) {
-		t.Errorf("error = %v, want ErrNotFound", err)
 	}
 }

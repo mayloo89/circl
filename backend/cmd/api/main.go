@@ -228,7 +228,7 @@ func main() {
 	})
 
 	reportMgr := reports.NewManager(reportSvc,
-		reports.WithModerator(adminSvc),
+		reports.WithModerator(reportModerator{svc: adminSvc}),
 		reports.WithLimiter(limiter),
 		reports.WithLogger(log),
 	)
@@ -461,10 +461,10 @@ func main() {
 			}
 			return sess.IPHash, nil
 		},
-		BanRoomIP:    guestSessionStore.BanRoomIP,
+		BanRoomIP:     guestSessionStore.BanRoomIP,
 		IsMutedInRoom: guestSessionStore.IsMutedInRoom,
-		MuteInRoom:   guestSessionStore.MuteInRoom,
-		UnmuteInRoom: guestSessionStore.UnmuteInRoom,
+		MuteInRoom:    guestSessionStore.MuteInRoom,
+		UnmuteInRoom:  guestSessionStore.UnmuteInRoom,
 		ScheduleUnmute: func(roomID, targetID string, ttl time.Duration) {
 			frame, _ := json.Marshal(map[string]any{
 				"event":   "you_are_unmuted",
@@ -956,4 +956,28 @@ func (n suspensionNotifier) NotifyOfSuspension(ctx context.Context, user admin.U
 			logger.Warn().Err(err).Msg("appeals: send appeal email failed")
 		}
 	}()
+}
+
+// reportModerator lets report review apply admin actions while keeping the
+// reports package free of admin's error types.
+type reportModerator struct {
+	svc *admin.Service
+}
+
+func (m reportModerator) SuspendUser(ctx context.Context, userID, reason string, durationDays int, adminID string) error {
+	return translateModerationErr(m.svc.SuspendUser(ctx, userID, reason, durationDays, adminID))
+}
+
+func (m reportModerator) BanUser(ctx context.Context, userID, reason, adminID string) error {
+	return translateModerationErr(m.svc.BanUser(ctx, userID, reason, adminID))
+}
+
+func translateModerationErr(err error) error {
+	switch {
+	case errors.Is(err, admin.ErrUserPurged), errors.Is(err, admin.ErrUserNotFound):
+		return fmt.Errorf("%w: %w", reports.ErrReportedUserGone, err)
+	case errors.Is(err, admin.ErrAlreadySuspended):
+		return fmt.Errorf("%w: %w", reports.ErrAlreadyModerated, err)
+	}
+	return err
 }

@@ -415,7 +415,7 @@ func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	case "reactivate":
 		err := h.svc.ReactivateUser(r.Context(), userID)
-		if errors.Is(err, ErrUserNotFound) {
+		if errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrUserPurged) {
 			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}

@@ -82,6 +82,7 @@ const (
 	CodeMessageNotFound     = "message_not_found"
 	CodeAlreadyReported     = "already_reported"
 	CodeReportedAccountGone = "reported_account_gone"
+	CodeAlreadyModerated    = "already_moderated"
 
 	// Image moderation
 	CodeUploadRejectedModeration = "upload_rejected_moderation"

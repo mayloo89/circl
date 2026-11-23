@@ -780,7 +780,8 @@
     "reportMessageBadge": "Message",
     "viewReport": "View",
     "viewReportTitle": "Report details",
-    "close": "Close"
+    "close": "Close",
+    "reportAlreadyModerated": "This account is already suspended or banned. Mark the report reviewed without an action."
   },
   "channels": {
     "title": "Channels",

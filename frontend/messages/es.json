@@ -780,7 +780,8 @@
     "reportMessageBadge": "Mensaje",
     "viewReport": "Ver",
     "viewReportTitle": "Detalles del reporte",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "reportAlreadyModerated": "Esta cuenta ya está suspendida o baneada. Marca el reporte como revisado sin acción."
   },
   "channels": {
     "title": "Canales",

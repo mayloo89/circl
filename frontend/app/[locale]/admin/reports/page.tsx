@@ -139,7 +139,13 @@ function ReviewModal({
       })
       if (!res.ok) {
         const data: { code?: string } = await res.json().catch(() => ({}))
-        setError(data.code === "reported_account_gone" ? t("reportAccountGoneNoAction") : t("updateReportFailed"))
+        setError(
+          data.code === "reported_account_gone"
+            ? t("reportAccountGoneNoAction")
+            : data.code === "already_moderated"
+            ? t("reportAlreadyModerated")
+            : t("updateReportFailed"),
+        )
         return
       }
       onDone()
