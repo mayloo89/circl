@@ -3,6 +3,7 @@ package profiles
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -799,4 +800,157 @@ func TestBrowse_Integration(t *testing.T) {
 			}
 		}
 	})
+}
+
+// --- Browse distance privacy (integration) ---
+
+func TestBrowseDistancePrivacy_Integration(t *testing.T) {
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("TEST_DATABASE_URL not set, skipping integration test")
+	}
+	pool, err := pgxpool.New(t.Context(), dbURL)
+	if err != nil {
+		t.Fatalf("connect to db: %v", err)
+	}
+	// Registered first so it runs after the row cleanups below (LIFO).
+	t.Cleanup(pool.Close)
+	store := NewStore(pool)
+	dob := time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	seed := func(name string, lat, lng float64) string {
+		var id string
+		if err := pool.QueryRow(t.Context(),
+			`INSERT INTO users (email, password_hash, provider, status)
+			 VALUES ($1, 'hash', 'local', 'active') RETURNING id`, name+"@distance.example.com",
+		).Scan(&id); err != nil {
+			t.Fatalf("insert user %s: %v", name, err)
+		}
+		t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, id) })
+		cLat, cLng := SnapToCell(lat, lng)
+		if _, err := store.Upsert(t.Context(), id, ProfileInput{
+			Username: name, DisplayName: name, DateOfBirth: &dob, Latitude: &cLat, Longitude: &cLng,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", name, err)
+		}
+		return id
+	}
+
+	viewer := seed("dist_viewer", -34.6037, -58.3816)
+	near := seed("dist_near", -34.6037, -58.3487)     // ~3 km east
+	far := seed("dist_far", -34.9214, -57.9545)       // La Plata, ~50 km
+	hidden := seed("dist_hidden", -34.6037, -58.3650) // ~1.5 km east, hides distance
+	if _, err := store.UpsertPreferences(t.Context(), hidden, PreferencesUpdate{HideDistanceFromNonContacts: new(true)}); err != nil {
+		t.Fatalf("hide distance: %v", err)
+	}
+	ours := map[string]bool{near: true, far: true, hidden: true}
+
+	browse := func(t *testing.T, cursor string, limit int) []BrowseProfile {
+		t.Helper()
+		all, err := store.Browse(t.Context(), viewer, limit, cursor, true, nil, "seed", time.Now())
+		if err != nil {
+			t.Fatalf("browse: %v", err)
+		}
+		var mine []BrowseProfile
+		for _, p := range all {
+			if ours[p.UserID] {
+				mine = append(mine, p)
+			}
+		}
+		return mine
+	}
+
+	t.Run("returns coarse bands and hides the hidden candidate's distance", func(t *testing.T) {
+		byUser := map[string]BrowseProfile{}
+		for _, p := range browse(t, "", 200) {
+			byUser[p.UserID] = p
+		}
+		if d := byUser[near].DistanceKm; d == nil || *d < 2 || *d > 4 {
+			t.Errorf("near band = %v, want 2..4", d)
+		}
+		if d := byUser[far].DistanceKm; d == nil || *d%5 != 0 || *d < 45 || *d > 55 {
+			t.Errorf("far band = %v, want a multiple of 5 in 45..55", d)
+		}
+		if p, ok := byUser[hidden]; !ok || p.DistanceKm != nil {
+			t.Errorf("hidden candidate = %+v, want present with nil distance", p)
+		}
+	})
+
+	t.Run("hidden candidate sorts last, not by position", func(t *testing.T) {
+		got := browse(t, "", 200)
+		if len(got) != 3 || got[0].UserID != near || got[1].UserID != far || got[2].UserID != hidden {
+			ids := make([]string, len(got))
+			for i, p := range got {
+				ids[i] = p.Username
+			}
+			t.Errorf("distance order = %v, want [dist_near dist_far dist_hidden]", ids)
+		}
+	})
+
+	t.Run("cursor carries only the band", func(t *testing.T) {
+		first := browse(t, "", 200)[0]
+		cur, err := DecodeBrowseCursor(EncodeBrowseCursor(first, true, time.Now()))
+		if err != nil {
+			t.Fatalf("decode cursor: %v", err)
+		}
+		if cur.DistanceKm == nil || *cur.DistanceKm != *first.DistanceKm {
+			t.Errorf("cursor distance = %v, want band %v", cur.DistanceKm, *first.DistanceKm)
+		}
+	})
+
+	t.Run("max distance filter excludes the hidden candidate by flag", func(t *testing.T) {
+		if _, err := store.UpsertPreferences(t.Context(), viewer, PreferencesUpdate{MaxDistanceKm: Optional[int]{Set: true, Value: new(10)}}); err != nil {
+			t.Fatalf("set max distance: %v", err)
+		}
+		got := browse(t, "", 200)
+		if len(got) != 1 || got[0].UserID != near {
+			t.Errorf("within 10 km got %d of ours, want only dist_near", len(got))
+		}
+	})
+}
+
+// TestSnapMigrationMatchesGo runs the backfill migration against a row holding
+// an exact position and checks it lands on the same cell center as SnapToCell.
+func TestSnapMigrationMatchesGo_Integration(t *testing.T) {
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("TEST_DATABASE_URL not set, skipping integration test")
+	}
+	pool, err := pgxpool.New(t.Context(), dbURL)
+	if err != nil {
+		t.Fatalf("connect to db: %v", err)
+	}
+	// Registered first so it runs after the row cleanups below (LIFO).
+	t.Cleanup(pool.Close)
+	migration, err := os.ReadFile("../../migrations/000048_snap_profile_locations.up.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+
+	for i, p := range [][2]float64{{-34.603722, -58.381592}, {64.146582, -21.942635}, {-89.9999, -179.9999}} {
+		var id string
+		if err := pool.QueryRow(t.Context(),
+			`INSERT INTO users (email, password_hash, provider, status)
+			 VALUES ($1, 'hash', 'local', 'active') RETURNING id`, fmt.Sprintf("snap_parity_%d@example.com", i),
+		).Scan(&id); err != nil {
+			t.Fatalf("insert user: %v", err)
+		}
+		t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, id) })
+		if _, err := pool.Exec(t.Context(),
+			`INSERT INTO profiles (user_id, display_name, latitude, longitude) VALUES ($1, 'p', $2, $3)
+			 ON CONFLICT (user_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude`, id, p[0], p[1],
+		); err != nil {
+			t.Fatalf("insert profile: %v", err)
+		}
+		if _, err := pool.Exec(t.Context(), string(migration)); err != nil {
+			t.Fatalf("run migration: %v", err)
+		}
+		var lat, lng float64
+		if err := pool.QueryRow(t.Context(), `SELECT latitude, longitude FROM profiles WHERE user_id = $1`, id).Scan(&lat, &lng); err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if wantLat, wantLng := SnapToCell(p[0], p[1]); lat != wantLat || lng != wantLng {
+			t.Errorf("migration snapped (%v, %v) to (%v, %v), Go gives (%v, %v)", p[0], p[1], lat, lng, wantLat, wantLng)
+		}
+	}
 }

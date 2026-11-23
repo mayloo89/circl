@@ -69,8 +69,10 @@ The decisions that make this a showcase rather than a CRUD app:
   as logged-out, and legal-floor image moderation holds an upload as `pending`
   (never served) if a detector errors, retrying with backoff.
 - **Privacy is enforced server-side** — contact-info masking rewrites DMs *before
-  persistence*, public profiles are redacted for non-contacts, and presence is
-  gated to accepted contacts.
+  persistence*, public profiles are redacted for non-contacts, presence is
+  gated to accepted contacts, and profile coordinates are stored only as ~500 m
+  cell centers with browse returning coarse distance bands (repeated
+  observations can still reveal the stored cell, but nothing finer).
 - **Fully internationalized** — every user-facing string (including `aria-label`s)
   flows through next-intl in all three locales; no hardcoded copy in components.
 - **Accessibility as an invariant** — focus-trapped dialogs, keyboard-navigable

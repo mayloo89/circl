@@ -580,7 +580,8 @@
     "completeGateDesc": "Add a photo, bio, interests, and location to start discovering people.",
     "completeGateCTA": "Complete profile",
     "distanceUnder1Km": "< 1 km away",
-    "distanceKmAway": "{km} km away"
+    "distanceKmAway": "{km} km away",
+    "distanceOver100Km": "100+ km away"
   },
   "admin": {
     "title": "Admin panel",

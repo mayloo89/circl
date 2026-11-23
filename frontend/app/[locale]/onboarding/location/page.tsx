@@ -121,9 +121,11 @@ export default function OnboardingLocationPage() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const res = await fetch(
-            `https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}&limit=1`,
-          )
+          // The exact GPS fix never leaves the device: a ~1 km position is
+          // enough for a city-level label, and the server snaps it again.
+          const lat = pos.coords.latitude.toFixed(2)
+          const lon = pos.coords.longitude.toFixed(2)
+          const res = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}&limit=1`)
           if (res.ok) {
             const data = await res.json()
             const f: PhotonFeature = data.features?.[0]

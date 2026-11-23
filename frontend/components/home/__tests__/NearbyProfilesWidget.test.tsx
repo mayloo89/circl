@@ -26,14 +26,14 @@ function profile(overrides: Record<string, unknown> = {}) {
     username: "bea",
     display_name: "Bea",
     avatar_url: "",
-    distance_km: 2.4,
+    distance_km: 2,
     location_text: "Palermo",
     ...overrides,
   }
 }
 
 describe("NearbyProfilesWidget", () => {
-  it("renders nearby profiles with rounded distance, linking to their pages", async () => {
+  it("renders nearby profiles with their distance band, linking to their pages", async () => {
     server.use(
       http.get(`${API}/profiles/browse`, () =>
         HttpResponse.json({ profiles: [profile()] }),
@@ -58,11 +58,21 @@ describe("NearbyProfilesWidget", () => {
   it("shows the sub-kilometre label for very close profiles", async () => {
     server.use(
       http.get(`${API}/profiles/browse`, () =>
-        HttpResponse.json({ profiles: [profile({ distance_km: 0.3 })] }),
+        HttpResponse.json({ profiles: [profile({ distance_km: 0 })] }),
       ),
     )
     renderWithIntl(<NearbyProfilesWidget />)
     expect(await screen.findByText("< 1 km")).toBeInTheDocument()
+  })
+
+  it("shows the open-ended label for the farthest band", async () => {
+    server.use(
+      http.get(`${API}/profiles/browse`, () =>
+        HttpResponse.json({ profiles: [profile({ distance_km: 100 })] }),
+      ),
+    )
+    renderWithIntl(<NearbyProfilesWidget />)
+    expect(await screen.findByText("100+ km")).toBeInTheDocument()
   })
 
   it("shows the empty state with a set-location link", async () => {
