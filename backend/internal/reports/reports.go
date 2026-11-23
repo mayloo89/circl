@@ -153,6 +153,9 @@ type Store interface {
 	// critical first, then high, then normal, and newest-first within each
 	// priority bucket so admin sees the worst items at the top of the table.
 	List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo, error)
+	// ReportedAccountGone reports whether the reported account was purged or
+	// hard-deleted. Returns ErrNotFound when the report does not exist.
+	ReportedAccountGone(ctx context.Context, id string) (bool, error)
 	// UpdateStatus updates a report's status and records who reviewed it.
 	// Dismissing a report purges its message copy.
 	UpdateStatus(ctx context.Context, id, status, reviewedBy string) (*Report, error)
@@ -195,6 +198,12 @@ func (s *Service) Create(ctx context.Context, reporterID string, target Target, 
 // GetByID retrieves a report by ID.
 func (s *Service) GetByID(ctx context.Context, id string) (*Report, error) {
 	return s.store.GetByID(ctx, id)
+}
+
+// ReportedAccountGone reports whether the reported account was purged or
+// hard-deleted, so no moderation action can apply to it.
+func (s *Service) ReportedAccountGone(ctx context.Context, id string) (bool, error) {
+	return s.store.ReportedAccountGone(ctx, id)
 }
 
 // List returns reports matching the given filter.

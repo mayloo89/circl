@@ -68,6 +68,7 @@ type mockHandlerStore struct {
 	updateErr   error
 	getByIDErr  error
 	updated     bool
+	accountGone bool
 }
 
 func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
@@ -76,6 +77,10 @@ func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _, _ string) (*rep
 
 func (m *mockHandlerStore) CreateForMessage(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
 	return m.report, m.createErr
+}
+
+func (m *mockHandlerStore) ReportedAccountGone(_ context.Context, _ string) (bool, error) {
+	return m.accountGone, m.getByIDErr
 }
 
 func (m *mockHandlerStore) GetByID(_ context.Context, _ string) (*reports.Report, error) {
@@ -797,7 +802,7 @@ func TestCreateReport_ErrorMapping(t *testing.T) {
 }
 
 func TestUpdateReportStatus_ActionOnDeletedAccountIsRejectedBeforeStatusChange(t *testing.T) {
-	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", Status: "pending"}}
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", Status: "pending"}, accountGone: true}
 	mod := &mockModerator{}
 	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
 

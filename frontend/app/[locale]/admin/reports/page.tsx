@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import Button from "@/components/ui/Button"
 import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
@@ -86,7 +86,8 @@ function ReportedMessageSnapshot({ message }: { message: ReportedMessage }) {
   )
 }
 
-// Modal for reviewing a report with optional moderation action
+// Modal for reviewing a report with optional moderation action. Resolved
+// reports open read-only so their retained evidence stays inspectable.
 function ReviewModal({
   report,
   token,
@@ -99,6 +100,8 @@ function ReviewModal({
   onClose: () => void
 }) {
   const t = useTranslations("admin")
+  const titleId = useId()
+  const readOnly = report.status !== "pending"
   const reasonLabels: Record<string, string> = {
     harassment: t("reasonHarassment"),
     spam: t("reasonSpam"),
@@ -146,12 +149,14 @@ function ReviewModal({
   }
 
   return (
-    <Modal open onClose={onClose}>
+    <Modal open onClose={onClose} labelledBy={titleId}>
       <div
         className="mx-4 max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-lg bg-gray-900 p-6 ring-1 ring-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-foreground">{t("reviewTitle")}</h2>
+        <h2 id={titleId} className="text-base font-semibold text-foreground">
+          {readOnly ? t("viewReportTitle") : t("reviewTitle")}
+        </h2>
 
         <div className="rounded bg-gray-800 p-4 space-y-1 text-sm">
           <p className="text-gray-400">
@@ -182,81 +187,87 @@ function ReviewModal({
 
         {report.message && <ReportedMessageSnapshot message={report.message} />}
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {!readOnly && (
+          <>
+            {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <div>
-          <label className="block text-xs text-gray-400 mb-2">{t("reviewResolution")}</label>
-          <div className="flex gap-3">
-            {(["reviewed", "dismissed"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setNewStatus(s)}
-                className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
-                  newStatus === s
-                    ? "bg-brand-primary text-foreground"
-                    : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                }`}
-              >
-                {s === "reviewed" ? t("reviewMarkReviewed") : t("reviewDismiss")}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {newStatus === "reviewed" && report.reported_account_gone && (
-          <p className="text-sm text-gray-400">{t("reportAccountGoneNoAction")}</p>
-        )}
-
-        {newStatus === "reviewed" && !report.reported_account_gone && (
-          <div>
-            <label className="block text-xs text-gray-400 mb-2">{t("reviewModAction")}</label>
-            <div className="flex gap-3 mb-3">
-              {(["", "suspend", "ban"] as const).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAction(a)}
-                  className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
-                    action === a
-                      ? "bg-brand-primary text-foreground"
-                      : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                  }`}
-                >
-                  {a === "" ? t("reviewActionNone") : a === "suspend" ? t("reviewActionSuspend") : t("reviewActionBan")}
-                </button>
-              ))}
+            <div>
+              <label className="block text-xs text-gray-400 mb-2">{t("reviewResolution")}</label>
+              <div className="flex gap-3">
+                {(["reviewed", "dismissed"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setNewStatus(s)}
+                    className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
+                      newStatus === s
+                        ? "bg-brand-primary text-foreground"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    {s === "reviewed" ? t("reviewMarkReviewed") : t("reviewDismiss")}
+                  </button>
+                ))}
+              </div>
             </div>
-            {action === "suspend" && (
-              <div className="space-y-2">
-                <input
-                  type="number"
-                  min="0"
-                  value={days}
-                  onChange={(e) => setDays(e.target.value)}
-                  className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none"
-                  placeholder={t("reviewDurationPlaceholder")}
-                />
-                <input
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none"
-                  placeholder={t("reviewReasonPlaceholder")}
-                />
+
+            {newStatus === "reviewed" && report.reported_account_gone && (
+              <p className="text-sm text-gray-400">{t("reportAccountGoneNoAction")}</p>
+            )}
+
+            {newStatus === "reviewed" && !report.reported_account_gone && (
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">{t("reviewModAction")}</label>
+                <div className="flex gap-3 mb-3">
+                  {(["", "suspend", "ban"] as const).map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => setAction(a)}
+                      className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-hover ${
+                        action === a
+                          ? "bg-brand-primary text-foreground"
+                          : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                      }`}
+                    >
+                      {a === "" ? t("reviewActionNone") : a === "suspend" ? t("reviewActionSuspend") : t("reviewActionBan")}
+                    </button>
+                  ))}
+                </div>
+                {action === "suspend" && (
+                  <div className="space-y-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={days}
+                      onChange={(e) => setDays(e.target.value)}
+                      className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none"
+                      placeholder={t("reviewDurationPlaceholder")}
+                    />
+                    <input
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none"
+                      placeholder={t("reviewReasonPlaceholder")}
+                    />
+                  </div>
+                )}
+                {action === "ban" && (
+                  <input
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none"
+                    placeholder={t("reviewBanReasonPlaceholder")}
+                  />
+                )}
               </div>
             )}
-            {action === "ban" && (
-              <input
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full rounded bg-gray-800 px-3 py-2 text-sm text-gray-200 ring-1 ring-gray-700 focus:outline-none"
-                placeholder={t("reviewBanReasonPlaceholder")}
-              />
-            )}
-          </div>
+          </>
         )}
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose}>{t("cancel")}</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>{t("submitAction")}</Button>
+          <Button variant="secondary" onClick={onClose}>{readOnly ? t("close") : t("cancel")}</Button>
+          {!readOnly && (
+            <Button variant="primary" loading={loading} onClick={submit}>{t("submitAction")}</Button>
+          )}
         </div>
       </div>
     </Modal>
@@ -446,9 +457,13 @@ export default function AdminReportsPage() {
                     {new Date(r.created_at).toLocaleDateString(locale)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {r.status === "pending" && (
+                    {r.status === "pending" ? (
                       <Button size="sm" variant="primary" onClick={() => setReviewTarget(r)}>
                         {t("reviewReport")}
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="secondary" onClick={() => setReviewTarget(r)}>
+                        {t("viewReport")}
                       </Button>
                     )}
                   </td>

@@ -1,14 +1,15 @@
 import { describe, it, expect, vi } from "vitest"
-import { screen, fireEvent, waitFor } from "@testing-library/react"
+import { screen, fireEvent, waitFor, within } from "@testing-library/react"
 import { http, HttpResponse } from "msw"
 import { server } from "@/test/msw-server"
 import { renderWithIntl } from "@/test/renderWithIntl"
 
 const API = "http://localhost:8080"
 
-vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { accessToken: "tok", user: { id: "admin" } }, status: "authenticated" }),
-}))
+// One object for every render, like a resolved session: a fresh object per
+// call would restart the page's fetch effect after each response.
+const session = vi.hoisted(() => ({ data: { accessToken: "tok", user: { id: "admin" } }, status: "authenticated" }))
+vi.mock("next-auth/react", () => ({ useSession: () => session }))
 vi.mock("@/i18n/navigation", () => ({
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={`/en${href}`} {...rest}>
@@ -37,6 +38,8 @@ function report(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+const REVIEW_TITLE = "Review report"
 
 const MESSAGE = { id: "m1", room_id: "r1", type: "text", content: "the reported words", sent_at: "2026-11-01T11:59:00Z" }
 
@@ -101,5 +104,31 @@ describe("AdminReportsPage evidence", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Review" }))
     fireEvent.click(await screen.findByRole("button", { name: "Submit" }))
     await waitFor(() => expect(screen.getByText(/no moderation action can be applied/i)).toBeInTheDocument())
+  })
+
+  it("names the review dialog after its heading", async () => {
+    seed([report()])
+    renderWithIntl(<AdminReportsPage />)
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }))
+    expect(await screen.findByRole("dialog", { name: REVIEW_TITLE })).toBeInTheDocument()
+  })
+
+  it("opens resolved reports read-only so retained evidence stays visible", async () => {
+    seed([report({ status: "reviewed", message: MESSAGE })])
+    renderWithIntl(<AdminReportsPage />)
+    fireEvent.click(await screen.findByRole("button", { name: "View" }))
+    const dialog = await screen.findByRole("dialog", { name: "Report details" })
+    expect(within(dialog).getByText("the reported words")).toBeInTheDocument()
+    expect(within(dialog).queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole("button", { name: "Ban" })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }))
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("shows the purge notice on dismissed reports", async () => {
+    seed([report({ status: "dismissed", message: { ...MESSAGE, content: null, purged_at: "2026-11-02T00:00:00Z" } })])
+    renderWithIntl(<AdminReportsPage />)
+    fireEvent.click(await screen.findByRole("button", { name: "View" }))
+    expect(await screen.findByText(/message copy was deleted/i)).toBeInTheDocument()
   })
 })

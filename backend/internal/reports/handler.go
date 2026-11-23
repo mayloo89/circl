@@ -182,7 +182,7 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 	// Check the target before changing status so a failed action never leaves
 	// a report marked reviewed with nothing done.
 	if req.Action != "" {
-		existing, err := m.svc.GetByID(r.Context(), reportID)
+		gone, err := m.svc.ReportedAccountGone(r.Context(), reportID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "report not found")
@@ -191,7 +191,7 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 			return
 		}
-		if existing.ReportedUserID == nil {
+		if gone {
 			apierror.Write(w, http.StatusConflict, apierror.CodeReportedAccountGone, ErrReportedUserGone.Error())
 			return
 		}

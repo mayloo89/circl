@@ -2044,7 +2044,7 @@ paths:
         Dismissing a report purges its message copy. An optional `action`
         suspends or bans the reported account; it is rejected with
         `reported_account_gone` (409) before the status changes when that
-        account no longer exists.
+        account was hard-deleted or purged.
       parameters:
         - in: path
           name: id

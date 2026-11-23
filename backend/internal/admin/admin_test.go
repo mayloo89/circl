@@ -564,3 +564,15 @@ func TestService_SetUserRole_Error(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestService_ModerationRefusesPurgedAccounts(t *testing.T) {
+	store := &mockStore{user: &admin.UserRecord{ID: "u-1", Status: "purged"}, suspension: &admin.Suspension{ID: "s-1"}}
+	svc := admin.NewService(store)
+
+	if err := svc.SuspendUser(t.Context(), "u-1", "spam", 7, "admin-1"); !errors.Is(err, admin.ErrUserPurged) {
+		t.Errorf("SuspendUser() error = %v, want ErrUserPurged", err)
+	}
+	if err := svc.BanUser(t.Context(), "u-1", "spam", "admin-1"); !errors.Is(err, admin.ErrUserPurged) {
+		t.Errorf("BanUser() error = %v, want ErrUserPurged", err)
+	}
+}

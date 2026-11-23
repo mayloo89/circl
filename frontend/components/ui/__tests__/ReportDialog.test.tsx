@@ -52,6 +52,7 @@ describe("ReportDialog", () => {
 
   it("uses message copy when reporting a message", () => {
     renderWithIntl(<ReportDialog {...baseProps} target="message" />)
+    expect(screen.getByRole("dialog", { name: "Report message" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Report message" })).toBeInTheDocument()
     expect(screen.getByText(/sender is not notified/i)).toBeInTheDocument()
   })

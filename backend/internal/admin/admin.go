@@ -13,6 +13,9 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 	// ErrAlreadySuspended is returned when the user is already suspended or banned.
 	ErrAlreadySuspended = errors.New("user already suspended or banned")
+	// ErrUserPurged is returned when a moderation action targets an account
+	// that was purged. Its users row survives only as an anonymized tombstone.
+	ErrUserPurged = errors.New("user account was purged")
 	// ErrChannelNotFound is returned when the target channel does not exist.
 	ErrChannelNotFound = errors.New("channel not found")
 	// ErrChannelNameTaken is returned when a channel with the same name already exists.
@@ -153,6 +156,9 @@ func (s *Service) SuspendUser(ctx context.Context, userID, reason string, durati
 	if err != nil {
 		return err
 	}
+	if u.Status == "purged" {
+		return ErrUserPurged
+	}
 	if u.Status == "banned" || u.Status == "suspended" {
 		return ErrAlreadySuspended
 	}
@@ -177,6 +183,9 @@ func (s *Service) BanUser(ctx context.Context, userID, reason, adminID string) e
 	u, err := s.store.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
+	}
+	if u.Status == "purged" {
+		return ErrUserPurged
 	}
 	if err := s.store.SetUserStatus(ctx, userID, "banned"); err != nil {
 		return err

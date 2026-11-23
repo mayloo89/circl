@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -16,6 +16,10 @@ export function useMessageReport(token: string | undefined) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [sent, setSent] = useState(false)
+  // Escape and backdrop clicks still reach cancel() while a request is in
+  // flight; locking the target keeps that response from landing on another
+  // report the user opened in the meantime.
+  const pending = useRef(false)
 
   useEffect(() => {
     if (!sent) return
@@ -24,17 +28,20 @@ export function useMessageReport(token: string | undefined) {
   }, [sent])
 
   function start(id: string) {
+    if (pending.current) return
     setError("")
     setMessageId(id)
   }
 
   function cancel() {
+    if (pending.current) return
     setMessageId(null)
     setError("")
   }
 
   async function submit(reason: string, description: string) {
-    if (!token || !messageId) return
+    if (!token || !messageId || pending.current) return
+    pending.current = true
     setLoading(true)
     setError("")
     try {
@@ -59,6 +66,7 @@ export function useMessageReport(token: string | undefined) {
     } catch {
       setError(t("failed"))
     } finally {
+      pending.current = false
       setLoading(false)
     }
   }

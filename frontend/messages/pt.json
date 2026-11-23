@@ -777,7 +777,10 @@
     "reportedMessagePurged": "A cópia da mensagem foi excluída quando esta denúncia foi descartada.",
     "reportedMessageMedia": "Mensagem de mídia ({type}). Apenas o registro da mensagem é mantido.",
     "reportAccountGoneNoAction": "Esta conta não existe mais, então nenhuma ação de moderação pode ser aplicada.",
-    "reportMessageBadge": "Mensagem"
+    "reportMessageBadge": "Mensagem",
+    "viewReport": "Ver",
+    "viewReportTitle": "Detalhes da denúncia",
+    "close": "Fechar"
   },
   "channels": {
     "title": "Canais",

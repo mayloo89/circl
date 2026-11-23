@@ -777,7 +777,10 @@
     "reportedMessagePurged": "The message copy was deleted when this report was dismissed.",
     "reportedMessageMedia": "Media message ({type}). Only the message record is kept.",
     "reportAccountGoneNoAction": "This account no longer exists, so no moderation action can be applied.",
-    "reportMessageBadge": "Message"
+    "reportMessageBadge": "Message",
+    "viewReport": "View",
+    "viewReportTitle": "Report details",
+    "close": "Close"
   },
   "channels": {
     "title": "Channels",

@@ -81,6 +81,12 @@ func TestReportEvidence_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create: %v", err)
 		}
+		if gone, err := f.store.ReportedAccountGone(t.Context(), r.ID); err != nil || gone {
+			t.Errorf("ReportedAccountGone() = %v, %v; want false for a live account", gone, err)
+		}
+		if _, err := f.store.ReportedAccountGone(t.Context(), "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrNotFound) {
+			t.Errorf("missing report: error = %v, want ErrNotFound", err)
+		}
 		if r.ReportedUserID == nil || *r.ReportedUserID != f.sender {
 			t.Errorf("reported user = %v, want the sender %s", r.ReportedUserID, f.sender)
 		}
@@ -119,6 +125,9 @@ func TestReportEvidence_Integration(t *testing.T) {
 		); err != nil {
 			t.Fatalf("anonymize: %v", err)
 		}
+		if gone, err := f.store.ReportedAccountGone(t.Context(), r.ID); err != nil || !gone {
+			t.Errorf("ReportedAccountGone() = %v, %v; want true for a purged account", gone, err)
+		}
 		got := f.listed(t, r.ID)
 		if !got.ReportedAccountGone || got.ReportedUsername != "purged_sender" || got.ReportedName != "Sender Name" ||
 			got.ReportedEmail != "purged_sender@evidence.example.com" {
@@ -137,6 +146,9 @@ func TestReportEvidence_Integration(t *testing.T) {
 		}
 		if _, err := f.pool.Exec(t.Context(), `DELETE FROM users WHERE id = $1`, f.sender); err != nil {
 			t.Fatalf("hard delete: %v", err)
+		}
+		if gone, err := f.store.ReportedAccountGone(t.Context(), r.ID); err != nil || !gone {
+			t.Errorf("ReportedAccountGone() = %v, %v; want true after a hard delete", gone, err)
 		}
 		got := f.listed(t, r.ID)
 		if got.ReportedUserID != nil || !got.ReportedAccountGone || got.ReportedUsername != "hard_sender" {

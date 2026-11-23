@@ -227,6 +227,23 @@ describe("RoomView", () => {
       expect(await within(dialog).findByRole("alert")).toHaveTextContent(text)
     })
 
+    it("keeps the dialog open while a report is in flight", async () => {
+      let release: (() => void) | null = null
+      seed(DM, [msg({ id: "h1", content: "rude" })])
+      server.use(http.post(`${API}/reports`, () => new Promise<Response>((resolve) => {
+        release = () => resolve(HttpResponse.json({ code: "internal_error" }, { status: 500 }))
+      })))
+      renderWithIntl(<RoomView roomId="r1" surface="messages" />)
+      await openReport()
+      await waitFor(() => expect(release).not.toBeNull())
+      fireEvent.keyDown(document, { key: "Escape" })
+      expect(screen.getByRole("heading", { name: "Report message" })).toBeInTheDocument()
+      release!()
+      expect(await screen.findByRole("alert")).toHaveTextContent("Could not send the report.")
+      fireEvent.keyDown(document, { key: "Escape" })
+      await waitFor(() => expect(screen.queryByRole("heading", { name: "Report message" })).not.toBeInTheDocument())
+    })
+
     it("is not offered in channels, whose messages are not stored", async () => {
       seed(CHANNEL)
       chat.value.messages = [msg({ id: "l1", content: "channel line" })]
