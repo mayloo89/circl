@@ -71,7 +71,8 @@ The decisions that make this a showcase rather than a CRUD app:
 - **Privacy is enforced server-side** — contact-info masking rewrites DMs *before
   persistence*, public profiles are redacted for non-contacts, presence is
   gated to accepted contacts, and locations are stored only as ~500 m cells and
-  shown as coarse distance bands, so nobody can be triangulated.
+  shown as coarse distance bands, so no observation pins anyone down further
+  than their cell.
 - **Fully internationalized** — every user-facing string (including `aria-label`s)
   flows through next-intl in all three locales; no hardcoded copy in components.
 - **Accessibility as an invariant** — focus-trapped dialogs, keyboard-navigable

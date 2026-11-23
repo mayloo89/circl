@@ -8,7 +8,7 @@ import (
 // cellSizeDeg is the latitude height of a location cell, about 500 m. Profiles
 // only ever store the center of the cell they fall in, so the exact position a
 // client reports is discarded on write and cannot leak from the database,
-// backups, exports, or distance arithmetic.
+// exports, backups taken after migration 000048, or distance arithmetic.
 const cellSizeDeg = 0.0045
 
 // minCosLat keeps the longitude step finite at the poles.
