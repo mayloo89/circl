@@ -81,11 +81,17 @@ func uploadHandler(ls *LocalStorage) http.HandlerFunc {
 func serveHandler(ls *LocalStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := chi.URLParam(r, "*")
-		if key == "" || strings.Contains(key, "..") {
+		if key == "" || strings.Contains(key, "..") || IsRestrictedKey(key) {
 			http.NotFound(w, r)
 			return
 		}
 		path := ls.FilePath(key)
+		// Serve regular files only: http.ServeFile would otherwise render a
+		// directory listing and let anyone enumerate every stored key.
+		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+			http.NotFound(w, r)
+			return
+		}
 		http.ServeFile(w, r, path)
 	}
 }

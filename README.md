@@ -45,7 +45,8 @@ a security and accessibility posture held to production standards.
   a nickname (Turnstile-gated), with in-room admin moderation (kick / mute) — the
   top-of-funnel that avoids the cold-start problem.
 - **Trust & safety** — blocking, user and per-message reporting with
-  auto-suspension and evidence that survives deletion, a full admin
+  auto-suspension and evidence that survives deletion (including copies of
+  reported media, kept in never-served storage on a retention schedule), a full admin
   moderation panel, an appeals flow, a fail-closed image-moderation pipeline
   (ready for a CSAM/NCII vendor to be plugged in), DM contact-info masking between
   non-contacts, message-retention sweeps, and GDPR-style data export.

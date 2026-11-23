@@ -31,6 +31,7 @@ import (
 	"github.com/mayloo89/circl/backend/internal/contacts"
 	"github.com/mayloo89/circl/backend/internal/db"
 	"github.com/mayloo89/circl/backend/internal/email"
+	"github.com/mayloo89/circl/backend/internal/evidence"
 	"github.com/mayloo89/circl/backend/internal/exports"
 	"github.com/mayloo89/circl/backend/internal/guest"
 	"github.com/mayloo89/circl/backend/internal/logger"
@@ -227,13 +228,6 @@ func main() {
 		log:         log,
 	})
 
-	reportMgr := reports.NewManager(reportSvc,
-		reports.WithModerator(reportModerator{svc: adminSvc}),
-		reports.WithLimiter(limiter),
-		reports.WithLogger(log),
-	)
-	reportsHandler := reports.NewHandler(reportMgr)
-
 	pushStore := push.NewStore(pool)
 	pushSvc := push.NewService(pushStore,
 		config.EnvOrDefault("VAPID_PUBLIC_KEY", ""),
@@ -321,6 +315,22 @@ func main() {
 	default:
 		log.Fatal().Str("provider", storageProvider).Msg("unknown storage provider")
 	}
+
+	// Reports keep copies of reported media under the never-served evidence/
+	// prefix; the daily maintenance loop below discards them on schedule.
+	evidenceSvc := evidence.NewService(evidence.Config{
+		Store:         evidence.NewStore(pool),
+		Storage:       fileStorage,
+		URLPrefix:     fileStorage.PublicURL(""),
+		RetentionDays: config.EnvIntOrDefault("REPORT_EVIDENCE_RETENTION_DAYS", evidence.DefaultRetentionDays),
+	})
+	reportMgr := reports.NewManager(reportSvc,
+		reports.WithModerator(reportModerator{svc: adminSvc}),
+		reports.WithLimiter(limiter),
+		reports.WithLogger(log),
+		reports.WithEvidence(evidenceSvc, evidence.NewAdminHandler(evidenceSvc)),
+	)
+	reportsHandler := reports.NewHandler(reportMgr)
 
 	// Now that fileStorage is set, lock down which URL prefix avatar/photo uploads must have.
 	profileSvc.SetStoragePublicURL(fileStorage.PublicURL(""))
@@ -542,7 +552,7 @@ func main() {
 				UserID:    userID,
 			})
 		},
-		StoragePrefix:   "exports/",
+		StoragePrefix:   storage.ExportPrefix,
 		DownloadURLBase: apiPublicURL + "/account/export",
 		Log:             log,
 	})
@@ -584,9 +594,11 @@ func main() {
 		defer ticker.Stop()
 		worker.PurgeDeletedAccounts(appCtx, log, authStore, fileStorage)
 		worker.PurgeExpiredModerationFiles(appCtx, log, uploadStore, fileStorage, moderationRetentionDays)
+		worker.SweepReportEvidence(appCtx, log, evidenceSvc)
 		for range ticker.C {
 			worker.PurgeDeletedAccounts(appCtx, log, authStore, fileStorage)
 			worker.PurgeExpiredModerationFiles(appCtx, log, uploadStore, fileStorage, moderationRetentionDays)
+			worker.SweepReportEvidence(appCtx, log, evidenceSvc)
 		}
 	}()
 

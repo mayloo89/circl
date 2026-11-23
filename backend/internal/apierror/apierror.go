@@ -83,6 +83,7 @@ const (
 	CodeAlreadyReported     = "already_reported"
 	CodeReportedAccountGone = "reported_account_gone"
 	CodeAlreadyModerated    = "already_moderated"
+	CodeEvidenceRestricted  = "evidence_restricted"
 
 	// Image moderation
 	CodeUploadRejectedModeration = "upload_rejected_moderation"

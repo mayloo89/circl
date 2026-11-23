@@ -20,6 +20,7 @@ import (
 	"golang.org/x/image/webp"
 
 	"github.com/mayloo89/circl/backend/internal/moderation"
+	"github.com/mayloo89/circl/backend/internal/storage"
 	"github.com/mayloo89/circl/backend/internal/uploads"
 )
 
@@ -305,10 +306,9 @@ func isHardModerationFailure(m moderation.Moderator, err error) bool {
 }
 
 // quarantineKeyFor returns the restricted storage key a quarantined object is
-// preserved under. The "quarantine/" prefix is the never-served namespace the
-// serve layer and storage GC both treat as off-limits.
+// preserved under; storage.IsRestrictedKey keeps the serve layer off it.
 func quarantineKeyFor(storageKey string) string {
-	return "quarantine/" + storageKey
+	return storage.QuarantinePrefix + storageKey
 }
 
 // thumbnailKey returns the storage key for the thumbnail of storageKey.

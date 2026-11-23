@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/mayloo89/circl/backend/internal/storage"
 )
 
 // MediaStorage is the subset of the storage interface the export builder
@@ -51,7 +53,7 @@ type Config struct {
 	Storage         MediaStorage
 	Mailer          Mailer
 	Enqueue         Enqueuer
-	StoragePrefix   string // e.g. "exports/" — zip files are written here
+	StoragePrefix   string // defaults to storage.ExportPrefix, which is never served by URL
 	DownloadURLBase string // e.g. "https://api.circl.app/account/export" — token is appended
 	Log             zerolog.Logger
 }
@@ -60,7 +62,7 @@ type Config struct {
 func NewService(cfg Config) *Service {
 	prefix := cfg.StoragePrefix
 	if prefix == "" {
-		prefix = "exports/"
+		prefix = storage.ExportPrefix
 	}
 	return &Service{
 		store:           cfg.Store,

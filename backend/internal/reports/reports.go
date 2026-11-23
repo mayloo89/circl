@@ -15,6 +15,12 @@ type AdminModerator interface {
 	BanUser(ctx context.Context, userID, reason, adminID string) error
 }
 
+// EvidenceKeeper preserves a report's media and discards it.
+type EvidenceKeeper interface {
+	Preserve(ctx context.Context, r *Report) error
+	Discard(ctx context.Context, reportID string) error
+}
+
 // RateLimiter enforces call-rate limits keyed by an arbitrary string.
 type RateLimiter interface {
 	// Allow returns true if the action is within the allowed rate.

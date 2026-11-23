@@ -17,10 +17,20 @@ import (
 
 // Manager wraps the service with HTTP handlers.
 type Manager struct {
-	svc       *Service
-	moderator AdminModerator
-	limiter   RateLimiter
-	log       zerolog.Logger
+	svc             *Service
+	moderator       AdminModerator
+	limiter         RateLimiter
+	evidence        EvidenceKeeper
+	evidenceHandler http.Handler
+	log             zerolog.Logger
+}
+
+// WithEvidence preserves reported media when a report is filed and discards it
+// when the report is dismissed. h serves the copies to admins at
+// /reports/{id}/evidence; the caller supplies both so this package does not
+// import evidence.
+func WithEvidence(k EvidenceKeeper, h http.Handler) func(*Manager) {
+	return func(mgr *Manager) { mgr.evidence, mgr.evidenceHandler = k, h }
 }
 
 // WithModerator sets the admin moderator on the Manager.
@@ -58,6 +68,9 @@ func NewHandler(m *Manager) http.Handler {
 		r.Use(middleware.RequireAdmin)
 		r.Get("/", m.ListReports)
 		r.Put("/{id}/status", m.UpdateReportStatus)
+		if m.evidenceHandler != nil {
+			r.Mount("/{id}/evidence", m.evidenceHandler)
+		}
 	})
 	return r
 }
@@ -117,6 +130,15 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		}
 		return
+	}
+
+	// The report stands even if a copy fails: losing the report would be worse
+	// than losing one attachment, and the failure is logged for follow-up. The
+	// copy outlives a client disconnect, which would otherwise cut it short.
+	if m.evidence != nil {
+		if err := m.evidence.Preserve(context.WithoutCancel(r.Context()), report); err != nil {
+			m.log.Error().Err(err).Str("report_id", report.ID).Msg("preserve report evidence failed")
+		}
 	}
 
 	apierror.WriteJSON(w, http.StatusCreated, report)
@@ -224,6 +246,14 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		}
 		return
+	}
+
+	// A dismissal frees the evidence right away; if this fails the retention
+	// sweep picks the report up again.
+	if report.Status == StatusDismissed && m.evidence != nil {
+		if err := m.evidence.Discard(r.Context(), report.ID); err != nil {
+			m.log.Error().Err(err).Str("report_id", report.ID).Msg("discard report evidence failed")
+		}
 	}
 
 	apierror.WriteJSON(w, http.StatusOK, report)

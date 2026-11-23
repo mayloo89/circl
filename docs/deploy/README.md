@@ -57,6 +57,13 @@ from the backend's `/uploads/files/` path — no S3 / MinIO needed for a
 single-host deploy. The `LOCAL_STORAGE_BASE_URL` env var tells the backend
 the public URL the proxy serves them from.
 
+Three key prefixes are never served by URL: `quarantine/` (moderation hits
+preserved for reporting), `evidence/` (media copied into abuse reports) and
+`exports/` (data-export archives). The backend's file handler answers 404 for
+them. With `STORAGE_PROVIDER=s3`, the bucket's public-read policy must leave
+those prefixes out (grant `s3:GetObject` on an allow-list of the public
+prefixes, not on `*`), or a CDN in front of it must block them.
+
 ## Files in this folder
 
 - **`docker-compose.prod.yml`** — production compose. Pulls the published
