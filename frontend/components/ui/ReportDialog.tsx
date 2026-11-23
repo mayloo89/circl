@@ -8,6 +8,8 @@ interface ReportDialogProps {
   open: boolean
   loading?: boolean
   error?: string
+  /** What is being reported; picks the dialog copy. */
+  target?: "user" | "message"
   onSubmit: (reason: string, description: string) => void
   onCancel: () => void
 }
@@ -27,6 +29,7 @@ export default function ReportDialog({
   open,
   loading = false,
   error,
+  target = "user",
   onSubmit,
   onCancel,
 }: ReportDialogProps) {
@@ -47,9 +50,9 @@ export default function ReportDialog({
         className="w-full max-w-sm rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-foreground">{t("title")}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{target === "message" ? t("titleMessage") : t("title")}</h2>
         <p className="mt-2 text-sm text-gray-400">
-          {t("subtitle")}
+          {target === "message" ? t("subtitleMessage") : t("subtitle")}
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
@@ -82,7 +85,7 @@ export default function ReportDialog({
               placeholder={t("descriptionPlaceholder")}
             />
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={loading}>
               {tc("cancel")}

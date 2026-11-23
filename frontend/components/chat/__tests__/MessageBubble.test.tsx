@@ -142,4 +142,47 @@ describe("MessageBubble", () => {
     renderWithIntl(<MessageBubble {...baseProps} isOwn isLastSeenOwn msg={message()} />)
     expect(screen.getByText("Seen")).toBeInTheDocument()
   })
+
+  describe("message actions", () => {
+    it("offers Report message on peer messages and reports the message id", async () => {
+      const onReport = vi.fn()
+      renderWithIntl(<MessageBubble {...baseProps} msg={message()} onReport={onReport} />)
+      const trigger = screen.getByRole("button", { name: "Message actions" })
+      expect(trigger).toHaveAttribute("aria-haspopup", "menu")
+      expect(trigger).toHaveAttribute("aria-expanded", "false")
+      fireEvent.click(trigger)
+      expect(trigger).toHaveAttribute("aria-expanded", "true")
+      fireEvent.click(screen.getByRole("menuitem", { name: "Report message" }))
+      expect(onReport).toHaveBeenCalledWith("m1")
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument()
+    })
+
+    it("closes the menu on Escape", () => {
+      renderWithIntl(<MessageBubble {...baseProps} msg={message()} onReport={vi.fn()} />)
+      fireEvent.click(screen.getByRole("button", { name: "Message actions" }))
+      expect(screen.getByRole("menu")).toBeInTheDocument()
+      fireEvent.keyDown(document, { key: "Escape" })
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument()
+    })
+
+    it("closes the menu on an outside pointer press", () => {
+      renderWithIntl(<MessageBubble {...baseProps} msg={message()} onReport={vi.fn()} />)
+      fireEvent.click(screen.getByRole("button", { name: "Message actions" }))
+      fireEvent.pointerDown(document.body)
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ["own messages", { isOwn: true }],
+      ["tombstones", { isTombstone: true }],
+    ])("is absent on %s", (_, overrides) => {
+      renderWithIntl(<MessageBubble {...baseProps} {...overrides} msg={message()} onReport={vi.fn()} />)
+      expect(screen.queryByRole("button", { name: "Message actions" })).not.toBeInTheDocument()
+    })
+
+    it("is absent when the surface does not support reporting", () => {
+      renderWithIntl(<MessageBubble {...baseProps} msg={message()} />)
+      expect(screen.queryByRole("button", { name: "Message actions" })).not.toBeInTheDocument()
+    })
+  })
 })

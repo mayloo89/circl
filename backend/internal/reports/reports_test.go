@@ -10,18 +10,25 @@ import (
 
 // mockStore is a test double for reports.Store.
 type mockStore struct {
-	report       *reports.Report
-	reportList   []reports.ReportWithUserInfo
-	createErr    error
-	getErr       error
-	listErr      error
-	updateErr    error
-	lastPriority string
-	lastFilter   reports.ListFilter
+	report        *reports.Report
+	reportList    []reports.ReportWithUserInfo
+	createErr     error
+	lastMessageID string
+	getErr        error
+	listErr       error
+	updateErr     error
+	lastPriority  string
+	lastFilter    reports.ListFilter
 }
 
 func (m *mockStore) Create(_ context.Context, _, _, _, priority, _ string) (*reports.Report, error) {
 	m.lastPriority = priority
+	return m.report, m.createErr
+}
+
+func (m *mockStore) CreateForMessage(_ context.Context, _, messageID, _, priority, _ string) (*reports.Report, error) {
+	m.lastPriority = priority
+	m.lastMessageID = messageID
 	return m.report, m.createErr
 }
 
@@ -46,7 +53,7 @@ func TestService_Create_Success(t *testing.T) {
 	expected := &reports.Report{ID: "r-1"}
 	svc := newService(&mockStore{report: expected})
 
-	got, err := svc.Create(t.Context(), "u-1", "u-2", reports.ReasonHarassment, "test")
+	got, err := svc.Create(t.Context(), "u-1", reports.Target{UserID: "u-2"}, reports.ReasonHarassment, "test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,7 +65,7 @@ func TestService_Create_Success(t *testing.T) {
 func TestService_Create_SelfReport(t *testing.T) {
 	svc := newService(&mockStore{})
 
-	_, err := svc.Create(t.Context(), "u-1", "u-1", reports.ReasonHarassment, "test")
+	_, err := svc.Create(t.Context(), "u-1", reports.Target{UserID: "u-1"}, reports.ReasonHarassment, "test")
 	if !errors.Is(err, reports.ErrSelfReport) {
 		t.Errorf("expected ErrSelfReport, got: %v", err)
 	}
@@ -67,7 +74,7 @@ func TestService_Create_SelfReport(t *testing.T) {
 func TestService_Create_InvalidReason(t *testing.T) {
 	svc := newService(&mockStore{})
 
-	_, err := svc.Create(t.Context(), "u-1", "u-2", "invalid_reason", "test")
+	_, err := svc.Create(t.Context(), "u-1", reports.Target{UserID: "u-2"}, "invalid_reason", "test")
 	if !errors.Is(err, reports.ErrInvalidReason) {
 		t.Errorf("expected ErrInvalidReason, got: %v", err)
 	}
@@ -76,7 +83,7 @@ func TestService_Create_InvalidReason(t *testing.T) {
 func TestService_Create_StoreError(t *testing.T) {
 	svc := newService(&mockStore{createErr: errors.New("db error")})
 
-	_, err := svc.Create(t.Context(), "u-1", "u-2", reports.ReasonSpam, "test")
+	_, err := svc.Create(t.Context(), "u-1", reports.Target{UserID: "u-2"}, reports.ReasonSpam, "test")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -188,7 +195,7 @@ func TestService_Create_DerivesPriority(t *testing.T) {
 		t.Run(tc.reason, func(t *testing.T) {
 			store := &mockStore{report: &reports.Report{ID: "r"}}
 			svc := newService(store)
-			if _, err := svc.Create(t.Context(), "u-1", "u-2", tc.reason, ""); err != nil {
+			if _, err := svc.Create(t.Context(), "u-1", reports.Target{UserID: "u-2"}, tc.reason, ""); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if store.lastPriority != tc.priority {
@@ -250,5 +257,38 @@ func TestService_UpdateStatus_StoreError(t *testing.T) {
 	_, err := svc.UpdateStatus(t.Context(), "r-1", reports.StatusReviewed, "u-admin")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- Message targets ---
+
+func TestCreate_MessageTargetRoutesToCreateForMessage(t *testing.T) {
+	store := &mockStore{report: &reports.Report{ID: "r-1"}}
+	svc := newService(store)
+
+	if _, err := svc.Create(t.Context(), "u-1", reports.Target{MessageID: "m-1"}, reports.ReasonCSAM, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.lastMessageID != "m-1" {
+		t.Errorf("CreateForMessage got message %q, want m-1", store.lastMessageID)
+	}
+	if store.lastPriority != reports.PriorityCritical {
+		t.Errorf("priority = %q, want critical", store.lastPriority)
+	}
+}
+
+func TestCreate_RequiresExactlyOneTarget(t *testing.T) {
+	svc := newService(&mockStore{})
+	for _, target := range []reports.Target{{}, {UserID: "u-2", MessageID: "m-1"}} {
+		if _, err := svc.Create(t.Context(), "u-1", target, reports.ReasonSpam, ""); !errors.Is(err, reports.ErrMissingTarget) {
+			t.Errorf("Create(%+v) error = %v, want ErrMissingTarget", target, err)
+		}
+	}
+}
+
+func TestCreate_MessageTargetValidatesReason(t *testing.T) {
+	svc := newService(&mockStore{})
+	if _, err := svc.Create(t.Context(), "u-1", reports.Target{MessageID: "m-1"}, "bogus", ""); !errors.Is(err, reports.ErrInvalidReason) {
+		t.Errorf("error = %v, want ErrInvalidReason", err)
 	}
 }

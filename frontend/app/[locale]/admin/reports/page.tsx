@@ -4,19 +4,34 @@ import { useSession } from "next-auth/react"
 import { useLocale, useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 import Button from "@/components/ui/Button"
+import Modal from "@/components/ui/Modal"
 import Skeleton from "@/components/ui/Skeleton"
 import { Link } from "@/i18n/navigation"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
+interface ReportedMessage {
+  id: string
+  room_id: string
+  type: string
+  /** Null once a dismissal purged the copy. */
+  content: string | null
+  sent_at: string
+  purged_at?: string
+}
+
 interface Report {
   id: string
-  reporter_id: string
-  reported_user_id: string
+  /** Null when the account was hard-deleted after the report was filed. */
+  reporter_id: string | null
+  reported_user_id: string | null
   reported_email: string
   reported_name: string
   reported_username: string
   reported_avatar: string
+  /** Identity fields then come from the snapshot taken at report time. */
+  reported_account_gone: boolean
+  message?: ReportedMessage
   reason: string
   priority: string
   description: string
@@ -39,6 +54,36 @@ const PRIORITY_BADGE: Record<string, string> = {
   critical: "bg-rose-900 text-rose-200 ring-1 ring-rose-700",
   high: "bg-amber-900 text-amber-200",
   normal: "bg-gray-800 text-gray-400",
+}
+
+function AccountDeletedBadge() {
+  const t = useTranslations("admin")
+  return (
+    <span className="ml-2 inline-flex rounded-full bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-400 ring-1 ring-gray-700">
+      {t("reportAccountDeleted")}
+    </span>
+  )
+}
+
+function ReportedMessageSnapshot({ message }: { message: ReportedMessage }) {
+  const t = useTranslations("admin")
+  const locale = useLocale()
+  const sentAt = new Date(message.sent_at).toLocaleString(locale)
+  return (
+    <figure className="rounded border border-gray-700 bg-gray-950 p-3">
+      <figcaption className="mb-1 flex flex-wrap items-baseline justify-between gap-2 text-xs text-gray-500">
+        <span className="font-medium text-gray-300">{t("reportedMessageLabel")}</span>
+        <time dateTime={message.sent_at}>{t("reportedMessageSentAt", { date: sentAt })}</time>
+      </figcaption>
+      {message.content === null ? (
+        <p className="text-sm italic text-gray-500">{t("reportedMessagePurged")}</p>
+      ) : message.type === "text" ? (
+        <blockquote className="whitespace-pre-wrap break-words text-sm text-gray-100">{message.content}</blockquote>
+      ) : (
+        <p className="text-sm italic text-gray-400">{t("reportedMessageMedia", { type: message.type })}</p>
+      )}
+    </figure>
+  )
 }
 
 // Modal for reviewing a report with optional moderation action
@@ -90,8 +135,8 @@ function ReviewModal({
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const text = await res.text()
-        setError(text.trim() || t("updateReportFailed"))
+        const data: { code?: string } = await res.json().catch(() => ({}))
+        setError(data.code === "reported_account_gone" ? t("reportAccountGoneNoAction") : t("updateReportFailed"))
         return
       }
       onDone()
@@ -101,14 +146,17 @@ function ReviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80">
-      <div className="w-full max-w-lg rounded-lg bg-gray-900 ring-1 ring-gray-700 p-6 space-y-4">
+    <Modal open onClose={onClose}>
+      <div
+        className="mx-4 max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-lg bg-gray-900 p-6 ring-1 ring-gray-700"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-base font-semibold text-foreground">{t("reviewTitle")}</h2>
 
         <div className="rounded bg-gray-800 p-4 space-y-1 text-sm">
           <p className="text-gray-400">
             <span className="text-gray-200 font-medium">{t("reportedUserLabel")}:</span>{" "}
-            {report.reported_username ? (
+            {report.reported_username && !report.reported_account_gone ? (
               <Link
                 href={`/profile/${report.reported_username}`}
                 target="_blank"
@@ -120,6 +168,7 @@ function ReviewModal({
             ) : (
               <span>{report.reported_name || report.reported_email}</span>
             )}
+            {report.reported_account_gone && <AccountDeletedBadge />}
           </p>
           <p className="text-gray-400">
             <span className="text-gray-200 font-medium">{t("reportReasonLabel")}:</span> {reasonLabels[report.reason] ?? report.reason}
@@ -130,6 +179,8 @@ function ReviewModal({
             </p>
           )}
         </div>
+
+        {report.message && <ReportedMessageSnapshot message={report.message} />}
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
@@ -152,7 +203,11 @@ function ReviewModal({
           </div>
         </div>
 
-        {newStatus === "reviewed" && (
+        {newStatus === "reviewed" && report.reported_account_gone && (
+          <p className="text-sm text-gray-400">{t("reportAccountGoneNoAction")}</p>
+        )}
+
+        {newStatus === "reviewed" && !report.reported_account_gone && (
           <div>
             <label className="block text-xs text-gray-400 mb-2">{t("reviewModAction")}</label>
             <div className="flex gap-3 mb-3">
@@ -204,7 +259,7 @@ function ReviewModal({
           <Button variant="primary" loading={loading} onClick={submit}>{t("submitAction")}</Button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -356,7 +411,7 @@ export default function AdminReportsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {r.reported_username ? (
+                    {r.reported_username && !r.reported_account_gone ? (
                       <Link
                         href={`/profile/${r.reported_username}`}
                         className="text-gray-100 font-medium hover:text-brand-muted transition-colors"
@@ -364,12 +419,20 @@ export default function AdminReportsPage() {
                         {r.reported_name || r.reported_username}
                       </Link>
                     ) : (
-                      <p className="text-gray-100 font-medium">{r.reported_name || "—"}</p>
+                      <p className="text-gray-100 font-medium">
+                        {r.reported_name || "—"}
+                        {r.reported_account_gone && <AccountDeletedBadge />}
+                      </p>
                     )}
                     <p className="text-xs text-gray-500">{r.reported_email}</p>
                   </td>
                   <td className="hidden md:table-cell px-4 py-3 text-gray-300">
                     {reasonLabels[r.reason] ?? r.reason}
+                    {r.message && (
+                      <span className="ml-2 inline-flex rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
+                        {t("reportMessageBadge")}
+                      </span>
+                    )}
                     {r.description && (
                       <p className="text-xs text-gray-500 truncate max-w-xs">{r.description}</p>
                     )}

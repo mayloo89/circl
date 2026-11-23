@@ -78,6 +78,11 @@ const (
 	CodeExportAlreadyPending = "export_already_pending"
 	CodeExportNotReady       = "export_not_ready"
 
+	// Reports
+	CodeMessageNotFound     = "message_not_found"
+	CodeAlreadyReported     = "already_reported"
+	CodeReportedAccountGone = "reported_account_gone"
+
 	// Image moderation
 	CodeUploadRejectedModeration = "upload_rejected_moderation"
 	// CodeUploadNotApproved signals a transient state: the upload has not yet

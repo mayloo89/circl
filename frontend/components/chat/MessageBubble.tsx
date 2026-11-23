@@ -8,6 +8,7 @@ import type { AnyMessage } from "@/types/chat"
 import { expiryCountdown, expiryColorClass, type ExpiryCountdown } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
 import AlbumShareBubble from "@/components/chat/AlbumShareBubble"
+import MessageActionsMenu from "@/components/chat/MessageActionsMenu"
 
 // Sentinel emitted by the backend redact package in place of contact info.
 // Kept in sync with backend/internal/redact.RedactionToken.
@@ -40,6 +41,8 @@ interface MessageBubbleProps {
   now: number
   onViewOnce: (id: string) => void
   onOpenMedia: (url: string, type: string) => void
+  /** Present only on surfaces whose messages are persisted server-side. */
+  onReport?: (id: string) => void
 }
 
 export default function MessageBubble({
@@ -54,6 +57,7 @@ export default function MessageBubble({
   now,
   onViewOnce,
   onOpenMedia,
+  onReport,
 }: MessageBubbleProps) {
   const t = useTranslations("chatRoom")
   const avatarUrl = "sender_avatar_url" in msg ? msg.sender_avatar_url : ""
@@ -249,6 +253,9 @@ export default function MessageBubble({
               <span className="text-xs text-gray-600">
                 {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
+              {!isOwn && onReport && (
+                <MessageActionsMenu align="start" onReport={() => onReport(msg.id)} />
+              )}
               {isOwn && (
                 <svg className="h-3.5 w-3.5 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6" />

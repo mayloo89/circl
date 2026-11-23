@@ -9,11 +9,13 @@ import { useNotificationsContext } from "@/contexts/NotificationsContext"
 import { useChat, type SendOpts } from "@/hooks/useChat"
 import { usePresence, formatLastSeen } from "@/hooks/usePresence"
 import { useUpload } from "@/hooks/useUpload"
+import { useMessageReport } from "@/hooks/useMessageReport"
 import UploadRejectionModal from "@/components/upload/UploadRejectionModal"
 import type { AnyMessage, EphemeralMode, HistoryMessage } from "@/types/chat"
 import { sameCalendarDay, formatDaySeparator, isFirstInGroup, isLastInGroup } from "@/lib/chatHelpers"
 import Avatar from "@/components/ui/Avatar"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
+import ReportDialog from "@/components/ui/ReportDialog"
 import PresenceDot from "@/components/ui/PresenceDot"
 import Skeleton from "@/components/ui/Skeleton"
 import ChatInput from "@/components/chat/ChatInput"
@@ -149,6 +151,7 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
   const { messages: liveMessages, deletedIds, connected, send, sendAttachment, sendTyping, typingUsers, readReceipts, participantEvents } = useChat(roomId, token)
   const { upload, uploading, reviewing, rejection, clearRejection, pendingReview, clearPendingReview } = useUpload(token)
   const [attachPreview, setAttachPreview] = useState<string | null>(null)
+  const report = useMessageReport(token)
   const { clearChatBadge, subscribe } = useNotificationsContext()
 
   const isMultiRoom = room?.type === "group" || room?.type === "channel"
@@ -547,6 +550,23 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
         />
       )}
 
+      <ReportDialog
+        open={report.open}
+        target="message"
+        loading={report.loading}
+        error={report.error}
+        onSubmit={report.submit}
+        onCancel={report.cancel}
+      />
+      {/* Always mounted so screen readers pick up the confirmation. */}
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-28 z-40 flex justify-center px-4">
+        {report.sent && (
+          <p className="rounded-full bg-gray-800 px-4 py-2 text-sm text-gray-100 shadow-lg ring-1 ring-gray-700">
+            {t("reportSent")}
+          </p>
+        )}
+      </div>
+
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-gray-800 bg-gray-900 px-4 py-3">
         <button aria-label={t("backToMessages")} onClick={() => requestLeave(listDestination)} className="cursor-pointer rounded p-3 text-gray-400 transition-colors hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-hover">
@@ -675,6 +695,8 @@ export default function RoomView({ roomId, surface }: RoomViewProps) {
                         now={now}
                         onViewOnce={handleViewOnce}
                         onOpenMedia={(url, type) => setMediaModal({ url, type })}
+                        // Channel messages are never persisted, so there is nothing to report.
+                        onReport={room?.type === "dm" || room?.type === "group" ? report.start : undefined}
                       />
                     </div>
                   )

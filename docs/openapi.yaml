@@ -155,15 +155,43 @@ components:
         upload_id:  { type: string, format: uuid }
         upload_url: { type: string, format: uri, description: Pre-signed PUT URL. }
 
+    ReportedMessage:
+      type: object
+      description: |
+        Copy of the reported message taken when the report was filed. It
+        outlives the original (unsend, tombstoning, retention sweep).
+      properties:
+        id:        { type: string, format: uuid }
+        room_id:   { type: string, format: uuid }
+        type:      { type: string }
+        content:
+          type: [string, "null"]
+          description: Null once a dismissal has purged the copy.
+        sent_at:   { type: string, format: date-time }
+        purged_at: { type: string, format: date-time }
+
     Report:
       type: object
+      description: |
+        Identity fields come from the live account, or from the snapshot
+        taken at report time once the account is purged or deleted
+        (`reported_account_gone`).
       properties:
         id:                { type: string, format: uuid }
-        reporter_id:       { type: string, format: uuid }
-        reported_user_id:  { type: string, format: uuid }
-        reported_email:    { type: string, format: email }
+        reporter_id:
+          type: [string, "null"]
+          format: uuid
+          description: Null if the reporter's account was hard-deleted.
+        reported_user_id:
+          type: [string, "null"]
+          format: uuid
+          description: Null if the reported account was hard-deleted.
+        reported_email:    { type: string }
         reported_name:     { type: string }
+        reported_username: { type: string }
         reported_avatar:   { type: string }
+        reported_account_gone: { type: boolean }
+        message: { $ref: "#/components/schemas/ReportedMessage" }
         reason:
           type: string
           enum:
@@ -1964,15 +1992,22 @@ paths:
         `csam` and `non_consensual_intimate_images` are routed to the critical
         queue, `digital_gender_violence` (Ley Olimpia) to the high queue,
         everything else to normal.
+
+        Send exactly one of `reported_user_id` or `message_id`. For a message
+        report the reported user is the message's sender, and the reporter
+        must be able to see the message (member of its DM or group). The
+        reported identity, and the message for message reports, are copied
+        into the report so it survives deletion of either.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [reported_user_id, reason]
+              required: [reason]
               properties:
                 reported_user_id: { type: string, format: uuid }
+                message_id:       { type: string, format: uuid }
                 reason:
                   type: string
                   enum:
@@ -1988,14 +2023,28 @@ paths:
       responses:
         "201":
           description: Report submitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: |
+            `user_not_found`, or `message_not_found` when the message does not
+            exist, was tombstoned, or is in a room the reporter cannot see.
+        "409":
+          description: '`already_reported`: the reporter already reported this message.'
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /reports/{id}/status:
     put:
       tags: [Reports]
       summary: Update report status (admin only)
+      description: |
+        Dismissing a report purges its message copy. An optional `action`
+        suspends or bans the reported account; it is rejected with
+        `reported_account_gone` (409) before the status changes when that
+        account no longer exists.
       parameters:
         - in: path
           name: id
@@ -2010,12 +2059,17 @@ paths:
               required: [status]
               properties:
                 status: { type: string, enum: [reviewed, dismissed] }
+                action: { type: string, enum: [suspend, ban] }
+                duration_days: { type: integer, description: Suspension length. }
+                reason: { type: string, description: Shown to the user for suspend/ban. }
       responses:
         "200":
           description: Status updated.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: '`reported_account_gone`: the action targets a deleted account.'
 
   # ── Appeals ───────────────────────────────────────────────────────────────────
   # The public /appeal/{token} routes are intentionally un-authenticated — the

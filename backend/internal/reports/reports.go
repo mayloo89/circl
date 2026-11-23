@@ -71,13 +71,24 @@ var (
 	ErrInvalidReason   = errors.New("invalid report reason")
 	ErrInvalidStatus   = errors.New("invalid report status")
 	ErrInvalidPriority = errors.New("invalid report priority")
+	// ErrMessageNotFound covers both a missing message and one the reporter
+	// cannot see, so the API never confirms a message exists to a non-member.
+	ErrMessageNotFound = errors.New("message not found")
+	ErrUserNotFound    = errors.New("reported user not found")
+	ErrDuplicateReport = errors.New("message already reported")
+	ErrMissingTarget   = errors.New("report needs exactly one of reported_user_id or message_id")
+	// ErrReportedUserGone is returned when an action targets an account that
+	// was hard-deleted after the report was filed.
+	ErrReportedUserGone = errors.New("reported account no longer exists")
 )
 
-// Report represents a user report.
+// Report represents a user report. ReporterID and ReportedUserID are nil only
+// when the account was hard-deleted after the report was filed.
 type Report struct {
 	ID             string     `json:"id"`
-	ReporterID     string     `json:"reporter_id"`
-	ReportedUserID string     `json:"reported_user_id"`
+	ReporterID     *string    `json:"reporter_id"`
+	ReportedUserID *string    `json:"reported_user_id"`
+	MessageID      *string    `json:"message_id,omitempty"`
 	Reason         string     `json:"reason"`
 	Priority       string     `json:"priority"`
 	Description    string     `json:"description"`
@@ -87,24 +98,38 @@ type Report struct {
 	ReviewedBy     *string    `json:"reviewed_by,omitempty"`
 }
 
-// ReportWithUserInfo includes reported user details for display. Username is
-// exposed alongside email/name so the admin UI can link directly to
-// /profile/{username} for review.
+// ReportedMessage is the copy of a reported message taken when the report was
+// filed. Content is nil once a dismissal has purged it.
+type ReportedMessage struct {
+	ID       string     `json:"id"`
+	RoomID   string     `json:"room_id"`
+	Type     string     `json:"type"`
+	Content  *string    `json:"content"`
+	SentAt   time.Time  `json:"sent_at"`
+	PurgedAt *time.Time `json:"purged_at,omitzero"`
+}
+
+// ReportWithUserInfo includes reported user details for display. Identity
+// fields prefer the live account and fall back to the snapshot taken at report
+// time, so a purged account still shows who was reported. ReportedAccountGone
+// tells the admin UI not to link to a profile that no longer exists.
 type ReportWithUserInfo struct {
-	ID               string     `json:"id"`
-	ReporterID       string     `json:"reporter_id"`
-	ReportedUserID   string     `json:"reported_user_id"`
-	ReportedEmail    string     `json:"reported_email"`
-	ReportedName     string     `json:"reported_name"`
-	ReportedUsername string     `json:"reported_username"`
-	ReportedAvatar   string     `json:"reported_avatar"`
-	Reason           string     `json:"reason"`
-	Priority         string     `json:"priority"`
-	Description      string     `json:"description"`
-	Status           string     `json:"status"`
-	CreatedAt        time.Time  `json:"created_at"`
-	ReviewedAt       *time.Time `json:"reviewed_at,omitzero"`
-	ReviewedBy       *string    `json:"reviewed_by,omitempty"`
+	ID                  string           `json:"id"`
+	ReporterID          *string          `json:"reporter_id"`
+	ReportedUserID      *string          `json:"reported_user_id"`
+	ReportedEmail       string           `json:"reported_email"`
+	ReportedName        string           `json:"reported_name"`
+	ReportedUsername    string           `json:"reported_username"`
+	ReportedAvatar      string           `json:"reported_avatar"`
+	ReportedAccountGone bool             `json:"reported_account_gone"`
+	Message             *ReportedMessage `json:"message,omitempty"`
+	Reason              string           `json:"reason"`
+	Priority            string           `json:"priority"`
+	Description         string           `json:"description"`
+	Status              string           `json:"status"`
+	CreatedAt           time.Time        `json:"created_at"`
+	ReviewedAt          *time.Time       `json:"reviewed_at,omitzero"`
+	ReviewedBy          *string          `json:"reviewed_by,omitempty"`
 }
 
 // ListFilter narrows a report list query. Zero-valued fields are ignored.
@@ -115,8 +140,13 @@ type ListFilter struct {
 
 // Store is the persistence interface required by the service.
 type Store interface {
-	// Create creates a new report with the given priority.
+	// Create files a report against a user, snapshotting their identity.
 	Create(ctx context.Context, reporterID, reportedUserID, reason, priority, description string) (*Report, error)
+	// CreateForMessage files a report against a message. The reported user is
+	// the message's sender; the message and sender identity are snapshotted.
+	// Returns ErrMessageNotFound when the message is missing, tombstoned, or in
+	// a room the reporter is not a member of.
+	CreateForMessage(ctx context.Context, reporterID, messageID, reason, priority, description string) (*Report, error)
 	// GetByID retrieves a report by ID.
 	GetByID(ctx context.Context, id string) (*Report, error)
 	// List returns reports matching the filter. Results are ordered with
@@ -124,6 +154,7 @@ type Store interface {
 	// priority bucket so admin sees the worst items at the top of the table.
 	List(ctx context.Context, f ListFilter) ([]ReportWithUserInfo, error)
 	// UpdateStatus updates a report's status and records who reviewed it.
+	// Dismissing a report purges its message copy.
 	UpdateStatus(ctx context.Context, id, status, reviewedBy string) (*Report, error)
 }
 
@@ -137,16 +168,28 @@ func NewService(store Store) *Service {
 	return &Service{store: store}
 }
 
-// Create creates a new report. Priority is derived from the reason so callers
-// can't downgrade a CSAM or NCII report to the normal queue.
-func (s *Service) Create(ctx context.Context, reporterID, reportedUserID, reason, description string) (*Report, error) {
-	if reporterID == reportedUserID {
-		return nil, ErrSelfReport
+// Target is what a report is filed against: exactly one of a user or a message.
+type Target struct {
+	UserID    string
+	MessageID string
+}
+
+// Create files a report. Priority is derived from the reason so callers can't
+// downgrade a CSAM or NCII report to the normal queue.
+func (s *Service) Create(ctx context.Context, reporterID string, target Target, reason, description string) (*Report, error) {
+	if (target.UserID == "") == (target.MessageID == "") {
+		return nil, ErrMissingTarget
 	}
 	if !isValidReason(reason) {
 		return nil, ErrInvalidReason
 	}
-	return s.store.Create(ctx, reporterID, reportedUserID, reason, PriorityFor(reason), description)
+	if target.MessageID != "" {
+		return s.store.CreateForMessage(ctx, reporterID, target.MessageID, reason, PriorityFor(reason), description)
+	}
+	if reporterID == target.UserID {
+		return nil, ErrSelfReport
+	}
+	return s.store.Create(ctx, reporterID, target.UserID, reason, PriorityFor(reason), description)
 }
 
 // GetByID retrieves a report by ID.

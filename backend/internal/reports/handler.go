@@ -82,6 +82,7 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		ReportedUserID string `json:"reported_user_id"`
+		MessageID      string `json:"message_id"`
 		Reason         string `json:"reason"`
 		Description    string `json:"description"`
 	}
@@ -90,22 +91,27 @@ func (m *Manager) CreateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.ReportedUserID == "" {
-		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "reported_user_id is required")
-		return
-	}
 	if req.Reason == "" {
 		apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "reason is required")
 		return
 	}
 
-	report, err := m.svc.Create(r.Context(), reporterID, req.ReportedUserID, req.Reason, req.Description)
+	target := Target{UserID: req.ReportedUserID, MessageID: req.MessageID}
+	report, err := m.svc.Create(r.Context(), reporterID, target, req.Reason, req.Description)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrMissingTarget):
+			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "exactly one of reported_user_id or message_id is required")
 		case errors.Is(err, ErrSelfReport):
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "cannot report yourself")
 		case errors.Is(err, ErrInvalidReason):
 			apierror.Write(w, http.StatusBadRequest, apierror.CodeInvalidRequest, "invalid reason")
+		case errors.Is(err, ErrUserNotFound):
+			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "reported user not found")
+		case errors.Is(err, ErrMessageNotFound):
+			apierror.Write(w, http.StatusNotFound, apierror.CodeMessageNotFound, "message not found")
+		case errors.Is(err, ErrDuplicateReport):
+			apierror.Write(w, http.StatusConflict, apierror.CodeAlreadyReported, "message already reported")
 		default:
 			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
 		}
@@ -173,6 +179,24 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check the target before changing status so a failed action never leaves
+	// a report marked reviewed with nothing done.
+	if req.Action != "" {
+		existing, err := m.svc.GetByID(r.Context(), reportID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				apierror.Write(w, http.StatusNotFound, apierror.CodeNotFound, "report not found")
+				return
+			}
+			apierror.Write(w, http.StatusInternalServerError, apierror.CodeInternalError, "internal server error")
+			return
+		}
+		if existing.ReportedUserID == nil {
+			apierror.Write(w, http.StatusConflict, apierror.CodeReportedAccountGone, ErrReportedUserGone.Error())
+			return
+		}
+	}
+
 	report, err := m.svc.UpdateStatus(r.Context(), reportID, req.Status, reviewerID)
 	if err != nil {
 		switch {
@@ -186,15 +210,16 @@ func (m *Manager) UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if m.moderator != nil {
+	if m.moderator != nil && report.ReportedUserID != nil {
+		target := *report.ReportedUserID
 		switch req.Action {
 		case "suspend":
-			if err := m.moderator.SuspendUser(r.Context(), report.ReportedUserID, req.Reason, req.DurationDays, reviewerID); err != nil {
-				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", report.ReportedUserID).Msg("reports: suspend user failed")
+			if err := m.moderator.SuspendUser(r.Context(), target, req.Reason, req.DurationDays, reviewerID); err != nil {
+				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", target).Msg("reports: suspend user failed")
 			}
 		case "ban":
-			if err := m.moderator.BanUser(r.Context(), report.ReportedUserID, req.Reason, reviewerID); err != nil {
-				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", report.ReportedUserID).Msg("reports: ban user failed")
+			if err := m.moderator.BanUser(r.Context(), target, req.Reason, reviewerID); err != nil {
+				zerolog.Ctx(r.Context()).Error().Err(err).Str("user_id", target).Msg("reports: ban user failed")
 			}
 		}
 	}

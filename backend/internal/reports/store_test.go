@@ -44,6 +44,8 @@ func (r *mockReportRows) Scan(dest ...any) error {
 		switch v := d.(type) {
 		case *string:
 			*v = row[i].(string)
+		case *bool:
+			*v = row[i].(bool)
 		case *time.Time:
 			if row[i] == nil {
 				var zero time.Time
@@ -88,21 +90,30 @@ func (m *mockReportQuerier) Exec(_ context.Context, _ string, _ ...any) (pgconn.
 	return m.execFn()
 }
 
-// scanReport is a helper that fills a Report via Scan dest pointers.
-func scanReport(r *Report) func(dest ...any) error {
+// fillReport fills a Report via Scan dest pointers in reportColumns order.
+func fillReport(r *Report) func(dest ...any) error {
 	return func(dest ...any) error {
 		*dest[0].(*string) = r.ID
-		*dest[1].(*string) = r.ReporterID
-		*dest[2].(*string) = r.ReportedUserID
-		*dest[3].(*string) = r.Reason
-		*dest[4].(*string) = r.Priority
-		*dest[5].(*string) = r.Description
-		*dest[6].(*string) = r.Status
-		*dest[7].(*time.Time) = r.CreatedAt
-		*dest[8].(**time.Time) = r.ReviewedAt
-		*dest[9].(**string) = r.ReviewedBy
+		*dest[1].(**string) = r.ReporterID
+		*dest[2].(**string) = r.ReportedUserID
+		*dest[3].(**string) = r.MessageID
+		*dest[4].(*string) = r.Reason
+		*dest[5].(*string) = r.Priority
+		*dest[6].(*string) = r.Description
+		*dest[7].(*string) = r.Status
+		*dest[8].(*time.Time) = r.CreatedAt
+		*dest[9].(**time.Time) = r.ReviewedAt
+		*dest[10].(**string) = r.ReviewedBy
 		return nil
 	}
+}
+
+// deref turns an optional ID into the mock row value (nil stays nil).
+func deref(p *string) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 // --- Store.Create ---
@@ -111,8 +122,8 @@ func TestStore_Create_Success(t *testing.T) {
 	now := time.Now()
 	report := &Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Reason:         "harassment",
 		Description:    "Test description",
 		Status:         "pending",
@@ -120,7 +131,7 @@ func TestStore_Create_Success(t *testing.T) {
 	}
 	q := &mockReportQuerier{
 		rowFn: func() pgx.Row {
-			return &mockReportRow{scanFn: scanReport(report)}
+			return &mockReportRow{scanFn: fillReport(report)}
 		},
 	}
 	s := &pgStore{db: q}
@@ -142,8 +153,8 @@ func TestStore_Create_WithReviewedFields(t *testing.T) {
 	reviewedBy := "admin-1"
 	report := &Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Reason:         "spam",
 		Status:         "reviewed",
 		CreatedAt:      now,
@@ -152,7 +163,7 @@ func TestStore_Create_WithReviewedFields(t *testing.T) {
 	}
 	q := &mockReportQuerier{
 		rowFn: func() pgx.Row {
-			return &mockReportRow{scanFn: scanReport(report)}
+			return &mockReportRow{scanFn: fillReport(report)}
 		},
 	}
 	s := &pgStore{db: q}
@@ -191,15 +202,15 @@ func TestStore_GetByID_Success(t *testing.T) {
 	now := time.Now()
 	report := &Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Reason:         "spam",
 		Status:         "pending",
 		CreatedAt:      now,
 	}
 	q := &mockReportQuerier{
 		rowFn: func() pgx.Row {
-			return &mockReportRow{scanFn: scanReport(report)}
+			return &mockReportRow{scanFn: fillReport(report)}
 		},
 	}
 	s := &pgStore{db: q}
@@ -250,14 +261,14 @@ func TestStore_GetByID_StoreError(t *testing.T) {
 func TestStore_List_All(t *testing.T) {
 	now := time.Now()
 	reports := []ReportWithUserInfo{
-		{ID: "r-1", ReporterID: "u-1", ReportedUserID: "u-2", ReportedEmail: "user2@test.com", ReportedName: "User 2", ReportedAvatar: "", Reason: "spam", Status: "pending", CreatedAt: now},
-		{ID: "r-2", ReporterID: "u-2", ReportedUserID: "u-3", ReportedEmail: "user3@test.com", ReportedName: "User 3", ReportedAvatar: "", Reason: "harassment", Status: "reviewed", CreatedAt: now},
+		{ID: "r-1", ReporterID: new("u-1"), ReportedUserID: new("u-2"), ReportedEmail: "user2@test.com", ReportedName: "User 2", ReportedAvatar: "", Reason: "spam", Status: "pending", CreatedAt: now},
+		{ID: "r-2", ReporterID: new("u-2"), ReportedUserID: new("u-3"), ReportedEmail: "user3@test.com", ReportedName: "User 3", ReportedAvatar: "", Reason: "harassment", Status: "reviewed", CreatedAt: now},
 	}
 	rows := &mockReportRows{
 		data: make([][]any, len(reports)),
 	}
 	for i, r := range reports {
-		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedUsername, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
+		rows.data[i] = []any{r.ID, deref(r.ReporterID), deref(r.ReportedUserID), r.ReportedEmail, r.ReportedName, r.ReportedUsername, r.ReportedAvatar, r.ReportedAccountGone, nil, nil, nil, nil, nil, nil, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
 	}
 
 	q := &mockReportQuerier{
@@ -279,11 +290,11 @@ func TestStore_List_All(t *testing.T) {
 func TestStore_List_WithStatusFilter(t *testing.T) {
 	now := time.Now()
 	reports := []ReportWithUserInfo{
-		{ID: "r-1", ReporterID: "u-1", ReportedUserID: "u-2", ReportedEmail: "user2@test.com", ReportedName: "User 2", ReportedAvatar: "", Reason: "spam", Status: "pending", CreatedAt: now},
+		{ID: "r-1", ReporterID: new("u-1"), ReportedUserID: new("u-2"), ReportedEmail: "user2@test.com", ReportedName: "User 2", ReportedAvatar: "", Reason: "spam", Status: "pending", CreatedAt: now},
 	}
 	rows := &mockReportRows{data: make([][]any, len(reports))}
 	for i, r := range reports {
-		rows.data[i] = []any{r.ID, r.ReporterID, r.ReportedUserID, r.ReportedEmail, r.ReportedName, r.ReportedUsername, r.ReportedAvatar, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
+		rows.data[i] = []any{r.ID, deref(r.ReporterID), deref(r.ReportedUserID), r.ReportedEmail, r.ReportedName, r.ReportedUsername, r.ReportedAvatar, r.ReportedAccountGone, nil, nil, nil, nil, nil, nil, r.Reason, r.Priority, r.Description, r.Status, r.CreatedAt, nil, nil}
 	}
 
 	q := &mockReportQuerier{
@@ -343,8 +354,8 @@ func TestStore_UpdateStatus_Success(t *testing.T) {
 	reviewedBy := "admin-1"
 	report := &Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Reason:         "harassment",
 		Status:         "reviewed",
 		ReviewedAt:     &reviewedAt,
@@ -353,7 +364,7 @@ func TestStore_UpdateStatus_Success(t *testing.T) {
 	}
 	q := &mockReportQuerier{
 		rowFn: func() pgx.Row {
-			return &mockReportRow{scanFn: scanReport(report)}
+			return &mockReportRow{scanFn: fillReport(report)}
 		},
 	}
 	s := &pgStore{db: q}
@@ -396,5 +407,91 @@ func TestStore_UpdateStatus_StoreError(t *testing.T) {
 	_, err := s.UpdateStatus(context.Background(), "r-1", "reviewed", "admin-1")
 	if err == nil {
 		t.Fatal("UpdateStatus() expected error")
+	}
+}
+
+// --- Evidence snapshots ---
+
+func TestClassifyCreateErr(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{"no row", pgx.ErrNoRows, ErrMessageNotFound},
+		{"self report", &pgconn.PgError{Code: "23514", ConstraintName: "no_self_report"}, ErrSelfReport},
+		{"duplicate", &pgconn.PgError{Code: "23505", ConstraintName: "idx_reports_reporter_message"}, ErrDuplicateReport},
+		{"malformed uuid", &pgconn.PgError{Code: "22P02"}, ErrMessageNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := classifyCreateErr(tc.err, ErrMessageNotFound); !errors.Is(got, tc.want) {
+				t.Errorf("classifyCreateErr(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+	other := errors.New("boom")
+	if got := classifyCreateErr(other, ErrMessageNotFound); !errors.Is(got, other) || errors.Is(got, ErrMessageNotFound) {
+		t.Errorf("unexpected classification for a generic error: %v", got)
+	}
+}
+
+func TestStore_CreateForMessage_Success(t *testing.T) {
+	report := &Report{ID: "r-1", ReporterID: new("u-1"), ReportedUserID: new("u-2"), MessageID: new("m-1"), Status: "pending"}
+	s := &pgStore{db: &mockReportQuerier{rowFn: func() pgx.Row { return &mockReportRow{scanFn: fillReport(report)} }}}
+
+	got, err := s.CreateForMessage(t.Context(), "u-1", "m-1", ReasonSpam, PriorityNormal, "")
+	if err != nil {
+		t.Fatalf("CreateForMessage() error = %v", err)
+	}
+	if got.MessageID == nil || *got.MessageID != "m-1" || *got.ReportedUserID != "u-2" {
+		t.Errorf("got %+v, want message m-1 reported against u-2", got)
+	}
+}
+
+func TestStore_CreateForMessage_NotVisible(t *testing.T) {
+	s := &pgStore{db: &mockReportQuerier{rowFn: func() pgx.Row {
+		return &mockReportRow{scanFn: func(...any) error { return pgx.ErrNoRows }}
+	}}}
+	if _, err := s.CreateForMessage(t.Context(), "u-1", "m-1", ReasonSpam, PriorityNormal, ""); !errors.Is(err, ErrMessageNotFound) {
+		t.Errorf("error = %v, want ErrMessageNotFound", err)
+	}
+}
+
+func TestStore_Create_UnknownUser(t *testing.T) {
+	s := &pgStore{db: &mockReportQuerier{rowFn: func() pgx.Row {
+		return &mockReportRow{scanFn: func(...any) error { return pgx.ErrNoRows }}
+	}}}
+	if _, err := s.Create(t.Context(), "u-1", "u-404", ReasonSpam, PriorityNormal, ""); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestStore_List_MapsMessageSnapshotAndGoneAccount(t *testing.T) {
+	sent := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	purged := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	rows := &mockReportRows{data: [][]any{
+		{"r-1", "u-1", nil, "bea@example.com", "Bea", "bea", "", true,
+			"m-1", "room-1", "text", nil, sent, purged,
+			"harassment", "normal", "", "dismissed", sent, nil, nil},
+		{"r-2", "u-1", "u-3", "cam@example.com", "Cam", "cam", "", false,
+			nil, nil, nil, nil, nil, nil,
+			"spam", "normal", "", "pending", sent, nil, nil},
+	}}
+	s := &pgStore{db: &mockReportQuerier{rowsFn: func() (pgx.Rows, error) { return rows, nil }}}
+
+	got, err := s.List(t.Context(), ListFilter{})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	first := got[0]
+	if !first.ReportedAccountGone || first.ReportedUserID != nil || first.ReportedUsername != "bea" {
+		t.Errorf("gone account not mapped from snapshot: %+v", first)
+	}
+	if m := first.Message; m == nil || m.ID != "m-1" || m.RoomID != "room-1" || m.Content != nil || m.PurgedAt == nil || !m.SentAt.Equal(sent) {
+		t.Errorf("message snapshot = %+v, want purged copy of m-1", first.Message)
+	}
+	if got[1].Message != nil {
+		t.Errorf("user-level report has message %+v, want nil", got[1].Message)
 	}
 }

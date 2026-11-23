@@ -189,4 +189,50 @@ describe("RoomView", () => {
     expect(await screen.findByText("Message expired")).toBeInTheDocument()
     expect(screen.queryByText("secret")).not.toBeInTheDocument()
   })
+
+  describe("reporting a message", () => {
+    async function openReport() {
+      fireEvent.click(await screen.findByRole("button", { name: "Message actions" }))
+      fireEvent.click(screen.getByRole("menuitem", { name: "Report message" }))
+      const dialog = (await screen.findByRole("heading", { name: "Report message" })).closest('[role="dialog"]') as HTMLElement
+      fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "harassment" } })
+      fireEvent.click(within(dialog).getByRole("button", { name: /submit/i }))
+      return dialog
+    }
+
+    it("posts the message id and confirms", async () => {
+      let body: Record<string, unknown> = {}
+      seed(DM, [msg({ id: "h1", content: "rude" })])
+      server.use(http.post(`${API}/reports`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ id: "rep1" }, { status: 201 })
+      }))
+      renderWithIntl(<RoomView roomId="r1" surface="messages" />)
+      await openReport()
+      expect(await screen.findByText("Report sent. A moderator will review it.")).toBeInTheDocument()
+      expect(body).toMatchObject({ message_id: "h1", reason: "harassment" })
+      expect(body).not.toHaveProperty("reported_user_id")
+      expect(screen.queryByRole("heading", { name: "Report message" })).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ["already_reported", 409, "You already reported this message."],
+      ["message_not_found", 404, "This message can no longer be reported."],
+      ["internal_error", 500, "Could not send the report. Please try again."],
+    ])("maps %s to a localized error", async (code, status, text) => {
+      seed(DM, [msg({ id: "h1", content: "rude" })])
+      server.use(http.post(`${API}/reports`, () => HttpResponse.json({ code, error: "x" }, { status })))
+      renderWithIntl(<RoomView roomId="r1" surface="messages" />)
+      const dialog = await openReport()
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(text)
+    })
+
+    it("is not offered in channels, whose messages are not stored", async () => {
+      seed(CHANNEL)
+      chat.value.messages = [msg({ id: "l1", content: "channel line" })]
+      renderWithIntl(<RoomView roomId="r1" surface="channels" />)
+      expect(await screen.findByText("channel line")).toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Message actions" })).not.toBeInTheDocument()
+    })
+  })
 })

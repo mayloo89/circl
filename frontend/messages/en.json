@@ -770,7 +770,14 @@
     "createPublicRoomDuplicate": "A public room with that name already exists.",
     "deletePublicRoomFailed": "Failed to delete public room",
     "adminPublicRoomNamePlaceholder": "e.g. lounge",
-    "create": "Create"
+    "create": "Create",
+    "reportAccountDeleted": "Account deleted",
+    "reportedMessageLabel": "Reported message",
+    "reportedMessageSentAt": "Sent {date}",
+    "reportedMessagePurged": "The message copy was deleted when this report was dismissed.",
+    "reportedMessageMedia": "Media message ({type}). Only the message record is kept.",
+    "reportAccountGoneNoAction": "This account no longer exists, so no moderation action can be applied.",
+    "reportMessageBadge": "Message"
   },
   "channels": {
     "title": "Channels",
@@ -939,7 +946,10 @@
     "expiryDaysLeft": "{count}d left",
     "expiryHoursLeft": "{count}h left",
     "expiryMinutesLeft": "{count}m left",
-    "expiryUnderMinute": "< 1m"
+    "expiryUnderMinute": "< 1m",
+    "messageActions": "Message actions",
+    "reportMessage": "Report message",
+    "reportSent": "Report sent. A moderator will review it."
   },
   "publicProfile": {
     "title": "Profile",
@@ -990,7 +1000,12 @@
       "digitalGenderViolence": "Digital gender violence (Ley Olimpia)",
       "csam": "Sexual content involving minors (CSAM)",
       "other": "Other"
-    }
+    },
+    "titleMessage": "Report message",
+    "subtitleMessage": "A copy of this message goes to the moderators. The sender is not notified.",
+    "alreadyReported": "You already reported this message.",
+    "messageUnavailable": "This message can no longer be reported.",
+    "failed": "Could not send the report. Please try again."
   },
   "pushPrompt": {
     "message": "Enable notifications to stay updated on messages and contacts.",
