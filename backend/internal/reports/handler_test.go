@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -67,9 +68,14 @@ type mockHandlerStore struct {
 	listErr     error
 	updateErr   error
 	getByIDErr  error
+	updated     bool
 }
 
 func (m *mockHandlerStore) Create(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
+	return m.report, m.createErr
+}
+
+func (m *mockHandlerStore) CreateForMessage(_ context.Context, _, _, _, _, _ string) (*reports.Report, error) {
 	return m.report, m.createErr
 }
 
@@ -82,6 +88,7 @@ func (m *mockHandlerStore) List(_ context.Context, _ reports.ListFilter) ([]repo
 }
 
 func (m *mockHandlerStore) UpdateStatus(_ context.Context, _, _, _ string) (*reports.Report, error) {
+	m.updated = true
 	return m.report, m.updateErr
 }
 
@@ -103,8 +110,8 @@ func TestCreateReport_Success(t *testing.T) {
 	now := time.Now()
 	report := &reports.Report{
 		ID:             "r-1",
-		ReporterID:     testUserID,
-		ReportedUserID: "u-2",
+		ReporterID:     new(testUserID),
+		ReportedUserID: new("u-2"),
 		Reason:         "harassment",
 		Description:    "User sent offensive messages",
 		Status:         "pending",
@@ -256,7 +263,7 @@ func TestCreateReport_NoUserIDInContext(t *testing.T) {
 // --- Content-Type ---
 
 func TestHandlers_ContentType(t *testing.T) {
-	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReporterID: "u-1", ReportedUserID: "u-2", Reason: "spam", Status: "pending"}}
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReporterID: new("u-1"), ReportedUserID: new("u-2"), Reason: "spam", Status: "pending"}}
 	svc := reports.NewService(store)
 	mgr := reports.NewManager(svc)
 	h := reports.NewHandler(mgr)
@@ -275,7 +282,7 @@ func TestHandlers_ContentType(t *testing.T) {
 
 func TestListReports_AdminSuccess(t *testing.T) {
 	items := []reports.ReportWithUserInfo{
-		{ID: "r-1", ReporterID: "u-1", ReportedUserID: "u-2", Reason: "spam", Status: "pending"},
+		{ID: "r-1", ReporterID: new("u-1"), ReportedUserID: new("u-2"), Reason: "spam", Status: "pending"},
 	}
 	store := &mockHandlerStore{reportsList: items}
 	svc := reports.NewService(store)
@@ -389,8 +396,8 @@ func TestListReports_InternalError(t *testing.T) {
 func TestUpdateReportStatus_AdminSuccess(t *testing.T) {
 	report := &reports.Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Status:         "reviewed",
 	}
 	store := &mockHandlerStore{report: report}
@@ -484,8 +491,8 @@ func TestUpdateReportStatus_InvalidAction(t *testing.T) {
 func TestUpdateReportStatus_SuspendAction(t *testing.T) {
 	report := &reports.Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Status:         "reviewed",
 	}
 	store := &mockHandlerStore{report: report}
@@ -512,8 +519,8 @@ func TestUpdateReportStatus_SuspendAction(t *testing.T) {
 func TestUpdateReportStatus_BanAction(t *testing.T) {
 	report := &reports.Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Status:         "reviewed",
 	}
 	store := &mockHandlerStore{report: report}
@@ -540,8 +547,8 @@ func TestUpdateReportStatus_BanAction(t *testing.T) {
 func TestUpdateReportStatus_NoModerator(t *testing.T) {
 	report := &reports.Report{
 		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
+		ReporterID:     new("u-1"),
+		ReportedUserID: new("u-2"),
 		Status:         "reviewed",
 	}
 	store := &mockHandlerStore{report: report}
@@ -584,7 +591,7 @@ func TestCreateReport_RateLimited(t *testing.T) {
 
 func TestCreateReport_LimiterError_Continues(t *testing.T) {
 	// When the limiter returns an error, the request should still be processed.
-	report := &reports.Report{ID: "r-1", ReporterID: testUserID, ReportedUserID: "u-2", Reason: "spam", Status: "pending"}
+	report := &reports.Report{ID: "r-1", ReporterID: new(testUserID), ReportedUserID: new("u-2"), Reason: "spam", Status: "pending"}
 	store := &mockHandlerStore{report: report}
 	svc := reports.NewService(store)
 	limiter := &mockLimiter{allowed: false, err: errors.New("redis down")}
@@ -674,53 +681,209 @@ func TestUpdateReportStatus_NoUserIDInContext(t *testing.T) {
 	}
 }
 
-func TestUpdateReportStatus_ModeratorSuspendError_StillReturns200(t *testing.T) {
-	report := &reports.Report{
-		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
-		Status:         "reviewed",
-	}
-	store := &mockHandlerStore{report: report}
-	svc := reports.NewService(store)
-	mod := &mockModerator{suspendErr: errors.New("already suspended")}
-	mgr := reports.NewManager(svc, reports.WithModerator(mod))
+// --- Message reports ---
 
-	body := `{"status":"reviewed","action":"suspend","reason":"spam"}`
-	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(body)))
+func postReport(t *testing.T, store *mockHandlerStore, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	h := reports.NewHandler(reports.NewManager(reports.NewService(store)))
+	req := authedRequest(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
 	rec := httptest.NewRecorder()
+	serve(h, req, rec)
+	return rec
+}
 
-	router := chi.NewRouter()
-	router.Put("/{id}/status", mgr.UpdateReportStatus)
-	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
+func errorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("invalid JSON: %v (%s)", err, rec.Body.String())
+	}
+	return body.Code
+}
 
-	// Moderator error is logged but does not affect the HTTP response.
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+func TestCreateReport_MessageSuccess(t *testing.T) {
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-9", MessageID: new("m-1"), ReportedUserID: new("u-2")}}
+	rec := postReport(t, store, `{"message_id":"m-1","reason":"harassment"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var got reports.Report
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if got.MessageID == nil || *got.MessageID != "m-1" {
+		t.Errorf("message_id = %v, want m-1", got.MessageID)
 	}
 }
 
-func TestUpdateReportStatus_ModeratorBanError_StillReturns200(t *testing.T) {
-	report := &reports.Report{
-		ID:             "r-1",
-		ReporterID:     "u-1",
-		ReportedUserID: "u-2",
-		Status:         "reviewed",
+func TestCreateReport_ErrorMapping(t *testing.T) {
+	cases := []struct {
+		name     string
+		body     string
+		err      error
+		wantCode int
+		wantErr  string
+	}{
+		{"both targets", `{"reported_user_id":"u-2","message_id":"m-1","reason":"spam"}`, nil, http.StatusBadRequest, "invalid_request"},
+		{"no target", `{"reason":"spam"}`, nil, http.StatusBadRequest, "invalid_request"},
+		{"message not visible", `{"message_id":"m-1","reason":"spam"}`, reports.ErrMessageNotFound, http.StatusNotFound, "message_not_found"},
+		{"duplicate", `{"message_id":"m-1","reason":"spam"}`, reports.ErrDuplicateReport, http.StatusConflict, "already_reported"},
+		{"own message", `{"message_id":"m-1","reason":"spam"}`, reports.ErrSelfReport, http.StatusBadRequest, "invalid_request"},
+		{"unknown user", `{"reported_user_id":"u-404","reason":"spam"}`, reports.ErrUserNotFound, http.StatusNotFound, "user_not_found"},
 	}
-	store := &mockHandlerStore{report: report}
-	svc := reports.NewService(store)
-	mod := &mockModerator{banErr: errors.New("ban failed")}
-	mgr := reports.NewManager(svc, reports.WithModerator(mod))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := postReport(t, &mockHandlerStore{createErr: tc.err}, tc.body)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if got := errorCode(t, rec); got != tc.wantErr {
+				t.Errorf("error code = %q, want %q", got, tc.wantErr)
+			}
+		})
+	}
+}
 
-	body := `{"status":"reviewed","action":"ban","reason":"severe violation"}`
+func TestUpdateReportStatus_ActionOnDeletedAccountIsRejectedBeforeStatusChange(t *testing.T) {
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", Status: "pending"}}
+	mod := &mockModerator{}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+	body := `{"status":"reviewed","action":"ban","reason":"csam"}`
 	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(body)))
 	rec := httptest.NewRecorder()
-
 	router := chi.NewRouter()
 	router.Put("/{id}/status", mgr.UpdateReportStatus)
 	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusConflict)
 	}
+	if got := errorCode(t, rec); got != "reported_account_gone" {
+		t.Errorf("error code = %q, want reported_account_gone", got)
+	}
+	if store.updated || mod.banned {
+		t.Error("status must not change and no action may run when the account is gone")
+	}
+}
+
+func TestUpdateReportStatus_ActionOnMissingReport(t *testing.T) {
+	store := &mockHandlerStore{getByIDErr: reports.ErrNotFound}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(&mockModerator{}))
+
+	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-x/status", strings.NewReader(`{"status":"reviewed","action":"suspend"}`)))
+	rec := httptest.NewRecorder()
+	router := chi.NewRouter()
+	router.Put("/{id}/status", mgr.UpdateReportStatus)
+	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestUpdateReportStatus_ActionLookupError(t *testing.T) {
+	store := &mockHandlerStore{getByIDErr: errors.New("db down")}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(&mockModerator{}))
+
+	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(`{"status":"reviewed","action":"suspend"}`)))
+	rec := httptest.NewRecorder()
+	router := chi.NewRouter()
+	router.Put("/{id}/status", mgr.UpdateReportStatus)
+	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func putStatus(t *testing.T, mgr *reports.Manager, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := adminAuthedRequest(httptest.NewRequest(http.MethodPut, "/r-1/status", strings.NewReader(body)))
+	rec := httptest.NewRecorder()
+	router := chi.NewRouter()
+	router.Put("/{id}/status", mgr.UpdateReportStatus)
+	middleware.RequireAuth(testSecret)(middleware.RequireAdmin(router)).ServeHTTP(rec, req)
+	return rec
+}
+
+func TestUpdateReportStatus_FailedActionLeavesStatusUntouched(t *testing.T) {
+	cases := []struct {
+		name     string
+		modErr   error
+		wantCode int
+		wantErr  string
+	}{
+		{"account purged during review", fmt.Errorf("%w: purged", reports.ErrReportedUserGone), http.StatusConflict, "reported_account_gone"},
+		{"already moderated", reports.ErrAlreadyModerated, http.StatusConflict, "already_moderated"},
+		{"moderator failure", errors.New("db down"), http.StatusInternalServerError, "internal_error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReportedUserID: new("u-2"), Status: "pending"}}
+			mod := &mockModerator{suspendErr: tc.modErr, banErr: tc.modErr}
+			mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+			rec := putStatus(t, mgr, `{"status":"reviewed","action":"ban","reason":"x"}`)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if got := errorCode(t, rec); got != tc.wantErr {
+				t.Errorf("error code = %q, want %q", got, tc.wantErr)
+			}
+			if store.updated {
+				t.Error("report status changed although the action failed")
+			}
+		})
+	}
+}
+
+func TestUpdateReportStatus_ActionRunsBeforeStatusChange(t *testing.T) {
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReportedUserID: new("u-2"), Status: "pending"}}
+	mod := &orderModerator{store: store}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+	if rec := putStatus(t, mgr, `{"status":"reviewed","action":"suspend","duration_days":3}`); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !mod.ran || mod.statusChangedFirst {
+		t.Errorf("moderation ran=%v, status changed before it=%v; want the action first", mod.ran, mod.statusChangedFirst)
+	}
+	if !store.updated {
+		t.Error("status was not updated after a successful action")
+	}
+}
+
+func TestUpdateReportStatus_ActionRequiresReviewed(t *testing.T) {
+	store := &mockHandlerStore{report: &reports.Report{ID: "r-1", ReportedUserID: new("u-2"), Status: "pending"}}
+	mod := &mockModerator{}
+	mgr := reports.NewManager(reports.NewService(store), reports.WithModerator(mod))
+
+	rec := putStatus(t, mgr, `{"status":"dismissed","action":"ban","reason":"x"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if mod.banned || store.updated {
+		t.Error("a dismissal must neither run an action nor change status")
+	}
+}
+
+// orderModerator records whether the report status had already changed when
+// the moderation action ran.
+type orderModerator struct {
+	store              *mockHandlerStore
+	ran                bool
+	statusChangedFirst bool
+}
+
+func (o *orderModerator) SuspendUser(_ context.Context, _, _ string, _ int, _ string) error {
+	o.ran, o.statusChangedFirst = true, o.store.updated
+	return nil
+}
+
+func (o *orderModerator) BanUser(_ context.Context, _, _, _ string) error {
+	o.ran, o.statusChangedFirst = true, o.store.updated
+	return nil
 }

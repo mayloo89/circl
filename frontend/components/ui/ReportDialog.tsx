@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from "react"
 import { useTranslations } from "next-intl"
 import Modal from "@/components/ui/Modal"
 import Button from "@/components/ui/Button"
@@ -8,6 +9,8 @@ interface ReportDialogProps {
   open: boolean
   loading?: boolean
   error?: string
+  /** What is being reported; picks the dialog copy. */
+  target?: "user" | "message"
   onSubmit: (reason: string, description: string) => void
   onCancel: () => void
 }
@@ -27,11 +30,13 @@ export default function ReportDialog({
   open,
   loading = false,
   error,
+  target = "user",
   onSubmit,
   onCancel,
 }: ReportDialogProps) {
   const t = useTranslations("report")
   const tc = useTranslations("common")
+  const titleId = useId()
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -42,14 +47,14 @@ export default function ReportDialog({
   }
 
   return (
-    <Modal open={open} onClose={onCancel}>
+    <Modal open={open} onClose={onCancel} labelledBy={titleId}>
       <div
         className="w-full max-w-sm rounded-xl bg-gray-900 p-6 shadow-2xl ring-1 ring-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-foreground">{t("title")}</h2>
+        <h2 id={titleId} className="text-lg font-semibold text-foreground">{target === "message" ? t("titleMessage") : t("title")}</h2>
         <p className="mt-2 text-sm text-gray-400">
-          {t("subtitle")}
+          {target === "message" ? t("subtitleMessage") : t("subtitle")}
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
@@ -82,7 +87,7 @@ export default function ReportDialog({
               placeholder={t("descriptionPlaceholder")}
             />
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={loading}>
               {tc("cancel")}

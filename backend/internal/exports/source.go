@@ -301,7 +301,7 @@ func (s *pgSource) messages(ctx context.Context, userID string) ([]Message, erro
 
 func (s *pgSource) reports(ctx context.Context, userID string) ([]ReportFiled, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, reported_user_id, reason, priority, COALESCE(description, ''), status, created_at
+		SELECT id, COALESCE(reported_user_id::text, ''), reason, priority, COALESCE(description, ''), status, created_at
 		  FROM reports
 		 WHERE reporter_id = $1
 		 ORDER BY created_at`, userID)

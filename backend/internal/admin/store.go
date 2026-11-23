@@ -66,18 +66,27 @@ func (s *pgStore) GetUserByID(ctx context.Context, userID string) (*UserRecord, 
 }
 
 // SetUserStatus updates a user's status field.
+// The status guard lives in the UPDATE itself so a purge that commits between
+// a caller's read and this write still wins: a purged row is never revived.
 func (s *pgStore) SetUserStatus(ctx context.Context, userID, status string) error {
 	tag, err := s.db.Exec(ctx,
-		`UPDATE users SET status = $2 WHERE id = $1`,
+		`UPDATE users SET status = $2 WHERE id = $1 AND status <> 'purged'`,
 		userID, status,
 	)
 	if err != nil {
 		return fmt.Errorf("set user status: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrUserNotFound
+	if tag.RowsAffected() > 0 {
+		return nil
 	}
-	return nil
+	var exists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)`, userID).Scan(&exists); err != nil {
+		return fmt.Errorf("set user status: %w", err)
+	}
+	if exists {
+		return ErrUserPurged
+	}
+	return ErrUserNotFound
 }
 
 // CreateSuspension inserts a new suspension record.

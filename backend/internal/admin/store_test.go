@@ -162,17 +162,44 @@ func TestPgStore_SetUserStatus_Success(t *testing.T) {
 	}
 }
 
-func TestPgStore_SetUserStatus_NotFound(t *testing.T) {
-	q := &mockQuerier{
+// noRowsUpdated simulates the guarded UPDATE touching nothing, followed by the
+// existence probe that tells a purged row from a missing one.
+func noRowsUpdated(exists bool, probeErr error) *mockQuerier {
+	return &mockQuerier{
 		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
 			return pgconn.NewCommandTag("UPDATE 0"), nil
 		},
+		queryRowFn: func(_ context.Context, _ string, _ ...any) rowScanner {
+			return &mockRow{scanFn: func(dest ...any) error {
+				if probeErr != nil {
+					return probeErr
+				}
+				*dest[0].(*bool) = exists
+				return nil
+			}}
+		},
 	}
-	s := &pgStore{db: q}
+}
 
-	err := s.SetUserStatus(t.Context(), "u-missing", "suspended")
-	if !errors.Is(err, ErrUserNotFound) {
+func TestPgStore_SetUserStatus_NotFound(t *testing.T) {
+	s := &pgStore{db: noRowsUpdated(false, nil)}
+	if err := s.SetUserStatus(t.Context(), "u-missing", "suspended"); !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestPgStore_SetUserStatus_PurgedRowIsNeverRevived(t *testing.T) {
+	s := &pgStore{db: noRowsUpdated(true, nil)}
+	if err := s.SetUserStatus(t.Context(), "u-1", "banned"); !errors.Is(err, ErrUserPurged) {
+		t.Errorf("error = %v, want ErrUserPurged", err)
+	}
+}
+
+func TestPgStore_SetUserStatus_ProbeError(t *testing.T) {
+	s := &pgStore{db: noRowsUpdated(false, errors.New("db error"))}
+	err := s.SetUserStatus(t.Context(), "u-1", "banned")
+	if err == nil || errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrUserPurged) {
+		t.Errorf("error = %v, want a wrapped probe error", err)
 	}
 }
 

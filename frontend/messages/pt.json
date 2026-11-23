@@ -770,7 +770,18 @@
     "createPublicRoomDuplicate": "Já existe uma sala pública com esse nome.",
     "deletePublicRoomFailed": "Não foi possível excluir a sala pública",
     "adminPublicRoomNamePlaceholder": "ex. lounge",
-    "create": "Criar"
+    "create": "Criar",
+    "reportAccountDeleted": "Conta excluída",
+    "reportedMessageLabel": "Mensagem denunciada",
+    "reportedMessageSentAt": "Enviada {date}",
+    "reportedMessagePurged": "A cópia da mensagem foi excluída quando esta denúncia foi descartada.",
+    "reportedMessageMedia": "Mensagem de mídia ({type}). Apenas o registro da mensagem é mantido.",
+    "reportAccountGoneNoAction": "Esta conta não existe mais, então nenhuma ação de moderação pode ser aplicada.",
+    "reportMessageBadge": "Mensagem",
+    "viewReport": "Ver",
+    "viewReportTitle": "Detalhes da denúncia",
+    "close": "Fechar",
+    "reportAlreadyModerated": "Esta conta já está suspensa ou banida. Marque a denúncia como revisada sem ação."
   },
   "channels": {
     "title": "Canais",
@@ -939,7 +950,10 @@
     "expiryDaysLeft": "restam {count} d",
     "expiryHoursLeft": "restam {count} h",
     "expiryMinutesLeft": "restam {count} min",
-    "expiryUnderMinute": "< 1 min"
+    "expiryUnderMinute": "< 1 min",
+    "messageActions": "Ações da mensagem",
+    "reportMessage": "Denunciar mensagem",
+    "reportSent": "Denúncia enviada. Um moderador vai analisá-la."
   },
   "publicProfile": {
     "title": "Perfil",
@@ -990,7 +1004,12 @@
       "digitalGenderViolence": "Violência digital de gênero (Ley Olimpia)",
       "csam": "Conteúdo sexual envolvendo menores (CSAM)",
       "other": "Outro"
-    }
+    },
+    "titleMessage": "Denunciar mensagem",
+    "subtitleMessage": "Uma cópia desta mensagem vai para os moderadores. Quem a enviou não é notificado.",
+    "alreadyReported": "Você já denunciou esta mensagem.",
+    "messageUnavailable": "Esta mensagem não pode mais ser denunciada.",
+    "failed": "Não foi possível enviar a denúncia. Tente novamente."
   },
   "pushPrompt": {
     "message": "Ative as notificações para ficar por dentro de mensagens e contatos.",

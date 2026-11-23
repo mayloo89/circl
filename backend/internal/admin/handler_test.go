@@ -459,7 +459,7 @@ func TestUpdateUserStatus_AlreadySuspended(t *testing.T) {
 }
 
 func TestUpdateUserStatus_BanNotFound(t *testing.T) {
-	store := &mockStore{setStatusErr: admin.ErrUserNotFound}
+	store := &mockStore{getUserErr: admin.ErrUserNotFound}
 	h := newHandler(store)
 
 	body := `{"action":"ban","reason":"spam"}`
@@ -532,7 +532,7 @@ func TestUpdateUserStatus_SuspendInternalError(t *testing.T) {
 }
 
 func TestUpdateUserStatus_BanInternalError(t *testing.T) {
-	store := &mockStore{setStatusErr: errors.New("db error")}
+	store := &mockStore{user: &admin.UserRecord{ID: "u-1", Status: "active"}, setStatusErr: errors.New("db error")}
 	h := newHandler(store)
 
 	body := `{"action":"ban","reason":"spam"}`
@@ -1158,5 +1158,20 @@ func TestDeletePublicRoom_NotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestUpdateUserStatus_PurgedAccountIsNotFound(t *testing.T) {
+	for _, body := range []string{`{"action":"suspend","reason":"spam","duration_days":7}`, `{"action":"ban","reason":"spam"}`} {
+		store := &mockStore{user: &admin.UserRecord{ID: "u-1", Status: "purged"}, suspension: &admin.Suspension{ID: "s-1"}}
+		h := newHandler(store)
+
+		req := adminRequest(httptest.NewRequest(http.MethodPut, "/users/u-1/status", strings.NewReader(body)))
+		rec := httptest.NewRecorder()
+		serve(h, req, rec)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status = %d, want 404", body, rec.Code)
+		}
 	}
 }

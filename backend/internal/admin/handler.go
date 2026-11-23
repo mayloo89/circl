@@ -391,7 +391,7 @@ func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "suspend":
 		err := h.svc.SuspendUser(r.Context(), userID, req.Reason, req.DurationDays, adminID)
-		if errors.Is(err, ErrUserNotFound) {
+		if errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrUserPurged) {
 			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}
@@ -405,7 +405,7 @@ func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	case "ban":
 		err := h.svc.BanUser(r.Context(), userID, req.Reason, adminID)
-		if errors.Is(err, ErrUserNotFound) {
+		if errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrUserPurged) {
 			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}
@@ -415,7 +415,7 @@ func (h *handler) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	case "reactivate":
 		err := h.svc.ReactivateUser(r.Context(), userID)
-		if errors.Is(err, ErrUserNotFound) {
+		if errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrUserPurged) {
 			apierror.Write(w, http.StatusNotFound, apierror.CodeUserNotFound, "user not found")
 			return
 		}

@@ -49,4 +49,16 @@ describe("ReportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
     expect(onCancel).toHaveBeenCalledOnce()
   })
+
+  it("uses message copy when reporting a message", () => {
+    renderWithIntl(<ReportDialog {...baseProps} target="message" />)
+    expect(screen.getByRole("dialog", { name: "Report message" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Report message" })).toBeInTheDocument()
+    expect(screen.getByText(/sender is not notified/i)).toBeInTheDocument()
+  })
+
+  it("announces submission errors", () => {
+    renderWithIntl(<ReportDialog {...baseProps} error="nope" />)
+    expect(screen.getByRole("alert")).toHaveTextContent("nope")
+  })
 })

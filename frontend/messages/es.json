@@ -770,7 +770,18 @@
     "createPublicRoomDuplicate": "Ya existe una sala pública con ese nombre.",
     "deletePublicRoomFailed": "No se pudo eliminar la sala pública",
     "adminPublicRoomNamePlaceholder": "p. ej. sala-general",
-    "create": "Crear"
+    "create": "Crear",
+    "reportAccountDeleted": "Cuenta eliminada",
+    "reportedMessageLabel": "Mensaje reportado",
+    "reportedMessageSentAt": "Enviado {date}",
+    "reportedMessagePurged": "La copia del mensaje se eliminó al descartar este reporte.",
+    "reportedMessageMedia": "Mensaje multimedia ({type}). Solo se conserva el registro del mensaje.",
+    "reportAccountGoneNoAction": "Esta cuenta ya no existe, por lo que no se puede aplicar ninguna acción de moderación.",
+    "reportMessageBadge": "Mensaje",
+    "viewReport": "Ver",
+    "viewReportTitle": "Detalles del reporte",
+    "close": "Cerrar",
+    "reportAlreadyModerated": "Esta cuenta ya está suspendida o baneada. Marca el reporte como revisado sin acción."
   },
   "channels": {
     "title": "Canales",
@@ -939,7 +950,10 @@
     "expiryDaysLeft": "quedan {count} d",
     "expiryHoursLeft": "quedan {count} h",
     "expiryMinutesLeft": "quedan {count} min",
-    "expiryUnderMinute": "< 1 min"
+    "expiryUnderMinute": "< 1 min",
+    "messageActions": "Acciones del mensaje",
+    "reportMessage": "Reportar mensaje",
+    "reportSent": "Reporte enviado. Un moderador lo revisará."
   },
   "publicProfile": {
     "title": "Perfil",
@@ -990,7 +1004,12 @@
       "digitalGenderViolence": "Violencia digital de género (Ley Olimpia)",
       "csam": "Contenido sexual con menores (CSAM)",
       "other": "Otro"
-    }
+    },
+    "titleMessage": "Reportar mensaje",
+    "subtitleMessage": "Una copia de este mensaje llega a los moderadores. Quien lo envió no recibe ningún aviso.",
+    "alreadyReported": "Ya reportaste este mensaje.",
+    "messageUnavailable": "Este mensaje ya no se puede reportar.",
+    "failed": "No se pudo enviar el reporte. Inténtalo de nuevo."
   },
   "pushPrompt": {
     "message": "Activa las notificaciones para estar al día con mensajes y contactos.",
